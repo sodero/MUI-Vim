@@ -67,7 +67,8 @@
  */
 #if (defined(FEAT_DND) && defined(FEAT_GUI_GTK)) \
 	|| defined(FEAT_GUI_MSWIN) \
-	|| defined(FEAT_GUI_MAC)
+	|| defined(FEAT_GUI_MAC) \
+	|| defined(FEAT_GUI_MUI)
 # define HAVE_DROP_FILE
 #endif
 
@@ -429,7 +430,7 @@ typedef struct Gui
 #endif
 
 #if defined(FEAT_TOOLBAR) \
-	&& (defined(FEAT_GUI_ATHENA) || defined(FEAT_GUI_MOTIF))
+	&& (defined(FEAT_GUI_ATHENA) || defined(FEAT_GUI_MOTIF) || defined(FEAT_GUI_MUI))
     int		toolbar_height;	    /* height of the toolbar */
 #endif
 

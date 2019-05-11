@@ -88,6 +88,10 @@ typedef long off_t;
 #ifdef __GNUC__
 # include <sys/stat.h>
 # include <unistd.h>
+# include <limits.h>
+# include <errno.h>
+# include <pwd.h>
+# include <time.h>
 #endif
 
 #ifndef PROTO
@@ -224,7 +228,14 @@ typedef long off_t;
 int setenv(const char *, const char *);
 #endif
 
-#define mch_remove(x) remove((char *)(x))
-#define mch_rename(src, dst) rename(src, dst)
-#define mch_chdir(s) chdir(s)
-#define vim_mkdir(x, y) mch_mkdir(x)
+#define mch_remove(x) remove((const char *) x)
+#define mch_rename(s, d) rename((const char *) s, (const char *) d)
+#define mch_chdir(s) chdir((const char *) s)
+#define mch_rmdir(s) rmdir((const char *) s)
+#define vim_mkdir(x, m) mkdir((const char *) x, m)
+
+/* Avoid compiler warnings, these
+ * are defined and used by Vim. */
+#undef INSERT
+#undef ERROR_UNKNOWN
+

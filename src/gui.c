@@ -543,6 +543,13 @@ gui_init(void)
 	}
 	else
 	{
+#ifdef AMIGA
+	    struct Process	*proc = (struct Process *)FindTask(0L);
+	    APTR		save_winptr = proc->pr_WindowPtr;
+
+	    /* Avoid a requester here for a volume that doesn't exist. */
+	    proc->pr_WindowPtr = (APTR)-1L;
+#endif
 	    /*
 	     * Get system wide defaults for gvim, only when file name defined.
 	     */
@@ -627,6 +634,9 @@ gui_init(void)
 		    need_wait_return = TRUE;
 		secure = 0;
 	    }
+#ifdef AMIGA
+	    proc->pr_WindowPtr = save_winptr;
+#endif
 	}
 
 	if (need_wait_return || msg_didany)
@@ -832,7 +842,8 @@ gui_exit(int rc)
 }
 
 #if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_X11) || defined(FEAT_GUI_MSWIN) \
-	|| defined(FEAT_GUI_PHOTON) || defined(FEAT_GUI_MAC) || defined(PROTO)
+	|| defined(FEAT_GUI_PHOTON) || defined(FEAT_GUI_MAC) || defined(FEAT_GUI_MUI) \
+	|| defined(PROTO)
 # define NEED_GUI_UPDATE_SCREEN 1
 /*
  * Called when the GUI shell is closed by the user.  If there are no changed
@@ -2387,21 +2398,13 @@ gui_outstr_nowrap(
 
     if (highlight_mask & (HL_INVERSE | HL_STANDOUT))
     {
-#if defined(AMIGA)
-	gui_mch_set_colors(bg_color, fg_color);
-#else
 	gui_mch_set_fg_color(bg_color);
 	gui_mch_set_bg_color(fg_color);
-#endif
     }
     else
     {
-#if defined(AMIGA)
-	gui_mch_set_colors(fg_color, bg_color);
-#else
 	gui_mch_set_fg_color(fg_color);
 	gui_mch_set_bg_color(bg_color);
-#endif
     }
     gui_mch_set_sp_color(sp_color);
 

@@ -122,6 +122,13 @@ main
     argc = get_cmd_argsW(&argv);
 #endif
 
+#ifdef AMIGA
+    /*
+     * Parse Workbench arguments if necessary.
+     */
+    argc = get_cmd_argsA(argc, &argv);
+#endif
+
     /* Many variables are in "params" so that we can pass them to invoked
      * functions without a lot of arguments.  "argc" and "argv" are also
      * copied, so that they can be changed. */
@@ -477,7 +484,7 @@ vim_main2(void)
 	}
 
 	source_in_path(rtp_copy == NULL ? p_rtp : rtp_copy,
-# ifdef VMS	/* Somehow VMS doesn't handle the "**". */
+# if defined(VMS) || defined(AMIGA) 	/* Not everyone handles the "**". */
 		(char_u *)"plugin/*.vim",
 # else
 		(char_u *)"plugin/**/*.vim",
@@ -492,7 +499,7 @@ vim_main2(void)
 	    load_start_packages();
 	TIME_MSG("loading packages");
 
-# ifdef VMS	/* Somehow VMS doesn't handle the "**". */
+# if defined(VMS) || defined(AMIGA) 	/* Not everyone handles the "**". */
 	source_runtime((char_u *)"plugin/*.vim", DIP_ALL | DIP_AFTER);
 # else
 	source_runtime((char_u *)"plugin/**/*.vim", DIP_ALL | DIP_AFTER);

@@ -18,6 +18,7 @@
 
 #ifdef AMIGA
 # include <time.h>	/* for strftime() */
+# include <dirent.h>	/* for opendir() */
 #endif
 
 #ifdef VMS

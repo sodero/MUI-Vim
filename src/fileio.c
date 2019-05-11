@@ -6132,6 +6132,7 @@ shorten_fnames(int force)
 #if (defined(FEAT_DND) && defined(FEAT_GUI_GTK)) \
 	|| defined(FEAT_GUI_MSWIN) \
 	|| defined(FEAT_GUI_MAC) \
+	|| defined(FEAT_GUI_MUI) \
 	|| defined(PROTO)
 /*
  * Shorten all filenames in "fnames[count]" by current directory.

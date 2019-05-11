@@ -5366,9 +5366,9 @@ nv_clear(cmdarg_T *cap)
 {
     if (!checkclearop(cap->oap))
     {
-#if defined(__BEOS__) && !USE_THREAD_FOR_INPUT_WITH_TIMEOUT
+#if defined(__MORPHOS__) || defined(__BEOS__) && !USE_THREAD_FOR_INPUT_WITH_TIMEOUT
 	/*
-	 * Right now, the BeBox doesn't seem to have an easy way to detect
+	 * Right now, the BeBox and MorphOS doesn't seem to have an easy way to detect
 	 * window resizing, so we cheat and make the user detect it
 	 * manually with CTRL-L instead
 	 */
