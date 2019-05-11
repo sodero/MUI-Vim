@@ -20,18 +20,18 @@ endif
 # Phony standard targets
 #------------------------------------------------------------------------------------------
 .PHONY: all
-all: .arc
+all: $(SRC)/vim
 
 .PHONY: clean
 clean:
-	$(MAKE) -C $(SRC)/src -f Make_ami.mak clean
+	$(MAKE) -C $(SRC) -f Make_ami.mak clean
 	rm -Rf *.lha $(SRC)/.pat $(SRC)/.ver .arc
 
 #------------------------------------------------------------------------------------------
 # Build Vim
 #------------------------------------------------------------------------------------------
-$(SRC)/src/vim: $(SRC)/src/.pat
-	$(MAKE) -C $(SRC)/src -f Make_ami.mak PATCHLEVEL=`cat .pat`
+$(SRC)/vim: $(SRC)/.ver $(SRC)/.pat
+	$(MAKE) -C $(SRC) -f Make_ami.mak PATCHLEVEL=`cat .pat`
 
 #------------------------------------------------------------------------------------------
 # Determine version
