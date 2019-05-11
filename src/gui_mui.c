@@ -3051,6 +3051,12 @@ int gui_mch_wait_for_chars (int wtime)
     // control over to Vim at any time is not safe.
 #ifdef FEAT_TIMEOUT
     DoMethod (Con, MUIM_VimCon_SetTimeout, wtime > 0 ? wtime : 0);
+#else
+    // Timeout immediately.
+    if(wtime > 0)
+    {
+        return FAIL;
+    }
 #endif
 
     while (!vim_is_input_buf_full() )
