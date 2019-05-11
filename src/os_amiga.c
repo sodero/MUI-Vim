@@ -14,6 +14,7 @@
  */
 
 #include "vim.h"
+#include "version.h"
 
 #ifdef Window
 # undef Window	/* Amiga has its own Window definition */
@@ -40,6 +41,7 @@
 
 #include <exec/memory.h>
 #include <libraries/dosextens.h>
+#include <workbench/startup.h>
 
 #include <dos/dostags.h>	    /* for 2.0 functions */
 #include <dos/dosasl.h>
@@ -49,9 +51,6 @@
  */
 #ifdef __amigaos4__
 # include <dos/anchorpath.h>
-# define	free_fib(x) FreeDosObject(DOS_FIB, x)
-#else
-# define	free_fib(x) vim_free(fib)
 #endif
 
 #if defined(LATTICE) && !defined(SASC) && defined(FEAT_ARP)
@@ -76,13 +75,14 @@ static long dos_packet(struct MsgPort *, long, long);
 static int lock2name(BPTR lock, char_u *buf, long   len);
 static void out_num(long n);
 static struct FileInfoBlock *get_fib(char_u *);
+static void free_fib(struct FileInfoBlock *);
 static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
 static BPTR		raw_out = (BPTR)NULL;
 static int		close_win = FALSE;  /* set if Vim opened the window */
-
-#ifndef __amigaos4__	/* Use autoopen for AmigaOS4 */
+/* Use autoopen for AmigaOS4, AROS and MorphOS */
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
 struct IntuitionBase	*IntuitionBase = NULL;
 #endif
 #ifdef FEAT_ARP
@@ -97,15 +97,41 @@ int			dos2 = FALSE;	    /* Amiga DOS 2.0x or higher */
 #endif
 int			size_set = FALSE;   /* set to TRUE if window size was set */
 
+#ifdef PATCHLEVEL
+#define VIM_VERSION_PATCH_STR PATCHLEVEL
+#else
+#define VIM_VERSION_PATCH_STR "0"
+#endif
+
+static char version[] __attribute__((used)) =
+    "\0$VER: Vim "
+    VIM_VERSION_MAJOR_STR "."
+    VIM_VERSION_MINOR_STR "."
+    VIM_VERSION_PATCH_STR;
+
     void
 win_resize_on(void)
 {
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
+    {
+        // Stay quiet
+        return;
+    }
+#endif
     OUT_STR_NF("\033[12{");
 }
 
     void
 win_resize_off(void)
 {
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
+    {
+        // Stay quiet
+        return;
+    }
+#endif
     OUT_STR_NF("\033[12}");
 }
 
@@ -191,10 +217,10 @@ mch_char_avail(void)
     long_u
 mch_avail_mem(int special)
 {
-#ifdef __amigaos4__
-    return (long_u)AvailMem(MEMF_ANY) >> 10;
+#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
+    return (long_u) AvailMem(MEMF_ANY) >> 10;
 #else
-    return (long_u)(AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
+    return (long_u) (AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
 #endif
 }
 
@@ -205,10 +231,6 @@ mch_avail_mem(int special)
     void
 mch_delay(long msec, int ignoreinput)
 {
-#ifndef LATTICE		/* SAS declares void Delay(ULONG) */
-    void	    Delay(long);
-#endif
-
     if (msec > 0)
     {
 	if (ignoreinput)
@@ -234,7 +256,9 @@ mch_suspend(void)
     void
 mch_init(void)
 {
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     static char	    intlibname[] = "intuition.library";
+#endif
 
 #ifdef AZTEC_C
     Enable_Abort = 0;		/* disallow vim to be aborted */
@@ -263,7 +287,7 @@ mch_init(void)
     out_flush();
 
     wb_window = NULL;
-#ifndef __amigaos4__
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     if ((IntuitionBase = (struct IntuitionBase *)
 				OpenLibrary((UBYTE *)intlibname, 0L)) == NULL)
     {
@@ -275,9 +299,75 @@ mch_init(void)
 #endif
 }
 
-#ifndef PROTO
-# include <workbench/startup.h>
-#endif
+static char **cmd_args;
+
+static BOOL is_wb_args(char **argv)
+{
+    return argv == cmd_args;
+}
+
+static void free_cmd_args(void)
+{
+    if(cmd_args)
+    {
+	char **done = cmd_args;
+
+	while(*cmd_args)
+	{
+	    free(*cmd_args);
+	    cmd_args++;
+	}
+
+	free(done);
+    }
+}
+
+int get_cmd_argsA(int argc, char ***argvp)
+{
+    if(!argc)
+    {
+        struct WBStartup *wb = (struct WBStartup *) *argvp;
+
+	free_cmd_args();
+
+        if(wb->sm_NumArgs)
+        {
+	    cmd_args = calloc(wb->sm_NumArgs + 1, sizeof(char *));
+
+	    if(cmd_args)
+	    {
+		struct WBArg *arg = wb->sm_ArgList;
+
+		LONG i = 0;
+		cmd_args[i++] = strdup(arg->wa_Name);
+		CurrentDir(arg->wa_Lock);
+
+		while(i < wb->sm_NumArgs && cmd_args[i - 1])
+		{
+                    static char path[PATH_MAX + 1];
+
+		    if( arg[i].wa_Name[0] != '-' &&
+		        lock2name(arg[i].wa_Lock, path, PATH_MAX))
+                    {
+		        AddPart(path, arg[i].wa_Name, PATH_MAX);
+		        cmd_args[i] = strdup(path);
+                    }
+                    else
+                    {
+		        cmd_args[i] = strdup(arg[i].wa_Name);
+                    }
+
+		    i++;
+		}
+
+		*argvp = cmd_args;
+		return i;
+	    }
+        }
+    }
+
+    return argc;
+}
 
 /*
  * Check_win checks whether we have an interactive window.
@@ -308,15 +398,24 @@ mch_check_win(int argc, char **argv)
     char	    *av;
     char_u	    *device = NULL;
     int		    exitval = 4;
-#ifndef __amigaos4__
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     struct Library  *DosBase;
 #endif
     int		    usewin = FALSE;
 
+#ifdef FEAT_GUI
+    // Enable GUI mode if started from WB.
+    if(is_wb_args(argv))
+    {
+        gui.starting = TRUE;
+        return FAIL;
+    }
+#endif
+
 /*
  * check if we are running under DOS 2.0x or higher
  */
-#ifndef __amigaos4__
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     DosBase = OpenLibrary(DOS_LIBRARY, 37L);
     if (DosBase != NULL)
     /* if (((struct Library *)DOSBase)->lib_Version >= 37) */
@@ -340,7 +439,7 @@ mch_check_win(int argc, char **argv)
 	}
 # endif
     }
-#endif	/* __amigaos4__ */
+#endif	/* __amigaos4__ __AROS__ __MORPHOS__ */
 
     /*
      * scan argv[] for the "-f" and "-d" arguments
@@ -419,11 +518,8 @@ mch_check_win(int argc, char **argv)
      * we use a pointer to the current task instead. This should be a
      * shared structure and thus globally unique.
      */
-#ifdef __amigaos4__
     sprintf((char *)buf1, "t:nc%p", FindTask(0));
-#else
-    sprintf((char *)buf1, "t:nc%ld", (long)buf1);
-#endif
+
     if ((fh = Open((UBYTE *)buf1, (long)MODE_NEWFILE)) == (BPTR)NULL)
     {
 	mch_errmsg(_("Cannot create "));
@@ -558,9 +654,30 @@ fname_case(
 	if (fib->fib_DirEntryType == ST_ROOT)
 	    strcat(fib->fib_FileName, ":");
 #endif
-	if (flen == strlen(fib->fib_FileName))	/* safety check */
+	if (flen == STRLEN(fib->fib_FileName))	/* safety check */
 	    mch_memmove(name, fib->fib_FileName, flen);
 	free_fib(fib);
+    }
+}
+
+/*
+ * mch_deduplicate_root(): Remove root slash from amiga root since this
+ *                         is redundant at best. It will cause problems
+ *                         when used in combination with non root assigns. 
+ */
+void mch_deduplicate_root(char_u *fname)
+{
+    int i = 1;
+    int j = STRLEN(fname) - 1;
+
+    for(i = 1; i < j - 1; ++i)
+    {
+        if(fname[i] == ':' && fname[i + 1] == '/')
+        {
+            while(++i < j) fname[i] = fname[i + 1];
+            fname[i] = 0;
+            break;
+        }
     }
 }
 
@@ -572,28 +689,42 @@ fname_case(
     static struct FileInfoBlock *
 get_fib(char_u *fname)
 {
-    BPTR		    flock;
-    struct FileInfoBlock    *fib;
-
-    if (fname == NULL)	    /* safety check */
-	return NULL;
-#ifdef __amigaos4__
-    fib = AllocDosObject(DOS_FIB,0);
-#else
-    fib = (struct FileInfoBlock *)alloc(sizeof(struct FileInfoBlock));
-#endif
-    if (fib != NULL)
+    if(fname)
     {
-	flock = Lock((UBYTE *)fname, (long)ACCESS_READ);
-	if (flock == (BPTR)NULL || !Examine(flock, fib))
+	mch_deduplicate_root(fname); /* remove root slash */
+        struct FileInfoBlock *fib = (struct FileInfoBlock *)
+	       AllocDosObject(DOS_FIB, NULL);
+	if(fib)
 	{
-	    free_fib(fib);  /* in case of an error the memory is freed here */
-	    fib = NULL;
+            BPTR lock = (BPTR) Lock(fname, ACCESS_READ);
+	    if(lock)
+	    {
+                if(Examine(lock, fib))
+                {
+		    UnLock(lock);
+		    return fib;
+                }
+		else
+		{
+		    UnLock(lock);
+		}
+	    }
+            FreeDosObject(DOS_FIB, fib);
 	}
-	if (flock)
-	    UnLock(flock);
     }
-    return fib;
+    return NULL;
+}
+
+/*
+ * Free file info block safely.
+ */
+    void
+free_fib(struct FileInfoBlock * fib)
+{
+    if(fib)
+    {
+	FreeDosObject(DOS_FIB, fib);
+    }
 }
 
 #ifdef FEAT_TITLE
@@ -604,8 +735,17 @@ get_fib(char_u *fname)
     void
 mch_settitle(char_u *title, char_u *icon)
 {
+#ifdef FEAT_GUI
+    if(gui.in_use)
+    {
+       gui_mch_settitle(title, icon);
+       return;
+    }
+#endif
     if (wb_window != NULL && title != NULL)
-	SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
+    {
+       SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
+    }
 }
 
 /*
@@ -625,7 +765,12 @@ mch_restore_title(int which)
     int
 mch_can_restore_title(void)
 {
-    return (wb_window != NULL);
+    int res = 0;
+#ifdef FEAT_GUI
+    res |= gui.in_use;
+#endif
+    res |= (wb_window != NULL);
+    return res;
 }
 
     int
@@ -641,8 +786,14 @@ mch_can_restore_icon(void)
     int
 mch_get_user_name(char_u *s, int len)
 {
-    /* TODO: Implement this. */
-    *s = NUL;
+    int uid = getuid();
+    struct passwd *pw = getpwuid(uid);
+
+    if (pw && pw->pw_name && len > 0)
+    {
+        vim_strncpy(s, (char_u *) pw->pw_name, len - 1);
+        return OK;
+    }
     return FAIL;
 }
 
@@ -652,10 +803,10 @@ mch_get_user_name(char_u *s, int len)
     void
 mch_get_host_name(char_u *s, int len)
 {
-#if defined(__amigaos4__) && defined(__CLIB2__)
+#if !defined(__AROS__)
     gethostname(s, len);
 #else
-    vim_strncpy(s, "Amiga", len - 1);
+    STRNCPY(s, "Amiga", len - 1);
 #endif
 }
 
@@ -665,14 +816,10 @@ mch_get_host_name(char_u *s, int len)
     long
 mch_get_pid(void)
 {
-#ifdef __amigaos4__
     /* This is as close to a pid as we can come. We could use CLI numbers also,
      * but then we would have two different types of process identifiers.
      */
-    return((long)FindTask(0));
-#else
-    return (long)0;
-#endif
+    return (long) FindTask(0);
 }
 
 /*
@@ -818,13 +965,10 @@ mch_isdir(char_u *name)
     fib = get_fib(name);
     if (fib != NULL)
     {
-#ifdef __amigaos4__
-	retval = (FIB_IS_DRAWER(fib)) ? TRUE : FALSE;
-#else
 	retval = ((fib->fib_DirEntryType >= 0) ? TRUE : FALSE);
-#endif
 	free_fib(fib);
     }
+
     return retval;
 }
 
@@ -881,8 +1025,17 @@ mch_early_init(void)
     void
 mch_exit(int r)
 {
+    free_cmd_args();
     exiting = TRUE;
 
+#ifdef FEAT_GUI
+    if (gui.in_use)
+    {
+       ml_close_all(TRUE);	    /* remove all memfiles */
+       gui_exit(r);
+       exit(r);
+    }
+#endif
     if (raw_in)			    /* put terminal in 'normal' mode */
     {
 	settmode(TMODE_COOK);
@@ -942,7 +1095,7 @@ mch_exit(int r)
     void
 mch_settmode(int tmode)
 {
-#if defined(__AROS__) || defined(__amigaos4__)
+#if defined(__AROS__) || defined(__amigaos4__) || defined(__MORPHOS__)
     if (!SetMode(raw_in, tmode == TMODE_RAW ? 1 : 0))
 #else
     if (dos_packet(MP(raw_in), (long)ACTION_SCREEN_MODE,
@@ -1023,9 +1176,9 @@ mch_get_shellsize(void)
 	term_console = FALSE;
 	goto out;
     }
-    if (oldwindowtitle == NULL)
+    if (!oldwindowtitle)
 	oldwindowtitle = (char_u *)wb_window->Title;
-    if (id->id_InUse == (BPTR)NULL)
+    if (!id->id_InUse)
     {
 	mch_errmsg(_("mch_get_shellsize: not a console??\n"));
 	return FAIL;
@@ -1212,7 +1365,7 @@ mch_call_shell(
 # ifdef FEAT_ARP
 	if (dos2)
 # endif
-	    x = SystemTags((char *)cmd, SYS_UserShell, TRUE, TAG_DONE);
+	    x = SystemTags(cmd, SYS_UserShell, TRUE, TAG_DONE);
 # ifdef FEAT_ARP
 	else
 	    x = Execute((char *)cmd, 0L, raw_out);
@@ -1432,8 +1585,8 @@ mch_expandpath(
     struct AnchorPath	*Anchor;
     LONG		Result;
     char_u		*starbuf, *sp, *dp;
-    int			start_len;
-    int			matches;
+    int			start_len = gap->ga_len;
+    int			matches = 0;
 #ifdef __amigaos4__
     struct TagItem	AnchorTags[] = {
 	{ADO_Strlen, ANCHOR_BUF_SIZE},
@@ -1441,8 +1594,6 @@ mch_expandpath(
 	{TAG_DONE, 0L}
     };
 #endif
-
-    start_len = gap->ga_len;
 
     /* Get our AnchorBase */
 #ifdef __amigaos4__
@@ -1651,3 +1802,4 @@ mch_setenv(char *var, char *value, int x)
 	return 0;   /* success */
     return -1;	    /* failure */
 }
+

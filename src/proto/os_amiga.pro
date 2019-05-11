@@ -8,6 +8,7 @@ long_u mch_avail_mem(int special);
 void mch_delay(long msec, int ignoreinput);
 void mch_suspend(void);
 void mch_init(void);
+int get_cmd_argsA(int argc, char ***argvp);
 int mch_check_win(int argc, char **argv);
 int mch_input_isatty(void);
 void fname_case(char_u *name, int len);

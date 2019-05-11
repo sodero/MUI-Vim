@@ -284,6 +284,9 @@ extern char *vim_SelFile(Widget toplevel, char *prompt, char *init_path, int (*s
 #  ifdef FEAT_GUI_MAC
 #   include "gui_mac.pro"
 #  endif
+#  ifdef FEAT_GUI_MUI
+#   include "gui_mui.pro"
+#  endif
 #  ifdef FEAT_GUI_X11
 #   include "gui_x11.pro"
 #  endif
