@@ -1,0 +1,91 @@
+; Vim
+; $VER: Vim 8.1
+
+(set @app-name "Vim")
+(set @default-dest "SYS:")
+(set #root "")
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Welcome
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(welcome "Welcome to the Vim installer\n")
+(complete 0)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Choose installation location
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(set #dest-root
+    (askdir
+        (prompt "Please choose a location for installing Vim\nA drawer called \"Vim\" will be created there.")
+        (help "Choose where to install Vim using the controls in the Installer window")
+        (default @default-dest)
+    )
+)
+(set @default-dest #dest-root)
+(set @default-dest (tackon @default-dest @app-name))
+(complete 10)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Copy executables and runtime data. Bail out on skip. No point in continuing.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(if (= 0
+        (copyfiles
+            (source #root)
+            (dest @default-dest)
+            (prompt "Copying executables and runtime data...")
+            (help @copyfiles-help)
+            (infos)
+            (all)
+            (confirm)
+        )
+    )
+    ;then
+    (
+        (exit (quiet))
+    )
+)
+(complete 80)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Set protection bits and default tool.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(protect (tackon @default-dest "gvim") "+srwed")
+(delete (tackon @default-dest "gvim.info"))
+(rename (tackon @default-dest "gvim.info_") (tackon @default-dest "gvim.info"))
+(tooltype (dest (tackon @default-dest "gvim")) (setdefaulttool "C:IconX"))
+(complete 85)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Clean up
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(delete (tackon @default-dest "Vim installer.info"))
+(delete (tackon @default-dest "Vim installer"))
+(delete (tackon @default-dest "INSTALLATION.txt.info"))
+(delete (tackon @default-dest "INSTALLATION.txt"))
+(delete (tackon #dest-root "Vim.info"))
+(delete (tackon @default-dest "README.txt.info"))
+(delete (tackon @default-dest "README.__OS__.txt.info"))
+(delete (tackon @default-dest "CHANGELOG.__OS__.txt.info"))
+(rename (tackon @default-dest "Vim.info_") (tackon #dest-root "Vim.info"))
+(rename (tackon @default-dest "README.txt.info_") (tackon @default-dest "README.txt.info"))
+(rename (tackon @default-dest "README.__OS__.txt.info_") (tackon @default-dest "README.__OS__.txt.info"))
+(rename (tackon @default-dest "CHANGELOG.__OS__.txt.info_") (tackon @default-dest "CHANGELOG.__OS__.txt.info"))
+(complete 90)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Create Vim assign / add Vim to path in user-startup
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(set #assign-dir (tackon @default-dest "runtime"))
+(startup @app-name
+    (prompt "Create Vim assign and add Vim to path in \"user-startup\"?")
+    (help "In order to work correctly Vim needs the VIM: assign. It's recommended to set this in \"user-startup\".")
+    (command ("Assign %s: \"%s\"\nPath ADD >NIL: \"%s\"" @app-name #assign-dir @default-dest))
+)
+(complete 95)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Run assign to be able to run Vim without a reboot. Add Vim to path (using an assign) as well.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(run (cat "assign VIM: " #assign-dir))
+(run (cat "assign ADD C: " @default-dest))
+(complete 100)
