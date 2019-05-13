@@ -31,7 +31,7 @@ clean:
 # Build Vim
 #------------------------------------------------------------------------------------------
 $(SRC)/vim: $(SRC)/.ver $(SRC)/.pat
-	$(MAKE) -C $(SRC) -f Make_ami.mak PATCHLEVEL=`cat .pat`
+	$(MAKE) -C $(SRC) -f Make_ami.mak PATCHLEVEL=`cat $(SRC)/.pat`
 
 #------------------------------------------------------------------------------------------
 # Determine version
