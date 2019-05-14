@@ -43,7 +43,7 @@ upload: $(DST)_$(VER)-$(ANM).lha
 $(BIN)/gVim: $(PRG)
 	mkdir -p $(DST) $(BIN) && \
 	cp $(ICO)/$(UNM)/*.info $(DST) && \
-    mv $(DST)/$(DST).info . && mv $(DST)/gVim.info $(BIN) && \
+	mv $(DST)/$(DST).info . && mv $(DST)/gVim.info $(BIN) && \
 	for file in $(TXT); do cp $$file $(DST); done && \
 	cp -r $(TOP)/runtime $(DST) && \
 	cp *installer $(DST) && \
