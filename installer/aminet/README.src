@@ -1,0 +1,28 @@
+Short:        The ubiquitous text editor (source)
+Author:       Bram Moolenaar et al.
+Uploader:     rolfkopman@gmail.com (Ola Söder)
+Type:         text/edit
+Architecture: generic
+Requires:     dev/mui/MCC_TheBar-26.17.lha
+Version:      __VER__
+Distribution: Aminet
+
+Vim is a highly configurable text editor built to make creating and
+changing any kind of text very efficient. Vim is rock stable and is
+continuously being developed to become even better. Among its features
+are:
+
+    * persistent, multi-level undo tree
+    * extensive plugin system
+    * support for hundreds of programming languages and file formats
+    * powerful search and replace
+    * integrates with many tools
+
+Please note that this is not a straight port of the upstream version.
+It includes a full MUI GUI with most of the bells and whistles found
+in Vim on any of the major platforms.
+
+This archive contains the full source code for version __VER__ of Vim.
+Older versions and ongoing developments can be found here:
+
+https://github.com/sodero/MUI-Vim
