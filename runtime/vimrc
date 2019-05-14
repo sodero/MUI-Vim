@@ -1,0 +1,38 @@
+" This file is used as fall back settings when placed in VIM:
+" If you like to have your own settings (without the risk of
+" overwriting it with a silly install script such as the one
+" provided in this archive), call it .vimrc and place it in
+" home: or s:.
+
+" Don't expand tabs in makefiles
+autocmd FileType make setlocal noexpandtab
+
+" Disable visual bell
+autocmd GUIEnter * set vb t_vb=
+autocmd GUIEnter * colo spring-night
+autocmd GUIEnter * imap  <DEL>
+
+" Highlight trailing whitespace.
+autocmd GUIEnter * match Search /\s\+$/
+
+set nocompatible
+set nu
+set expandtab
+set tabstop=4
+set shiftwidth=4
+set hlsearch
+set nowrap
+set noeb
+set ruler
+set autoindent
+set synmaxcol=120
+set viminfo+=nVIM:viminfo
+
+" Hack to disable the netrw plugin. Its file / dir browser
+" doesn't work very well on Amiga like systems, it will in
+" fact crash Vim completely in some cases.
+let g:loaded_netrwPlugin = "v156"
+
+" Make syntax highlightning sloppy to save time.
+syntax sync minlines=400
+syntax on
