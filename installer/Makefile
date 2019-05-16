@@ -40,9 +40,8 @@ upload: $(DST)_$(VER)-$(ANM).lha
 # Gather files.
 #------------------------------------------------------------------------------------------
 $(DST)/gVim: $(PRG)
-	mkdir -p $(DST) && \
-	cp $(ICO)/$(UNM)/*.info $(DST) && \
-	mv $(DST)/$(DST).info . && \
+	$(MAKE) -C $(TOP) && mkdir -p $(DST) && \
+	cp $(ICO)/$(UNM)/*.info $(DST) && mv $(DST)/$(DST).info . && \
 	for file in $(TXT); do cp $$file $(DST); done && \
 	cp -r $(TOP)/runtime $(DST) && \
 	cp *installer $(DST) && \
