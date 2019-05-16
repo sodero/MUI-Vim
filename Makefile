@@ -4,17 +4,6 @@
 VIM:=Vim
 SRC:=src
 NST:=installer
-UNM:=$(shell uname)
-ARC:=$(shell uname -m | tr -d ower)
-
-ifeq ($(UNM),MorphOS)
-ANM:=$(ARC)-morphos
-LHO:=-3rae
-else ifeq ($(UNM),AmigaOS4)
-ANM:=$(ARC)-amigaos
-else ifeq ($(UNM),AROS)
-ANM:=$(ARC)-aros
-endif
 
 #------------------------------------------------------------------------------------------
 # Build Vim
@@ -35,10 +24,17 @@ $(SRC)/.pat: $(SRC)/version.c
 	grep -m1 "^ \{4\}[0-9]\{1,4\},$$" $< | tr -d "[:space:]," > $@
 
 #------------------------------------------------------------------------------------------
+# Create installer archive
+#------------------------------------------------------------------------------------------
+.PHONY: installer
+installer: $(SRC)/vim
+	$(MAKE) -C $(NST)
+
+#------------------------------------------------------------------------------------------
 # Phony standard targets
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
 	$(MAKE) -C $(NST) $@
 	$(MAKE) -C $(SRC) -f Make_ami.mak $@
-	rm -Rf *.lha $(SRC)/.pat $(SRC)/.ver .arc
+	rm -f $(SRC)/.pat $(SRC)/.ver .arc
