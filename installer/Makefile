@@ -21,7 +21,6 @@ endif
 TOP:=..
 DST:=Vim
 ICO:=icons
-BIN:=$(DST)/bin
 PRG:=$(TOP)/src/vim
 TXT:=$(wildcard *.txt)
 VER:=$(shell cat $(TOP)/src/.ver)
@@ -40,10 +39,10 @@ upload: $(DST)_$(VER)-$(ANM).lha
 #------------------------------------------------------------------------------------------
 # Gather files.
 #------------------------------------------------------------------------------------------
-$(BIN)/gVim: $(PRG)
-	mkdir -p $(DST) $(BIN) && \
+$(DST)/gVim: $(PRG)
+	mkdir -p $(DST) && \
 	cp $(ICO)/$(UNM)/*.info $(DST) && \
-	mv $(DST)/$(DST).info . && mv $(DST)/gVim.info $(BIN) && \
+	mv $(DST)/$(DST).info . && \
 	for file in $(TXT); do cp $$file $(DST); done && \
 	cp -r $(TOP)/runtime $(DST) && \
 	cp *installer $(DST) && \
@@ -52,7 +51,7 @@ $(BIN)/gVim: $(PRG)
 #------------------------------------------------------------------------------------------
 # Create archive
 #------------------------------------------------------------------------------------------
-$(DST)_$(VER)-$(ANM).lha: $(BIN)/gVim
+$(DST)_$(VER)-$(ANM).lha: $(DST)/gVim
 	lha $(LHO) a $@ $(DST) && \
 	lha $(LHO) a $@ $(DST).info && \
 	rm -f $(DST).info
@@ -62,4 +61,6 @@ $(DST)_$(VER)-$(ANM).lha: $(BIN)/gVim
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf $(DST) $(DST).info Vim_$(VER)-$(ANM).lha README.bin README.src *.readme upload
+	rm -Rf $(DST) gVim Vim_$(VER)-$(ANM).lha README.bin README.src
+	rm -Rf $(DST).info gVim.info
+	rm -Rf *.readme upload
