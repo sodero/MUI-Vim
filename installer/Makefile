@@ -1,8 +1,8 @@
 #------------------------------------------------------------------------------------------
 # Host settings
 #------------------------------------------------------------------------------------------
-UNM:=$(shell uname)
-ARC:=$(shell uname -m | tr -d ower)
+UNM?=$(shell uname)
+ARC?=$(shell uname -m | tr -d ower)
 ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
 LHO:=-3rae
