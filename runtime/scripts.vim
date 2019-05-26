@@ -371,6 +371,10 @@ else
   elseif s:line1 =~? '-\*-.*erlang.*-\*-'
     set ft=erlang
 
+  " Amiga Installer
+  elseif search('(trace\|(retrace\|(rex\|(pro\|(pat\|(in\|(for\|(get\|(ear\|(ex\|(wel\|(cop\|(ask\|(set\|(bit\|(cat\|(com\|(if\|([+-/*<]')
+    set ft=installer
+
   " CVS diff
   else
     let s:lnum = 1
