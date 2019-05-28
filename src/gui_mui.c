@@ -1026,8 +1026,11 @@ MUIDSP IPTR VimConSetFgColor (Class *cls,
     };
 
     struct VimConData *my = INST_DATA (cls,obj);
-
+	#ifdef __amigaos4__
+    tags[0].ti_Data = msg->Color|0xFF000000;
+    #else
     tags[0].ti_Data = msg->Color;
+    #endif
     SetRPAttrsA (&my->rp, tags);
 
     return TRUE;
@@ -1049,8 +1052,11 @@ MUIDSP IPTR VimConSetBgColor (Class *cls,
     };
 
     struct VimConData *my = INST_DATA (cls,obj);
-
+    #ifdef __amigaos4__
+    tags[0].ti_Data = msg->Color|0xFF000000;
+    #else
     tags[0].ti_Data = msg->Color;
+    #endif
     SetRPAttrsA (&my->rp, tags);
 
     return TRUE;
