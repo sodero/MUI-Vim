@@ -3363,15 +3363,21 @@ int gui_mch_init (void)
 
     if (!VimToolbarClass)
     {
-        struct TagItem tags[] = { ESA_Position,REQPOS_CENTERSCREEN, TAG_DONE };
-        struct EasyStruct req={ 0 };
-        req.es_StructSize   = sizeof(struct EasyStruct);
-        req.es_Flags        = 0;//ESF_SCREEN | ESF_TAGGED | ESF_EVENSIZE;
-        req.es_Title        = (UBYTE *)"Error";
-        req.es_TextFormat   = (UBYTE *)"MCC_TheBar required";
-        req.es_GadgetFormat = (UBYTE *)"OK";
-        req.es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen; 
-        req.es_TagList      = tags;
+#ifdef __amigaos4__
+        struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
+#endif
+        struct EasyStruct req =
+        {
+            .es_StructSize   = sizeof(struct EasyStruct),
+            .es_Flags        = 0, // ESF_SCREEN | ESF_TAGGED | ESF_EVENSIZE;
+            .es_Title        = (UBYTE *)"Error",
+            .es_TextFormat   = (UBYTE *)"MCC_TheBar required",
+            .es_GadgetFormat = (UBYTE *)"OK",
+#ifdef __amigaos4__
+            .es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen,
+            .es_TagList      = tags
+#endif
+        };
 
         EasyRequest (NULL, &req, NULL, NULL);
         ERR ("MCC_TheBar required");
