@@ -51,6 +51,7 @@
  */
 #ifdef __amigaos4__
 # include <dos/anchorpath.h>
+# include <dos/obsolete.h>
 #endif
 
 #if defined(LATTICE) && !defined(SASC) && defined(FEAT_ARP)
