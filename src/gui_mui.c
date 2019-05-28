@@ -3401,6 +3401,7 @@ int gui_mch_init (void)
         MUIA_Application_Window, Win =
             MUI_NewObject (MUIC_Window,
             MUIA_Window_Title, (IPTR) "Vim",
+            MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
             MUIA_Window_RootObject,
