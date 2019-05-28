@@ -50,6 +50,7 @@ SRC =	arabic.c			\
 		charset.c			\
 		crypt.c				\
 		crypt_zip.c			\
+		debugger.c			\
 		dict.c				\
 		diff.c				\
 		digraph.c			\
@@ -103,6 +104,7 @@ SRC =	arabic.c			\
 		textprop.c			\
 		ui.c				\
 		undo.c				\
+		usercmd.c			\
 		userfunc.c			\
 		version.c			\
 		window.c			\
