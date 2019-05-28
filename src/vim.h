@@ -454,8 +454,12 @@ typedef unsigned int u8char_T;	// int is 32 bits or more
 #  include <strings.h>
 # endif
 # ifdef HAVE_STAT_H
+#ifdef __amigaos4__
+#  include <sys/stat.h>
+#else
 #  include <stat.h>
 # endif
+#endif
 # ifdef HAVE_STDLIB_H
 #  include <stdlib.h>
 # endif
