@@ -1185,7 +1185,11 @@ MUIDSP IPTR VimConNew (Class *cls,
     my->event.ehn_Flags = 0;
     my->event.ehn_Object = obj;
     my->event.ehn_Class = NULL;
-    my->event.ehn_Events = IDCMP_RAWKEY | IDCMP_MOUSEBUTTONS;
+    my->event.ehn_Events = IDCMP_RAWKEY |
+                           #ifdef __amigaos4__
+                           IDCMP_EXTENDEDMOUSE |
+                           #endif
+                           IDCMP_MOUSEBUTTONS;
 
     return (IPTR) obj;
 }
@@ -1704,6 +1708,25 @@ MUIDSP IPTR VimConHandleEvent (Class *cls,
     case IDCMP_INTUITICKS:
         VimConMouseMove (cls, obj, msg);
         break;
+
+#ifdef __amigaos4__
+    case IDCMP_EXTENDEDMOUSE:
+        if(msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
+        {
+            struct IntuiWheelData *iwd = (struct IntuiWheelData *)msg->imsg->IAddress;
+            if(iwd->WheelY<0)
+                msg->imsg->Code=RAWKEY_NM_WHEEL_UP;
+            else if(iwd->WheelY>0)
+                msg->imsg->Code=RAWKEY_NM_WHEEL_DOWN;
+            else if(iwd->WheelX<0)
+                msg->imsg->Code=RAWKEY_NM_WHEEL_LEFT;
+            else if(iwd->WheelX>0)
+                msg->imsg->Code=RAWKEY_NM_WHEEL_RIGHT;
+
+            VimConHandleRaw(cls, obj, msg);
+        }
+        break;
+#endif
 
     case IDCMP_RAWKEY:
         VimConHandleRaw (cls, obj, msg);
