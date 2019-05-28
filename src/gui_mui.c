@@ -1768,10 +1768,10 @@ MUIDSP IPTR VimConMinMax (Class *cls,
     // Maybe something less ad hoc?
     msg->MinMaxInfo->MaxWidth = GetBitMapAttr (my->bm, BMA_WIDTH);
     msg->MinMaxInfo->MaxHeight = GetBitMapAttr (my->bm, BMA_HEIGHT);
-    msg->MinMaxInfo->MinWidth = msg->MinMaxInfo->MaxWidth >> 3L;
-    msg->MinMaxInfo->MinHeight = msg->MinMaxInfo->MaxHeight >> 3L;
-    msg->MinMaxInfo->DefWidth = (msg->MinMaxInfo->MaxWidth >> 1L) + msg->MinMaxInfo->MinWidth;
-    msg->MinMaxInfo->DefHeight = (msg->MinMaxInfo->MaxHeight >> 1L) + msg->MinMaxInfo->MinHeight;
+    msg->MinMaxInfo->MinWidth += msg->MinMaxInfo->MaxWidth >> 3L;
+    msg->MinMaxInfo->MinHeight += msg->MinMaxInfo->MaxHeight >> 3L;
+    msg->MinMaxInfo->DefWidth += (msg->MinMaxInfo->MaxWidth >> 1L) + msg->MinMaxInfo->MinWidth;
+    msg->MinMaxInfo->DefHeight += (msg->MinMaxInfo->MaxHeight >> 1L) + msg->MinMaxInfo->MinHeight;
     return r;
 }
 
