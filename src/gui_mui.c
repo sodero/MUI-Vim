@@ -3326,7 +3326,10 @@ int gui_mch_init (void)
 #endif
 		   
 
-    const char *classes[] = { "TheBar.mcc", NULL };
+    static const CONST_STRPTR classes[] = {
+        "TheBar.mcc",
+        NULL
+    };
     VimToolbarClass = VimConClass = VimMenuClass = NULL;
 
 
