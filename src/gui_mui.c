@@ -3693,8 +3693,12 @@ void gui_mch_add_menu_item (vimmenu_T *menu,
             }
             else
             {
-                DoMethod (Mnu, MUIM_VimMenu_AddMenuItem, menu->parent,
-                          menu, menu->dname);
+                #warning ! after scrollbar functionality is implemented, remove that hack !
+                if(!strstr(menu->dname, "Scrollbar"))
+                {                 
+                    DoMethod (Mnu, MUIM_VimMenu_AddMenuItem, menu->parent,
+                              menu, menu->dname);
+                }
             }
         }
     }
