@@ -61,6 +61,15 @@
 #endif /* PROTO */
 
 /*
+ * Set minimum stack size of 1mb , so to deal with all possible crashes related to small stack size.
+ */
+#ifdef __amigaos4__
+static const char* __attribute__((used)) stackcookie = "$STACK: 1000000";
+#else // morphos & aros
+unsigned long __stack = 1000000;
+#endif 
+
+/*
  * At this point TRUE and FALSE are defined as 1L and 0L, but we want 1 and 0.
  */
 #undef	TRUE
