@@ -1337,6 +1337,12 @@ MUIDSP IPTR VimConCleanup (Class *cls,
     // Input handler for keys and mouse is always present
     DoMethod (_win (obj), MUIM_Window_RemEventHandler, &my->event);
 
+    // Let Vim know that we have a zero size shell. This
+    // is for iconification and not tear down. A redraw
+    // will be triggered when we have a shell with a size
+    // greater than zero, e.g when de-iconifying.
+    gui_resize_shell (0, 0);
+
     // Let the superclass do its part
     return (IPTR) DoSuperMethodA (cls, obj, (Msg) msg);
 }
@@ -1931,7 +1937,10 @@ MUIDSP IPTR VimConShow (Class *cls,
                         Msg msg)
 {
     IPTR r = (IPTR) DoSuperMethodA (cls, obj, msg);
+
+    // We probably have a new size.
     gui_resize_shell (_mwidth(obj), _mheight(obj));
+
     return r;
 }
 
