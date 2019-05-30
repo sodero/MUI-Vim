@@ -320,15 +320,16 @@ static void free_cmd_args(void)
 {
     if(cmd_args)
     {
-	char **done = cmd_args;
+	char **arg = cmd_args;
 
-	while(*cmd_args)
+	while(*arg)
 	{
-	    free(*cmd_args);
-	    cmd_args++;
+	    free(*arg);
+	    arg++;
 	}
 
-	free(done);
+	free(cmd_args);
+	cmd_args = NULL;
     }
 }
 
