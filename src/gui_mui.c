@@ -1163,7 +1163,37 @@ MUIDSP IPTR VimConNew (Class *cls,
         return (IPTR) NULL;
     }
 
+    struct Screen *s = LockPubScreen(NULL);
+
+    if (!s)
+    {
+        ERR ("Could not lock public screen");
+        CoerceMethod (cls, obj, OM_DISPOSE);
+        return (IPTR) NULL;
+    }
+
     struct VimConData *my = INST_DATA (cls,obj);
+
+    my->bm = (struct BitMap *) AllocBitMap
+             (GetBitMapAttr (s->RastPort.BitMap, BMA_WIDTH),
+              GetBitMapAttr (s->RastPort.BitMap, BMA_HEIGHT),
+              GetBitMapAttr (s->RastPort.BitMap, BMA_DEPTH),
+              BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
+              s->RastPort.BitMap);
+
+    UnlockPubScreen(NULL, s);
+
+    if (!my->bm)
+    {
+        ERR ("Failed allocating bitmap memory");
+        CoerceMethod (cls, obj, OM_DISPOSE);
+        return (IPTR) NULL;
+    }
+
+    // Initial RP settings
+    InitRastPort (&my->rp);
+    my->rp.BitMap = my->bm;
+    SetRPAttrs (&my->rp, RPTAG_DrMd, JAM2, RPTAG_PenMode, FALSE, TAG_DONE);
 
     // Static settings
     my->blink = 0;
@@ -1212,20 +1242,6 @@ MUIDSP IPTR VimConSetup (Class *cls,
         return FALSE;
     }
 
-    // Allocate offscreen bitmap.
-    my->bm = (struct BitMap *) AllocBitMap
-             (GetBitMapAttr (_screen(obj)->RastPort.BitMap, BMA_WIDTH),
-              GetBitMapAttr (_screen(obj)->RastPort.BitMap, BMA_HEIGHT),
-              GetBitMapAttr (_screen(obj)->RastPort.BitMap, BMA_DEPTH),
-              BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
-              _screen(obj)->RastPort.BitMap);
-
-    if (!my->bm)
-    {
-        ERR ("Failed allocating bitmap memory");
-        return FALSE;
-    }
-
     // Make sure that we're running cgfx.
     if (!GetCyberMapAttr (my->bm, CYBRMATTR_ISCYBERGFX))
     {
@@ -1234,18 +1250,8 @@ MUIDSP IPTR VimConSetup (Class *cls,
         return FALSE;
     }
 
-    // Initial RP settings
-    InitRastPort (&my->rp);
-    my->rp.BitMap = my->bm;
-
-    SetRPAttrs
-    (
-        &my->rp,
-        RPTAG_DrMd, JAM2,
-        RPTAG_PenMode, FALSE,
-        RPTAG_Font, _font(obj),
-        TAG_DONE
-    );
+    // Font might have changed
+    SetFont (&my->rp, _font (obj));
 
     // Make room for smearing, no overlap allowed
     my->rp.TxSpacing = my->rp.Font->tf_BoldSmear;
@@ -1300,6 +1306,16 @@ MUIDSP IPTR VimConDispose (Class *cls,
                            Object *obj,
                            Msg msg)
 {
+    struct VimConData *my = INST_DATA (cls,obj);
+
+    // Free bitmap when no one's using it
+    if (my->bm)
+    {
+        WaitBlit();
+        FreeBitMap (my->bm);
+        my->bm = NULL;
+    }
+
     return DoSuperMethodA (cls, obj, msg);
 }
 
@@ -1313,14 +1329,6 @@ MUIDSP IPTR VimConCleanup (Class *cls,
                            Msg msg)
 {
     struct VimConData *my = INST_DATA (cls,obj);
-
-    // Free bitmap when no one's using it
-    if (my->bm)
-    {
-        WaitBlit();
-        FreeBitMap (my->bm);
-        my->bm = NULL;
-    }
 
     // Remove timeout timer if present
     if (my->timeout.ihn_Millis)
