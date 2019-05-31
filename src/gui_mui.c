@@ -173,10 +173,10 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
-#define MUIV_VimCon_GetState_Idle    (1 << 0)
-#define MUIV_VimCon_GetState_Input   (1 << 1)
-#define MUIV_VimCon_GetState_Timeout (1 << 2)
-#define MUIV_VimCon_GetState_Unknown (0)
+#define MUIV_VimCon_State_Idle       (1 << 0)
+#define MUIV_VimCon_State_Yield      (1 << 1)
+#define MUIV_VimCon_State_Timeout    (1 << 2)
+#define MUIV_VimCon_State_Unknown    (0)
 
 struct MUIP_VimCon_SetFgColor
 {
@@ -503,7 +503,7 @@ MUIDSP IPTR VimConAboutMUI ( Class *cls,
     struct VimConData *my = INST_DATA (cls,obj);
 
     // Needed to not mess up the message loop
-    my->state |= MUIV_VimCon_GetState_Input;
+    my->state |= MUIV_VimCon_State_Yield;
     DoMethod (_app(obj), MUIM_Application_AboutMUI, _win(obj));
 
     return 0;
@@ -520,7 +520,7 @@ MUIDSP IPTR VimConMUISettings ( Class *cls,
     struct VimConData *my = INST_DATA (cls,obj);
 
     // Needed to not mess up the message loop
-    my->state |= MUIV_VimCon_GetState_Input;
+    my->state |= MUIV_VimCon_State_Yield;
     DoMethod (_app(obj), MUIM_Application_OpenConfigWindow, _win(obj));
 
     return 0;
@@ -734,7 +734,7 @@ MUIDSP IPTR VimConTimeout (Class *cls,
     struct VimConData *my = INST_DATA (cls,obj);
 
     // Take note and keep on going
-    my->state |= MUIV_VimCon_GetState_Timeout;
+    my->state |= MUIV_VimCon_State_Timeout;
 
     return TRUE;
 }
@@ -1200,7 +1200,6 @@ MUIDSP IPTR VimConNew (Class *cls,
     my->cursor[0] = 700;
     my->cursor[1] = 250;
     my->cursor[2] = 400;
-    my->state = MUIV_VimCon_GetState_Idle;
     my->xdelta = my->ydelta = 1;
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
@@ -1290,6 +1289,9 @@ MUIDSP IPTR VimConSetup (Class *cls,
     {
         DoMethod (_app (obj), MUIM_Application_AddInputHandler, &my->ticker);
     }
+
+    // Yield CPU when init is done.
+    my->state |= MUIV_VimCon_State_Yield;
 
     // Let Vim know about changes in size (if any)
     gui_resize_shell (_mwidth (obj), _mheight (obj) );
@@ -1752,7 +1754,7 @@ MUIDSP IPTR VimConHandleEvent (Class *cls,
         return DoSuperMethodA (cls, obj, (Msg)msg);
     }
 
-    my->state |= MUIV_VimCon_GetState_Input;
+    my->state |= MUIV_VimCon_State_Yield;
     return MUI_EventHandlerRC_Eat;
 }
 
@@ -1882,7 +1884,7 @@ MUIDSP IPTR VimConCallback (Class *cls,
     if (mp && mp->cb)
     {
         // Treat menu / buttons like keyboard input
-        my->state |= MUIV_VimCon_GetState_Input;
+        my->state |= MUIV_VimCon_State_Yield;
         mp->cb (mp);
         return TRUE;
     }
@@ -1904,29 +1906,29 @@ MUIDSP IPTR VimConGetState (Class *cls,
     struct VimConData *my = INST_DATA (cls,obj);
 
     // Can't idle and X at the same time
-    if (my->state == MUIV_VimCon_GetState_Idle)
+    if (my->state == MUIV_VimCon_State_Idle)
     {
         // A signal of some sort?
-        return MUIV_VimCon_GetState_Idle;
+        return MUIV_VimCon_State_Idle;
     }
 
-    // Input takes precendence over timeout
-    if (my->state & MUIV_VimCon_GetState_Input)
+    // Yields take precendence over timeouts
+    if (my->state & MUIV_VimCon_State_Yield)
     {
-        my->state = MUIV_VimCon_GetState_Idle;
-        return MUIV_VimCon_GetState_Input;
+        my->state = MUIV_VimCon_State_Idle;
+        return MUIV_VimCon_State_Yield;
     }
 
     // Timeout takes precedence over nothing
-    if (my->state & MUIV_VimCon_GetState_Timeout)
+    if (my->state & MUIV_VimCon_State_Timeout)
     {
-        my->state = MUIV_VimCon_GetState_Idle;
-        return MUIV_VimCon_GetState_Timeout;
+        my->state = MUIV_VimCon_State_Idle;
+        return MUIV_VimCon_State_Timeout;
     }
 
     // Real trouble
     ERR ("Unknown state");
-    return MUIV_VimCon_GetState_Unknown;
+    return MUIV_VimCon_State_Unknown;
 }
 
 //----------------------------------------------------------------------------
@@ -3145,7 +3147,7 @@ int gui_mch_wait_for_chars (int wtime)
         {
             int state = DoMethod (Con, MUIM_VimCon_GetState);
 
-            if (state == MUIV_VimCon_GetState_Idle)
+            if (state == MUIV_VimCon_State_Idle)
             {
                 sig = Wait (sig | SIGBREAKF_CTRL_C);
 
@@ -3156,15 +3158,15 @@ int gui_mch_wait_for_chars (int wtime)
             }
             else
             {
-                if (state != MUIV_VimCon_GetState_Input &&
-                    state != MUIV_VimCon_GetState_Timeout)
+                if (state != MUIV_VimCon_State_Yield &&
+                    state != MUIV_VimCon_State_Timeout)
                 {
                     ERR ("Unknown state");
                     getout_preserve_modified (0);
                 }
 
                 // No input == a timeout has occurred
-                return state == MUIV_VimCon_GetState_Input ? OK : FAIL;
+                return state == MUIV_VimCon_State_Yield ? OK : FAIL;
             }
         }
         else
