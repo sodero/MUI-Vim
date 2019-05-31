@@ -1749,7 +1749,7 @@ MUIDSP IPTR VimConHandleEvent (Class *cls,
 
     default:
         // Leave the rest to our parent class
-        return DoSuperMethodA (cls, obj, msg);
+        return DoSuperMethodA (cls, obj, (Msg)msg);
     }
 
     my->state |= MUIV_VimCon_GetState_Input;
@@ -1765,7 +1765,7 @@ MUIDSP IPTR VimConMinMax (Class *cls,
                           Object *obj,
                           struct MUIP_AskMinMax *msg)
 {
-    IPTR r = (IPTR) DoSuperMethodA (cls, obj, msg);
+    IPTR r = (IPTR) DoSuperMethodA (cls, obj, (Msg)msg);
     struct VimConData *my = INST_DATA (cls,obj);
     if (!my->bm)
     {
@@ -1792,7 +1792,7 @@ MUIDSP IPTR VimConDraw (Class *cls,
                         Object *obj,
                         struct MUIP_Draw *msg)
 {
-    IPTR r = (IPTR) DoSuperMethodA (cls, obj, msg);
+    IPTR r = (IPTR) DoSuperMethodA (cls, obj, (Msg)msg);
     struct VimConData *my = INST_DATA (cls,obj);
     LONG xs = 0, ys = 0, xd = 0,
          yd = 0, w = 0, h = 0;
