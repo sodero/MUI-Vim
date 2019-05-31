@@ -5,7 +5,7 @@ UNM?=$(shell uname)
 ARC?=$(shell uname -m | tr -d ower)
 ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
-LHO:=-3rae
+LHO:=-rae
 else ifeq ($(UNM),AmigaOS4)
 ANM:=$(ARC)-amigaos
 else ifeq ($(UNM),AROS)
@@ -20,17 +20,17 @@ endif
 #------------------------------------------------------------------------------------------
 TOP:=..
 DST:=Vim
-ICO:=icons
+EXT:=extras
 PRG:=$(TOP)/src/vim
 TXT:=$(wildcard *.txt)
 VER:=$(shell cat $(TOP)/src/.ver)
 REV:=$(shell cat $(TOP)/src/.pat)
 
 #------------------------------------------------------------------------------------------
-# Aminet preparation.
+# Create Lha archive and Aminet readme.
 #------------------------------------------------------------------------------------------
-upload: $(DST)_$(VER)-$(ANM).lha
-	mkdir -p $@ && cp $< $@ && \
+archive: $(DST)_$(VER)-$(ANM).lha
+	mkdir -p $@ && mv $< $@ && \
 	cat aminet/README.bin | sed -e "s/__VER__/$(VER).$(REV)/" | \
 	sed -e "s/__ARC__/$(ANM)/" > $@/$(DST)_$(VER)-$(ANM).readme && \
 	cat aminet/README.src | sed -e "s/__VER__/$(VER).$(REV)/" > \
@@ -39,27 +39,25 @@ upload: $(DST)_$(VER)-$(ANM).lha
 #------------------------------------------------------------------------------------------
 # Gather files.
 #------------------------------------------------------------------------------------------
-$(DST)/gVim: $(PRG)
+$(DST)/vim: $(PRG)
 	$(MAKE) -C $(TOP) && mkdir -p $(DST) && \
-	cp $(ICO)/$(UNM)/*.info $(DST) && mv $(DST)/$(DST).info . && \
+	cp $(EXT)/$(UNM)/* $(DST) && mv $(DST)/$(DST).info . && \
+	protect $(DST)/gVim +s && protect $(DST)/eVim +s &&protect $(DST)/vi +s && \
 	for file in $(TXT); do cp $$file $(DST); done && \
 	cp -r $(TOP)/runtime $(DST) && \
-	cp *installer $(DST) && \
 	cp $(PRG) $@
 
 #------------------------------------------------------------------------------------------
 # Create archive
 #------------------------------------------------------------------------------------------
-$(DST)_$(VER)-$(ANM).lha: $(DST)/gVim
+$(DST)_$(VER)-$(ANM).lha: $(DST)/vim
 	lha $(LHO) a $@ $(DST) && \
 	lha $(LHO) a $@ $(DST).info && \
-	rm -f $(DST).info
+	rm -Rf $(DST) $(DST).info
 
 #------------------------------------------------------------------------------------------
 # Phony targets
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf $(DST) gVim Vim_$(VER)-$(ANM).lha README.bin README.src
-	rm -Rf $(DST).info gVim.info
-	rm -Rf *.readme upload
+	rm -Rf archive
