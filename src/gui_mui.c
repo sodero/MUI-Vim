@@ -3142,22 +3142,33 @@ int gui_mch_wait_for_chars (int wtime)
     {
         ULONG sig = 0;
 
+        // Pass control over to MUI.
         if (DoMethod (_app (Con), MUIM_Application_NewInput,
                       &sig) != (ULONG) MUIV_Application_ReturnID_Quit)
         {
+            // Get current input state.
             int state = DoMethod (Con, MUIM_VimCon_GetState);
 
+            // Wait for something to happen if we're idle.
             if (state == MUIV_VimCon_State_Idle)
             {
-                sig = Wait (sig | SIGBREAKF_CTRL_C);
-
-                if (sig & SIGBREAKF_CTRL_C)
+                // For some reason MUI returns 0 when jumping
+                // to the same screen that we're currently on.
+                // If so, just pass control over to Vim.
+                if (sig)
                 {
-                    getout_preserve_modified (0);
+                    sig = Wait (sig | SIGBREAKF_CTRL_C);
+
+                    if (sig & SIGBREAKF_CTRL_C)
+                    {
+                        getout_preserve_modified (0);
+                    }
                 }
             }
             else
             {
+                // Something happened. Either input, a voluntary
+                // yield or a timeout.
                 if (state != MUIV_VimCon_State_Yield &&
                     state != MUIV_VimCon_State_Timeout)
                 {
@@ -3171,6 +3182,7 @@ int gui_mch_wait_for_chars (int wtime)
         }
         else
         {
+            // Quit.
             gui_shell_closed();
         }
     }
