@@ -1,12 +1,12 @@
 /*
  * VIM - Vi IMproved    by Bram Moolenaar
  *
- *                      ***************************************
- *                      * This is not a part of the official  *
- *                      * version of Vim found on www.vim.org *
- *                      ***************************************
+ * *****************************************************************
+ * *              This is not a part of the official               *
+ * *              version of Vim found on www.vim.org              *
+ * *****************************************************************
  *
- *                      MUI support by Ola Söder
+ * MUI support by Ola Söder and KAS1E's REAL NAME (if he wants to).
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
  * Do ":help credits" in Vim to see a list of people who contributed.
