@@ -1,1 +1,5 @@
-TODO
+Credits
+=============
+Ola Söder - Initial version for AROS and MorphOS.
+KAS1E's REAL NAME (if he wants to) - Amiga OS4 port and numerous bug fixes.
+Martin Merz - Icons and toolbar graphics.
