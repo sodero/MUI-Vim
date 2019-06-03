@@ -31,12 +31,10 @@ REV:=$(shell cat $(SRC)/.pat)
 #------------------------------------------------------------------------------------------
 # Create Lha archive and Aminet readme.
 #------------------------------------------------------------------------------------------
-archive: $(DST)_$(VER)-$(ANM).lha
+tmp: $(DST)_$(VER)-$(ANM).lha
 	mkdir -p $@ && mv $< $@ && \
 	cat aminet/README.bin | sed -e "s/__VER__/$(VER).$(REV)/" | \
-	sed -e "s/__ARC__/$(ANM)/" > $@/$(DST)_$(VER)-$(ANM).readme && \
-	cat aminet/README.src | sed -e "s/__VER__/$(VER).$(REV)/" > \
-	$@/$(DST)_$(VER)-src.readme
+	sed -e "s/__ARC__/$(ANM)/" > $@/$(DST)_$(VER)-$(ANM).readme
 
 #------------------------------------------------------------------------------------------
 # Gather files.
@@ -62,4 +60,4 @@ $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf archive
+	rm -Rf tmp
