@@ -21,10 +21,12 @@ endif
 TOP:=..
 DST:=Vim
 EXT:=extras
-PRG:=$(TOP)/src/vim
-TXT:=$(wildcard *.txt)
-VER:=$(shell cat $(TOP)/src/.ver)
-REV:=$(shell cat $(TOP)/src/.pat)
+PRO:=protect
+SRC:=$(TOP)/src
+PRG:=$(SRC)/vim
+ALL:=$(wildcard *.txt) vi gVim eVim
+VER:=$(shell cat $(SRC)/.ver)
+REV:=$(shell cat $(SRC)/.pat)
 
 #------------------------------------------------------------------------------------------
 # Create Lha archive and Aminet readme.
@@ -40,10 +42,10 @@ archive: $(DST)_$(VER)-$(ANM).lha
 # Gather files.
 #------------------------------------------------------------------------------------------
 $(DST)/vim: $(PRG)
-	$(MAKE) -C $(TOP) && mkdir -p $(DST) && \
+	$(MAKE) -C $(SRC) -f Make_ami.mak && mkdir -p $(DST) && \
 	cp $(EXT)/$(UNM)/* $(DST) && mv $(DST)/$(DST).info . && \
-	protect $(DST)/gVim +s && protect $(DST)/eVim +s &&protect $(DST)/vi +s && \
-	for file in $(TXT); do cp $$file $(DST); done && \
+	$(PRO) $(DST)/gVim +s && $(PRO) $(DST)/eVim +s && $(PRO) $(DST)/vi +s && \
+	for file in $(ALL); do cp $$file $(DST); done && \
 	cp -r $(TOP)/runtime $(DST) && \
 	cp $(PRG) $@
 
