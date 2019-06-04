@@ -42,8 +42,8 @@ tmp: $(DST)_$(VER)-$(ANM).lha
 $(DST)/vim: $(PRG)
 	$(MAKE) -C $(SRC) -f Make_ami.mak && mkdir -p $(DST) && \
 	cp $(EXT)/$(UNM)/* $(DST) && mv $(DST)/$(DST).info . && \
-	$(PRO) $(DST)/gVim +s && $(PRO) $(DST)/eVim +s && $(PRO) $(DST)/vi +s && \
 	for file in $(ALL); do cp $$file $(DST); done && \
+	$(PRO) $(DST)/gVim +s && $(PRO) $(DST)/eVim +s && $(PRO) $(DST)/vi +s && \
 	cp -r $(TOP)/runtime $(DST) && \
 	cp $(PRG) $@
 
