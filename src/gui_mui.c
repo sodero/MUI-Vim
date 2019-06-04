@@ -3140,7 +3140,7 @@ int gui_mch_wait_for_chars (int wtime)
 
     while (!vim_is_input_buf_full() )
     {
-        ULONG sig = 0;
+        static ULONG sig;
 
         // Pass control over to MUI.
         if (DoMethod (_app (Con), MUIM_Application_NewInput,

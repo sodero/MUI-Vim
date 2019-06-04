@@ -21,3 +21,6 @@ are:
 Please note that this is not a straight port of the upstream version.
 It includes a full MUI GUI with most of the bells and whistles found
 in Vim on any of the major platforms.
+
+The source code is available here:
+https://github.com/sodero/MUI-Vim
