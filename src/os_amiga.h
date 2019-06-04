@@ -92,6 +92,7 @@ typedef long off_t;
 # include <errno.h>
 # include <pwd.h>
 # include <time.h>
+# include <dirent.h>
 #endif
 
 #ifndef PROTO

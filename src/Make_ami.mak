@@ -90,6 +90,7 @@ SRC =	arabic.c			\
 		option.c			\
 		os_amiga.c			\
 		popupmnu.c			\
+		popupwin.c			\
 		quickfix.c			\
 		regexp.c			\
 		screen.c			\
