@@ -292,10 +292,10 @@ get_lambda_tv(char_u **arg, typval_T *rettv, int evaluate)
 
 	sprintf((char*)name, "<lambda>%d", ++lambda_no);
 
-	fp = (ufunc_T *)alloc_clear((unsigned)(sizeof(ufunc_T) + STRLEN(name)));
+	fp = alloc_clear(sizeof(ufunc_T) + STRLEN(name));
 	if (fp == NULL)
 	    goto errret;
-	pt = (partial_T *)alloc_clear((unsigned)sizeof(partial_T));
+	pt = ALLOC_CLEAR_ONE(partial_T);
 	if (pt == NULL)
 	    goto errret;
 
@@ -305,7 +305,7 @@ get_lambda_tv(char_u **arg, typval_T *rettv, int evaluate)
 
 	/* Add "return " before the expression. */
 	len = 7 + e - s + 1;
-	p = (char_u *)alloc(len);
+	p = alloc(len);
 	if (p == NULL)
 	    goto errret;
 	((char_u **)(newlines.ga_data))[newlines.ga_len++] = p;
@@ -432,16 +432,16 @@ emsg_funcname(char *ermsg, char_u *name)
  */
     int
 get_func_tv(
-    char_u	*name,		/* name of the function */
-    int		len,		/* length of "name" */
+    char_u	*name,		// name of the function
+    int		len,		// length of "name" or -1 to use strlen()
     typval_T	*rettv,
-    char_u	**arg,		/* argument, pointing to the '(' */
-    linenr_T	firstline,	/* first line of range */
-    linenr_T	lastline,	/* last line of range */
-    int		*doesrange,	/* return: function handled range */
+    char_u	**arg,		// argument, pointing to the '('
+    linenr_T	firstline,	// first line of range
+    linenr_T	lastline,	// last line of range
+    int		*doesrange,	// return: function handled range
     int		evaluate,
-    partial_T	*partial,	/* for extra arguments */
-    dict_T	*selfdict)	/* Dictionary for "self" */
+    partial_T	*partial,	// for extra arguments
+    dict_T	*selfdict)	// Dictionary for "self"
 {
     char_u	*argp;
     int		ret = OK;
@@ -557,7 +557,7 @@ fname_trans_sid(char_u *name, char_u *fname_buf, char_u **tofree, int *error)
 	}
 	else
 	{
-	    fname = alloc((unsigned)(i + STRLEN(name + llen) + 1));
+	    fname = alloc(i + STRLEN(name + llen) + 1);
 	    if (fname == NULL)
 		*error = ERROR_OTHER;
 	    else
@@ -802,7 +802,7 @@ call_user_func(
 
     line_breakcheck();		/* check for CTRL-C hit */
 
-    fc = (funccall_T *)alloc_clear(sizeof(funccall_T));
+    fc = ALLOC_CLEAR_ONE(funccall_T);
     if (fc == NULL)
 	return;
     fc->caller = current_funccal;
@@ -978,7 +978,7 @@ call_user_func(
     /* need space for function name + ("function " + 3) or "[number]" */
     len = (save_sourcing_name == NULL ? 0 : STRLEN(save_sourcing_name))
 						   + STRLEN(fp->uf_name) + 20;
-    sourcing_name = alloc((unsigned)len);
+    sourcing_name = alloc(len);
     if (sourcing_name != NULL)
     {
 	if (save_sourcing_name != NULL
@@ -1435,7 +1435,7 @@ func_call(
     }
 
     if (item == NULL)
-	r = call_func(name, (int)STRLEN(name), rettv, argc, argv, NULL,
+	r = call_func(name, -1, rettv, argc, argv, NULL,
 				 curwin->w_cursor.lnum, curwin->w_cursor.lnum,
 					     &dummy, TRUE, partial, selfdict);
 
@@ -1444,6 +1444,30 @@ func_call(
 	clear_tv(&argv[--argc]);
 
     return r;
+}
+
+/*
+ * Invoke call_func() with a callback.
+ */
+    int
+call_callback(
+    callback_T	*callback,
+    int		len,		// length of "name" or -1 to use strlen()
+    typval_T	*rettv,		// return value goes here
+    int		argcount,	// number of "argvars"
+    typval_T	*argvars,	// vars for arguments, must have "argcount"
+				// PLUS ONE elements!
+    int		(* argv_func)(int, typval_T *, int),
+				// function to fill in argvars
+    linenr_T	firstline,	// first line of range
+    linenr_T	lastline,	// last line of range
+    int		*doesrange,	// return: function handled range
+    int		evaluate,
+    dict_T	*selfdict)	// Dictionary for "self"
+{
+    return call_func(callback->cb_name, len, rettv, argcount, argvars,
+	    argv_func, firstline, lastline, doesrange, evaluate,
+	    callback->cb_partial, selfdict);
 }
 
 /*
@@ -1458,20 +1482,20 @@ func_call(
  */
     int
 call_func(
-    char_u	*funcname,	/* name of the function */
-    int		len,		/* length of "name" */
-    typval_T	*rettv,		/* return value goes here */
-    int		argcount_in,	/* number of "argvars" */
-    typval_T	*argvars_in,	/* vars for arguments, must have "argcount"
-				   PLUS ONE elements! */
+    char_u	*funcname,	// name of the function
+    int		len,		// length of "name" or -1 to use strlen()
+    typval_T	*rettv,		// return value goes here
+    int		argcount_in,	// number of "argvars"
+    typval_T	*argvars_in,	// vars for arguments, must have "argcount"
+				// PLUS ONE elements!
     int		(* argv_func)(int, typval_T *, int),
-				/* function to fill in argvars */
-    linenr_T	firstline,	/* first line of range */
-    linenr_T	lastline,	/* last line of range */
-    int		*doesrange,	/* return: function handled range */
+				// function to fill in argvars
+    linenr_T	firstline,	// first line of range
+    linenr_T	lastline,	// last line of range
+    int		*doesrange,	// return: function handled range
     int		evaluate,
-    partial_T	*partial,	/* optional, can be NULL */
-    dict_T	*selfdict_in)	/* Dictionary for "self" */
+    partial_T	*partial,	// optional, can be NULL
+    dict_T	*selfdict_in)	// Dictionary for "self"
 {
     int		ret = FAIL;
     int		error = ERROR_NONE;
@@ -1487,9 +1511,9 @@ call_func(
     typval_T	argv[MAX_FUNC_ARGS + 1]; /* used when "partial" is not NULL */
     int		argv_clear = 0;
 
-    /* Make a copy of the name, if it comes from a funcref variable it could
-     * be changed or deleted in the called function. */
-    name = vim_strnsave(funcname, len);
+    // Make a copy of the name, if it comes from a funcref variable it could
+    // be changed or deleted in the called function.
+    name = len > 0 ? vim_strnsave(funcname, len) : vim_strsave(funcname);
     if (name == NULL)
 	return ret;
 
@@ -1932,7 +1956,7 @@ trans_function_name(
 	}
     }
 
-    name = alloc((unsigned)(len + lead + 1));
+    name = alloc(len + lead + 1);
     if (name != NULL)
     {
 	if (lead > 0)
@@ -1979,6 +2003,7 @@ ex_function(exarg_T *eap)
     int		indent;
     int		nesting;
     char_u	*skip_until = NULL;
+    char_u	*trimmed = NULL;
     dictitem_T	*v;
     funcdict_T	fudi;
     static int	func_nr = 0;	    /* number for nameless function */
@@ -2303,10 +2328,18 @@ ex_function(exarg_T *eap)
 
 	if (skip_until != NULL)
 	{
-	    /* between ":append" and "." and between ":python <<EOF" and "EOF"
-	     * don't check for ":endfunc". */
-	    if (STRCMP(theline, skip_until) == 0)
-		VIM_CLEAR(skip_until);
+	    // Between ":append" and "." and between ":python <<EOF" and "EOF"
+	    // don't check for ":endfunc".
+	    if (trimmed == NULL
+			    || STRNCMP(theline, trimmed, STRLEN(trimmed)) == 0)
+	    {
+		p = trimmed == NULL ? theline : theline + STRLEN(trimmed);
+		if (STRCMP(p, skip_until) == 0)
+		{
+		    VIM_CLEAR(skip_until);
+		    VIM_CLEAR(trimmed);
+		}
+	    }
 	}
 	else
 	{
@@ -2405,6 +2438,30 @@ ex_function(exarg_T *eap)
 		    skip_until = vim_strsave((char_u *)".");
 		else
 		    skip_until = vim_strsave(p);
+	    }
+
+	    // Check for ":let v =<< [trim] EOF"
+	    arg = skipwhite(skiptowhite(p));
+	    arg = skipwhite(skiptowhite(arg));
+	    if (arg[0] == '=' && arg[1] == '<' && arg[2] =='<'
+		    && ((p[0] == 'l'
+			    && p[1] == 'e'
+			    && (!ASCII_ISALNUM(p[2])
+				|| (p[2] == 't' && !ASCII_ISALNUM(p[3]))))))
+	    {
+		// ":let v =<<" continues until a dot
+		p = skipwhite(arg + 3);
+		if (STRNCMP(p, "trim", 4) == 0)
+		{
+		    // Ignore leading white space.
+		    p = skipwhite(p + 4);
+		    trimmed = vim_strnsave(theline,
+					  (int)(skipwhite(theline) - theline));
+		}
+		if (*p == NUL)
+		    skip_until = vim_strsave((char_u *)".");
+		else
+		    skip_until = vim_strnsave(p, (int)(skiptowhite(p) - p));
 	    }
 	}
 
@@ -2547,7 +2604,7 @@ ex_function(exarg_T *eap)
 	    }
 	}
 
-	fp = (ufunc_T *)alloc_clear((unsigned)(sizeof(ufunc_T) + STRLEN(name)));
+	fp = alloc_clear(sizeof(ufunc_T) + STRLEN(name));
 	if (fp == NULL)
 	    goto erret;
 
@@ -2718,14 +2775,11 @@ func_do_profile(ufunc_T *fp)
 	profile_zero(&fp->uf_tm_self);
 	profile_zero(&fp->uf_tm_total);
 	if (fp->uf_tml_count == NULL)
-	    fp->uf_tml_count = (int *)alloc_clear(
-					       (unsigned)(sizeof(int) * len));
+	    fp->uf_tml_count = ALLOC_CLEAR_MULT(int, len);
 	if (fp->uf_tml_total == NULL)
-	    fp->uf_tml_total = (proftime_T *)alloc_clear(
-					 (unsigned)(sizeof(proftime_T) * len));
+	    fp->uf_tml_total = ALLOC_CLEAR_MULT(proftime_T, len);
 	if (fp->uf_tml_self == NULL)
-	    fp->uf_tml_self = (proftime_T *)alloc_clear(
-					 (unsigned)(sizeof(proftime_T) * len));
+	    fp->uf_tml_self = ALLOC_CLEAR_MULT(proftime_T, len);
 	fp->uf_tml_idx = -1;
 	if (fp->uf_tml_count == NULL || fp->uf_tml_total == NULL
 						    || fp->uf_tml_self == NULL)
@@ -2754,7 +2808,7 @@ func_dump_profile(FILE *fd)
     if (todo == 0)
 	return;     /* nothing to dump */
 
-    sorttab = (ufunc_T **)alloc((unsigned)(sizeof(ufunc_T *) * todo));
+    sorttab = ALLOC_MULT(ufunc_T *, todo);
 
     for (hi = func_hashtab.ht_array; todo > 0; ++hi)
     {
@@ -3285,7 +3339,7 @@ ex_call(exarg_T *eap)
 	    curwin->w_cursor.coladd = 0;
 	}
 	arg = startarg;
-	if (get_func_tv(name, (int)STRLEN(name), &rettv, &arg,
+	if (get_func_tv(name, -1, &rettv, &arg,
 		    eap->line1, eap->line2, &doesrange,
 				   !eap->skip, partial, fudi.fd_dict) == FAIL)
 	{
@@ -3638,7 +3692,7 @@ make_partial(dict_T *selfdict_in, typval_T *rettv)
 
     if (fp != NULL && (fp->uf_flags & FC_DICT))
     {
-	partial_T	*pt = (partial_T *)alloc_clear(sizeof(partial_T));
+	partial_T	*pt = ALLOC_CLEAR_ONE(partial_T);
 
 	if (pt != NULL)
 	{
@@ -3672,8 +3726,7 @@ make_partial(dict_T *selfdict_in, typval_T *rettv)
 		}
 		if (ret_pt->pt_argc > 0)
 		{
-		    pt->pt_argv = (typval_T *)alloc(
-				      sizeof(typval_T) * ret_pt->pt_argc);
+		    pt->pt_argv = ALLOC_MULT(typval_T, ret_pt->pt_argc);
 		    if (pt->pt_argv == NULL)
 			/* out of memory: drop the arguments */
 			pt->pt_argc = 0;
