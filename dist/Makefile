@@ -68,13 +68,11 @@ $(DST)/$(DST).info: $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
 	cp *.txt $(DST)
 	cp gVim $(DST)
-	cp eVim $(DST)
 	cp vi $(DST)
 
 $(DST).info: $(DST)/$(DST).info
 	mv $(DST)/$(DST).info .
 	$(PRO) $(DST)/gVim +s
-	$(PRO) $(DST)/eVim +s
 	$(PRO) $(DST)/vi +s
 
 $(DST)/vim: $(PRG) $(DST).info
