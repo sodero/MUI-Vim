@@ -7,6 +7,7 @@ CC ?=		gcc
 LD =		$(CC)
 
 CFLAGS =	-c				\
+			-O3				\
 			-DNO_ARP		\
 			-DUSE_TMPNAM	\
 			-DHAVE_STDARG_H	\
