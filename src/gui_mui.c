@@ -32,22 +32,22 @@
 #include <proto/keymap.h>
 
 #ifdef __amigaos4__
-	
+
 #include <dos/obsolete.h>
 
 typedef unsigned long IPTR;
 
-struct Library			*MUIMasterBase	= NULL;
-struct MUIMasterIFace	*IMUIMaster		= NULL; 
+struct Library            *MUIMasterBase    = NULL;
+struct MUIMasterIFace    *IMUIMaster        = NULL;
 
-struct Library			*CyberGfxBase	= NULL;
-struct CyberGfxIFace	*ICyberGfx		= NULL; 
+struct Library            *CyberGfxBase    = NULL;
+struct CyberGfxIFace    *ICyberGfx        = NULL;
 
-struct Library 			*KeymapBase		= NULL;
-struct KeymapIFace 		*IKeymap 		= NULL;
+struct Library             *KeymapBase        = NULL;
+struct KeymapIFace         *IKeymap         = NULL;
 
-#define RPTAG_FgColor RPTAG_APenColor 
-#define RPTAG_BgColor RPTAG_BPenColor 
+#define RPTAG_FgColor RPTAG_APenColor
+#define RPTAG_BgColor RPTAG_BPenColor
 #define RPTAG_PenMode TAG_IGNORE
 
 #define KPrintF DebugPrintF
@@ -64,10 +64,9 @@ rc = (Object *)DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG), NULL)
 va_end(args);
 
 return rc;
-} 
+}
 
 #endif
-
 
 //----------------------------------------------------------------------------
 // Macros - Debug and log
@@ -97,7 +96,7 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 # define DISPATCH_HEAD \
   Class *cls = (Class *) REG_A0; \
   Object *obj = (Object *) REG_A2; \
-  Msg msg = (Msg) REG_A1  
+  Msg msg = (Msg) REG_A1
 # define CLASS_DEF(C) \
   static IPTR C ## Dispatch (void); \
   static struct MUI_CustomClass * C ## Class; \
@@ -105,9 +104,9 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
   { TRAP_LIB, 0, (void (*) (void)) C ## Dispatch }; \
   struct C ## Data
 #else
-	#ifndef __amigaos4__
-	# define DoSuperNew(C,O,...) DoSuperNewTags(C,O,NULL,__VA_ARGS__)
-	#endif
+    #ifndef __amigaos4__
+    # define DoSuperNew(C,O,...) DoSuperNewTags(C,O,NULL,__VA_ARGS__)
+    #endif
 # define DISPATCH_HEAD
 # define DISPATCH_ARGS Class *cls, Object *obj, Msg msg
 # define DISPATCH_GATE(C) C ## Dispatch
@@ -1025,12 +1024,9 @@ MUIDSP IPTR VimConSetFgColor (Class *cls,
         { .ti_Tag = TAG_END        }
     };
 
-    struct VimConData *my = INST_DATA (cls,obj);
-	#ifdef __amigaos4__
     tags[0].ti_Data = msg->Color|0xFF000000;
-    #else
-    tags[0].ti_Data = msg->Color;
-    #endif
+
+    struct VimConData *my = INST_DATA (cls,obj);
     SetRPAttrsA (&my->rp, tags);
 
     return TRUE;
@@ -3350,26 +3346,25 @@ int gui_mch_init (void)
            *Set = NULL, *Abo = NULL;
 
 #ifdef __amigaos4__
-	if(!(MUIMasterBase = OpenLibrary("muimaster.library", 19))) {
-		fprintf(stderr, "Failed to open muimaster.library.\n");
-		return FALSE;		
-	}
-	IMUIMaster = (struct MUIMasterIFace *)GetInterface(MUIMasterBase, "main", 1, NULL);
-			
-	if(!(CyberGfxBase=OpenLibrary("cybergraphics.library",40))) {
-		fprintf(stderr, "Failed to open cybergraphics.library.\n");
-		return FALSE;
-	}
-	ICyberGfx=(struct CyberGfxIFace*)GetInterface(CyberGfxBase,"main",1,NULL);	
-	
-	
-	if(!(KeymapBase =OpenLibrary("keymap.library", 50))) {
-		fprintf(stderr, "Failed to open keymap.library.\n");
-		return FALSE;
-	}
+    if(!(MUIMasterBase = OpenLibrary("muimaster.library", 19))) {
+        fprintf(stderr, "Failed to open muimaster.library.\n");
+        return FALSE;
+    }
+    IMUIMaster = (struct MUIMasterIFace *)GetInterface(MUIMasterBase, "main", 1, NULL);
+
+    if(!(CyberGfxBase=OpenLibrary("cybergraphics.library",40))) {
+        fprintf(stderr, "Failed to open cybergraphics.library.\n");
+        return FALSE;
+    }
+    ICyberGfx=(struct CyberGfxIFace*)GetInterface(CyberGfxBase,"main",1,NULL);
+
+    if(!(KeymapBase =OpenLibrary("keymap.library", 50))) {
+        fprintf(stderr, "Failed to open keymap.library.\n");
+        return FALSE;
+    }
     IKeymap = (struct KeymapIFace*)GetInterface(KeymapBase, "main", 1, NULL);
 #endif
-		   
+
 
     static const CONST_STRPTR classes[] = {
         "TheBar.mcc",
@@ -3600,21 +3595,21 @@ void gui_mch_exit (int rc)
         MUI_DeleteCustomClass (VimToolbarClass);
     }
 #ifdef __amigaos4__
-	if(IMUIMaster != NULL) {
-		DropInterface((struct Interface *)IMUIMaster);
-	}
-	if (MUIMasterBase) CloseLibrary((struct Library *)MUIMasterBase);
+    if(IMUIMaster != NULL) {
+        DropInterface((struct Interface *)IMUIMaster);
+    }
+    if (MUIMasterBase) CloseLibrary((struct Library *)MUIMasterBase);
 
-	if(ICyberGfx != NULL) {
-		DropInterface((struct Interface *)ICyberGfx);
-	}
-	if (CyberGfxBase) CloseLibrary((struct Library *)CyberGfxBase);
-	
-	
-	if(IKeymap != NULL) {
-		DropInterface((struct Interface*)IKeymap);
-	}
-    if(KeymapBase) CloseLibrary((struct Library *)KeymapBase);	
+    if(ICyberGfx != NULL) {
+        DropInterface((struct Interface *)ICyberGfx);
+    }
+    if (CyberGfxBase) CloseLibrary((struct Library *)CyberGfxBase);
+
+
+    if(IKeymap != NULL) {
+        DropInterface((struct Interface*)IKeymap);
+    }
+    if(KeymapBase) CloseLibrary((struct Library *)KeymapBase);
 #endif
 
 }
