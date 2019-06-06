@@ -6,8 +6,9 @@ ARC?=$(shell uname -m | tr -d ower)
 ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
 LHO:=-rae
-else ifeq ($(UNM),AmigaOS4)
+else ifeq ($(UNM),AmigaOS)
 ANM:=$(ARC)-amigaos
+LHO:=-rae
 else ifeq ($(UNM),AROS)
 ANM:=$(ARC)-aros
 else
@@ -24,40 +25,67 @@ EXT:=extras
 PRO:=protect
 SRC:=$(TOP)/src
 PRG:=$(SRC)/vim
-ALL:=$(wildcard *.txt) vi gVim eVim
 VER:=$(shell cat $(SRC)/.ver)
 REV:=$(shell cat $(SRC)/.pat)
 
 #------------------------------------------------------------------------------------------
-# Create Lha archive and Aminet readme.
+# Create archive and Aminet readme
 #------------------------------------------------------------------------------------------
-tmp: $(DST)_$(VER)-$(ANM).lha
-	mkdir -p $@ && mv $< $@ && \
-	cat aminet/README.bin | sed -e "s/__VER__/$(VER).$(REV)/" | \
-	sed -e "s/__ARC__/$(ANM)/" > $@/$(DST)_$(VER)-$(ANM).readme
+.PHONY: all
+all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
 #------------------------------------------------------------------------------------------
-# Gather files.
+# Build vim
 #------------------------------------------------------------------------------------------
-$(DST)/vim: $(PRG)
-	$(MAKE) -C $(SRC) -f Make_ami.mak && mkdir -p $(DST) && \
-	cp $(EXT)/$(UNM)/* $(DST) && mv $(DST)/$(DST).info . && \
-	for file in $(ALL); do cp $$file $(DST); done && \
-	$(PRO) $(DST)/gVim +s && $(PRO) $(DST)/eVim +s && $(PRO) $(DST)/vi +s && \
-	cp -r $(TOP)/runtime $(DST) && \
-	cp $(PRG) $@
+.PHONY: $(PRG)
+$(PRG):
+	$(MAKE) -C $(SRC) -f Make_ami.mak
 
 #------------------------------------------------------------------------------------------
 # Create archive
 #------------------------------------------------------------------------------------------
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
-	lha $(LHO) a $@ $(DST) && \
-	lha $(LHO) a $@ $(DST).info && \
-	rm -Rf $(DST) $(DST).info
+	lha $(LHO) a $@ $(DST) $(DST).info
+
+#------------------------------------------------------------------------------------------
+# Populate temp
+#------------------------------------------------------------------------------------------
+tmp/$(DST)_$(VER)-$(ANM).readme: tmp
+	cat aminet/README.bin | sed -e "s/__VER__/$(VER).$(REV)/" | \
+	sed -e "s/__ARC__/$(ANM)/" > $@
+
+tmp/$(DST)_$(VER)-$(ANM).lha: $(DST)_$(VER)-$(ANM).lha tmp
+	mv $< $@
+
+tmp:
+	mkdir -p $@
+
+#------------------------------------------------------------------------------------------
+# Gather files.
+#------------------------------------------------------------------------------------------
+$(DST)/$(DST).info: $(DST)
+	cp -r $(TOP)/runtime $(DST)
+	cp $(EXT)/$(UNM)/* $(DST)
+	cp *.txt $(DST)
+	cp gVim $(DST)
+	cp eVim $(DST)
+	cp vi $(DST)
+
+$(DST).info: $(DST)/$(DST).info
+	mv $(DST)/$(DST).info .
+	$(PRO) $(DST)/gVim +s
+	$(PRO) $(DST)/eVim +s
+	$(PRO) $(DST)/vi +s
+
+$(DST)/vim: $(PRG) $(DST).info
+	cp $(PRG) $@
+
+$(DST):
+	mkdir $@
 
 #------------------------------------------------------------------------------------------
 # Phony targets
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf tmp
+	rm -Rf tmp Vim Vim.info *.lha
