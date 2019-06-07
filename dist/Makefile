@@ -17,16 +17,16 @@ UNM:="Unknown"
 endif
 
 #------------------------------------------------------------------------------------------
-# Paths and files
+# General settings
 #------------------------------------------------------------------------------------------
 TOP:=..
-DST:=Vim
-EXT:=extras
-PRO:=protect
 SRC:=$(TOP)/src
-PRG:=$(SRC)/vim
-VER:=$(shell cat $(SRC)/.ver)
-REV:=$(shell cat $(SRC)/.pat)
+VIM:=$(SRC)/vim
+PRO:=protect
+EXT:=extras
+DST:=Vim
+VER?=0
+REV?=0
 
 #------------------------------------------------------------------------------------------
 # Create archive and Aminet readme
@@ -34,55 +34,45 @@ REV:=$(shell cat $(SRC)/.pat)
 .PHONY: all
 all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
-#------------------------------------------------------------------------------------------
-# Build vim
-#------------------------------------------------------------------------------------------
-.PHONY: $(PRG)
-$(PRG):
-	$(MAKE) -C $(SRC) -f Make_ami.mak
-
-#------------------------------------------------------------------------------------------
-# Create archive
-#------------------------------------------------------------------------------------------
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
 	lha $(LHO) a $@ $(DST) $(DST).info
 
 #------------------------------------------------------------------------------------------
 # Populate temp
 #------------------------------------------------------------------------------------------
-tmp/$(DST)_$(VER)-$(ANM).readme: tmp
+tmp/$(DST)_$(VER)-$(ANM).readme: | tmp
 	cat aminet/README.bin | sed -e "s/__VER__/$(VER).$(REV)/" | \
 	sed -e "s/__ARC__/$(ANM)/" > $@
 
-tmp/$(DST)_$(VER)-$(ANM).lha: $(DST)_$(VER)-$(ANM).lha tmp
+tmp/$(DST)_$(VER)-$(ANM).lha: $(DST)_$(VER)-$(ANM).lha | tmp
 	mv $< $@
 
 tmp:
 	mkdir -p $@
 
 #------------------------------------------------------------------------------------------
-# Gather files.
+# Gather files
 #------------------------------------------------------------------------------------------
-$(DST)/$(DST).info: $(DST)
+$(DST)/$(DST).info: | $(DST)
 	cp -r $(TOP)/runtime $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
 	cp *.txt $(DST)
 	cp gVim $(DST)
 	cp vi $(DST)
 
-$(DST).info: $(DST)/$(DST).info
+$(DST).info: | $(DST)/$(DST).info
 	mv $(DST)/$(DST).info .
 	$(PRO) $(DST)/gVim +s
 	$(PRO) $(DST)/vi +s
 
-$(DST)/vim: $(PRG) $(DST).info
-	cp $(PRG) $@
+$(DST)/vim: | $(DST).info
+	cp $(VIM) $@
 
 $(DST):
 	mkdir $@
 
 #------------------------------------------------------------------------------------------
-# Phony targets
+# Clean up
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
