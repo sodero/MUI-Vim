@@ -10,6 +10,7 @@ CFLAGS =	-c				\
 			-O3				\
 			-DNO_ARP		\
 			-DUSE_TMPNAM	\
+			-DHAVE_FSYNC	\
 			-DHAVE_STDARG_H	\
 			-DHAVE_TGETENT	\
 			-DHAVE_TERMCAP	\
