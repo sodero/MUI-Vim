@@ -1,3 +1,5 @@
+# Shanghai Makefile
+ifeq ("bloody","boring")
 # This Makefile has two purposes:
 # 1. Starting the compilation of Vim for Unix.
 # 2. Creating the various distribution files.
@@ -572,3 +574,7 @@ html: dist dist/$(COMMENT_HTML)
 farsi: dist dist/$(COMMENT_FARSI)
 	-rm -f dist/farsi$(VERSION).zip
 	zip -9 -rD -z dist/farsi$(VERSION).zip farsi < dist/$(COMMENT_FARSI)
+else
+	# Amiga build.
+	include Make_ami.mak
+endif
