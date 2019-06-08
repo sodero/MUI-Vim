@@ -235,6 +235,11 @@ int setenv(const char *, const char *);
 #define mch_rmdir(s) rmdir((const char *) s)
 #define vim_mkdir(x, m) mkdir((const char *) x, m)
 
+#ifdef __MORPHOS__
+#define fsync(x) 0
+#warning Missing fsync!
+#endif
+
 /* Avoid compiler warnings, these
  * are defined and used by Vim. */
 #undef INSERT
