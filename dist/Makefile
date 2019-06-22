@@ -3,17 +3,11 @@
 #------------------------------------------------------------------------------------------
 UNM?=$(shell uname)
 ARC?=$(shell uname -m | tr -d ower)
-ifeq ($(UNM),MorphOS)
-ANM:=$(ARC)-morphos
-LHO:=-rae
-else ifeq ($(UNM),AmigaOS)
-ANM:=$(ARC)-amigaos
-LHO:=-rae
-else ifeq ($(UNM),AROS)
-ANM:=$(ARC)-aros
+ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
+ifeq ($(UNM),AROS)
+LHO:=
 else
-ANM:=$(ARC)-unknown
-UNM:="Unknown"
+LHO:=-rae
 endif
 
 #------------------------------------------------------------------------------------------
