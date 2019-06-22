@@ -1971,7 +1971,7 @@ MUIDSP ULONG VimConCopy( Class *cls,
     int type;
     long_u size;
     char_u *data;
-    VimClipboard *cbd = (VimClipboard *) msg;
+    Clipboard_T *cbd = (Clipboard_T *) msg;
 
     if (!cbd->owned)
     {
@@ -2050,7 +2050,7 @@ MUIDSP ULONG VimConPaste( Class *cls,
                           Object *obj,
                           struct MUIP_VimCon_Paste *msg )
 {
-    VimClipboard *cbd = (VimClipboard *) msg;
+    Clipboard_T *cbd = (Clipboard_T *) msg;
     struct IFFHandle *iffh = AllocIFF();
 
     if (iffh)
@@ -3125,6 +3125,7 @@ int gui_mch_wait_for_chars (int wtime)
     // problems in the MUI message loop. Passing the
     // control over to Vim at any time is not safe.
 #ifdef FEAT_TIMEOUT
+    #warning Timeout support will cause MUI message loop problems
     DoMethod (Con, MUIM_VimCon_SetTimeout, wtime > 0 ? wtime : 0);
 #else
     // Timeout immediately.
@@ -3836,7 +3837,7 @@ void gui_mch_invert_rectangle (int row,
 //----------------------------------------------------------------------------
 // clip_mch_own_selection - Not supported
 //----------------------------------------------------------------------------
-int clip_mch_own_selection (VimClipboard *cbd)
+int clip_mch_own_selection (Clipboard_T *cbd)
 {
     INFO ("Not supported");
     return OK;
@@ -3845,7 +3846,7 @@ int clip_mch_own_selection (VimClipboard *cbd)
 //----------------------------------------------------------------------------
 // clip_mch_lose_selection - Not supported
 //----------------------------------------------------------------------------
-void clip_mch_lose_selection (VimClipboard *cbd)
+void clip_mch_lose_selection (Clipboard_T *cbd)
 {
     INFO ("Not supported");
 }
@@ -3853,7 +3854,7 @@ void clip_mch_lose_selection (VimClipboard *cbd)
 //----------------------------------------------------------------------------
 // clip_mch_request_selection
 //----------------------------------------------------------------------------
-void clip_mch_request_selection (VimClipboard *cbd)
+void clip_mch_request_selection (Clipboard_T *cbd)
 {
     DoMethod (Con, MUIM_VimCon_Paste, cbd);
 }
@@ -3861,7 +3862,7 @@ void clip_mch_request_selection (VimClipboard *cbd)
 //----------------------------------------------------------------------------
 // clip_mch_set_selection
 //----------------------------------------------------------------------------
-void clip_mch_set_selection (VimClipboard *cbd)
+void clip_mch_set_selection (Clipboard_T *cbd)
 {
     DoMethod (Con, MUIM_VimCon_Copy, cbd);
 }
