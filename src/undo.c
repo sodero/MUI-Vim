@@ -2805,7 +2805,7 @@ u_undoredo(int undo)
 	/* per netbeans undo rules, keep it as modified */
 	if (!isNetbeansModified(curbuf))
 #endif
-	unchanged(curbuf, FALSE);
+	unchanged(curbuf, FALSE, TRUE);
 
     /*
      * restore marks from before undo/redo
@@ -3111,18 +3111,12 @@ ex_undolist(exarg_T *eap UNUSED)
 u_add_time(char_u *buf, size_t buflen, time_t tt)
 {
 #ifdef HAVE_STRFTIME
-# ifdef HAVE_LOCALTIME_R
     struct tm	tmval;
-# endif
     struct tm	*curtime;
 
     if (vim_time() - tt >= 100)
     {
-# ifdef HAVE_LOCALTIME_R
-	curtime = localtime_r(&tt, &tmval);
-# else
-	curtime = localtime(&tt);
-# endif
+	curtime = vim_localtime(&tt, &tmval);
 	if (vim_time() - tt < (60L * 60L * 12L))
 	    /* within 12 hours */
 	    (void)strftime((char *)buf, buflen, "%H:%M:%S", curtime);

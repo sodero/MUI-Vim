@@ -1,8 +1,7 @@
 " Test for timers
 
-if !has('timers')
-  finish
-endif
+source check.vim
+CheckFeature timers
 
 source shared.vim
 source screendump.vim
@@ -281,7 +280,7 @@ endfunc
 
 func Test_restore_count()
   if !CanRunVimInTerminal()
-    return
+    throw 'Skipped: cannot run Vim in a terminal window'
   endif
   " Check that v:count is saved and restored, not changed by a timer.
   call writefile([
@@ -308,6 +307,30 @@ func Test_restore_count()
   call StopVimInTerminal(buf)
   call delete('Xtrcscript')
   call delete('Xtrctext')
+endfunc
+
+" Test that the garbage collector isn't triggered if a timer callback invokes
+" vgetc().
+func Test_nocatch_garbage_collect()
+  " 'uptimetime. must be bigger than the timer timeout
+  set ut=200
+  call test_garbagecollect_soon()
+  call test_override('no_wait_return', 0)
+  func CauseAnError(id)
+    " This will show an error and wait for Enter.
+    let a = {'foo', 'bar'}
+  endfunc
+  func FeedChar(id)
+    call feedkeys('x', 't')
+  endfunc
+  call timer_start(300, 'FeedChar')
+  call timer_start(100, 'CauseAnError')
+  let x = getchar()
+
+  set ut&
+  call test_override('no_wait_return', 1)
+  delfunc CauseAnError
+  delfunc FeedChar
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

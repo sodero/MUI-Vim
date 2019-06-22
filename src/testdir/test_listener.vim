@@ -28,9 +28,10 @@ func Test_listening()
   set undolevels&  " start new undo block
   call append(2, 'two two')
   undo
+  call assert_equal([{'lnum': 3, 'end': 3, 'col': 1, 'added': 1}], s:list)
   redraw
-  " the two changes get merged
-  call assert_equal([{'lnum': 3, 'end': 4, 'col': 1, 'added': 0}], s:list)
+  " the two changes are not merged
+  call assert_equal([{'lnum': 3, 'end': 4, 'col': 1, 'added': -1}], s:list)
   1
 
   " Two listeners, both get called.  Also check column.
@@ -65,15 +66,16 @@ func Test_listening()
   call assert_equal([{'lnum': 3, 'end': 3, 'col': 1, 'added': 1},
 	\ {'lnum': 1, 'end': 2, 'col': 1, 'added': 0}], s:list)
 
-  " an insert just above a previous change that was the last one gets merged
+  " an insert just above a previous change that was the last one does not get
+  " merged
   call setline(1, ['one one', 'two'])
   call listener_flush()
   let s:list = []
   call setline(2, 'something')
   call append(1, 'two two')
-  call assert_equal([], s:list)
+  call assert_equal([{'lnum': 2, 'end': 3, 'col': 1, 'added': 0}], s:list)
   call listener_flush()
-  call assert_equal([{'lnum': 2, 'end': 3, 'col': 1, 'added': 1}], s:list)
+  call assert_equal([{'lnum': 2, 'end': 2, 'col': 1, 'added': 1}], s:list)
 
   " an insert above a previous change causes a flush
   call setline(1, ['one one', 'two'])
@@ -86,13 +88,13 @@ func Test_listening()
   call assert_equal([{'lnum': 1, 'end': 1, 'col': 1, 'added': 1}], s:list)
   call assert_equal('two two', s:text)
 
-  " a delete at a previous change that was the last one gets merged
+  " a delete at a previous change that was the last one does not get merged
   call setline(1, ['one one', 'two'])
   call listener_flush()
   let s:list = []
   call setline(2, 'something')
   2del
-  call assert_equal([], s:list)
+  call assert_equal([{'lnum': 2, 'end': 3, 'col': 1, 'added': 0}], s:list)
   call listener_flush()
   call assert_equal([{'lnum': 2, 'end': 3, 'col': 1, 'added': -1}], s:list)
 
@@ -221,5 +223,22 @@ func Test_listening_other_buf()
 
   call listener_remove(id)
   exe "buf " .. bufnr
+  bwipe!
+endfunc
+
+func Test_listener_garbage_collect()
+  func MyListener(x, bufnr, start, end, added, changes)
+    " NOP
+  endfunc
+
+  new
+  let id = listener_add(function('MyListener', [{}]), bufnr(''))
+  call test_garbagecollect_now()
+  " must not crach caused by invalid memory access
+  normal ia
+  call assert_true(v:true)
+
+  call listener_remove(id)
+  delfunc MyListener
   bwipe!
 endfunc

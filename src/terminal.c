@@ -3019,6 +3019,8 @@ term_after_channel_closed(term_T *term)
 	    ch_log(NULL, "terminal job finished, closing window");
 	    aucmd_prepbuf(&aco, term->tl_buffer);
 	    // Avoid closing the window if we temporarily use it.
+	    if (curwin == aucmd_win)
+		do_set_w_closing = TRUE;
 	    if (do_set_w_closing)
 		curwin->w_closing = TRUE;
 	    do_bufdel(DOBUF_WIPE, (char_u *)"", 1, fnum, fnum, FALSE);
@@ -4049,7 +4051,7 @@ set_ref_in_term(int copyID)
     term_T	*term;
     typval_T	tv;
 
-    for (term = first_term; term != NULL; term = term->tl_next)
+    for (term = first_term; !abort && term != NULL; term = term->tl_next)
 	if (term->tl_job != NULL)
 	{
 	    tv.v_type = VAR_JOB;
