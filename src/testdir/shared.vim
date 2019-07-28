@@ -261,7 +261,7 @@ func GetVimCommand(...)
     let cmd = cmd . ' -u ' . name
   endif
   let cmd .= ' --not-a-term'
-  let cmd = substitute(cmd, 'VIMRUNTIME=.*VIMRUNTIME;', '', '')
+  let cmd = substitute(cmd, 'VIMRUNTIME=\S\+', '', '')
 
   " If using valgrind, make sure every run uses a different log file.
   if cmd =~ 'valgrind.*--log-file='
@@ -282,6 +282,13 @@ func GetVimCommandClean()
   " let cmd = 'valgrind --tool=memcheck --leak-check=yes --num-callers=25 --log-file=valgrind ' . cmd
 
   return cmd
+endfunc
+
+" Get the command to run Vim, with --clean, and force to run in terminal so it
+" won't start a new GUI.
+func GetVimCommandCleanTerm()
+  " Add -v to have gvim run in the terminal (if possible)
+  return GetVimCommandClean() .. ' -v '
 endfunc
 
 " Run Vim, using the "vimcmd" file and "-u NORC".

@@ -61,13 +61,15 @@
 #endif /* PROTO */
 
 /*
- * Set minimum stack size of 1mb , so to deal with all possible crashes related to small stack size.
+ * Set stack size to 1 MiB on NG systems. This should be enough even for
+ * hungry syntax HL / plugin combinations. Leave the stack alone on OS 3
+ * and below, those systems might be low on memory.
  */
-#ifdef __amigaos4__
-static const char* __attribute__((used)) stackcookie = "$STACK: 1000000";
-#else // morphos & aros
-unsigned long __stack = 1000000;
-#endif 
+#if defined(__amigaos4__)
+static const char* __attribute__((used)) stackcookie = "$STACK: 1048576";
+#elif defined(__AROS__) || defined(__MORPHOS__)
+unsigned long __stack = 1048576;
+#endif
 
 /*
  * At this point TRUE and FALSE are defined as 1L and 0L, but we want 1 and 0.

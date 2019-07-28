@@ -990,6 +990,14 @@ func Test_Executable()
   elseif has('unix')
     call assert_equal(1, executable('cat'))
     call assert_equal(0, executable('nodogshere'))
+
+    " get "cat" path and remove the leading /
+    let catcmd = exepath('cat')[1:]
+    new
+    lcd /
+    call assert_equal(1, executable(catcmd))
+    call assert_equal('/' .. catcmd, exepath(catcmd))
+    bwipe
   endif
 endfunc
 
@@ -1528,10 +1536,10 @@ func Test_bufadd_bufload()
   call assert_equal([''], getbufline(buf, 1, '$'))
 
   let curbuf = bufnr('')
-  call writefile(['some', 'text'], 'otherName')
-  let buf = bufadd('otherName')
+  call writefile(['some', 'text'], 'XotherName')
+  let buf = bufadd('XotherName')
   call assert_notequal(0, buf)
-  call assert_equal(1, bufexists('otherName'))
+  call assert_equal(1, bufexists('XotherName'))
   call assert_equal(0, getbufvar(buf, '&buflisted'))
   call assert_equal(0, bufloaded(buf))
   call bufload(buf)
@@ -1554,6 +1562,7 @@ func Test_bufadd_bufload()
   call assert_equal(0, bufexists(buf2))
 
   bwipe someName
-  bwipe otherName
+  bwipe XotherName
   call assert_equal(0, bufexists('someName'))
+  call delete('XotherName')
 endfunc

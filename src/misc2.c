@@ -1060,7 +1060,7 @@ free_all_mem(void)
     spell_free_all();
 # endif
 
-#if defined(FEAT_INS_EXPAND) && defined(FEAT_BEVAL_TERM)
+# if defined(FEAT_INS_EXPAND) && defined(FEAT_BEVAL_TERM)
     ui_remove_balloon();
 # endif
 
@@ -1092,7 +1092,7 @@ free_all_mem(void)
 # endif
 # if defined(FEAT_KEYMAP)
 	do_cmdline_cmd((char_u *)"set keymap=");
-#endif
+# endif
     }
 
 # ifdef FEAT_TITLE
@@ -1149,11 +1149,11 @@ free_all_mem(void)
 # ifdef FEAT_CMDHIST
     init_history();
 # endif
-#ifdef FEAT_TEXT_PROP
+# ifdef FEAT_TEXT_PROP
     clear_global_prop_types();
-#endif
+# endif
 
-#ifdef FEAT_QUICKFIX
+# ifdef FEAT_QUICKFIX
     {
 	win_T	    *win;
 	tabpage_T   *tab;
@@ -1163,7 +1163,7 @@ free_all_mem(void)
 	FOR_ALL_TAB_WINDOWS(tab, win)
 	    qf_free_all(win);
     }
-#endif
+# endif
 
     // Close all script inputs.
     close_all_scripts();
@@ -1177,9 +1177,9 @@ free_all_mem(void)
 
     /* Free all buffers.  Reset 'autochdir' to avoid accessing things that
      * were freed already. */
-#ifdef FEAT_AUTOCHDIR
+# ifdef FEAT_AUTOCHDIR
     p_acd = FALSE;
-#endif
+# endif
     for (buf = firstbuf; buf != NULL; )
     {
 	bufref_T    bufref;
@@ -1194,7 +1194,7 @@ free_all_mem(void)
     }
 
 # ifdef FEAT_ARABIC
-    free_cmdline_buf();
+    free_arshape_buf();
 # endif
 
     /* Clear registers. */
@@ -4442,13 +4442,21 @@ has_non_ascii(char_u *s)
     void
 parse_queued_messages(void)
 {
-    win_T   *old_curwin = curwin;
+    int	    old_curwin_id = curwin->w_id;
+    int	    old_curbuf_fnum = curbuf->b_fnum;
     int	    i;
+    int	    save_may_garbage_collect = may_garbage_collect;
 
     // Do not handle messages while redrawing, because it may cause buffers to
     // change or be wiped while they are being redrawn.
     if (updating_screen)
 	return;
+
+    // may_garbage_collect is set in main_loop() to do garbage collection when
+    // blocking to wait on a character.  We don't want that while parsing
+    // messages, a callback may invoke vgetc() while lists and dicts are in use
+    // in the call stack.
+    may_garbage_collect = FALSE;
 
     // Loop when a job ended, but don't keep looping forever.
     for (i = 0; i < MAX_REPEAT_PARSE; ++i)
@@ -4485,9 +4493,11 @@ parse_queued_messages(void)
 	break;
     }
 
-    // If the current window changed we need to bail out of the waiting loop.
-    // E.g. when a job exit callback closes the terminal window.
-    if (curwin != old_curwin)
+    may_garbage_collect = save_may_garbage_collect;
+
+    // If the current window or buffer changed we need to bail out of the
+    // waiting loop.  E.g. when a job exit callback closes the terminal window.
+    if (curwin->w_id != old_curwin_id || curbuf->b_fnum != old_curbuf_fnum)
 	ins_char_typebuf(K_IGNORE);
 }
 #endif
@@ -4667,81 +4677,4 @@ build_argv_from_list(list_T *l, char ***argv, int *argc)
     return OK;
 }
 # endif
-#endif
-
-#if defined(FEAT_SESSION) || defined(PROTO)
-/*
- * Generate a script that can be used to restore the current editing session.
- * Save the value of v:this_session before running :mksession in order to make
- * automagic session save fully transparent.  Return TRUE on success.
- */
-    int
-write_session_file(char_u *filename)
-{
-    char_u	    *escaped_filename;
-    char	    *mksession_cmdline;
-    unsigned int    save_ssop_flags;
-    int		    failed;
-
-    /*
-     * Build an ex command line to create a script that restores the current
-     * session if executed.  Escape the filename to avoid nasty surprises.
-     */
-    escaped_filename = vim_strsave_escaped(filename, escape_chars);
-    if (escaped_filename == NULL)
-	return FALSE;
-    mksession_cmdline = alloc(10 + (int)STRLEN(escaped_filename) + 1);
-    if (mksession_cmdline == NULL)
-    {
-	vim_free(escaped_filename);
-	return FALSE;
-    }
-    strcpy(mksession_cmdline, "mksession ");
-    STRCAT(mksession_cmdline, escaped_filename);
-    vim_free(escaped_filename);
-
-    /*
-     * Use a reasonable hardcoded set of 'sessionoptions' flags to avoid
-     * unpredictable effects when the session is saved automatically.  Also,
-     * we definitely need SSOP_GLOBALS to be able to restore v:this_session.
-     * Don't use SSOP_BUFFERS to prevent the buffer list from becoming
-     * enormously large if the GNOME session feature is used regularly.
-     */
-    save_ssop_flags = ssop_flags;
-    ssop_flags = (SSOP_BLANK|SSOP_CURDIR|SSOP_FOLDS|SSOP_GLOBALS
-		  |SSOP_HELP|SSOP_OPTIONS|SSOP_WINSIZE|SSOP_TABPAGES);
-
-    do_cmdline_cmd((char_u *)"let Save_VV_this_session = v:this_session");
-    failed = (do_cmdline_cmd((char_u *)mksession_cmdline) == FAIL);
-    do_cmdline_cmd((char_u *)"let v:this_session = Save_VV_this_session");
-    do_unlet((char_u *)"Save_VV_this_session", TRUE);
-
-    ssop_flags = save_ssop_flags;
-    vim_free(mksession_cmdline);
-
-    /*
-     * Reopen the file and append a command to restore v:this_session,
-     * as if this save never happened.	This is to avoid conflicts with
-     * the user's own sessions.  FIXME: It's probably less hackish to add
-     * a "stealth" flag to 'sessionoptions' -- gotta ask Bram.
-     */
-    if (!failed)
-    {
-	FILE *fd;
-
-	fd = open_exfile(filename, TRUE, APPENDBIN);
-
-	failed = (fd == NULL
-	       || put_line(fd, "let v:this_session = Save_VV_this_session") == FAIL
-	       || put_line(fd, "unlet Save_VV_this_session") == FAIL);
-
-	if (fd != NULL && fclose(fd) != 0)
-	    failed = TRUE;
-
-	if (failed)
-	    mch_remove(filename);
-    }
-
-    return !failed;
-}
 #endif
