@@ -109,17 +109,15 @@ int			dos2 = FALSE;	    /* Amiga DOS 2.0x or higher */
 #endif
 int			size_set = FALSE;   /* set to TRUE if window size was set */
 
-#ifdef PATCHLEVEL
-#define VIM_VERSION_PATCH_STR PATCHLEVEL
-#else
-#define VIM_VERSION_PATCH_STR "0"
-#endif
 
 static char version[] __attribute__((used)) =
     "\0$VER: Vim "
     VIM_VERSION_MAJOR_STR "."
-    VIM_VERSION_MINOR_STR "."
-    VIM_VERSION_PATCH_STR;
+    VIM_VERSION_MINOR_STR
+#ifdef PATCHLEVEL
+    "." PATCHLEVEL
+#endif
+    ;
 
     void
 win_resize_on(void)
