@@ -78,3 +78,8 @@
 
 2019-03-31:
 - Update to VIM 8.1.1099.
+
+
+2019-??-??:
+- Update to VIM 8.1.????.
+- Amiga Installer script filetype detection fix.
