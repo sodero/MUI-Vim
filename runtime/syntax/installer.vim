@@ -31,6 +31,7 @@ syn keyword	InstallerKey iconinfo if in lt lte makeassign makedir message mul ne
 syn keyword	InstallerKey pathonly patmatch procedure protect rename retrace rexx run select set setmedia shiftleft
 syn keyword	InstallerKey shiftright showmedia startup strlen sub substr symbolset symbolval sys tackon textfile
 syn keyword	InstallerKey tooltype transcript trap trace until user welcome while working xor
+syn match      InstallerKey "[=+-/*><]"
 
 " options
 syn keyword	InstallerOption all append assigns back choices command compression confirm default delopts
@@ -38,6 +39,9 @@ syn keyword	InstallerOption dest disk files fonts getdefaulttool getposition get
 syn keyword	InstallerOption include infos newname newpath nogauge noposition noreq optional override
 syn keyword	InstallerOption pattern prompt quiet range safe setdefaulttool setposition setstack source
 syn keyword	InstallerOption settooltype swapcolors resident
+
+" scope
+syn match InstallerScope "[()]"
 
 " comments
 syn case match
@@ -50,10 +54,11 @@ syn sync lines=50
 if !exists("skip_installer_syntax_inits")
 
   hi def link InstallerComment	Comment
-  hi def link InstallerKey	    Statement
-  hi def link InstallerNumber	Number
-  hi def link InstallerString	String
-  hi def link InstallerOption	Special
+  hi def link InstallerKey		Statement
+  hi def link InstallerNumber		Number
+  hi def link InstallerString		String
+  hi def link InstallerOption		Define
+  hi def link InstallerScope		Special
   hi def link InstallerReserved	Error
 
 endif
