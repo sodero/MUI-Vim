@@ -1472,10 +1472,13 @@ au BufNewFile,BufRead .kshrc,*.ksh call dist#ft#SetFileTypeSH("ksh")
 au BufNewFile,BufRead */etc/profile,.profile,*.sh,*.env call dist#ft#SetFileTypeSH(getline(1))
 
 
-" Shell script (Arch Linux) or PHP file (Drupal)
+" Shell script (Arch Linux), PHP file (Drupal) or Amiga Installer script
 au BufNewFile,BufRead *.install
 	\ if getline(1) =~ '<?php' |
 	\   setf php |
+    \ elseif getline(1) =~ '^; $VER:'
+    \     && getline(2) =~ '^; Install script for' |
+	\   setf installer |
 	\ else |
 	\   call dist#ft#SetFileTypeSH("bash") |
 	\ endif

@@ -252,6 +252,11 @@ else
 	\ || s:line5 =~# '^\s*dnl\>'
     set ft=m4
 
+  " Amiga Installer
+  elseif s:line1 =~ '^; $VER:'
+    \ && s:line2 =~ '^; Install script for'
+    set ft=installer
+
     " AmigaDos scripts
   elseif $TERM == "amiga"
 	\ && (s:line1 =~# "^;" || s:line1 =~? '^\.bra')
@@ -375,10 +380,6 @@ else
   " (See also: http://www.gnu.org/software/emacs/manual/html_node/emacs/Choosing-Modes.html#Choosing-Modes)
   elseif s:line1 =~? '-\*-.*erlang.*-\*-'
     set ft=erlang
-
-  " Amiga Installer
-  elseif search('(trace\|(retrace\|(rex\|(pro\|(pat\|(in\|(for\|(get\|(ear\|(ex\|(wel\|(cop\|(ask\|(set\|(bit\|(cat\|(com\|(if\|([+-/*<]')
-    set ft=installer
 
   " CVS diff
   else
