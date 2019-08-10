@@ -44,6 +44,7 @@ endif
 
 SRC =	arabic.c			\
 		autocmd.c			\
+		beval.c				\
 		blob.c				\
 		blowfish.c			\
 		buffer.c			\
@@ -71,12 +72,14 @@ SRC =	arabic.c			\
 		gui_mui.c			\
 		hardcopy.c			\
 		hashtab.c			\
+		highlight.c			\
 		indent.c			\
 		insexpand.c			\
 		json.c				\
 		list.c				\
 		main.c				\
 		mark.c				\
+		map.c				\
 		mbyte.c				\
 		memfile.c			\
 		memline.c			\
@@ -95,6 +98,7 @@ SRC =	arabic.c			\
 		regexp.c			\
 		screen.c			\
 		search.c			\
+		session.c			\
 		sha256.c			\
 		sign.c				\
 		spell.c				\
@@ -103,12 +107,14 @@ SRC =	arabic.c			\
 		tag.c				\
 		term.c				\
 		termlib.c			\
+		testing.c			\
 		textprop.c			\
 		ui.c				\
 		undo.c				\
 		usercmd.c			\
 		userfunc.c			\
 		version.c			\
+		viminfo.c			\
 		window.c			\
 		xdiff/xdiffi.c      \
 		xdiff/xemit.c       \
