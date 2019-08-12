@@ -1,9 +1,8 @@
 " Vim syntax file
-" Language:	Amiga Installer
-" Maintainer:	-
-" Last Change:	-
-" Version:     -
-" URL:	-
+" Language:     Amiga Installer
+" Maintainer:   Ola Söder (rolfkopman@gmail.com)
+" First Author: Ola Söder (rolfkopman@gmail.com)
+" Last Change:  2019 Aug 12
 
 " quit when a syntax file was already loaded
 if exists("b:current_syntax")

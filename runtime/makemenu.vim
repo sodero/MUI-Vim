@@ -295,6 +295,7 @@ SynMenu HIJK.Innovation\ Data\ Processing.Upstream\ rpt:upstreamrpt
 SynMenu HIJK.Innovation\ Data\ Processing.Upstream\ Install\ log:upstreaminstalllog
 SynMenu HIJK.Innovation\ Data\ Processing.Usserver\ log:usserverlog
 SynMenu HIJK.Innovation\ Data\ Processing.USW2KAgt\ log:usw2kagtlog
+SynMenu HIJK.Installer:installer
 SynMenu HIJK.InstallShield\ script:ishd
 SynMenu HIJK.Interactive\ Data\ Lang:idlang
 SynMenu HIJK.IPfilter:ipfilter

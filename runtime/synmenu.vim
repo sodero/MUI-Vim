@@ -275,9 +275,10 @@ an 50.50.450 &Syntax.HIJK.Innovation\ Data\ Processing.Upstream\ rpt :cal SetSyn
 an 50.50.460 &Syntax.HIJK.Innovation\ Data\ Processing.Upstream\ Install\ log :cal SetSyn("upstreaminstalllog")<CR>
 an 50.50.470 &Syntax.HIJK.Innovation\ Data\ Processing.Usserver\ log :cal SetSyn("usserverlog")<CR>
 an 50.50.480 &Syntax.HIJK.Innovation\ Data\ Processing.USW2KAgt\ log :cal SetSyn("usw2kagtlog")<CR>
-an 50.50.490 &Syntax.HIJK.InstallShield\ script :cal SetSyn("ishd")<CR>
-an 50.50.500 &Syntax.HIJK.Interactive\ Data\ Lang :cal SetSyn("idlang")<CR>
-an 50.50.510 &Syntax.HIJK.IPfilter :cal SetSyn("ipfilter")<CR>
+an 50.50.490 &Syntax.HIJK.Installer :cal SetSyn("installer")<CR>
+an 50.50.500 &Syntax.HIJK.InstallShield\ script :cal SetSyn("ishd")<CR>
+an 50.50.510 &Syntax.HIJK.Interactive\ Data\ Lang :cal SetSyn("idlang")<CR>
+an 50.50.520 &Syntax.HIJK.IPfilter :cal SetSyn("ipfilter")<CR>
 an 50.50.530 &Syntax.HIJK.J :cal SetSyn("j")<CR>
 an 50.50.540 &Syntax.HIJK.JAL :cal SetSyn("jal")<CR>
 an 50.50.550 &Syntax.HIJK.JAM :cal SetSyn("jam")<CR>
