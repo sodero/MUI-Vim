@@ -35,10 +35,6 @@ static void f_add(typval_T *argvars, typval_T *rettv);
 static void f_and(typval_T *argvars, typval_T *rettv);
 static void f_append(typval_T *argvars, typval_T *rettv);
 static void f_appendbufline(typval_T *argvars, typval_T *rettv);
-static void f_argc(typval_T *argvars, typval_T *rettv);
-static void f_argidx(typval_T *argvars, typval_T *rettv);
-static void f_arglistid(typval_T *argvars, typval_T *rettv);
-static void f_argv(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_FLOAT
 static void f_asin(typval_T *argvars, typval_T *rettv);
 static void f_atan(typval_T *argvars, typval_T *rettv);
@@ -75,12 +71,6 @@ static void f_char2nr(typval_T *argvars, typval_T *rettv);
 static void f_chdir(typval_T *argvars, typval_T *rettv);
 static void f_cindent(typval_T *argvars, typval_T *rettv);
 static void f_col(typval_T *argvars, typval_T *rettv);
-#if defined(FEAT_INS_EXPAND)
-static void f_complete(typval_T *argvars, typval_T *rettv);
-static void f_complete_add(typval_T *argvars, typval_T *rettv);
-static void f_complete_check(typval_T *argvars, typval_T *rettv);
-static void f_complete_info(typval_T *argvars, typval_T *rettv);
-#endif
 static void f_confirm(typval_T *argvars, typval_T *rettv);
 static void f_copy(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_FLOAT
@@ -244,6 +234,7 @@ static void f_pow(typval_T *argvars, typval_T *rettv);
 #endif
 static void f_prevnonblank(typval_T *argvars, typval_T *rettv);
 static void f_printf(typval_T *argvars, typval_T *rettv);
+static void f_pum_getpos(typval_T *argvars, typval_T *rettv);
 static void f_pumvisible(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_PYTHON3
 static void f_py3eval(typval_T *argvars, typval_T *rettv);
@@ -421,13 +412,14 @@ typedef struct
 // values for f_argtype; zero means it cannot be used as a method
 #define FEARG_1    1	    // base is the first argument
 #define FEARG_2    2	    // base is the second argument
+#define FEARG_3    3	    // base is the third argument
 #define FEARG_LAST 9	    // base is the last argument
 
 static funcentry_T global_functions[] =
 {
 #ifdef FEAT_FLOAT
-    {"abs",		1, 1, 0,	  f_abs},
-    {"acos",		1, 1, 0,	  f_acos},	// WJMc
+    {"abs",		1, 1, FEARG_1,	  f_abs},
+    {"acos",		1, 1, FEARG_1,	  f_acos},	// WJMc
 #endif
     {"add",		2, 2, FEARG_1,	  f_add},
     {"and",		2, 2, 0,	  f_and},
@@ -438,23 +430,23 @@ static funcentry_T global_functions[] =
     {"arglistid",	0, 2, 0,	  f_arglistid},
     {"argv",		0, 2, 0,	  f_argv},
 #ifdef FEAT_FLOAT
-    {"asin",		1, 1, 0,	  f_asin},	// WJMc
+    {"asin",		1, 1, FEARG_1,	  f_asin},	// WJMc
 #endif
-    {"assert_beeps",	1, 2, 0,	  f_assert_beeps},
+    {"assert_beeps",	1, 2, FEARG_1,	  f_assert_beeps},
     {"assert_equal",	2, 3, FEARG_2,	  f_assert_equal},
     {"assert_equalfile", 2, 2, 0,	  f_assert_equalfile},
     {"assert_exception", 1, 2, 0,	  f_assert_exception},
-    {"assert_fails",	1, 3, 0,	  f_assert_fails},
-    {"assert_false",	1, 2, 0,	  f_assert_false},
-    {"assert_inrange",	3, 4, 0,	  f_assert_inrange},
-    {"assert_match",	2, 3, 0,	  f_assert_match},
+    {"assert_fails",	1, 3, FEARG_1,	  f_assert_fails},
+    {"assert_false",	1, 2, FEARG_1,	  f_assert_false},
+    {"assert_inrange",	3, 4, FEARG_3,	  f_assert_inrange},
+    {"assert_match",	2, 3, FEARG_2,	  f_assert_match},
     {"assert_notequal",	2, 3, FEARG_2,	  f_assert_notequal},
-    {"assert_notmatch",	2, 3, 0,	  f_assert_notmatch},
+    {"assert_notmatch",	2, 3, FEARG_2,	  f_assert_notmatch},
     {"assert_report",	1, 1, 0,	  f_assert_report},
-    {"assert_true",	1, 2, 0,	  f_assert_true},
+    {"assert_true",	1, 2, FEARG_1,	  f_assert_true},
 #ifdef FEAT_FLOAT
-    {"atan",		1, 1, 0,	  f_atan},
-    {"atan2",		2, 2, 0,	  f_atan2},
+    {"atan",		1, 1, FEARG_1,	  f_atan},
+    {"atan2",		2, 2, FEARG_1,	  f_atan2},
 #endif
 #ifdef FEAT_BEVAL
     {"balloon_gettext",	0, 0, 0,	  f_balloon_gettext},
@@ -482,7 +474,7 @@ static funcentry_T global_functions[] =
     {"byteidxcomp",	2, 2, 0,	  f_byteidxcomp},
     {"call",		2, 3, 0,	  f_call},
 #ifdef FEAT_FLOAT
-    {"ceil",		1, 1, 0,	  f_ceil},
+    {"ceil",		1, 1, FEARG_1,	  f_ceil},
 #endif
 #ifdef FEAT_JOB_CHANNEL
     {"ch_canread",	1, 1, 0,	  f_ch_canread},
@@ -519,8 +511,8 @@ static funcentry_T global_functions[] =
     {"confirm",		1, 4, 0,	  f_confirm},
     {"copy",		1, 1, FEARG_1,	  f_copy},
 #ifdef FEAT_FLOAT
-    {"cos",		1, 1, 0,	  f_cos},
-    {"cosh",		1, 1, 0,	  f_cosh},
+    {"cos",		1, 1, FEARG_1,	  f_cos},
+    {"cosh",		1, 1, FEARG_1,	  f_cosh},
 #endif
     {"count",		2, 4, FEARG_1,	  f_count},
     {"cscope_connection",0,3, 0,	  f_cscope_connection},
@@ -544,7 +536,7 @@ static funcentry_T global_functions[] =
     {"exepath",		1, 1, 0,	  f_exepath},
     {"exists",		1, 1, 0,	  f_exists},
 #ifdef FEAT_FLOAT
-    {"exp",		1, 1, 0,	  f_exp},
+    {"exp",		1, 1, FEARG_1,	  f_exp},
 #endif
     {"expand",		1, 3, 0,	  f_expand},
     {"expandcmd",	1, 1, 0,	  f_expandcmd},
@@ -557,9 +549,9 @@ static funcentry_T global_functions[] =
     {"finddir",		1, 3, 0,	  f_finddir},
     {"findfile",	1, 3, 0,	  f_findfile},
 #ifdef FEAT_FLOAT
-    {"float2nr",	1, 1, 0,	  f_float2nr},
-    {"floor",		1, 1, 0,	  f_floor},
-    {"fmod",		2, 2, 0,	  f_fmod},
+    {"float2nr",	1, 1, FEARG_1,	  f_float2nr},
+    {"floor",		1, 1, FEARG_1,	  f_floor},
+    {"fmod",		2, 2, FEARG_1,	  f_fmod},
 #endif
     {"fnameescape",	1, 1, 0,	  f_fnameescape},
     {"fnamemodify",	2, 2, 0,	  f_fnamemodify},
@@ -642,11 +634,11 @@ static funcentry_T global_functions[] =
     {"invert",		1, 1, 0,	  f_invert},
     {"isdirectory",	1, 1, 0,	  f_isdirectory},
 #if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
-    {"isinf",		1, 1, 0,	  f_isinf},
+    {"isinf",		1, 1, FEARG_1,	  f_isinf},
 #endif
     {"islocked",	1, 1, 0,	  f_islocked},
 #if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
-    {"isnan",		1, 1, 0,	  f_isnan},
+    {"isnan",		1, 1, FEARG_1,	  f_isnan},
 #endif
     {"items",		1, 1, FEARG_1,	  f_items},
 #ifdef FEAT_JOB_CHANNEL
@@ -676,8 +668,8 @@ static funcentry_T global_functions[] =
     {"listener_remove",	1, 1, 0,	  f_listener_remove},
     {"localtime",	0, 0, 0,	  f_localtime},
 #ifdef FEAT_FLOAT
-    {"log",		1, 1, 0,	  f_log},
-    {"log10",		1, 1, 0,	  f_log10},
+    {"log",		1, 1, FEARG_1,	  f_log},
+    {"log10",		1, 1, FEARG_1,	  f_log10},
 #endif
 #ifdef FEAT_LUA
     {"luaeval",		1, 2, 0,	  f_luaeval},
@@ -730,7 +722,7 @@ static funcentry_T global_functions[] =
     {"popup_show",	1, 1, 0,	  f_popup_show},
 #endif
 #ifdef FEAT_FLOAT
-    {"pow",		2, 2, 0,	  f_pow},
+    {"pow",		2, 2, FEARG_1,	  f_pow},
 #endif
     {"prevnonblank",	1, 1, 0,	  f_prevnonblank},
     {"printf",		1, 19, FEARG_2,	  f_printf},
@@ -750,6 +742,7 @@ static funcentry_T global_functions[] =
     {"prop_type_get",	1, 2, 0,	  f_prop_type_get},
     {"prop_type_list",	0, 1, 0,	  f_prop_type_list},
 #endif
+    {"pum_getpos",	0, 0, 0,	  f_pum_getpos},
     {"pumvisible",	0, 0, 0,	  f_pumvisible},
 #ifdef FEAT_PYTHON3
     {"py3eval",		1, 1, 0,	  f_py3eval},
@@ -782,7 +775,7 @@ static funcentry_T global_functions[] =
     {"resolve",		1, 1, 0,	  f_resolve},
     {"reverse",		1, 1, FEARG_1,	  f_reverse},
 #ifdef FEAT_FLOAT
-    {"round",		1, 1, 0,	  f_round},
+    {"round",		1, 1, FEARG_1,	  f_round},
 #endif
 #ifdef FEAT_RUBY
     {"rubyeval",	1, 1, 0,	  f_rubyeval},
@@ -835,8 +828,8 @@ static funcentry_T global_functions[] =
 #endif
     {"simplify",	1, 1, 0,	  f_simplify},
 #ifdef FEAT_FLOAT
-    {"sin",		1, 1, 0,	  f_sin},
-    {"sinh",		1, 1, 0,	  f_sinh},
+    {"sin",		1, 1, FEARG_1,	  f_sin},
+    {"sinh",		1, 1, FEARG_1,	  f_sinh},
 #endif
     {"sort",		1, 3, FEARG_1,	  f_sort},
 #ifdef FEAT_SOUND
@@ -850,8 +843,8 @@ static funcentry_T global_functions[] =
     {"spellsuggest",	1, 3, 0,	  f_spellsuggest},
     {"split",		1, 3, FEARG_1,	  f_split},
 #ifdef FEAT_FLOAT
-    {"sqrt",		1, 1, 0,	  f_sqrt},
-    {"str2float",	1, 1, 0,	  f_str2float},
+    {"sqrt",		1, 1, FEARG_1,	  f_sqrt},
+    {"str2float",	1, 1, FEARG_1,	  f_str2float},
 #endif
     {"str2list",	1, 2, FEARG_1,	  f_str2list},
     {"str2nr",		1, 2, 0,	  f_str2nr},
@@ -886,8 +879,8 @@ static funcentry_T global_functions[] =
     {"tagfiles",	0, 0, 0,	  f_tagfiles},
     {"taglist",		1, 2, 0,	  f_taglist},
 #ifdef FEAT_FLOAT
-    {"tan",		1, 1, 0,	  f_tan},
-    {"tanh",		1, 1, 0,	  f_tanh},
+    {"tan",		1, 1, FEARG_1,	  f_tan},
+    {"tanh",		1, 1, FEARG_1,	  f_tanh},
 #endif
     {"tempname",	0, 0, 0,	  f_tempname},
 #ifdef FEAT_TERMINAL
@@ -959,7 +952,7 @@ static funcentry_T global_functions[] =
     {"tr",		3, 3, 0,	  f_tr},
     {"trim",		1, 2, 0,	  f_trim},
 #ifdef FEAT_FLOAT
-    {"trunc",		1, 1, 0,	  f_trunc},
+    {"trunc",		1, 1, FEARG_1,	  f_trunc},
 #endif
     {"type",		1, 1, FEARG_1,	  f_type},
     {"undofile",	1, 1, 0,	  f_undofile},
@@ -1118,8 +1111,10 @@ call_internal_method(
     typval_T	argv[MAX_FUNC_ARGS + 1];
 
     fi = find_internal_func(name);
-    if (fi < 0 || global_functions[fi].f_argtype == 0)
+    if (fi < 0)
 	return ERROR_UNKNOWN;
+    if (global_functions[fi].f_argtype == 0)
+	return ERROR_NOTMETHOD;
     if (argcount + 1 < global_functions[fi].f_min_argc)
 	return ERROR_TOOFEW;
     if (argcount + 1 > global_functions[fi].f_max_argc)
@@ -1138,6 +1133,15 @@ call_internal_method(
 	argv[0] = argvars[0];
 	argv[1] = *basetv;
 	for (i = 1; i < argcount; ++i)
+	    argv[i + 1] = argvars[i];
+    }
+    else if (global_functions[fi].f_argtype == FEARG_3)
+    {
+	// base value goes third
+	argv[0] = argvars[0];
+	argv[1] = argvars[1];
+	argv[2] = *basetv;
+	for (i = 2; i < argcount; ++i)
 	    argv[i + 1] = argvars[i];
     }
     else
@@ -1488,116 +1492,6 @@ f_appendbufline(typval_T *argvars, typval_T *rettv)
 	lnum = tv_get_lnum_buf(&argvars[1], buf);
 	set_buffer_lines(buf, lnum, TRUE, &argvars[2], rettv);
     }
-}
-
-/*
- * "argc([window id])" function
- */
-    static void
-f_argc(typval_T *argvars, typval_T *rettv)
-{
-    win_T	*wp;
-
-    if (argvars[0].v_type == VAR_UNKNOWN)
-	// use the current window
-	rettv->vval.v_number = ARGCOUNT;
-    else if (argvars[0].v_type == VAR_NUMBER
-					   && tv_get_number(&argvars[0]) == -1)
-	// use the global argument list
-	rettv->vval.v_number = GARGCOUNT;
-    else
-    {
-	// use the argument list of the specified window
-	wp = find_win_by_nr_or_id(&argvars[0]);
-	if (wp != NULL)
-	    rettv->vval.v_number = WARGCOUNT(wp);
-	else
-	    rettv->vval.v_number = -1;
-    }
-}
-
-/*
- * "argidx()" function
- */
-    static void
-f_argidx(typval_T *argvars UNUSED, typval_T *rettv)
-{
-    rettv->vval.v_number = curwin->w_arg_idx;
-}
-
-/*
- * "arglistid()" function
- */
-    static void
-f_arglistid(typval_T *argvars, typval_T *rettv)
-{
-    win_T	*wp;
-
-    rettv->vval.v_number = -1;
-    wp = find_tabwin(&argvars[0], &argvars[1], NULL);
-    if (wp != NULL)
-	rettv->vval.v_number = wp->w_alist->id;
-}
-
-/*
- * Get the argument list for a given window
- */
-    static void
-get_arglist_as_rettv(aentry_T *arglist, int argcount, typval_T *rettv)
-{
-    int		idx;
-
-    if (rettv_list_alloc(rettv) == OK && arglist != NULL)
-	for (idx = 0; idx < argcount; ++idx)
-	    list_append_string(rettv->vval.v_list,
-						alist_name(&arglist[idx]), -1);
-}
-
-/*
- * "argv(nr)" function
- */
-    static void
-f_argv(typval_T *argvars, typval_T *rettv)
-{
-    int		idx;
-    aentry_T	*arglist = NULL;
-    int		argcount = -1;
-
-    if (argvars[0].v_type != VAR_UNKNOWN)
-    {
-	if (argvars[1].v_type == VAR_UNKNOWN)
-	{
-	    arglist = ARGLIST;
-	    argcount = ARGCOUNT;
-	}
-	else if (argvars[1].v_type == VAR_NUMBER
-					   && tv_get_number(&argvars[1]) == -1)
-	{
-	    arglist = GARGLIST;
-	    argcount = GARGCOUNT;
-	}
-	else
-	{
-	    win_T	*wp = find_win_by_nr_or_id(&argvars[1]);
-
-	    if (wp != NULL)
-	    {
-		/* Use the argument list of the specified window */
-		arglist = WARGLIST(wp);
-		argcount = WARGCOUNT(wp);
-	    }
-	}
-
-	rettv->v_type = VAR_STRING;
-	rettv->vval.v_string = NULL;
-	idx = tv_get_number_chk(&argvars[0], NULL);
-	if (arglist != NULL && idx >= 0 && idx < argcount)
-	    rettv->vval.v_string = vim_strsave(alist_name(&arglist[idx]));
-	else if (idx == -1)
-	    get_arglist_as_rettv(arglist, argcount, rettv);
-    }
-    else
-	get_arglist_as_rettv(ARGLIST, ARGCOUNT, rettv);
 }
 
 #ifdef FEAT_FLOAT
@@ -2293,86 +2187,6 @@ f_col(typval_T *argvars, typval_T *rettv)
     }
     rettv->vval.v_number = col;
 }
-
-#if defined(FEAT_INS_EXPAND)
-/*
- * "complete()" function
- */
-    static void
-f_complete(typval_T *argvars, typval_T *rettv UNUSED)
-{
-    int	    startcol;
-
-    if ((State & INSERT) == 0)
-    {
-	emsg(_("E785: complete() can only be used in Insert mode"));
-	return;
-    }
-
-    /* Check for undo allowed here, because if something was already inserted
-     * the line was already saved for undo and this check isn't done. */
-    if (!undo_allowed())
-	return;
-
-    if (argvars[1].v_type != VAR_LIST || argvars[1].vval.v_list == NULL)
-    {
-	emsg(_(e_invarg));
-	return;
-    }
-
-    startcol = (int)tv_get_number_chk(&argvars[0], NULL);
-    if (startcol <= 0)
-	return;
-
-    set_completion(startcol - 1, argvars[1].vval.v_list);
-}
-
-/*
- * "complete_add()" function
- */
-    static void
-f_complete_add(typval_T *argvars, typval_T *rettv)
-{
-    rettv->vval.v_number = ins_compl_add_tv(&argvars[0], 0);
-}
-
-/*
- * "complete_check()" function
- */
-    static void
-f_complete_check(typval_T *argvars UNUSED, typval_T *rettv)
-{
-    int		saved = RedrawingDisabled;
-
-    RedrawingDisabled = 0;
-    ins_compl_check_keys(0, TRUE);
-    rettv->vval.v_number = ins_compl_interrupted();
-    RedrawingDisabled = saved;
-}
-
-/*
- * "complete_info()" function
- */
-    static void
-f_complete_info(typval_T *argvars, typval_T *rettv)
-{
-    list_T	*what_list = NULL;
-
-    if (rettv_dict_alloc(rettv) != OK)
-	return;
-
-    if (argvars[0].v_type != VAR_UNKNOWN)
-    {
-	if (argvars[0].v_type != VAR_LIST)
-	{
-	    emsg(_(e_listreq));
-	    return;
-	}
-	what_list = argvars[0].vval.v_list;
-    }
-    get_complete_info(what_list, rettv->vval.v_dict);
-}
-#endif
 
 /*
  * "confirm(message, buttons[, default [, type]])" function
@@ -6629,6 +6443,10 @@ f_has(typval_T *argvars, typval_T *rettv)
 	else if (STRICMP(name, "conpty") == 0)
 	    n = use_conpty();
 #endif
+#ifdef FEAT_CLIPBOARD
+	else if (STRICMP(name, "clipboard_working") == 0)
+	    n = clip_star.available;
+#endif
     }
 
     rettv->vval.v_number = n;
@@ -8142,6 +7960,19 @@ f_printf(typval_T *argvars, typval_T *rettv)
 	}
     }
     did_emsg |= saved_did_emsg;
+}
+
+/*
+ * "pum_getpos()" function
+ */
+    static void
+f_pum_getpos(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
+{
+    if (rettv_dict_alloc(rettv) != OK)
+	return;
+#ifdef FEAT_INS_EXPAND
+    pum_set_event_info(rettv->vval.v_dict);
+#endif
 }
 
 /*

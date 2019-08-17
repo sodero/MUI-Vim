@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.1.  Last change: 2019 Aug 08
+*eval.txt*	For Vim version 8.1.  Last change: 2019 Aug 17
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -483,7 +483,7 @@ String automatically.  Thus the String '4' and the number 4 will find the same
 entry.  Note that the String '04' and the Number 04 are different, since the
 Number will be converted to the String '4'.  The empty string can also be used
 as a key.
-						*literal-Dict*
+						*literal-Dict* *#{}*
 To avoid having to put quotes around every key the #{} form can be used.  This
 does require the key to consist only of ASCII letters, digits, '-' and '_'.
 Example: >
@@ -1119,7 +1119,6 @@ in any order.  E.g., these are all possible:
 	expr8->(expr1, ...)[expr1]
 Evaluation is always from left to right.
 
-
 expr8[expr1]		item of String or |List|	*expr-[]* *E111*
 							*E909* *subscript*
 If expr8 is a Number or String this results in a String that contains the
@@ -1219,7 +1218,7 @@ When expr8 is a |Funcref| type variable, invoke the function it refers to.
 
 expr8->name([args])	method call			*method* *->*
 expr8->{lambda}([args])
-
+							*E276*
 For methods that are also available as global functions this is the same as: >
 	name(expr8 [, args])
 There can also be methods specifically for the type of "expr8".
@@ -1230,7 +1229,14 @@ next method: >
 <
 Example of using a lambda: >
 	GetPercentage->{x -> x * 100}()->printf('%d%%')
-
+<
+When using -> the |expr7| operators will be applied first, thus: >
+	-1.234->string()
+Is equivalent to: >
+	(-1.234)->string()
+And NOT: >
+	-(1.234->string())
+<
 							*E274*
 "->name(" must not contain white space.  There can be white space before the
 "->" and after the "(", thus you can split the lines like this: >
@@ -1239,7 +1245,10 @@ Example of using a lambda: >
 	\ ->map(mapexpr)
 	\ ->sort()
 	\ ->join()
-<
+
+When using the lambda form there must be no white space between the } and the
+(.
+
 
 							*expr9*
 number
@@ -2035,14 +2044,19 @@ v:progname	Contains the name (with path removed) with which Vim was
 		Read-only.
 
 					*v:progpath* *progpath-variable*
-v:progpath	Contains the command with which Vim was invoked, including the
-		path.  Useful if you want to message a Vim server using a
+v:progpath	Contains the command with which Vim was invoked, in a form
+		that when passed to the shell will run the same Vim executable
+		as the current one (if $PATH remains unchanged).
+		Useful if you want to message a Vim server using a
 		|--remote-expr|.
 		To get the full path use: >
 			echo exepath(v:progpath)
-<		If the path is relative it will be expanded to the full path,
-		so that it still works after `:cd`. Thus starting "./vim"
-		results in "/home/user/path/to/vim/src/vim".
+<		If the command has a relative path it will be expanded to the
+		full path, so that it still works after `:cd`. Thus starting
+		"./vim" results in "/home/user/path/to/vim/src/vim".
+		On Linux and other systems it will always be the full path.
+		On Mac it may just be "vim" and using exepath() as mentioned
+		above should be used to get the full path.
 		On MS-Windows the executable may be called "vim.exe", but the
 		".exe" is not added to v:progpath.
 		Read-only.
@@ -2613,6 +2627,7 @@ prop_type_delete({name} [, {props}])
 prop_type_get([{name} [, {props}])
 				Dict	get property type values
 prop_type_list([{props}])	List	get list of property types
+pum_getpos()			Dict	position and size of pum if visible
 pumvisible()			Number	whether popup menu is visible
 pyeval({expr})			any	evaluate |Python| expression
 py3eval({expr})			any	evaluate |python3| expression
@@ -2879,7 +2894,11 @@ abs({expr})							*abs()*
 <			5.456  >
 			echo abs(-4)
 <			4
-		{only available when compiled with the |+float| feature}
+
+		Can also be used as a |method|: >
+			Compute()->abs()
+
+<		{only available when compiled with the |+float| feature}
 
 
 acos({expr})							*acos()*
@@ -2892,7 +2911,11 @@ acos({expr})							*acos()*
 <			1.570796 >
 			:echo acos(-0.5)
 <			2.094395
-		{only available when compiled with the |+float| feature}
+
+		Can also be used as a |method|: >
+			Compute()->acos()
+
+<		{only available when compiled with the |+float| feature}
 
 
 add({object}, {expr})					*add()*
@@ -2904,6 +2927,7 @@ add({object}, {expr})					*add()*
 		item.  Use |extend()| to concatenate |Lists|.
 		When {object} is a |Blob| then  {expr} must be a number.
 		Use |insert()| to add an item at another position.
+
 		Can also be used as a |method|: >
 			mylist->add(val1)->add(val2)
 
@@ -3005,6 +3029,10 @@ asin({expr})						*asin()*
 <			0.927295 >
 			:echo asin(-0.5)
 <			-0.523599
+
+		Can also be used as a |method|: >
+			Compute()->asin()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -3017,6 +3045,10 @@ atan({expr})						*atan()*
 <			1.560797 >
 			:echo atan(-4.01)
 <			-1.326405
+
+		Can also be used as a |method|: >
+			Compute()->atan()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -3029,6 +3061,10 @@ atan2({expr1}, {expr2})					*atan2()*
 <			-0.785398 >
 			:echo atan2(1, -1)
 <			2.356194
+
+		Can also be used as a |method|: >
+			Compute()->atan(1)
+<
 		{only available when compiled with the |+float| feature}
 
 balloon_gettext()					*balloon_gettext()*
@@ -3287,6 +3323,10 @@ ceil({expr})							*ceil()*
 <			-5.0  >
 			echo ceil(4.0)
 <			4.0
+
+		Can also be used as a |method|: >
+			Compute()->ceil()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -3477,6 +3517,10 @@ complete_info([{what}])
 		the items listed in {what} are returned.  Unsupported items in
 		{what} are silently ignored.
 
+		To get the position and size of the popup menu, see
+		|pum_getpos()|. It's also available in |v:event| during the
+		|CompleteChanged| event.
+
 		Examples: >
 			" Get all items
 			call complete_info()
@@ -3559,6 +3603,10 @@ cos({expr})						*cos()*
 <			0.862319 >
 			:echo cos(-4.01)
 <			-0.646043
+
+		Can also be used as a |method|: >
+			Compute()->cos()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -3571,6 +3619,10 @@ cosh({expr})						*cosh()*
 <			1.127626 >
 			:echo cosh(-0.5)
 <			-1.127626
+
+		Can also be used as a |method|: >
+			Compute()->cosh()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -3956,6 +4008,10 @@ exp({expr})						*exp()*
 <			7.389056 >
 			:echo exp(-1)
 <			0.367879
+
+		Can also be used as a |method|: >
+			Compute()->exp()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -4254,6 +4310,10 @@ float2nr({expr})					*float2nr()*
 <			-2147483647 (or -9223372036854775807) >
 			echo float2nr(1.0e-100)
 <			0
+
+		Can also be used as a |method|: >
+			Compute()->float2nr()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -4268,6 +4328,10 @@ floor({expr})							*floor()*
 <			-6.0  >
 			echo floor(4.0)
 <			4.0
+
+		Can also be used as a |method|: >
+			Compute()->floor()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -4284,6 +4348,10 @@ fmod({expr1}, {expr2})					*fmod()*
 <			0.13 >
 			:echo fmod(-12.33, 1.22)
 <			-0.13
+
+		Can also be used as a |method|: >
+			Compute()->fmod(1.22)
+<
 		{only available when compiled with |+float| feature}
 
 
@@ -5781,6 +5849,9 @@ isinf({expr})						*isinf()*
 			:echo isinf(-1.0 / 0.0)
 <			-1
 
+		Can also be used as a |method|: >
+			Compute()->isinf()
+<
 		{only available when compiled with the |+float| feature}
 
 islocked({expr})					*islocked()* *E786*
@@ -5801,6 +5872,9 @@ isnan({expr})						*isnan()*
 			echo isnan(0.0 / 0.0)
 <			1
 
+		Can also be used as a |method|: >
+			Compute()->isnan()
+<
 		{only available when compiled with the |+float| feature}
 
 items({dict})						*items()*
@@ -6151,6 +6225,10 @@ log({expr})						*log()*
 <			2.302585 >
 			:echo log(exp(5))
 <			5.0
+
+		Can also be used as a |method|: >
+			Compute()->log()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -6162,6 +6240,10 @@ log10({expr})						*log10()*
 <			3.0 >
 			:echo log10(0.01)
 <			-2.0
+
+		Can also be used as a |method|: >
+			Compute()->log10()
+<
 		{only available when compiled with the |+float| feature}
 
 luaeval({expr} [, {expr}])					*luaeval()*
@@ -6721,6 +6803,10 @@ pow({x}, {y})						*pow()*
 <			65536.0 >
 			:echo pow(32, 0.20)
 <			2.0
+
+		Can also be used as a |method|: >
+			Compute()->pow(3)
+<
 		{only available when compiled with the |+float| feature}
 
 prevnonblank({lnum})					*prevnonblank()*
@@ -6976,6 +7062,20 @@ prompt_setprompt({buf}, {text})				*prompt_setprompt()*
 			call prompt_setprompt(bufnr(''), 'command: ')
 <
 prop_ functions are documented here: |text-prop-functions|.
+
+pum_getpos()						*pum_getpos()*
+		If the popup menu (see |ins-completion-menu|) is not visible,
+		returns an empty |Dictionary|, otherwise, returns a
+		|Dictionary| with the following keys:
+			height		nr of items visible
+			width		screen cells
+			row		top screen row (0 first row)
+			col		leftmost screen column (0 first col)
+			size		total nr of items
+			scrollbar	|TRUE| if visible
+
+		The values are the same as in |v:event| during
+		|CompleteChanged|.
 
 pumvisible()						*pumvisible()*
 		Returns non-zero when the popup menu is visible, zero
@@ -7331,6 +7431,10 @@ round({expr})							*round()*
 <			5.0 >
 			echo round(-4.5)
 <			-5.0
+
+		Can also be used as a |method|: >
+			Compute()->round()
+<
 		{only available when compiled with the |+float| feature}
 
 rubyeval({expr})					*rubyeval()*
@@ -8120,6 +8224,10 @@ sin({expr})						*sin()*
 <			-0.506366 >
 			:echo sin(-4.01)
 <			0.763301
+
+		Can also be used as a |method|: >
+			Compute()->sin()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -8132,6 +8240,10 @@ sinh({expr})						*sinh()*
 <			0.521095 >
 			:echo sinh(-0.9)
 <			-1.026517
+
+		Can also be used as a |method|: >
+			Compute()->sinh()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -8338,6 +8450,10 @@ sqrt({expr})						*sqrt()*
 			:echo sqrt(-4.01)
 <			nan
 		"nan" may be different, it depends on system libraries.
+
+		Can also be used as a |method|: >
+			Compute()->sqrt()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -8354,7 +8470,11 @@ str2float({expr})					*str2float()*
 		12.0.  You can strip out thousands separators with
 		|substitute()|: >
 			let f = str2float(substitute(text, ',', '', 'g'))
-<		{only available when compiled with the |+float| feature}
+<
+		Can also be used as a |method|: >
+			let f = text->substitute(',', '', 'g')->str2float()
+<
+		{only available when compiled with the |+float| feature}
 
 str2list({expr} [, {utf8}])				*str2list()*
 		Return a list containing the number values which represent
@@ -8951,6 +9071,10 @@ tan({expr})						*tan()*
 <			0.648361 >
 			:echo tan(-4.01)
 <			-1.181502
+
+		Can also be used as a |method|: >
+			Compute()->tan()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -8963,6 +9087,10 @@ tanh({expr})						*tanh()*
 <			0.462117 >
 			:echo tanh(-1)
 <			-0.761594
+
+		Can also be used as a |method|: >
+			Compute()->tanh()
+<
 		{only available when compiled with the |+float| feature}
 
 
@@ -9116,6 +9244,10 @@ trunc({expr})							*trunc()*
 <			-5.0  >
 			echo trunc(4.0)
 <			4.0
+
+		Can also be used as a |method|: >
+			Compute()->trunc()
+<
 		{only available when compiled with the |+float| feature}
 
 							*type()*
@@ -9301,6 +9433,7 @@ win_execute({id}, {command} [, {silent}])		*win_execute()*
 		autocommands and not actually show syntax highlighting.
 							*E994*
 		Not all commands are allowed in popup windows.
+		When window {id} does not exist then no error is given.
 
 win_findbuf({bufnr})					*win_findbuf()*
 		Returns a list with |window-ID|s for windows that contain
@@ -9603,6 +9736,7 @@ byte_offset		Compiled with support for 'o' in 'statusline'
 cindent			Compiled with 'cindent' support.
 clientserver		Compiled with remote invocation support |clientserver|.
 clipboard		Compiled with 'clipboard' support.
+clipboard_working	Compiled with 'clipboard' support and it can be used.
 cmdline_compl		Compiled with |cmdline-completion| support.
 cmdline_hist		Compiled with |cmdline-history| support.
 cmdline_info		Compiled with 'showcmd' and 'ruler' support.
@@ -10321,6 +10455,12 @@ This does NOT work: >
 :let ${env-name} = {expr1}			*:let-environment* *:let-$*
 			Set environment variable {env-name} to the result of
 			the expression {expr1}.  The type is always String.
+
+			On some systems making an environment variable empty
+			causes it to be deleted.  Many systems do not make a
+			difference between an environment variable that is not
+			set and an environment variable that is empty.
+
 :let ${env-name} .= {expr1}
 			Append {expr1} to the environment variable {env-name}.
 			If the environment variable didn't exist yet this

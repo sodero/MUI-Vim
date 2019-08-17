@@ -2522,6 +2522,7 @@ typedef enum {
 #define ERROR_NONE	5
 #define ERROR_OTHER	6
 #define ERROR_DELETED	7
+#define ERROR_NOTMETHOD	8   // function cannot be used as a method
 
 /* flags for find_name_end() */
 #define FNE_INCL_BR	1	/* include [] in name */

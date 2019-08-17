@@ -229,7 +229,7 @@ mch_char_avail(void)
 mch_avail_mem(int special)
 {
 #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-    return (long_u) AvailMem(MEMF_ANY) >> 10;
+    return (long_u)AvailMem(MEMF_ANY) >> 10;
 #else
     return (long_u) (AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
 #endif

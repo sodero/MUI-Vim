@@ -304,7 +304,6 @@ static void	ex_tag_cmd(exarg_T *eap, char_u *name);
 # define ex_unlockvar		ex_ni
 # define ex_while		ex_ni
 #endif
-static char_u	*arg_all(void);
 #ifndef FEAT_SESSION
 # define ex_loadview		ex_ni
 #endif
@@ -6137,18 +6136,6 @@ ex_only(exarg_T *eap)
     close_others(TRUE, eap->forceit);
 }
 
-/*
- * ":all" and ":sall".
- * Also used for ":tab drop file ..." after setting the argument list.
- */
-    void
-ex_all(exarg_T *eap)
-{
-    if (eap->addr_count == 0)
-	eap->line2 = 9999;
-    do_arg_all((int)eap->line2, eap->forceit, eap->cmdidx == CMD_drop);
-}
-
     static void
 ex_hide(exarg_T *eap UNUSED)
 {
@@ -6441,200 +6428,6 @@ handle_any_postponed_drop(void)
     if (!drop_busy && drop_filev != NULL
 		     && !text_locked() && !curbuf_locked() && !updating_screen)
 	handle_drop_internal();
-}
-#endif
-
-/*
- * Clear an argument list: free all file names and reset it to zero entries.
- */
-    void
-alist_clear(alist_T *al)
-{
-    while (--al->al_ga.ga_len >= 0)
-	vim_free(AARGLIST(al)[al->al_ga.ga_len].ae_fname);
-    ga_clear(&al->al_ga);
-}
-
-/*
- * Init an argument list.
- */
-    void
-alist_init(alist_T *al)
-{
-    ga_init2(&al->al_ga, (int)sizeof(aentry_T), 5);
-}
-
-/*
- * Remove a reference from an argument list.
- * Ignored when the argument list is the global one.
- * If the argument list is no longer used by any window, free it.
- */
-    void
-alist_unlink(alist_T *al)
-{
-    if (al != &global_alist && --al->al_refcount <= 0)
-    {
-	alist_clear(al);
-	vim_free(al);
-    }
-}
-
-/*
- * Create a new argument list and use it for the current window.
- */
-    void
-alist_new(void)
-{
-    curwin->w_alist = ALLOC_ONE(alist_T);
-    if (curwin->w_alist == NULL)
-    {
-	curwin->w_alist = &global_alist;
-	++global_alist.al_refcount;
-    }
-    else
-    {
-	curwin->w_alist->al_refcount = 1;
-	curwin->w_alist->id = ++max_alist_id;
-	alist_init(curwin->w_alist);
-    }
-}
-
-#if !defined(UNIX) || defined(PROTO)
-/*
- * Expand the file names in the global argument list.
- * If "fnum_list" is not NULL, use "fnum_list[fnum_len]" as a list of buffer
- * numbers to be re-used.
- */
-    void
-alist_expand(int *fnum_list, int fnum_len)
-{
-    char_u	**old_arg_files;
-    int		old_arg_count;
-    char_u	**new_arg_files;
-    int		new_arg_file_count;
-    char_u	*save_p_su = p_su;
-    int		i;
-
-    /* Don't use 'suffixes' here.  This should work like the shell did the
-     * expansion.  Also, the vimrc file isn't read yet, thus the user
-     * can't set the options. */
-    p_su = empty_option;
-    old_arg_files = ALLOC_MULT(char_u *, GARGCOUNT);
-    if (old_arg_files != NULL)
-    {
-	for (i = 0; i < GARGCOUNT; ++i)
-	    old_arg_files[i] = vim_strsave(GARGLIST[i].ae_fname);
-	old_arg_count = GARGCOUNT;
-	if (expand_wildcards(old_arg_count, old_arg_files,
-		    &new_arg_file_count, &new_arg_files,
-		    EW_FILE|EW_NOTFOUND|EW_ADDSLASH|EW_NOERROR) == OK
-		&& new_arg_file_count > 0)
-	{
-	    alist_set(&global_alist, new_arg_file_count, new_arg_files,
-						   TRUE, fnum_list, fnum_len);
-	    FreeWild(old_arg_count, old_arg_files);
-	}
-    }
-    p_su = save_p_su;
-}
-#endif
-
-/*
- * Set the argument list for the current window.
- * Takes over the allocated files[] and the allocated fnames in it.
- */
-    void
-alist_set(
-    alist_T	*al,
-    int		count,
-    char_u	**files,
-    int		use_curbuf,
-    int		*fnum_list,
-    int		fnum_len)
-{
-    int		i;
-    static int  recursive = 0;
-
-    if (recursive)
-    {
-	emsg(_(e_au_recursive));
-	return;
-    }
-    ++recursive;
-
-    alist_clear(al);
-    if (ga_grow(&al->al_ga, count) == OK)
-    {
-	for (i = 0; i < count; ++i)
-	{
-	    if (got_int)
-	    {
-		/* When adding many buffers this can take a long time.  Allow
-		 * interrupting here. */
-		while (i < count)
-		    vim_free(files[i++]);
-		break;
-	    }
-
-	    /* May set buffer name of a buffer previously used for the
-	     * argument list, so that it's re-used by alist_add. */
-	    if (fnum_list != NULL && i < fnum_len)
-		buf_set_name(fnum_list[i], files[i]);
-
-	    alist_add(al, files[i], use_curbuf ? 2 : 1);
-	    ui_breakcheck();
-	}
-	vim_free(files);
-    }
-    else
-	FreeWild(count, files);
-    if (al == &global_alist)
-	arg_had_last = FALSE;
-
-    --recursive;
-}
-
-/*
- * Add file "fname" to argument list "al".
- * "fname" must have been allocated and "al" must have been checked for room.
- */
-    void
-alist_add(
-    alist_T	*al,
-    char_u	*fname,
-    int		set_fnum)	/* 1: set buffer number; 2: re-use curbuf */
-{
-    if (fname == NULL)		/* don't add NULL file names */
-	return;
-#ifdef BACKSLASH_IN_FILENAME
-    slash_adjust(fname);
-#endif
-    AARGLIST(al)[al->al_ga.ga_len].ae_fname = fname;
-    if (set_fnum > 0)
-	AARGLIST(al)[al->al_ga.ga_len].ae_fnum =
-	    buflist_add(fname, BLN_LISTED | (set_fnum == 2 ? BLN_CURBUF : 0));
-    ++al->al_ga.ga_len;
-}
-
-#if defined(BACKSLASH_IN_FILENAME) || defined(PROTO)
-/*
- * Adjust slashes in file names.  Called after 'shellslash' was set.
- */
-    void
-alist_slash_adjust(void)
-{
-    int		i;
-    win_T	*wp;
-    tabpage_T	*tp;
-
-    for (i = 0; i < GARGCOUNT; ++i)
-	if (GARGLIST[i].ae_fname != NULL)
-	    slash_adjust(GARGLIST[i].ae_fname);
-    FOR_ALL_TAB_WINDOWS(tp, wp)
-	if (wp->w_alist != &global_alist)
-	    for (i = 0; i < WARGCOUNT(wp); ++i)
-		if (WARGLIST(wp)[i].ae_fname != NULL)
-		    slash_adjust(WARGLIST(wp)[i].ae_fname);
 }
 #endif
 
@@ -7675,12 +7468,19 @@ ex_sleep(exarg_T *eap)
     void
 do_sleep(long msec)
 {
-    long	done;
+    long	done = 0;
     long	wait_now;
+# ifdef ELAPSED_FUNC
+    elapsed_T	start_tv;
+
+    // Remember at what time we started, so that we know how much longer we
+    // should wait after waiting for a bit.
+    ELAPSED_INIT(start_tv);
+# endif
 
     cursor_on();
     out_flush_cursor(FALSE, FALSE);
-    for (done = 0; !got_int && done < msec; done += wait_now)
+    while (!got_int && done < msec)
     {
 	wait_now = msec - done > 1000L ? 1000L : msec - done;
 #ifdef FEAT_TIMERS
@@ -7692,10 +7492,15 @@ do_sleep(long msec)
 	}
 #endif
 #ifdef FEAT_JOB_CHANNEL
-	if (has_any_channel() && wait_now > 100L)
-	    wait_now = 100L;
+	if (has_any_channel() && wait_now > 20L)
+	    wait_now = 20L;
+#endif
+#ifdef FEAT_SOUND
+	if (has_any_sound_callback() && wait_now > 20L)
+	    wait_now = 20L;
 #endif
 	ui_delay(wait_now, TRUE);
+
 #ifdef FEAT_JOB_CHANNEL
 	if (has_any_channel())
 	    ui_breakcheck_force(TRUE);
@@ -7703,11 +7508,19 @@ do_sleep(long msec)
 #endif
 	    ui_breakcheck();
 #ifdef MESSAGE_QUEUE
-	/* Process the netbeans and clientserver messages that may have been
-	 * received in the call to ui_breakcheck() when the GUI is in use. This
-	 * may occur when running a test case. */
+	// Process the netbeans and clientserver messages that may have been
+	// received in the call to ui_breakcheck() when the GUI is in use. This
+	// may occur when running a test case.
 	parse_queued_messages();
 #endif
+
+# ifdef ELAPSED_FUNC
+	// actual time passed
+	done = ELAPSED_FUNC(start_tv);
+# else
+	// guestimate time passed (will actually be more)
+	done += wait_now;
+# endif
     }
 
     // If CTRL-C was typed to interrupt the sleep, drop the CTRL-C from the
@@ -8799,16 +8612,16 @@ ex_pedit(exarg_T *eap)
 {
     win_T	*curwin_save = curwin;
 
+    // Open the preview window or popup and make it the current window.
     g_do_tagpreview = p_pvh;
     prepare_tagpreview(TRUE);
 
-    keep_help_flag = bt_help(curwin_save->w_buffer);
+    // Edit the file.
     do_exedit(eap, NULL);
-    keep_help_flag = FALSE;
 
     if (curwin != curwin_save && win_valid(curwin_save))
     {
-	/* Return cursor to where we were */
+	// Return cursor to where we were
 	validate_cursor();
 	redraw_later(VALID);
 	win_enter(curwin_save, TRUE);
@@ -9262,76 +9075,6 @@ eval_vars(
 	result = vim_strnsave(result, resultlen);
     vim_free(resultbuf);
     return result;
-}
-
-/*
- * Concatenate all files in the argument list, separated by spaces, and return
- * it in one allocated string.
- * Spaces and backslashes in the file names are escaped with a backslash.
- * Returns NULL when out of memory.
- */
-    static char_u *
-arg_all(void)
-{
-    int		len;
-    int		idx;
-    char_u	*retval = NULL;
-    char_u	*p;
-
-    /*
-     * Do this loop two times:
-     * first time: compute the total length
-     * second time: concatenate the names
-     */
-    for (;;)
-    {
-	len = 0;
-	for (idx = 0; idx < ARGCOUNT; ++idx)
-	{
-	    p = alist_name(&ARGLIST[idx]);
-	    if (p != NULL)
-	    {
-		if (len > 0)
-		{
-		    /* insert a space in between names */
-		    if (retval != NULL)
-			retval[len] = ' ';
-		    ++len;
-		}
-		for ( ; *p != NUL; ++p)
-		{
-		    if (*p == ' '
-#ifndef BACKSLASH_IN_FILENAME
-			    || *p == '\\'
-#endif
-			    || *p == '`')
-		    {
-			/* insert a backslash */
-			if (retval != NULL)
-			    retval[len] = '\\';
-			++len;
-		    }
-		    if (retval != NULL)
-			retval[len] = *p;
-		    ++len;
-		}
-	    }
-	}
-
-	/* second time: break here */
-	if (retval != NULL)
-	{
-	    retval[len] = NUL;
-	    break;
-	}
-
-	/* allocate memory */
-	retval = alloc(len + 1);
-	if (retval == NULL)
-	    break;
-    }
-
-    return retval;
 }
 
 /*

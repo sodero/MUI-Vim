@@ -5127,7 +5127,8 @@ dozet:
 		    if (ptr == NULL && (len = find_ident_under_cursor(&ptr,
 							    FIND_IDENT)) == 0)
 			return;
-		    spell_add_word(ptr, len, nchar == 'w' || nchar == 'W',
+		    spell_add_word(ptr, len, nchar == 'w' || nchar == 'W'
+					      ? SPELL_ADD_BAD : SPELL_ADD_GOOD,
 					    (nchar == 'G' || nchar == 'W')
 						       ? 0 : (int)cap->count1,
 					    undo);
@@ -8064,7 +8065,7 @@ nv_g_cmd(cmdarg_T *cap)
 	    {
 		if (cap->count1 > 1)
 		    // if it fails, let the cursor still move to the last char
-		    cursor_down(cap->count1 - 1, FALSE);
+		    (void)cursor_down(cap->count1 - 1, FALSE);
 
 		i = curwin->w_leftcol + curwin->w_width - col_off - 1;
 		coladvance((colnr_T)i);
