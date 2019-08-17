@@ -42,6 +42,7 @@ CFLAGS += 	-DPATCHLEVEL=\"$(PATCHLEVEL)\"
 endif
 
 SRC =		arabic.c			\
+			arglist.c			\
 			autocmd.c			\
 			beval.c				\
 			blob.c				\
