@@ -34,5 +34,6 @@ set viminfo+=nVIM:viminfo
 let g:loaded_netrwPlugin = "v156"
 
 " Make syntax highlightning sloppy to save time.
-syntax sync minlines=400
+syntax sync minlines=256 maxlines=256
+set synmaxcol=200
 syntax on
