@@ -6,7 +6,7 @@
  * *              version of Vim found on www.vim.org              *
  * *****************************************************************
  *
- * MUI support by Ola Söder and KAS1E's REAL NAME (if he wants to).
+ * MUI support by Ola Söder. AmigaOS4 port by KAS1E.
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
  * Do ":help credits" in Vim to see a list of people who contributed.
@@ -37,14 +37,14 @@
 
 typedef unsigned long IPTR;
 
-struct Library            *MUIMasterBase    = NULL;
-struct MUIMasterIFace    *IMUIMaster        = NULL;
+struct Library *MUIMasterBase = NULL;
+struct MUIMasterIFace *IMUIMaster = NULL;
 
-struct Library            *CyberGfxBase    = NULL;
-struct CyberGfxIFace    *ICyberGfx        = NULL;
+struct Library *CyberGfxBase = NULL;
+struct CyberGfxIFace *ICyberGfx = NULL;
 
-struct Library             *KeymapBase        = NULL;
-struct KeymapIFace         *IKeymap         = NULL;
+struct Library *KeymapBase = NULL;
+struct KeymapIFace *IKeymap = NULL;
 
 #define RPTAG_FgColor RPTAG_APenColor
 #define RPTAG_BgColor RPTAG_BPenColor
@@ -56,14 +56,14 @@ Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...);
 
 Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...)
 {
-Object *rc;
-va_list args;
+    Object *rc;
+    va_list args;
 
-va_startlinear(args, obj);
-rc = (Object *)DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG), NULL);
-va_end(args);
+    va_startlinear(args, obj);
+    rc = (Object *)DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG), NULL);
+    va_end(args);
 
-return rc;
+    return rc;
 }
 
 #endif
