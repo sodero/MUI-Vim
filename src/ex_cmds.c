@@ -20,7 +20,7 @@
 
 static int linelen(int *has_tab);
 static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap, char_u *cmd, int do_in, int do_out);
-
+static int not_writing(void);
 static int check_readonly(int *forceit, buf_T *buf);
 static void delbuf_msg(char_u *name);
 static int help_compare(const void *s1, const void *s2);
@@ -2456,7 +2456,7 @@ do_wqall(exarg_T *eap)
  * Check the 'write' option.
  * Return TRUE and give a message when it's not set.
  */
-    int
+    static int
 not_writing(void)
 {
     if (p_write)
@@ -4391,12 +4391,10 @@ do_sub(exarg_T *eap)
 			    subflags.do_ask = FALSE;
 			    break;
 			}
-#ifdef FEAT_INS_EXPAND
 			if (typed == Ctrl_E)
 			    scrollup_clamp();
 			else if (typed == Ctrl_Y)
 			    scrolldown_clamp();
-#endif
 		    }
 		    State = save_State;
 #ifdef FEAT_MOUSE
@@ -5156,7 +5154,8 @@ prepare_tagpreview(
 	else if (use_popup)
 	{
 	    wp = popup_find_info_window();
-	    // TODO: set position
+	    if (wp != NULL)
+		popup_show(wp);
 	}
 	else
 # endif

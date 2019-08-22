@@ -28,6 +28,8 @@ static poppos_entry_T poppos_entries[] = {
     {"center", POPPOS_CENTER}
 };
 
+static void popup_adjust_position(win_T *wp);
+
 /*
  * Get option value for "key", which is "line" or "col".
  * Handles "cursor+N" and "cursor-N".
@@ -933,7 +935,7 @@ add_popup_dicts(buf_T *buf, list_T *l)
 /*
  * Get the padding plus border at the top, adjusted to 1 if there is a title.
  */
-    static int
+    int
 popup_top_extra(win_T *wp)
 {
     int	extra = wp->w_popup_border[0] + wp->w_popup_padding[0];
@@ -982,7 +984,7 @@ popup_extra_width(win_T *wp)
 /*
  * Adjust the position and size of the popup to fit on the screen.
  */
-    void
+    static void
 popup_adjust_position(win_T *wp)
 {
     linenr_T	lnum;
@@ -1119,7 +1121,10 @@ popup_adjust_position(win_T *wp)
     wp->w_has_scrollbar = wp->w_want_scrollbar
 	   && (wp->w_topline > 1 || lnum <= wp->w_buffer->b_ml.ml_line_count);
     if (wp->w_has_scrollbar)
+    {
 	++right_extra;
+	++extra_width;
+    }
 
     minwidth = wp->w_minwidth;
     if (wp->w_popup_title != NULL && *wp->w_popup_title != NUL)
@@ -1292,9 +1297,16 @@ popup_set_buffer_text(buf_T *buf, typval_T text)
     static int
 parse_popup_option(win_T *wp, int is_preview)
 {
-    char_u *p;
+    char_u *p =
+#ifdef FEAT_QUICKFIX
+	!is_preview ? p_cpp :
+#endif
+	p_pvp;
 
-    for (p = is_preview ? p_pvp : p_cpp; *p != NUL; p += (*p == ',' ? 1 : 0))
+    if (wp != NULL)
+	wp->w_popup_flags &= ~POPF_INFO_MENU;
+
+    for ( ; *p != NUL; p += (*p == ',' ? 1 : 0))
     {
 	char_u	*e, *dig;
 	char_u	*s = p;
@@ -1343,6 +1355,35 @@ parse_popup_option(win_T *wp, int is_preview)
 						s + 10, OPT_FREE|OPT_LOCAL, 0);
 		*p = c;
 	    }
+	}
+	else if (STRNCMP(s, "border:", 7) == 0)
+	{
+	    char_u	*arg = s + 7;
+	    int		on = STRNCMP(arg, "on", 2) == 0 && arg + 2 == p;
+	    int		off = STRNCMP(arg, "off", 3) == 0 && arg + 3 == p;
+	    int		i;
+
+	    if (!on && !off)
+		return FAIL;
+	    if (wp != NULL)
+	    {
+		for (i = 0; i < 4; ++i)
+		    wp->w_popup_border[i] = on ? 1 : 0;
+		if (off)
+		    // only show the X for close when there is a border
+		    wp->w_popup_close = POPCLOSE_NONE;
+	    }
+	}
+	else if (STRNCMP(s, "align:", 6) == 0)
+	{
+	    char_u	*arg = s + 6;
+	    int		item = STRNCMP(arg, "item", 4) == 0 && arg + 4 == p;
+	    int		menu = STRNCMP(arg, "menu", 4) == 0 && arg + 4 == p;
+
+	    if (!menu && !item)
+		return FAIL;
+	    if (wp != NULL && menu)
+		wp->w_popup_flags |= POPF_INFO_MENU;
 	}
 	else
 	    return FAIL;
@@ -1509,8 +1550,7 @@ popup_create(typval_T *argvars, typval_T *rettv, create_type_T type)
     {
 	// create a new buffer associated with the popup
 	new_buffer = TRUE;
-	buf = buflist_new(NULL, NULL, (linenr_T)0,
-						 BLN_NEW|BLN_LISTED|BLN_DUMMY);
+	buf = buflist_new(NULL, NULL, (linenr_T)0, BLN_NEW|BLN_DUMMY|BLN_REUSE);
 	if (buf == NULL)
 	    return NULL;
 	ml_open(buf);
@@ -1672,6 +1712,7 @@ popup_create(typval_T *argvars, typval_T *rettv, create_type_T type)
 	parse_previewpopup(wp);
 	popup_set_wantpos_cursor(wp, wp->w_minwidth);
     }
+# ifdef FEAT_QUICKFIX
     if (type == TYPE_INFO)
     {
 	wp->w_popup_pos = POPPOS_TOPLEFT;
@@ -1680,6 +1721,7 @@ popup_create(typval_T *argvars, typval_T *rettv, create_type_T type)
 	add_border_left_right_padding(wp);
 	parse_completepopup(wp);
     }
+# endif
 
     for (i = 0; i < 4; ++i)
 	VIM_CLEAR(wp->w_border_highlight[i]);
@@ -2018,6 +2060,18 @@ f_popup_close(typval_T *argvars, typval_T *rettv UNUSED)
 	popup_close_and_callback(wp, &argvars[1]);
 }
 
+    static void
+popup_hide(win_T *wp)
+{
+    if ((wp->w_popup_flags & POPF_HIDDEN) == 0)
+    {
+	wp->w_popup_flags |= POPF_HIDDEN;
+	--wp->w_buffer->b_nwindows;
+	redraw_all_later(NOT_VALID);
+	popup_mask_refresh = TRUE;
+    }
+}
+
 /*
  * popup_hide({id})
  */
@@ -2027,10 +2081,17 @@ f_popup_hide(typval_T *argvars, typval_T *rettv UNUSED)
     int		id = (int)tv_get_number(argvars);
     win_T	*wp = find_popup_win(id);
 
-    if (wp != NULL && (wp->w_popup_flags & POPF_HIDDEN) == 0)
+    if (wp != NULL)
+	popup_hide(wp);
+}
+
+    void
+popup_show(win_T *wp)
+{
+    if ((wp->w_popup_flags & POPF_HIDDEN) != 0)
     {
-	wp->w_popup_flags |= POPF_HIDDEN;
-	--wp->w_buffer->b_nwindows;
+	wp->w_popup_flags &= ~POPF_HIDDEN;
+	++wp->w_buffer->b_nwindows;
 	redraw_all_later(NOT_VALID);
 	popup_mask_refresh = TRUE;
     }
@@ -2045,13 +2106,8 @@ f_popup_show(typval_T *argvars, typval_T *rettv UNUSED)
     int		id = (int)tv_get_number(argvars);
     win_T	*wp = find_popup_win(id);
 
-    if (wp != NULL && (wp->w_popup_flags & POPF_HIDDEN) != 0)
-    {
-	wp->w_popup_flags &= ~POPF_HIDDEN;
-	++wp->w_buffer->b_nwindows;
-	redraw_all_later(NOT_VALID);
-	popup_mask_refresh = TRUE;
-    }
+    if (wp != NULL)
+	popup_show(wp);
 }
 
 /*
@@ -3255,6 +3311,7 @@ popup_is_popup(win_T *wp)
     return wp->w_popup_flags != 0;
 }
 
+#if defined(FEAT_QUICKFIX) || defined(PROTO)
 /*
  * Find an existing popup used as the info window, in the current tab page.
  * Return NULL if not found.
@@ -3270,9 +3327,18 @@ popup_find_info_window(void)
 	    return wp;
     return NULL;
 }
+#endif
 
     void
-f_popup_getpreview(typval_T *argvars UNUSED, typval_T *rettv)
+f_popup_findinfo(typval_T *argvars UNUSED, typval_T *rettv)
+{
+    win_T   *wp = popup_find_info_window();
+
+    rettv->vval.v_number = wp == NULL ? 0 : wp->w_id;
+}
+
+    void
+f_popup_findpreview(typval_T *argvars UNUSED, typval_T *rettv)
 {
     win_T   *wp = popup_find_preview_window();
 
@@ -3312,10 +3378,14 @@ popup_create_preview_window(int info)
     return OK;
 }
 
+#if defined(FEAT_QUICKFIX) || defined(PROTO)
+/*
+ * Close any preview popup.
+ */
     void
-popup_close_preview(int info)
+popup_close_preview(void)
 {
-    win_T *wp = info ? popup_find_info_window() : popup_find_preview_window();
+    win_T *wp = popup_find_preview_window();
 
     if (wp != NULL)
     {
@@ -3326,6 +3396,19 @@ popup_close_preview(int info)
 	popup_close_and_callback(wp, &res);
     }
 }
+
+/*
+ * Hide the info popup.
+ */
+    void
+popup_hide_info(void)
+{
+    win_T *wp = popup_find_info_window();
+
+    if (wp != NULL)
+	popup_hide(wp);
+}
+#endif
 
 /*
  * Set the title of the popup window to the file name.

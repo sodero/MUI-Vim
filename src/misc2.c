@@ -1014,14 +1014,19 @@ do_outofmem_msg(size_t size)
 {
     if (!did_outofmem_msg)
     {
-	/* Don't hide this message */
+	// Don't hide this message
 	emsg_silent = 0;
 
-	/* Must come first to avoid coming back here when printing the error
-	 * message fails, e.g. when setting v:errmsg. */
+	// Must come first to avoid coming back here when printing the error
+	// message fails, e.g. when setting v:errmsg.
 	did_outofmem_msg = TRUE;
 
 	semsg(_("E342: Out of memory!  (allocating %lu bytes)"), (long_u)size);
+
+	if (starting == NO_SCREEN)
+	    // Not even finished with initializations and already out of
+	    // memory?  Then nothing is going to work, exit.
+	    mch_exit(123);
     }
 }
 
@@ -1060,7 +1065,7 @@ free_all_mem(void)
     spell_free_all();
 # endif
 
-# if defined(FEAT_INS_EXPAND) && defined(FEAT_BEVAL_TERM)
+# if defined(FEAT_BEVAL_TERM)
     ui_remove_balloon();
 # endif
 
@@ -1112,9 +1117,7 @@ free_all_mem(void)
     free_search_patterns();
     free_old_sub();
     free_last_insert();
-# if defined(FEAT_INS_EXPAND)
     free_insexpand_stuff();
-# endif
     free_prev_shellcmd();
     free_regexp_stuff();
     free_tag_stuff();
@@ -2530,7 +2533,7 @@ static struct mousetable
  * Return the modifier mask bit (MOD_MASK_*) which corresponds to the given
  * modifier name ('S' for Shift, 'C' for Ctrl etc).
  */
-    int
+    static int
 name_to_mod_mask(int c)
 {
     int	    i;

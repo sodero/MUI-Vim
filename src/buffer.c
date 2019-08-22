@@ -27,6 +27,8 @@
 
 #include "vim.h"
 
+static void	enter_buffer(buf_T *buf);
+static void	buflist_getfpos(void);
 static char_u	*buflist_match(regmatch_T *rmp, buf_T *buf, int ignore_case);
 static char_u	*fname_match(regmatch_T *rmp, char_u *name, int ignore_case);
 #ifdef UNIX
@@ -43,6 +45,10 @@ static int	append_arg_number(win_T *wp, char_u *buf, int buflen, int add_file);
 static void	free_buffer(buf_T *);
 static void	free_buffer_stuff(buf_T *buf, int free_options);
 static void	clear_wininfo(buf_T *buf);
+#if defined(FEAT_JOB_CHANNEL) \
+	|| defined(FEAT_PYTHON) || defined(FEAT_PYTHON3)
+static int	find_win_for_buf(buf_T *buf, win_T **wp, tabpage_T **tp);
+#endif
 
 #ifdef UNIX
 # define dev_T dev_t
@@ -56,8 +62,20 @@ static char *msg_qflist = N_("[Quickfix List]");
 #endif
 static char *e_auabort = N_("E855: Autocommands caused command to abort");
 
-/* Number of times free_buffer() was called. */
+// Number of times free_buffer() was called.
 static int	buf_free_count = 0;
+
+static int	top_file_num = 1;	// highest file number
+static garray_T buf_reuse = GA_EMPTY;	// file numbers to recycle
+
+/*
+ * Return the highest possible buffer number.
+ */
+    int
+get_highest_fnum(void)
+{
+    return top_file_num - 1;
+}
 
 /*
  * Read data from buffer for retrying.
@@ -175,14 +193,19 @@ open_buffer(
 	    if (curbuf->b_ml.ml_mfp != NULL)
 		break;
 	/*
-	 * if there is no memfile at all, exit
+	 * If there is no memfile at all, exit.
 	 * This is OK, since there are no changes to lose.
 	 */
 	if (curbuf == NULL)
 	{
 	    emsg(_("E82: Cannot allocate any buffer, exiting..."));
+
+	    // Don't try to do any saving, with "curbuf" NULL almost nothing
+	    // will work.
+	    v_dying = 2;
 	    getout(2);
 	}
+
 	emsg(_("E83: Cannot allocate buffer, using other one..."));
 	enter_buffer(curbuf);
 #ifdef FEAT_SYN_HL
@@ -299,9 +322,7 @@ open_buffer(
     /* Set last_changedtick to avoid triggering a TextChanged autocommand right
      * after it was added. */
     curbuf->b_last_changedtick = CHANGEDTICK(curbuf);
-#ifdef FEAT_INS_EXPAND
     curbuf->b_last_changedtick_pum = CHANGEDTICK(curbuf);
-#endif
 
     /* require "!" to overwrite the file, because it wasn't read completely */
 #ifdef FEAT_EVAL
@@ -461,6 +482,7 @@ can_unload_buffer(buf_T *buf)
  * DOBUF_UNLOAD		buffer is unloaded
  * DOBUF_DELETE		buffer is unloaded and removed from buffer list
  * DOBUF_WIPE		buffer is unloaded and really deleted
+ * DOBUF_WIPE_REUSE	idem, and add to buf_reuse list
  * When doing all but the first one on the current buffer, the caller should
  * get a new buffer very soon!
  *
@@ -484,8 +506,8 @@ close_buffer(
     win_T	*the_curwin = curwin;
     tabpage_T	*the_curtab = curtab;
     int		unload_buf = (action != 0);
-    int		del_buf = (action == DOBUF_DEL || action == DOBUF_WIPE);
-    int		wipe_buf = (action == DOBUF_WIPE);
+    int		wipe_buf = (action == DOBUF_WIPE || action == DOBUF_WIPE_REUSE);
+    int		del_buf = (action == DOBUF_DEL || wipe_buf);
 
     /*
      * Force unloading or deleting when 'bufhidden' says so.
@@ -677,6 +699,14 @@ aucmd_abort:
      */
     if (wipe_buf)
     {
+	if (action == DOBUF_WIPE_REUSE)
+	{
+	    // we can re-use this buffer number, store it
+	    if (buf_reuse.ga_itemsize == 0)
+		ga_init2(&buf_reuse, sizeof(int), 50);
+	    if (ga_grow(&buf_reuse, 1) == OK)
+		((int *)buf_reuse.ga_data)[buf_reuse.ga_len++] = buf->b_fnum;
+	}
 	if (buf->b_sfname != buf->b_ffname)
 	    VIM_CLEAR(buf->b_sfname);
 	else
@@ -1175,7 +1205,8 @@ do_bufdel(
 		if (!VIM_ISDIGIT(*arg))
 		{
 		    p = skiptowhite_esc(arg);
-		    bnr = buflist_findpat(arg, p, command == DOBUF_WIPE,
+		    bnr = buflist_findpat(arg, p,
+			  command == DOBUF_WIPE || command == DOBUF_WIPE_REUSE,
 								FALSE, FALSE);
 		    if (bnr < 0)	    /* failed */
 			break;
@@ -1266,6 +1297,7 @@ empty_curbuf(
  * action == DOBUF_UNLOAD   unload specified buffer(s)
  * action == DOBUF_DEL	    delete specified buffer(s) from buffer list
  * action == DOBUF_WIPE	    delete specified buffer(s) really
+ * action == DOBUF_WIPE_REUSE idem, and add number to "buf_reuse"
  *
  * start == DOBUF_CURRENT   go to "count" buffer from current buffer
  * start == DOBUF_FIRST	    go to "count" buffer from first buffer
@@ -1285,7 +1317,7 @@ do_buffer(
     buf_T	*buf;
     buf_T	*bp;
     int		unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
-						     || action == DOBUF_WIPE);
+			|| action == DOBUF_WIPE || action == DOBUF_WIPE_REUSE);
 
     switch (start)
     {
@@ -1386,7 +1418,8 @@ do_buffer(
 
 	/* When unloading or deleting a buffer that's already unloaded and
 	 * unlisted: fail silently. */
-	if (action != DOBUF_WIPE && buf->b_ml.ml_mfp == NULL && !buf->b_p_bl)
+	if (action != DOBUF_WIPE && action != DOBUF_WIPE_REUSE
+				   && buf->b_ml.ml_mfp == NULL && !buf->b_p_bl)
 	    return FAIL;
 
 	if (!forceit && bufIsChanged(buf))
@@ -1622,13 +1655,14 @@ do_buffer(
  * DOBUF_UNLOAD	    unload it
  * DOBUF_DEL	    delete it
  * DOBUF_WIPE	    wipe it out
+ * DOBUF_WIPE_REUSE wipe it out and add to "buf_reuse"
  */
     void
 set_curbuf(buf_T *buf, int action)
 {
     buf_T	*prevbuf;
     int		unload = (action == DOBUF_UNLOAD || action == DOBUF_DEL
-						     || action == DOBUF_WIPE);
+			|| action == DOBUF_WIPE || action == DOBUF_WIPE_REUSE);
 #ifdef FEAT_SYN_HL
     long	old_tw = curbuf->b_p_tw;
 #endif
@@ -1705,7 +1739,7 @@ set_curbuf(buf_T *buf, int action)
  * Old curbuf must have been abandoned already!  This also means "curbuf" may
  * be pointing to freed memory.
  */
-    void
+    static void
 enter_buffer(buf_T *buf)
 {
     /* Copy buffer and window local option values.  Not for a help buffer. */
@@ -1852,8 +1886,6 @@ no_write_message_nobang(buf_T *buf UNUSED)
  * functions for dealing with the buffer list
  */
 
-static int  top_file_num = 1;		/* highest file number */
-
 /*
  * Return TRUE if the current buffer is empty, unnamed, unmodified and used in
  * only one window.  That means it can be re-used.
@@ -1881,6 +1913,7 @@ curbuf_reusable(void)
  * If (flags & BLN_NEW) is TRUE, don't use an existing buffer.
  * If (flags & BLN_NOOPT) is TRUE, don't copy options from the current buffer
  *				    if the buffer already exists.
+ * If (flags & BLN_REUSE) is TRUE, may use buffer number from "buf_reuse".
  * This is the ONLY way to create a new buffer.
  */
     buf_T *
@@ -2056,7 +2089,16 @@ buflist_new(
 	}
 	lastbuf = buf;
 
-	buf->b_fnum = top_file_num++;
+	if ((flags & BLN_REUSE) && buf_reuse.ga_len > 0)
+	{
+	    // Recycle a previously used buffer number.  Used for buffers which
+	    // are normally hidden, e.g. in a popup window.  Avoids that the
+	    // buffer number grows rapidly.
+	    --buf_reuse.ga_len;
+	    buf->b_fnum = ((int *)buf_reuse.ga_data)[buf_reuse.ga_len];
+	}
+	else
+	    buf->b_fnum = top_file_num++;
 	if (top_file_num < 0)		/* wrap around (may cause duplicates) */
 	{
 	    emsg(_("W14: Warning: List of file names overflow"));
@@ -2217,9 +2259,7 @@ free_buf_options(
 #if defined(FEAT_CINDENT) || defined(FEAT_SMARTINDENT)
     clear_string_option(&buf->b_p_cinw);
 #endif
-#ifdef FEAT_INS_EXPAND
     clear_string_option(&buf->b_p_cpt);
-#endif
 #ifdef FEAT_COMPL_FUNC
     clear_string_option(&buf->b_p_cfu);
     clear_string_option(&buf->b_p_ofu);
@@ -2236,10 +2276,8 @@ free_buf_options(
 #ifdef FEAT_EVAL
     clear_string_option(&buf->b_p_tfu);
 #endif
-#ifdef FEAT_INS_EXPAND
     clear_string_option(&buf->b_p_dict);
     clear_string_option(&buf->b_p_tsr);
-#endif
 #ifdef FEAT_TEXTOBJ
     clear_string_option(&buf->b_p_qe);
 #endif
@@ -2355,7 +2393,7 @@ buflist_getfile(
 /*
  * go to the last know line number for the current buffer
  */
-    void
+    static void
 buflist_getfpos(void)
 {
     pos_T	*fpos;
@@ -5465,7 +5503,7 @@ restore_win_for_buf(
  * If found OK is returned and "wp" and "tp" are set to the window and tabpage.
  * If not found FAIL is returned.
  */
-    int
+    static int
 find_win_for_buf(
     buf_T     *buf,
     win_T     **wp,

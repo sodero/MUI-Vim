@@ -4633,8 +4633,9 @@ invalid_range(exarg_T *eap)
 		    return _(e_invrange);
 		break;
 	    case ADDR_BUFFERS:
-		if (eap->line1 < firstbuf->b_fnum
-			|| eap->line2 > lastbuf->b_fnum)
+		// Only a boundary check, not whether the buffers actually
+		// exist.
+		if (eap->line1 < 1 || eap->line2 > get_highest_fnum())
 		    return _(e_invrange);
 		break;
 	    case ADDR_LOADED_BUFFERS:
@@ -5808,7 +5809,7 @@ ex_pclose(exarg_T *eap)
 	}
 # ifdef FEAT_TEXT_PROP
     // Also when 'previewpopup' is empty, it might have been cleared.
-    popup_close_preview(FALSE);
+    popup_close_preview();
 # endif
 }
 #endif

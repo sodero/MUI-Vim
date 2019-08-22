@@ -248,7 +248,9 @@ static int get_lit_string_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int free_unref_items(int copyID);
 static int get_env_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int get_env_len(char_u **arg);
-static char_u * make_expanded_name(char_u *in_start, char_u *expr_start, char_u *expr_end, char_u *in_end);
+static int get_name_len(char_u **arg, char_u **alias, int evaluate, int verbose);
+static char_u *make_expanded_name(char_u *in_start, char_u *expr_start, char_u *expr_end, char_u *in_end);
+static int get_var_tv(char_u *name, int len, typval_T *rettv, dictitem_T **dip, int verbose, int no_autoload);
 static void check_vars(char_u *name, int len);
 static typval_T *alloc_string_tv(char_u *string);
 static void delete_var(hashtab_T *ht, hashitem_T *hi);
@@ -6924,7 +6926,7 @@ get_id_len(char_u **arg)
  * If the name contains 'magic' {}'s, expand them and return the
  * expanded name in an allocated string via 'alias' - caller must free.
  */
-    int
+    static int
 get_name_len(
     char_u	**arg,
     char_u	**alias,
@@ -7453,7 +7455,7 @@ set_cmdarg(exarg_T *eap, char_u *oldarg)
  * Get the value of internal variable "name".
  * Return OK or FAIL.  If OK is returned "rettv" must be cleared.
  */
-    int
+    static int
 get_var_tv(
     char_u	*name,
     int		len,		/* length of "name" */
@@ -8014,7 +8016,7 @@ tv_get_string_buf_chk(typval_T *varp, char_u *buf)
  * Turn a typeval into a string.  Similar to tv_get_string_buf() but uses
  * string() on Dict, List, etc.
  */
-    char_u *
+    static char_u *
 tv_stringify(typval_T *varp, char_u *buf)
 {
     if (varp->v_type == VAR_LIST
@@ -9437,7 +9439,7 @@ autoload_name(char_u *name)
     // Get the script file name: replace '#' with '/', append ".vim".
     scriptname = alloc(STRLEN(name) + 14);
     if (scriptname == NULL)
-	return FALSE;
+	return NULL;
     STRCPY(scriptname, "autoload/");
     STRCAT(scriptname, name);
     for (p = scriptname + 9; (p = vim_strchr(p, AUTOLOAD_CHAR)) != NULL;
@@ -9467,6 +9469,8 @@ script_autoload(
 	return FALSE;
 
     tofree = scriptname = autoload_name(name);
+    if (scriptname == NULL)
+	return FALSE;
 
     /* Find the name in the list of previously loaded package names.  Skip
      * "autoload/", it's always the same. */
