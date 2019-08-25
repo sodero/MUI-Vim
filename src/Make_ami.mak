@@ -99,6 +99,7 @@ SRC =		arabic.c			\
 			quickfix.c			\
 			regexp.c			\
 			screen.c			\
+			scriptfile.c		\
 			search.c			\
 			session.c			\
 			sha256.c			\
