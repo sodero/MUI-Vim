@@ -22,7 +22,7 @@ func Test_setbufline_getbufline()
   call assert_equal(1, setbufline(b, 5, ['x']))
   call assert_equal(1, setbufline(bufnr('$') + 1, 1, ['x']))
   call assert_equal(0, setbufline(b, 4, ['d', 'e']))
-  call assert_equal(['c'], getbufline(b, 3))
+  call assert_equal(['c'], b->getbufline(3))
   call assert_equal(['d'], getbufline(b, 4))
   call assert_equal(['e'], getbufline(b, 5))
   call assert_equal([], getbufline(b, 6))
@@ -132,7 +132,7 @@ func Test_deletebufline()
   call assert_equal(0, deletebufline(b, 2, 8))
   call assert_equal(['aaa'], getbufline(b, 1, 2))
   exe "bd!" b
-  call assert_equal(1, deletebufline(b, 1))
+  call assert_equal(1, b->deletebufline(1))
 
   call assert_equal(1, deletebufline(-1, 1))
 

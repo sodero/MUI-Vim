@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.1.  Last change: 2019 Aug 21
+*eval.txt*	For Vim version 8.1.  Last change: 2019 Aug 24
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -1768,6 +1768,13 @@ v:dying		Normally zero.  When a deadly signal is caught it's set to
 <		Note: if another deadly signal is caught when v:dying is one,
 		VimLeave autocommands will not be executed.
 
+					*v:echospace* *echospace-variable*
+v:echospace	Number of screen cells that can be used for an `:echo` message
+		in the last screen line before causing the |hit-enter-prompt|.
+		Depends on 'showcmd', 'ruler' and 'columns'.  You need to
+		check 'cmdheight' for whether there are full-width lines
+		available above the last line.
+
 					*v:errmsg* *errmsg-variable*
 v:errmsg	Last given error message.  It's allowed to set this variable.
 		Example: >
@@ -2328,8 +2335,8 @@ bufexists({expr})		Number	|TRUE| if buffer {expr} exists
 buflisted({expr})		Number	|TRUE| if buffer {expr} is listed
 bufload({expr})			Number	load buffer {expr} if not loaded yet
 bufloaded({expr})		Number	|TRUE| if buffer {expr} is loaded
-bufname({expr})			String	Name of the buffer {expr}
-bufnr({expr} [, {create}])	Number	Number of the buffer {expr}
+bufname([{expr}])		String	Name of the buffer {expr}
+bufnr([{expr} [, {create}]])	Number	Number of the buffer {expr}
 bufwinid({expr})		Number	window ID of buffer {expr}
 bufwinnr({expr})		Number	window number of buffer {expr}
 byte2line({byte})		Number	line number at byte count {byte}
@@ -2443,7 +2450,7 @@ getbufline({expr}, {lnum} [, {end}])
 				List	lines {lnum} to {end} of buffer {expr}
 getbufvar({expr}, {varname} [, {def}])
 				any	variable {varname} in buffer {expr}
-getchangelist({expr})		List	list of change list items
+getchangelist([{expr}])		List	list of change list items
 getchar([expr])			Number	get one character from the user
 getcharmod()			Number	modifiers for the last typed character
 getcharsearch()			Dict	last character search
@@ -3210,9 +3217,10 @@ bufloaded({expr})					*bufloaded()*
 		Can also be used as a |method|: >
 			let loaded = 'somename'->bufloaded()
 
-bufname({expr})						*bufname()*
+bufname([{expr}])					*bufname()*
 		The result is the name of a buffer, as it is displayed by the
 		":ls" command.
+		If {expr} is omitted the current buffer is used.
 		If {expr} is a Number, that buffer number's name is given.
 		Number zero is the alternate buffer for the current window.
 		If {expr} is a String, it is used as a |file-pattern| to match
@@ -3244,7 +3252,7 @@ bufname({expr})						*bufname()*
 		Obsolete name: buffer_name().
 
 							*bufnr()*
-bufnr({expr} [, {create}])
+bufnr([{expr} [, {create}]])
 		The result is the number of a buffer, as it is displayed by
 		the ":ls" command.  For the use of {expr}, see |bufname()|
 		above.
@@ -3252,7 +3260,7 @@ bufnr({expr} [, {create}])
 		{create} argument is present and not zero, a new, unlisted,
 		buffer is created and its number is returned.
 		bufnr("$") is the last buffer: >
-	:let last_buffer = bufnr("$")
+			:let last_buffer = bufnr("$")
 <		The result is a Number, which is the highest buffer number
 		of existing buffers.  Note that not all buffers with a smaller
 		number necessarily exist, because ":bwipeout" may have removed
@@ -3299,7 +3307,11 @@ byte2line({byte})					*byte2line()*
 		for the current buffer.  The first character has byte count
 		one.
 		Also see |line2byte()|, |go| and |:goto|.
-		{not available when compiled without the |+byte_offset|
+
+		Can also be used as a |method|: >
+			GetOffset()->byte2line()
+
+<		{not available when compiled without the |+byte_offset|
 		feature}
 
 byteidx({expr}, {nr})					*byteidx()*
@@ -3323,6 +3335,9 @@ byteidx({expr}, {nr})					*byteidx()*
 		If there are exactly {nr} characters the length of the string
 		in bytes is returned.
 
+		Can also be used as a |method|: >
+			GetName()->byteidx(idx)
+
 byteidxcomp({expr}, {nr})					*byteidxcomp()*
 		Like byteidx(), except that a composing character is counted
 		as a separate character.  Example: >
@@ -3336,6 +3351,9 @@ byteidxcomp({expr}, {nr})					*byteidxcomp()*
 		Only works different from byteidx() when 'encoding' is set to
 		a Unicode encoding.
 
+		Can also be used as a |method|: >
+			GetName()->byteidxcomp(idx)
+
 call({func}, {arglist} [, {dict}])			*call()* *E699*
 		Call function {func} with the items in |List| {arglist} as
 		arguments.
@@ -3344,6 +3362,9 @@ call({func}, {arglist} [, {dict}])			*call()* *E699*
 		Returns the return value of the called function.
 		{dict} is for functions with the "dict" attribute.  It will be
 		used to set the local variable "self". |Dictionary-function|
+
+		Can also be used as a |method|: >
+			GetFunc()->call([arg, arg], dict)
 
 ceil({expr})							*ceil()*
 		Return the smallest integral value greater than or equal to
@@ -3390,6 +3411,9 @@ char2nr({expr} [, {utf8}])					*char2nr()*
 		    let list = map(split(str, '\zs'), {_, val -> char2nr(val)})
 <		Result: [65, 66, 67]
 
+		Can also be used as a |method|: >
+			GetChar()->char2nr()
+
 chdir({dir})						*chdir()*
 		Change the current working directory to {dir}.  The scope of
 		the directory change depends on the directory of the current
@@ -3410,6 +3434,9 @@ chdir({dir})						*chdir()*
 			   " ... do some work
 			   call chdir(save_dir)
 			endif
+
+<		Can also be used as a |method|: >
+			GetDir()->chdir()
 <
 cindent({lnum})						*cindent()*
 		Get the amount of indent for line {lnum} according the C
@@ -3420,12 +3447,18 @@ cindent({lnum})						*cindent()*
 		feature, -1 is returned.
 		See |C-indenting|.
 
+		Can also be used as a |method|: >
+			GetLnum()->cindent()
+
 clearmatches([{win}])					*clearmatches()*
 		Clears all matches previously defined for the current window
 		by |matchadd()| and the |:match| commands.
 		If {win} is specified, use the window with this number or
 		window ID instead of the current window.
 
+		Can also be used as a |method|: >
+			GetWin()->clearmatches()
+<
 							*col()*
 col({expr})	The result is a Number, which is the byte index of the column
 		position given with {expr}.  The accepted positions are:
@@ -3461,6 +3494,9 @@ col({expr})	The result is a Number, which is the byte index of the column
 				\<C-O>:set ve=all<CR>
 				\<C-O>:echo col(".") . "\n" <Bar>
 				\let &ve = save_ve<CR>
+
+<		Can also be used as a |method|: >
+			GetPos()->col()
 <
 
 complete({startcol}, {matches})			*complete()* *E785*
@@ -3492,6 +3528,10 @@ complete({startcol}, {matches})			*complete()* *E785*
 <		This isn't very useful, but it shows how it works.  Note that
 		an empty string is returned to avoid a zero being inserted.
 
+		Can also be used as a |method|, the second argument is passed
+		in: >
+			GetMatches()->complete(col('.'))
+
 complete_add({expr})				*complete_add()*
 		Add {expr} to the list of matches.  Only to be used by the
 		function specified with the 'completefunc' option.
@@ -3500,6 +3540,9 @@ complete_add({expr})				*complete_add()*
 		the list.
 		See |complete-functions| for an explanation of {expr}.  It is
 		the same as one item in the list that 'omnifunc' would return.
+
+		Can also be used as a |method|: >
+			GetMoreMatches()->complete_add()
 
 complete_check()				*complete_check()*
 		Check for a key typed while looking for completion matches.
@@ -3561,6 +3604,9 @@ complete_info([{what}])
 			call complete_info(['mode'])
 			" Get only 'mode' and 'pum_visible'
 			call complete_info(['mode', 'pum_visible'])
+
+<		Can also be used as a |method|: >
+			GetItems()->complete_info()
 <
 						*confirm()*
 confirm({msg} [, {choices} [, {default} [, {type}]]])
@@ -3615,6 +3661,9 @@ confirm({msg} [, {choices} [, {default} [, {type}]]])
 		tries to put the buttons in one horizontal line.  If they
 		don't fit, a vertical layout is used anyway.  For some systems
 		the horizontal layout is always used.
+
+		Can also be used as a |method|in: >
+			BuildMessage()->confirm("&Yes\n&No")
 
 							*copy()*
 copy({expr})	Make a copy of {expr}.  For Numbers and Strings this isn't
@@ -3745,11 +3794,17 @@ cursor({list})
 		position within a <Tab> or after the last character.
 		Returns 0 when the position could be set, -1 otherwise.
 
+		Can also be used as a |method|: >
+			GetCursorPos()->cursor()
+
 debugbreak({pid})					*debugbreak()*
 		Specifically used to interrupt a program being debugged.  It
 		will cause process {pid} to get a SIGTRAP.  Behavior for other
 		processes is undefined. See |terminal-debugger|.
 		{only available on MS-Windows}
+
+		Can also be used as a |method|: >
+			GetPid()->debugbreak()
 
 deepcopy({expr} [, {noref}])				*deepcopy()* *E698*
 		Make a copy of {expr}.  For Numbers and Strings this isn't
@@ -3772,6 +3827,9 @@ deepcopy({expr} [, {noref}])				*deepcopy()* *E698*
 		{noref} set to 1 will fail.
 		Also see |copy()|.
 
+		Can also be used as a |method|: >
+			GetObject()->deepcopy()
+
 delete({fname} [, {flags}])					*delete()*
 		Without {flags} or with {flags} empty: Deletes the file by the
 		name {fname}.  This also works when {fname} is a symbolic link.
@@ -3793,6 +3851,9 @@ delete({fname} [, {flags}])					*delete()*
 		To delete a line from the buffer use |:delete| or
 		|deletebufline()|.
 
+		Can also be used as a |method|: >
+			GetName()->delete()
+
 deletebufline({expr}, {first} [, {last}])		*deletebufline()*
 		Delete lines {first} to {last} (inclusive) from buffer {expr}.
 		If {last} is omitted then delete line {first} only.
@@ -3803,6 +3864,9 @@ deletebufline({expr}, {first} [, {last}])		*deletebufline()*
 		{first} and {last} are used like with |getline()|. Note that
 		when using |line()| this refers to the current buffer. Use "$"
 		to refer to the last line in buffer {expr}.
+
+		Can also be used as a |method|: >
+			GetBuffer()->deletebufline(1)
 
 							*did_filetype()*
 did_filetype()	Returns |TRUE| when autocommands are being executed and the
@@ -3825,6 +3889,9 @@ diff_filler({lnum})					*diff_filler()*
 		line, "'m" mark m, etc.
 		Returns 0 if the current window is not in diff mode.
 
+		Can also be used as a |method|: >
+			GetLnum()->diff_filler()
+
 diff_hlID({lnum}, {col})				*diff_hlID()*
 		Returns the highlight ID for diff mode at line {lnum} column
 		{col} (byte index).  When the current line does not have a
@@ -3836,6 +3903,8 @@ diff_hlID({lnum}, {col})				*diff_hlID()*
 		The highlight ID can be used with |synIDattr()| to obtain
 		syntax information about the highlighting.
 
+		Can also be used as a |method|: >
+			GetLnum()->diff_hlID(col)
 environ()						*environ()*
 		Return all of environment variables as dictionary. You can
 		check if an environment variable exists like this: >
@@ -3857,6 +3926,7 @@ empty({expr})						*empty()*
 
 		For a long |List| this is much faster than comparing the
 		length with zero.
+
 		Can also be used as a |method|: >
 			mylist->empty()
 
@@ -3868,6 +3938,9 @@ escape({string}, {chars})				*escape()*
 			c:\\program\ files\\vim
 <		Also see |shellescape()| and |fnameescape()|.
 
+		Can also be used as a |method|: >
+			GetText()->escape(' \')
+<
 							*eval()*
 eval({string})	Evaluate {string} and return the result.  Especially useful to
 		turn the result of |string()| back into the original value.
@@ -3909,6 +3982,9 @@ executable({expr})					*executable()*
 			-1	not implemented on this system
 		|exepath()| can be used to get the full path of an executable.
 
+		Can also be used as a |method|: >
+			GetCommand()->executable()
+
 execute({command} [, {silent}])					*execute()*
 		Execute an Ex command or commands and return the output as a
 		string.
@@ -3938,6 +4014,9 @@ execute({command} [, {silent}])					*execute()*
 		When used recursively the output of the recursive call is not
 		included in the output of the higher level call.
 
+		Can also be used as a |method|: >
+			GetCommand()->execute()
+
 exepath({expr})						*exepath()*
 		If {expr} is an executable and is either an absolute path, a
 		relative path or found in $PATH, return the full path.
@@ -3946,6 +4025,9 @@ exepath({expr})						*exepath()*
 			echo exepath(v:progpath)
 <		If {expr} cannot be found in $PATH or is not executable then
 		an empty string is returned.
+
+		Can also be used as a |method|: >
+			GetCommand()->exepath()
 
 							*exists()*
 exists({expr})	The result is a Number, which is |TRUE| if {expr} is defined,
@@ -4031,6 +4113,9 @@ exists({expr})	The result is a Number, which is |TRUE| if {expr} is defined,
 			exists(bufcount)
 <		This doesn't check for existence of the "bufcount" variable,
 		but gets the value of "bufcount", and checks if that exists.
+
+		Can also be used as a |method|: >
+			Varname()->exists()
 
 exp({expr})						*exp()*
 		Return the exponential of {expr} as a |Float| in the range
@@ -4132,6 +4217,9 @@ expand({expr} [, {nosuf} [, {list}]])				*expand()*
 		See |glob()| for finding existing files.  See |system()| for
 		getting the raw output of an external command.
 
+		Can also be used as a |method|: >
+			Getpattern()->expand()
+
 expandcmd({expr})					*expandcmd()*
 		Expand special items in {expr} like what is done for an Ex
 		command such as `:edit`.  This expands special keywords, like
@@ -4139,6 +4227,9 @@ expandcmd({expr})					*expandcmd()*
 		{expr}.  Returns the expanded string.
 		Example: >
 			:echo expandcmd('make %<.o')
+
+<		Can also be used as a |method|: >
+			GetCommand()->expandcmd()
 <
 extend({expr1}, {expr2} [, {expr3}])			*extend()*
 		{expr1} and {expr2} must be both |Lists| or both
@@ -4228,6 +4319,9 @@ feedkeys({string} [, {mode}])				*feedkeys()*
 
 		Return value is always 0.
 
+		Can also be used as a |method|: >
+			GetInput()->feedkeys()
+
 filereadable({file})					*filereadable()*
 		The result is a Number, which is |TRUE| when a file with the
 		name {file} exists, and can be read.  If {file} doesn't exist,
@@ -4240,6 +4334,9 @@ filereadable({file})					*filereadable()*
 			0
 			echo filereadable(expand('~/.vimrc'))
 			1
+
+<		Can also be used as a |method|: >
+			GetName()->filereadable()
 <							*file_readable()*
 		Obsolete name: file_readable().
 
@@ -4249,6 +4346,9 @@ filewritable({file})					*filewritable()*
 		name {file} exists, and can be written.  If {file} doesn't
 		exist, or is not writable, the result is 0.  If {file} is a
 		directory, and we can write to it, the result is 2.
+
+		Can also be used as a |method|: >
+			GetName()->filewriteable()
 
 
 filter({expr1}, {expr2})				*filter()*
@@ -4315,6 +4415,9 @@ finddir({name} [, {path} [, {count}]])				*finddir()*
 		{only available when compiled with the |+file_in_path|
 		feature}
 
+		Can also be used as a |method|: >
+			GetName()->finddir()
+
 findfile({name} [, {path} [, {count}]])				*findfile()*
 		Just like |finddir()|, but find a file instead of a directory.
 		Uses 'suffixesadd'.
@@ -4322,6 +4425,9 @@ findfile({name} [, {path} [, {count}]])				*findfile()*
 			:echo findfile("tags.vim", ".;")
 <		Searches from the directory of the current file upwards until
 		it finds the file "tags.vim".
+
+		Can also be used as a |method|: >
+			GetName()->findfile()
 
 float2nr({expr})					*float2nr()*
 		Convert {expr} to a Number by omitting the part after the
@@ -4402,6 +4508,9 @@ fnameescape({string})					*fnameescape()*
 			:exe "edit " . fnameescape(fname)
 <		results in executing: >
 			edit \+some\ str\%nge\|name
+<
+		Can also be used as a |method|: >
+			GetName()->fnameescape()
 
 fnamemodify({fname}, {mods})				*fnamemodify()*
 		Modify file name {fname} according to {mods}.  {mods} is a
@@ -4414,15 +4523,24 @@ fnamemodify({fname}, {mods})				*fnamemodify()*
 <		Note: Environment variables don't work in {fname}, use
 		|expand()| first then.
 
+		Can also be used as a |method|: >
+			GetName()->fnamemodify(':p:h')
+
 foldclosed({lnum})					*foldclosed()*
 		The result is a Number.  If the line {lnum} is in a closed
 		fold, the result is the number of the first line in that fold.
 		If the line {lnum} is not in a closed fold, -1 is returned.
 
+		Can also be used as a |method|: >
+			GetLnum()->foldclosed()
+
 foldclosedend({lnum})					*foldclosedend()*
 		The result is a Number.  If the line {lnum} is in a closed
 		fold, the result is the number of the last line in that fold.
 		If the line {lnum} is not in a closed fold, -1 is returned.
+
+		Can also be used as a |method|: >
+			GetLnum()->foldclosedend()
 
 foldlevel({lnum})					*foldlevel()*
 		The result is a Number, which is the foldlevel of line {lnum}
@@ -4433,6 +4551,9 @@ foldlevel({lnum})					*foldlevel()*
 		returned for lines where folds are still to be updated and the
 		foldlevel is unknown.  As a special case the level of the
 		previous line is usually available.
+
+		Can also be used as a |method|: >
+			GetLnum()->foldlevel()
 
 							*foldtext()*
 foldtext()	Returns a String, to be displayed for a closed fold.  This is
@@ -4461,6 +4582,10 @@ foldtextresult({lnum})					*foldtextresult()*
 		Useful when exporting folded text, e.g., to HTML.
 		{not available when compiled without the |+folding| feature}
 
+
+		Can also be used as a |method|: >
+			GetLnum()->foldtextresult()
+<
 							*foreground()*
 foreground()	Move the Vim window to the foreground.  Useful when sent from
 		a client to a Vim server. |remote_send()|
@@ -4480,6 +4605,9 @@ funcref({name} [, {arglist}] [, {dict}])
 		Also for autoloaded functions. {name} cannot be a builtin
 		function.
 
+		Can also be used as a |method|: >
+			GetFuncname()->funcref([arg])
+<
 					*function()* *E700* *E922* *E923*
 function({name} [, {arglist}] [, {dict}])
 		Return a |Funcref| variable that refers to function {name}.
@@ -4555,6 +4683,9 @@ function({name} [, {arglist}] [, {dict}])
 			call Func(500)
 <		Invokes the function as with: >
 			call context.Callback('one', 500)
+<
+		Can also be used as a |method|: >
+			GetFuncname()->function([arg])
 
 
 garbagecollect([{atexit}])				*garbagecollect()*
@@ -4685,6 +4816,9 @@ getbufline({expr}, {lnum} [, {end}])
 		Example: >
 			:let lines = getbufline(bufnr("myfile"), 1, "$")
 
+<		Can also be used as a |method|: >
+			GetBufnr()->getbufline(lnum)
+
 getbufvar({expr}, {varname} [, {def}])				*getbufvar()*
 		The result is the value of option or local buffer variable
 		{varname} in buffer {expr}.  Note that the name without "b:"
@@ -4704,8 +4838,11 @@ getbufvar({expr}, {varname} [, {def}])				*getbufvar()*
 		Examples: >
 			:let bufmodified = getbufvar(1, "&mod")
 			:echo "todo myvar = " . getbufvar("todo", "myvar")
+
+<		Can also be used as a |method|: >
+			GetBufnr()->getbufvar(varname)
 <
-getchangelist({expr})					*getchangelist()*
+getchangelist([{expr}])					*getchangelist()*
 		Returns the |changelist| for the buffer {expr}. For the use
 		of {expr}, see |bufname()| above. If buffer {expr} doesn't
 		exist, an empty list is returned.
@@ -4720,6 +4857,9 @@ getchangelist({expr})					*getchangelist()*
 		If buffer {expr} is the current buffer, then the current
 		position refers to the position in the list. For other
 		buffers, it is set to the length of the list.
+
+		Can also be used as a |method|: >
+			GetBufnr()->getchangelist()
 
 getchar([expr])						*getchar()*
 		Get a single character from the user or input stream.
@@ -4920,6 +5060,9 @@ getcompletion({pat}, {type} [, {filtered}])		*getcompletion()*
 		If there are no matches, an empty list is returned.  An
 		invalid value for {type} produces an error.
 
+		Can also be used as a |method|: >
+			GetPattern()->getcompletion('color')
+<
 							*getcurpos()*
 getcurpos()	Get the position of the cursor.  This is like getpos('.'), but
 		includes an extra item in the list:
@@ -4966,6 +5109,9 @@ getcwd([{winnr} [, {tabnr}]])
 			:echo getcwd(-1, 3)
 			" Get the working directory of current tabpage
 			:echo getcwd(-1, 0)
+
+<		Can also be used as a |method|: >
+			GetWinnr()->getcwd()
 <
 getenv({name})						*getenv()*
 		Return the value of environment variable {name}.
@@ -4973,6 +5119,9 @@ getenv({name})						*getenv()*
 		is different from a variable set to an empty string, although
 		some systems interpret the empty value as the variable being
 		deleted.  See also |expr-env|.
+
+		Can also be used as a |method|: >
+			GetVarname()->getenv()
 
 getfontname([{name}])					*getfontname()*
 		Without an argument returns the name of the normal font being
@@ -5003,6 +5152,9 @@ getfperm({fname})					*getfperm()*
 <		This will hopefully (from a security point of view) display
 		the string "rw-r--r--" or even "rw-------".
 
+		Can also be used as a |method|: >
+			GetFilename()->getfperm()
+<
 		For setting permissions use |setfperm()|.
 
 getfsize({fname})					*getfsize()*
@@ -5013,12 +5165,18 @@ getfsize({fname})					*getfsize()*
 		If the size of {fname} is too big to fit in a Number then -2
 		is returned.
 
+		Can also be used as a |method|: >
+			GetFilename()->getfsize()
+
 getftime({fname})					*getftime()*
 		The result is a Number, which is the last modification time of
 		the given file {fname}.  The value is measured as seconds
 		since 1st Jan 1970, and may be passed to strftime().  See also
 		|localtime()| and |strftime()|.
 		If the file {fname} can't be found -1 is returned.
+
+		Can also be used as a |method|: >
+			GetFilename()->getftime()
 
 getftype({fname})					*getftype()*
 		The result is a String, which is a description of the kind of
@@ -5041,6 +5199,9 @@ getftype({fname})					*getftype()*
 		"file" are returned.  On MS-Windows a symbolic link to a
 		directory returns "dir" instead of "link".
 
+		Can also be used as a |method|: >
+			GetFilename()->getftype()
+
 getjumplist([{winnr} [, {tabnr}]])			*getjumplist()*
 		Returns the |jumplist| for the specified window.
 
@@ -5060,7 +5221,10 @@ getjumplist([{winnr} [, {tabnr}]])			*getjumplist()*
 			filename	filename if available
 			lnum		line number
 
-							*getline()*
+		Can also be used as a |method|: >
+			GetWinnr()->getjumplist()
+
+<							*getline()*
 getline({lnum} [, {end}])
 		Without {end} the result is a String, which is line {lnum}
 		from the current buffer.  Example: >
@@ -5082,6 +5246,9 @@ getline({lnum} [, {end}])
 			:let start = line('.')
 			:let end = search("^$") - 1
 			:let lines = getline(start, end)
+
+<		Can also be used as a |method|: >
+			ComputeLnum()->getline()
 
 <		To get lines from another buffer see |getbufline()|
 
@@ -5157,6 +5324,9 @@ getpos({expr})	Get the position for {expr}.  For possible values of {expr}
 			...
 			call setpos("'a", save_a_mark)
 <		Also see |getcurpos()| and |setpos()|.
+
+		Can also be used as a |method|: >
+			GetMark()->getpos()
 
 
 getqflist([{what}])					*getqflist()*
@@ -5274,6 +5444,9 @@ getreg([{regname} [, 1 [, {list}]]])			*getreg()*
 
 		If {regname} is not specified, |v:register| is used.
 
+		Can also be used as a |method|: >
+			GetRegname()->getreg()
+
 
 getregtype([{regname}])					*getregtype()*
 		The result is a String, which is type of register {regname}.
@@ -5284,6 +5457,9 @@ getregtype([{regname}])					*getregtype()*
 		    ""			for an empty or unknown register
 		<CTRL-V> is one character with value 0x16.
 		If {regname} is not specified, |v:register| is used.
+
+		Can also be used as a |method|: >
+			GetRegname()->getregtype()
 
 gettabinfo([{arg}])					*gettabinfo()*
 		If {arg} is not specified, then information about all the tab
@@ -5298,6 +5474,9 @@ gettabinfo([{arg}])					*gettabinfo()*
 					tabpage-local variables
 			windows		List of |window-ID|s in the tab page.
 
+		Can also be used as a |method|: >
+			GetTabnr()->gettabinfo()
+
 gettabvar({tabnr}, {varname} [, {def}])				*gettabvar()*
 		Get the value of a tab-local variable {varname} in tab page
 		{tabnr}. |t:var|
@@ -5307,6 +5486,9 @@ gettabvar({tabnr}, {varname} [, {def}])				*gettabvar()*
 		Note that the name without "t:" must be used.
 		When the tab or variable doesn't exist {def} or an empty
 		string is returned, there is no error message.
+
+		Can also be used as a |method|: >
+			GetTabnr()->gettabvar(varname)
 
 gettabwinvar({tabnr}, {winnr}, {varname} [, {def}])		*gettabwinvar()*
 		Get the value of window-local variable {varname} in window
@@ -5333,6 +5515,9 @@ gettabwinvar({tabnr}, {winnr}, {varname} [, {def}])		*gettabwinvar()*
 <
 		To obtain all window-local variables use: >
 			gettabwinvar({tabnr}, {winnr}, '&')
+
+<		Can also be used as a |method|: >
+			GetTabnr()->gettabvar(winnr, varname)
 
 gettagstack([{nr}])					*gettagstack()*
 		The result is a Dict, which is the tag stack of window {nr}.
@@ -7071,7 +7256,7 @@ prompt_setcallback({buf}, {expr})			*prompt_setcallback()*
 		that was entered at the prompt.  This can be an empty string
 		if the user only typed Enter.
 		Example: >
-		   call prompt_setcallback(bufnr(''), function('s:TextEntered'))
+		   call prompt_setcallback(bufnr(), function('s:TextEntered'))
 		   func s:TextEntered(text)
 		     if a:text == 'exit' || a:text == 'quit'
 		       stopinsert
@@ -7097,7 +7282,7 @@ prompt_setprompt({buf}, {text})				*prompt_setprompt()*
 		{text} to end in a space.
 		The result is only visible if {buf} has 'buftype' set to
 		"prompt".  Example: >
-			call prompt_setprompt(bufnr(''), 'command: ')
+			call prompt_setprompt(bufnr(), 'command: ')
 <
 prop_ functions are documented here: |text-prop-functions|.
 
@@ -7875,6 +8060,9 @@ setfperm({fname}, {mode})				*setfperm()* *chmod*
 
 		Returns non-zero for success, zero for failure.
 
+		Can also be used as a |method|: >
+			GetFilename()->setfperm(mode)
+<
 		To read permissions see |getfperm()|.
 
 

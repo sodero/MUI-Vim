@@ -1986,7 +1986,7 @@ static struct vimoption options[] =
 			    (char_u *)&p_nf, PV_NF,
 			    {(char_u *)"bin,octal,hex", (char_u *)0L}
 			    SCTX_INIT},
-    {"number",	    "nu",   P_BOOL|P_VI_DEF|P_RCLR,
+    {"number",	    "nu",   P_BOOL|P_VI_DEF|P_RWIN,
 			    (char_u *)VAR_WIN, PV_NU,
 			    {(char_u *)FALSE, (char_u *)0L} SCTX_INIT},
     {"numberwidth", "nuw",  P_NUM|P_RWIN|P_VIM,
@@ -2254,7 +2254,7 @@ static struct vimoption options[] =
     {"regexpengine", "re",  P_NUM|P_VI_DEF,
 			    (char_u *)&p_re, PV_NONE,
 			    {(char_u *)0L, (char_u *)0L} SCTX_INIT},
-    {"relativenumber", "rnu", P_BOOL|P_VI_DEF|P_RCLR,
+    {"relativenumber", "rnu", P_BOOL|P_VI_DEF|P_RWIN,
 			    (char_u *)VAR_WIN, PV_RNU,
 			    {(char_u *)FALSE, (char_u *)0L} SCTX_INIT},
     {"remap",	    NULL,   P_BOOL|P_VI_DEF,
@@ -3892,9 +3892,10 @@ set_number_default(char *name, long val)
 /*
  * Set all window-local and buffer-local options to the Vim default.
  * local-global options will use the global value.
+ * When "do_buffer" is FALSE don't set buffer-local options.
  */
     void
-set_local_options_default(win_T *wp)
+set_local_options_default(win_T *wp, int do_buffer)
 {
     win_T	*save_curwin = curwin;
     int		i;
@@ -3909,6 +3910,7 @@ set_local_options_default(win_T *wp)
 	char_u		    *varp = get_varp_scope(p, OPT_LOCAL);
 
 	if (p->indir != PV_NONE
+		&& (do_buffer || (p->indir & PV_BUF) == 0)
 		&& !(options[i].flags & P_NODEFAULT)
 		&& !optval_default(p, varp, FALSE))
 	    set_option_default(i, OPT_LOCAL, FALSE);
@@ -9005,6 +9007,24 @@ set_bool_option(
 
 #endif
 
+#if defined(FEAT_SIGNS) && defined(FEAT_GUI)
+    else if (((int *)varp == &curwin->w_p_nu
+		|| (int *)varp == &curwin->w_p_rnu)
+	    && gui.in_use
+	    && (*curwin->w_p_scl == 'n' && *(curwin->w_p_scl + 1) == 'u')
+	    && curbuf->b_signlist != NULL)
+    {
+	// If the 'number' or 'relativenumber' options are modified and
+	// 'signcolumn' is set to 'number', then clear the screen for a full
+	// refresh. Otherwise the sign icons are not displayed properly in the
+	// number column.  If the 'number' option is set and only the
+	// 'relativenumber' option is toggled, then don't refresh the screen
+	// (optimization).
+	if (!(curwin->w_p_nu && ((int *)varp == &curwin->w_p_rnu)))
+	    redraw_all_later(CLEAR);
+    }
+#endif
+
 #ifdef FEAT_TERMGUICOLORS
     /* 'termguicolors' */
     else if ((int *)varp == &p_tgc)
@@ -10862,6 +10882,9 @@ comp_col(void)
 #else
     sc_col = Columns;
     ru_col = Columns;
+#endif
+#ifdef FEAT_EVAL
+    set_vim_var_nr(VV_ECHOSPACE, sc_col - 1);
 #endif
 }
 

@@ -343,6 +343,11 @@ func Test_popup_drag()
   " create a popup that covers the command line
   let lines =<< trim END
 	call setline(1, range(1, 20))
+	split
+	vsplit
+	$wincmd w
+	vsplit
+	1wincmd w
 	let winid = popup_create(['1111', '222222', '33333'], #{
 	      \ drag: 1,
 	      \ resize: 1,
@@ -353,12 +358,12 @@ func Test_popup_drag()
 	  call feedkeys("\<F3>\<LeftMouse>\<F4>\<LeftDrag>\<LeftRelease>", "xt")
 	endfunc
 	map <silent> <F3> :call test_setmouse(&lines - 4, &columns / 2)<CR>
-	map <silent> <F4> :call test_setmouse(&lines - 8, &columns / 2)<CR>
+	map <silent> <F4> :call test_setmouse(&lines - 8, &columns / 2 - 20)<CR>
 	func Resize()
 	  call feedkeys("\<F5>\<LeftMouse>\<F6>\<LeftDrag>\<LeftRelease>", "xt")
 	endfunc
-	map <silent> <F5> :call test_setmouse(6, 41)<CR>
-	map <silent> <F6> :call test_setmouse(7, 45)<CR>
+	map <silent> <F5> :call test_setmouse(6, 21)<CR>
+	map <silent> <F6> :call test_setmouse(7, 25)<CR>
   END
   call writefile(lines, 'XtestPopupDrag')
   let buf = RunVimInTerminal('-S XtestPopupDrag', #{rows: 10})
@@ -415,6 +420,15 @@ func Test_popup_close_with_mouse()
 	  call feedkeys("\<F4>\<LeftMouse>\<LeftRelease>", "xt")
 	endfunc
 	map <silent> <F4> :call test_setmouse(3, 17)<CR>
+	func CreateWithMenuFilter()
+	  let winid = popup_create('barfoo', #{
+		\ close: 'button',
+		\ filter: 'popup_filter_menu',
+		\ border: [],
+		\ line: 1,
+		\ col: 40,
+		\ })
+	endfunc
   END
   call writefile(lines, 'XtestPopupClose')
   let buf = RunVimInTerminal('-S XtestPopupClose', #{rows: 10})
@@ -425,6 +439,14 @@ func Test_popup_close_with_mouse()
 
   call term_sendkeys(buf, ":call CloseWithClick()\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_close_03', {})
+
+  call term_sendkeys(buf, ":call CreateWithMenuFilter()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_close_04', {})
+
+  " We have to send the actual mouse code, feedkeys() would be caught the
+  " filter.
+  call term_sendkeys(buf, "\<Esc>[<0;47;1M")
+  call VerifyScreenDump(buf, 'Test_popupwin_close_05', {})
 
   " clean up
   call StopVimInTerminal(buf)
@@ -1809,15 +1831,25 @@ func Test_popupwin_with_buffer()
   call writefile(['some text', 'in a buffer'], 'XsomeFile')
   let buf = bufadd('XsomeFile')
   call assert_equal(0, bufloaded(buf))
+
+  setlocal number
+  call setbufvar(buf, "&wrapmargin", 13)
+
   let winid = popup_create(buf, {})
   call assert_notequal(0, winid)
   let pos = popup_getpos(winid)
   call assert_equal(2, pos.height)
   call assert_equal(1, bufloaded(buf))
+
+  " window-local option is set to default, buffer-local is not
+  call assert_equal(0, getwinvar(winid, '&number'))
+  call assert_equal(13, getbufvar(buf, '&wrapmargin'))
+
   call popup_close(winid)
   call assert_equal({}, popup_getpos(winid))
   call assert_equal(1, bufloaded(buf))
   exe 'bwipe! ' .. buf
+  setlocal nonumber
 
   edit test_popupwin.vim
   let winid = popup_create(bufnr(''), {})
