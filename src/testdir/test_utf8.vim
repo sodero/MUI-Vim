@@ -77,7 +77,7 @@ func Test_list2str_str2list_utf8()
   let s = "\u304b\u3099\u3044"
   let l = [0x304b, 0x3099, 0x3044]
   call assert_equal(l, str2list(s, 1))
-  call assert_equal(s, list2str(l, 1))
+  call assert_equal(s, l->list2str(1))
   if &enc ==# 'utf-8'
     call assert_equal(str2list(s), str2list(s, 1))
     call assert_equal(list2str(l), list2str(l, 1))
@@ -112,7 +112,7 @@ func Test_screenchar_utf8()
   call setline(1, ["ABC\u0308"])
   redraw
   call assert_equal([0x0041], screenchars(1, 1))
-  call assert_equal([0x0042], screenchars(1, 2))
+  call assert_equal([0x0042], 1->screenchars(2))
   call assert_equal([0x0043, 0x0308], screenchars(1, 3))
   call assert_equal("A", screenstring(1, 1))
   call assert_equal("B", screenstring(1, 2))

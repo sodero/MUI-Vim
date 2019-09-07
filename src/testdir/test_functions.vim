@@ -253,7 +253,7 @@ func Test_resolve_unix()
   call delete('Xlink')
 
   silent !ln -s -f Xlink2/ Xlink1
-  call assert_equal('Xlink2', resolve('Xlink1'))
+  call assert_equal('Xlink2', 'Xlink1'->resolve())
   call assert_equal('Xlink2/', resolve('Xlink1/'))
   call delete('Xlink1')
 
@@ -400,10 +400,10 @@ endfunc
 func Test_pathshorten()
   call assert_equal('', pathshorten(''))
   call assert_equal('foo', pathshorten('foo'))
-  call assert_equal('/foo', pathshorten('/foo'))
+  call assert_equal('/foo', '/foo'->pathshorten())
   call assert_equal('f/', pathshorten('foo/'))
   call assert_equal('f/bar', pathshorten('foo/bar'))
-  call assert_equal('f/b/foobar', pathshorten('foo/bar/foobar'))
+  call assert_equal('f/b/foobar', 'foo/bar/foobar'->pathshorten())
   call assert_equal('/f/b/foobar', pathshorten('/foo/bar/foobar'))
   call assert_equal('.f/bar', pathshorten('.foo/bar'))
   call assert_equal('~f/bar', pathshorten('~foo/bar'))
@@ -655,8 +655,8 @@ func Test_mode()
   exe "normal Rabc\<C-X>\<C-L>\<F2>\<Esc>u"
   call assert_equal('R-Rc', g:current_modes)
 
-  call assert_equal('n', mode(0))
-  call assert_equal('n', mode(1))
+  call assert_equal('n', 0->mode())
+  call assert_equal('n', 1->mode())
 
   " i_CTRL-O
   exe "normal i\<C-O>:call Save_mode()\<Cr>\<Esc>"
@@ -793,7 +793,7 @@ endfunc
 
 func Test_match_func()
   call assert_equal(4,  match('testing', 'ing'))
-  call assert_equal(4,  match('testing', 'ing', 2))
+  call assert_equal(4,  'testing'->match('ing', 2))
   call assert_equal(-1, match('testing', 'ing', 5))
   call assert_equal(-1, match('testing', 'ing', 8))
   call assert_equal(1, match(['vim', 'testing', 'execute'], 'ing'))
@@ -802,7 +802,7 @@ endfunc
 
 func Test_matchend()
   call assert_equal(7,  matchend('testing', 'ing'))
-  call assert_equal(7,  matchend('testing', 'ing', 2))
+  call assert_equal(7,  'testing'->matchend('ing', 2))
   call assert_equal(-1, matchend('testing', 'ing', 5))
   call assert_equal(-1, matchend('testing', 'ing', 8))
   call assert_equal(match(['vim', 'testing', 'execute'], 'ing'), matchend(['vim', 'testing', 'execute'], 'ing'))
@@ -811,13 +811,13 @@ endfunc
 
 func Test_matchlist()
   call assert_equal(['acd', 'a', '', 'c', 'd', '', '', '', '', ''],  matchlist('acd', '\(a\)\?\(b\)\?\(c\)\?\(.*\)'))
-  call assert_equal(['d', '', '', '', 'd', '', '', '', '', ''],  matchlist('acd', '\(a\)\?\(b\)\?\(c\)\?\(.*\)', 2))
+  call assert_equal(['d', '', '', '', 'd', '', '', '', '', ''],  'acd'->matchlist('\(a\)\?\(b\)\?\(c\)\?\(.*\)', 2))
   call assert_equal([],  matchlist('acd', '\(a\)\?\(b\)\?\(c\)\?\(.*\)', 4))
 endfunc
 
 func Test_matchstr()
   call assert_equal('ing',  matchstr('testing', 'ing'))
-  call assert_equal('ing',  matchstr('testing', 'ing', 2))
+  call assert_equal('ing',  'testing'->matchstr('ing', 2))
   call assert_equal('', matchstr('testing', 'ing', 5))
   call assert_equal('', matchstr('testing', 'ing', 8))
   call assert_equal('testing', matchstr(['vim', 'testing', 'execute'], 'ing'))
@@ -826,7 +826,7 @@ endfunc
 
 func Test_matchstrpos()
   call assert_equal(['ing', 4, 7], matchstrpos('testing', 'ing'))
-  call assert_equal(['ing', 4, 7], matchstrpos('testing', 'ing', 2))
+  call assert_equal(['ing', 4, 7], 'testing'->matchstrpos('ing', 2))
   call assert_equal(['', -1, -1], matchstrpos('testing', 'ing', 5))
   call assert_equal(['', -1, -1], matchstrpos('testing', 'ing', 8))
   call assert_equal(['ing', 1, 4, 7], matchstrpos(['vim', 'testing', 'execute'], 'ing'))
@@ -847,21 +847,21 @@ Test
   call assert_equal(0, nextnonblank(-1))
   call assert_equal(0, nextnonblank(0))
   call assert_equal(1, nextnonblank(1))
-  call assert_equal(4, nextnonblank(2))
+  call assert_equal(4, 2->nextnonblank())
   call assert_equal(4, nextnonblank(3))
   call assert_equal(4, nextnonblank(4))
   call assert_equal(6, nextnonblank(5))
   call assert_equal(6, nextnonblank(6))
   call assert_equal(7, nextnonblank(7))
-  call assert_equal(0, nextnonblank(8))
+  call assert_equal(0, 8->nextnonblank())
 
   call assert_equal(0, prevnonblank(-1))
   call assert_equal(0, prevnonblank(0))
-  call assert_equal(1, prevnonblank(1))
+  call assert_equal(1, 1->prevnonblank())
   call assert_equal(1, prevnonblank(2))
   call assert_equal(1, prevnonblank(3))
   call assert_equal(4, prevnonblank(4))
-  call assert_equal(4, prevnonblank(5))
+  call assert_equal(4, 5->prevnonblank())
   call assert_equal(6, prevnonblank(6))
   call assert_equal(7, prevnonblank(7))
   call assert_equal(0, prevnonblank(8))
@@ -883,7 +883,7 @@ func Test_byte2line_line2byte()
   call assert_equal([-1, -1, 1, 1, 2, 2, 2, 3, 3, -1],
   \                 map(range(-1, 8), 'v:val->byte2line()'))
   call assert_equal([-1, -1, 1, 3, 6, 8, -1],
-  \                 map(range(-1, 5), 'line2byte(v:val)'))
+  \                 map(range(-1, 5), 'v:val->line2byte()'))
 
   set fileformat=dos
   call assert_equal([-1, -1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, -1],
@@ -1069,7 +1069,7 @@ endfunc
 
 func Test_hlexists()
   call assert_equal(0, hlexists('does_not_exist'))
-  call assert_equal(0, hlexists('Number'))
+  call assert_equal(0, 'Number'->hlexists())
   call assert_equal(0, highlight_exists('does_not_exist'))
   call assert_equal(0, highlight_exists('Number'))
   syntax on
@@ -1102,7 +1102,7 @@ endfunc
 func Test_inputlist()
   call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>1\<cr>", 'tx')
   call assert_equal(1, c)
-  call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>2\<cr>", 'tx')
+  call feedkeys(":let c = ['Select color:', '1. red', '2. green', '3. blue']->inputlist()\<cr>2\<cr>", 'tx')
   call assert_equal(2, c)
   call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>3\<cr>", 'tx')
   call assert_equal(3, c)
@@ -1137,7 +1137,7 @@ func Test_setbufvar_options()
   wincmd h
   let wh = winheight('.')
   let dummy_buf = bufnr('dummy_buf2', v:true)
-  call setbufvar(dummy_buf, '&buftype', 'nofile')
+  eval 'nofile'->setbufvar(dummy_buf, '&buftype')
   execute 'belowright vertical split #' . dummy_buf
   call assert_equal(wh, winheight('.'))
 
@@ -1180,7 +1180,7 @@ func Test_shellescape()
   let save_shell = &shell
   set shell=bash
   call assert_equal("'text'", shellescape('text'))
-  call assert_equal("'te\"xt'", shellescape('te"xt'))
+  call assert_equal("'te\"xt'", 'te"xt'->shellescape())
   call assert_equal("'te'\\''xt'", shellescape("te'xt"))
 
   call assert_equal("'te%xt'", shellescape("te%xt"))
@@ -1220,7 +1220,7 @@ func Test_trim()
   call assert_equal("a", trim("a", ""))
   call assert_equal("", trim("", "a"))
 
-  let chars = join(map(range(1, 0x20) + [0xa0], {n -> nr2char(n)}), '')
+  let chars = join(map(range(1, 0x20) + [0xa0], {n -> n->nr2char()}), '')
   call assert_equal("x", trim(chars . "x" . chars))
 endfunc
 
@@ -1279,7 +1279,7 @@ func Test_reg_executing_and_recording()
   let g:regs = []
   func TestFunc() abort
     let g:regs += [reg_executing()]
-    let g:typed = input('?')
+    let g:typed = '?'->input()
     let g:regs += [reg_executing()]
   endfunc
   call feedkeys("@qy\<CR>", 'xt')
@@ -1293,6 +1293,42 @@ func Test_reg_executing_and_recording()
   bwipe!
   delfunc s:save_reg_stat
   unlet s:reg_stat
+endfunc
+
+func Test_inputsecret()
+  map W :call TestFunc()<CR>
+  let @q = "W"
+  let g:typed1 = ''
+  let g:typed2 = ''
+  let g:regs = []
+  func TestFunc() abort
+    let g:typed1 = '?'->inputsecret()
+    let g:typed2 = inputsecret('password: ')
+  endfunc
+  call feedkeys("@qsomething\<CR>else\<CR>", 'xt')
+  call assert_equal("something", g:typed1)
+  call assert_equal("else", g:typed2)
+  delfunc TestFunc
+  unmap W
+  unlet g:typed1
+  unlet g:typed2
+endfunc
+
+func Test_getchar()
+  call feedkeys('a', '')
+  call assert_equal(char2nr('a'), getchar())
+
+  call test_setmouse(1, 3)
+  let v:mouse_win = 9
+  let v:mouse_winid = 9
+  let v:mouse_lnum = 9
+  let v:mouse_col = 9
+  call feedkeys("\<S-LeftMouse>", '')
+  call assert_equal("\<S-LeftMouse>", getchar())
+  call assert_equal(1, v:mouse_win)
+  call assert_equal(win_getid(1), v:mouse_winid)
+  call assert_equal(1, v:mouse_lnum)
+  call assert_equal(3, v:mouse_col)
 endfunc
 
 func Test_libcall_libcallnr()
@@ -1332,17 +1368,17 @@ func Test_libcall_libcallnr()
   endif
 
   if has('win32')
-    call assert_equal($USERPROFILE, libcall(libc, 'getenv', 'USERPROFILE'))
+    call assert_equal($USERPROFILE, 'USERPROFILE'->libcall(libc, 'getenv'))
   else
-    call assert_equal($HOME, libcall(libc, 'getenv', 'HOME'))
+    call assert_equal($HOME, 'HOME'->libcall(libc, 'getenv'))
   endif
 
   " If function returns NULL, libcall() should return an empty string.
   call assert_equal('', libcall(libc, 'getenv', 'X_ENV_DOES_NOT_EXIT'))
 
   " Test libcallnr() with string and integer argument.
-  call assert_equal(4, libcallnr(libc, 'strlen', 'abcd'))
-  call assert_equal(char2nr('A'), libcallnr(libc, 'toupper', char2nr('a')))
+  call assert_equal(4, 'abcd'->libcallnr(libc, 'strlen'))
+  call assert_equal(char2nr('A'), char2nr('a')->libcallnr(libc, 'toupper'))
 
   call assert_fails("call libcall(libc, 'Xdoesnotexist_', '')", 'E364:')
   call assert_fails("call libcallnr(libc, 'Xdoesnotexist_', '')", 'E364:')
@@ -1377,7 +1413,7 @@ func Test_func_range_with_edit()
   " is invalid in that buffer.
   call writefile(['just one line'], 'Xfuncrange2')
   new
-  call setline(1, range(10))
+  eval 10->range()->setline(1)
   write Xfuncrange1
   call assert_fails('5,8call EditAnotherFile()', 'E16:')
 
@@ -1508,7 +1544,7 @@ func Test_readdir()
   call assert_equal(['bar.txt', 'dir', 'foo.txt'], sort(files))
 
   " Only results containing "f"
-  let files = readdir('Xdir', { x -> stridx(x, 'f') !=- 1 })
+  let files = 'Xdir'->readdir({ x -> stridx(x, 'f') !=- 1 })
   call assert_equal(['foo.txt'], sort(files))
 
   " Only .txt files
@@ -1523,6 +1559,10 @@ func Test_readdir()
   let l = []
   let files = readdir('Xdir', {x -> len(add(l, x)) == 2 ? -1 : 1})
   call assert_equal(1, len(files))
+
+  " Nested readdir() must not crash
+  let files = readdir('Xdir', 'readdir("Xdir", "1") != []')
+  call sort(files)->assert_equal(['bar.txt', 'dir', 'foo.txt'])
 
   eval 'Xdir'->delete('rf')
 endfunc

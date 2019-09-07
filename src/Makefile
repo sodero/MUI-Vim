@@ -1595,14 +1595,17 @@ BASIC_SRC = \
 	digraph.c \
 	edit.c \
 	eval.c \
+	evalbuffer.c \
 	evalfunc.c \
 	evalvars.c \
+	evalwindow.c \
 	ex_cmds.c \
 	ex_cmds2.c \
 	ex_docmd.c \
 	ex_eval.c \
 	ex_getln.c \
 	fileio.c \
+	filepath.c \
 	findfile.c \
 	fold.c \
 	getchar.c \
@@ -1725,14 +1728,17 @@ OBJ_COMMON = \
 	objects/digraph.o \
 	objects/edit.o \
 	objects/eval.o \
+	objects/evalbuffer.o \
 	objects/evalfunc.o \
 	objects/evalvars.o \
+	objects/evalwindow.o \
 	objects/ex_cmds.o \
 	objects/ex_cmds2.o \
 	objects/ex_docmd.o \
 	objects/ex_eval.o \
 	objects/ex_getln.o \
 	objects/fileio.o \
+	objects/filepath.o \
 	objects/findfile.o \
 	objects/fold.o \
 	objects/getchar.o \
@@ -1868,14 +1874,17 @@ PRO_AUTO = \
 	digraph.pro \
 	edit.pro \
 	eval.pro \
+	evalbuffer.pro \
 	evalfunc.pro \
 	evalvars.pro \
+	evalwindow.pro \
 	ex_cmds.pro \
 	ex_cmds2.pro \
 	ex_docmd.pro \
 	ex_eval.pro \
 	ex_getln.pro \
 	fileio.pro \
+	filepath.pro \
 	findfile.pro \
 	fold.pro \
 	getchar.pro \
@@ -2828,12 +2837,31 @@ clean celan: testclean
 	fi
 
 # Make a shadow directory for compilation on another system or with different
-# features.
+# features:
+#  % make shadow
+#  % cd shadow
+#  edit configuration in src/shadow/Makefile
+#  % make
+#
+# Alternatively use a link for the Makefile and run configure with flags in
+# another way.  When new source files are added use "shadowupdate":
+#  % cd shadow
+#  % rm Makefile
+#  % ln -s ../Makefile .
+#  % ./configure {options}
+#  % make
+# And later:
+#  % git pull
+#  % make distclean shadowupdate
+#  % ./configure {options}
+#  % make
 SHADOWDIR = shadow
+
+LINKEDFILES = ../*.[chm] ../*.in ../*.sh ../*.xs ../*.xbm ../gui_gtk_res.xml ../toolcheck ../proto ../libvterm ../vimtutor ../gvimtutor ../install-sh ../Make_all.mak
 
 shadow:	runtime pixmaps
 	$(MKDIR_P) $(SHADOWDIR)
-	cd $(SHADOWDIR); ln -s ../*.[chm] ../*.in ../*.sh ../*.xs ../*.xbm ../gui_gtk_res.xml ../toolcheck ../proto ../libvterm ../vimtutor ../gvimtutor ../install-sh ../Make_all.mak .
+	cd $(SHADOWDIR); ln -s $(LINKEDFILES) .
 	mkdir $(SHADOWDIR)/auto
 	cd $(SHADOWDIR)/auto; ln -s ../../auto/configure .
 	$(MKDIR_P) $(SHADOWDIR)/po
@@ -2866,6 +2894,12 @@ shadow:	runtime pixmaps
 				 ../../testdir/dumps \
 				 ../../testdir/test83-tags? \
 				 ../../testdir/*.ok .
+
+# After updating Vim new files may have been created, use this to refresh the
+# symbolic links in the shadow directory. This isn't guaranteed to catch all
+# changes, running "make shadow" again might sometimes be needed.
+shadowupdate:
+	ln -sf $(LINKEDFILES) .
 
 # Link needed for doing "make install" in a shadow directory.
 runtime:
@@ -3052,11 +3086,17 @@ objects/edit.o: edit.c
 objects/eval.o: eval.c
 	$(CCC) -o $@ eval.c
 
+objects/evalbuffer.o: evalbuffer.c
+	$(CCC) -o $@ evalbuffer.c
+
 objects/evalfunc.o: evalfunc.c
 	$(CCC) -o $@ evalfunc.c
 
 objects/evalvars.o: evalvars.c
 	$(CCC) -o $@ evalvars.c
+
+objects/evalwindow.o: evalwindow.c
+	$(CCC) -o $@ evalwindow.c
 
 objects/ex_cmds.o: ex_cmds.c
 	$(CCC) -o $@ ex_cmds.c
@@ -3075,6 +3115,9 @@ objects/ex_getln.o: ex_getln.c
 
 objects/fileio.o: fileio.c
 	$(CCC) -o $@ fileio.c
+
+objects/filepath.o: filepath.c
+	$(CCC) -o $@ filepath.c
 
 objects/findfile.o: findfile.c
 	$(CCC) -o $@ findfile.c
@@ -3572,11 +3615,19 @@ objects/eval.o: eval.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h version.h
+objects/evalbuffer.o: evalbuffer.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h version.h
 objects/evalfunc.o: evalfunc.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h version.h
 objects/evalvars.o: evalvars.c vim.h protodef.h auto/config.h feature.h \
+ os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
+objects/evalwindow.o: evalwindow.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
@@ -3601,6 +3652,10 @@ objects/ex_getln.o: ex_getln.c vim.h protodef.h auto/config.h feature.h os_unix.
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
 objects/fileio.o: fileio.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
+objects/filepath.o: filepath.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
