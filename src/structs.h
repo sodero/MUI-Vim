@@ -249,6 +249,8 @@ typedef struct
 # define w_p_cuc w_onebuf_opt.wo_cuc	// 'cursorcolumn'
     int		wo_cul;
 # define w_p_cul w_onebuf_opt.wo_cul	// 'cursorline'
+    char_u	*wo_culopt;
+# define w_p_culopt w_onebuf_opt.wo_culopt	// 'cursorlineopt'
     char_u	*wo_cc;
 # define w_p_cc w_onebuf_opt.wo_cc	// 'colorcolumn'
 #endif
@@ -3050,6 +3052,8 @@ struct window_S
     int		w_popup_prop_topline; // w_topline of window with
 				      // w_popup_prop_type when position was
 				      // computed
+    linenr_T	w_popup_last_curline; // last known w_cursor.lnum of window
+				      // with "cursorline" set
     callback_T	w_close_cb;	    // popup close callback
     callback_T	w_filter_cb;	    // popup filter callback
     int		w_filter_mode;	    // mode when filter callback is used
