@@ -16,11 +16,7 @@
 #include "vim.h"
 #include "version.h"
 
-#ifdef Window
-# undef Window	/* Amiga has its own Window definition */
-#endif
-
-#undef TRUE		/* will be redefined by exec/types.h */
+#undef TRUE		/* Will be redefined by exec/types.h */
 #undef FALSE
 
 /* cproto fails on missing include files, skip them */
@@ -993,7 +989,7 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock != NULL)
+    if (lock)
     {
 	UnLock(lock);
 	return 0;
