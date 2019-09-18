@@ -10,7 +10,6 @@ CFLAGS =	-c				\
 			-O3				\
 			-DNO_ARP		\
 			-DUSE_TMPNAM	\
-			-DHAVE_FSYNC	\
 			-DHAVE_STDARG_H	\
 			-DHAVE_TGETENT	\
 			-DHAVE_TERMCAP	\
@@ -26,10 +25,10 @@ CFLAGS =	-c				\
 UNM := $(shell uname)
 ifeq ($(UNM),AmigaOS)
 LDFLAGS = 	-mcrt=clib2 -lauto -lm -lnet
-CFLAGS += 	-D__USE_INLINE__ -mcrt=clib2
+CFLAGS += 	-DHAVE_FSYNC -D__USE_INLINE__ -mcrt=clib2
 else
 ifeq ($(UNM),AROS)
-LDFLAGS = 	-ldebug
+LDFLAGS = 	-DHAVE_FSYNC -ldebug
 else
 ifeq ($(UNM),MorphOS)
 LDFLAGS = 	-ldebug -noixemul
@@ -98,6 +97,7 @@ SRC =		arabic.c			\
 			normal.c			\
 			ops.c				\
 			option.c			\
+			optionstr.c			\
 			os_amiga.c			\
 			popupmnu.c			\
 			popupwin.c			\
