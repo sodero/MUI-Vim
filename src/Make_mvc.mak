@@ -365,7 +365,7 @@ TERM_OBJ = \
 	$(OBJDIR)/terminal.obj \
 	$(OBJDIR)/encoding.obj \
 	$(OBJDIR)/keyboard.obj \
-	$(OBJDIR)/mouse.obj \
+	$(OBJDIR)/termmouse.obj \
 	$(OBJDIR)/parser.obj \
 	$(OBJDIR)/pen.obj \
 	$(OBJDIR)/termscreen.obj \
@@ -726,6 +726,8 @@ OBJ = \
 	$(OUTDIR)\dict.obj \
 	$(OUTDIR)\diff.obj \
 	$(OUTDIR)\digraph.obj \
+	$(OUTDIR)\drawline.obj \
+	$(OUTDIR)\drawscreen.obj \
 	$(OUTDIR)\edit.obj \
 	$(OUTDIR)\eval.obj \
 	$(OUTDIR)\evalbuffer.obj \
@@ -760,6 +762,7 @@ OBJ = \
 	$(OUTDIR)\message.obj \
 	$(OUTDIR)\misc1.obj \
 	$(OUTDIR)\misc2.obj \
+	$(OUTDIR)\mouse.obj \
 	$(OUTDIR)\move.obj \
 	$(OUTDIR)\normal.obj \
 	$(OUTDIR)\ops.obj \
@@ -1484,6 +1487,10 @@ $(OUTDIR)/xpatience.obj:	$(OUTDIR) xdiff/xpatience.c  $(XDIFF_DEPS)
 
 $(OUTDIR)/digraph.obj:	$(OUTDIR) digraph.c  $(INCL)
 
+$(OUTDIR)/drawline.obj:	$(OUTDIR) drawline.c  $(INCL)
+
+$(OUTDIR)/drawscreen.obj:	$(OUTDIR) drawscreen.c  $(INCL)
+
 $(OUTDIR)/edit.obj:	$(OUTDIR) edit.c  $(INCL)
 
 $(OUTDIR)/eval.obj:	$(OUTDIR) eval.c  $(INCL)
@@ -1594,6 +1601,8 @@ $(OUTDIR)/message.obj:	$(OUTDIR) message.c  $(INCL)
 $(OUTDIR)/misc1.obj:	$(OUTDIR) misc1.c  $(INCL)
 
 $(OUTDIR)/misc2.obj:	$(OUTDIR) misc2.c  $(INCL)
+
+$(OUTDIR)/mouse.obj:	$(OUTDIR) mouse.c  $(INCL)
 
 $(OUTDIR)/move.obj:	$(OUTDIR) move.c  $(INCL)
 
@@ -1730,7 +1739,7 @@ $(OUTDIR)/encoding.obj: $(OUTDIR) libvterm/src/encoding.c $(TERM_DEPS)
 
 $(OUTDIR)/keyboard.obj: $(OUTDIR) libvterm/src/keyboard.c $(TERM_DEPS)
 
-$(OUTDIR)/mouse.obj: $(OUTDIR) libvterm/src/mouse.c $(TERM_DEPS)
+$(OUTDIR)/termmouse.obj: $(OUTDIR) libvterm/src/termmouse.c $(TERM_DEPS)
 
 $(OUTDIR)/parser.obj: $(OUTDIR) libvterm/src/parser.c $(TERM_DEPS)
 
@@ -1783,6 +1792,8 @@ proto.h: \
 	proto/dict.pro \
 	proto/diff.pro \
 	proto/digraph.pro \
+	proto/drawline.pro \
+	proto/drawscreen.pro \
 	proto/edit.pro \
 	proto/eval.pro \
 	proto/evalbuffer.pro \
@@ -1814,6 +1825,7 @@ proto.h: \
 	proto/message.pro \
 	proto/misc1.pro \
 	proto/misc2.pro \
+	proto/mouse.pro \
 	proto/move.pro \
 	proto/mbyte.pro \
 	proto/normal.pro \
