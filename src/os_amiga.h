@@ -235,8 +235,3 @@ int setenv(const char *, const char *);
 #define mch_chdir(s) chdir((const char *) s)
 #define mch_rmdir(s) rmdir((const char *) s)
 #define vim_mkdir(x, m) mkdir((const char *) x, m)
-
-/* Avoid compiler warnings, these
- * are defined and used by Vim. */
-#undef INSERT
-
