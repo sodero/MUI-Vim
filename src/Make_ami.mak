@@ -106,6 +106,7 @@ SRC =		arabic.c			\
 			popupwin.c			\
 			quickfix.c			\
 			regexp.c			\
+			register.c			\
 			screen.c			\
 			scriptfile.c		\
 			search.c			\
