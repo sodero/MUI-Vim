@@ -1,28 +1,82 @@
-#
-# Makefile for Amiga-like systems
-#
+#####################################################
+#     Makefile for Amiga and Amiga-like systems     #
+#####################################################
 
+# Basic settings ####################################
 BIN =		vim
 CC ?=		gcc
 LD =		$(CC)
+UNM := 		$(shell uname)
+DEBUG ?=	no
+BUILD ?=	mui
 
-CFLAGS =	-c				\
-			-O3				\
-			-DNO_ARP		\
-			-DUSE_TMPNAM	\
-			-DHAVE_STDARG_H	\
-			-DHAVE_TGETENT	\
-			-DHAVE_TERMCAP	\
-			-DFEAT_GUI		\
-			-DFEAT_GUI_MUI	\
-			-DFEAT_HUGE		\
-			-DFEAT_BROWSE	\
-			-DFEAT_TOOLBAR	\
-			-I proto		\
-			-Wno-attributes \
+# Debug or default build ############################
+ifeq ($(DEBUG),no)
+	CFLAGS = -c -O3
+else
+	CFLAGS = -c -O0
+endif
+
+# Common compiler flags #############################
+CFLAGS +=	-DNO_ARP			\
+			-DUSE_TMPNAM		\
+			-DHAVE_STDARG_H		\
+			-DHAVE_TGETENT		\
+			-DHAVE_TERMCAP		\
+			-I proto			\
+			-Wno-attributes 	\
 			-Wextra
 
-UNM := $(shell uname)
+# Vim 'huge' build with MUI GUI #####################
+ifeq ($(BUILD),mui)
+CFLAGS +=	-DFEAT_GUI			\
+			-DFEAT_GUI_MUI		\
+			-DFEAT_BROWSE		\
+			-DFEAT_TOOLBAR		\
+			-DFEAT_HUGE
+SRC := 		gui.c				\
+			gui_mui.c
+else
+
+# Vim 'huge' build ##################################
+ifeq ($(BUILD),huge)
+CFLAGS +=	-DFEAT_BROWSE		\
+			-DFEAT_MOUSE		\
+			-DFEAT_HUGE
+else
+
+# Vim 'big' build ###################################
+ifeq ($(BUILD),big)
+CFLAGS +=	-DFEAT_BROWSE		\
+			-DFEAT_MOUSE		\
+			-DFEAT_BIG
+else
+
+# Vim 'normal' build ################################
+ifeq ($(BUILD),normal)
+CFLAGS +=	-DFEAT_BROWSE		\
+			-DFEAT_MOUSE		\
+			-DFEAT_NORMAL
+else
+
+# Vim 'small' build #################################
+ifeq ($(BUILD),small)
+CFLAGS +=	-DFEAT_TERMRESPONSE \
+			-DFEAT_SMALL
+else
+
+# Vim 'tiny' build ##################################
+ifeq ($(BUILD),tiny)
+CFLAGS +=	-DFEAT_TERMRESPONSE \
+			-DFEAT_TINY
+endif
+endif
+endif
+endif
+endif
+endif
+
+# OS specific compiler flags ########################
 ifeq ($(UNM),AmigaOS)
 LDFLAGS = 	-mcrt=clib2 -lauto -lm -lnet
 CFLAGS += 	-DHAVE_FSYNC -D__USE_INLINE__ -mcrt=clib2
@@ -36,11 +90,13 @@ endif
 endif
 endif
 
+# Patch level used for Amiga style version string ###
 ifdef PATCHLEVEL
 CFLAGS += 	-DPATCHLEVEL=\"$(PATCHLEVEL)\"
 endif
 
-SRC =		arabic.c			\
+# Common sources ####################################
+SRC +=		arabic.c			\
 			arglist.c			\
 			autocmd.c			\
 			beval.c				\
@@ -75,8 +131,6 @@ SRC =		arabic.c			\
 			findfile.c			\
 			fold.c				\
 			getchar.c			\
-			gui.c				\
-			gui_mui.c			\
 			hardcopy.c			\
 			hashtab.c			\
 			highlight.c			\
@@ -137,9 +191,11 @@ SRC =		arabic.c			\
 
 OBJ =	$(SRC:.c=.o)
 
+# Build everything ##################################
 $(BIN): $(OBJ)
 	${LD} -o $(BIN) $(OBJ) $(LDFLAGS)
 
+# Clean up ##########################################
 .PHONY: clean
 clean:
 	$(RM) -fv $(OBJ) $(BIN)
