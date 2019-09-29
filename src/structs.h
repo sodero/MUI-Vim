@@ -1938,6 +1938,7 @@ struct channel_S {
 #define JO2_ANSI_COLORS	    0x8000	// "ansi_colors"
 #define JO2_TTY_TYPE	    0x10000	// "tty_type"
 #define JO2_BUFNR	    0x20000	// "bufnr"
+#define JO2_TERM_API	    0x40000	// "term_api"
 
 #define JO_MODE_ALL	(JO_MODE + JO_IN_MODE + JO_OUT_MODE + JO_ERR_MODE)
 #define JO_CB_ALL \
@@ -2007,6 +2008,8 @@ typedef struct
     long_u	jo_ansi_colors[16];
 # endif
     int		jo_tty_type;	    // first character of "tty_type"
+    char_u	*jo_term_api;
+    char_u	jo_term_api_buf[NUMBUFLEN];
 #endif
 } jobopt_T;
 
@@ -2426,9 +2429,7 @@ struct file_buffer
 #if defined(FEAT_CINDENT) || defined(FEAT_SMARTINDENT)
     char_u	*b_p_cinw;	// 'cinwords'
 #endif
-#ifdef FEAT_COMMENTS
     char_u	*b_p_com;	// 'comments'
-#endif
 #ifdef FEAT_FOLDING
     char_u	*b_p_cms;	// 'commentstring'
 #endif
@@ -3879,3 +3880,32 @@ typedef struct spat
     int		    no_scs;	// no smartcase for this pattern
     soffset_T	    off;
 } spat_T;
+
+#define WRITEBUFSIZE	8192	// size of normal write buffer
+
+#define FIO_LATIN1	0x01	// convert Latin1
+#define FIO_UTF8	0x02	// convert UTF-8
+#define FIO_UCS2	0x04	// convert UCS-2
+#define FIO_UCS4	0x08	// convert UCS-4
+#define FIO_UTF16	0x10	// convert UTF-16
+#ifdef MSWIN
+# define FIO_CODEPAGE	0x20	// convert MS-Windows codepage
+# define FIO_PUT_CP(x) (((x) & 0xffff) << 16)	// put codepage in top word
+# define FIO_GET_CP(x)	(((x)>>16) & 0xffff)	// get codepage from top word
+#endif
+#ifdef MACOS_CONVERT
+# define FIO_MACROMAN	0x20	// convert MacRoman
+#endif
+#define FIO_ENDIAN_L	0x80	// little endian
+#define FIO_ENCRYPTED	0x1000	// encrypt written bytes
+#define FIO_NOCONVERT	0x2000	// skip encoding conversion
+#define FIO_UCSBOM	0x4000	// check for BOM at start of file
+#define FIO_ALL	-1	// allow all formats
+
+// When converting, a read() or write() may leave some bytes to be converted
+// for the next call.  The value is guessed...
+#define CONV_RESTLEN 30
+
+// We have to guess how much a sequence of bytes may expand when converting
+// with iconv() to be able to allocate a buffer.
+#define ICONV_MULT 8

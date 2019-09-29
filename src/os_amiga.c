@@ -795,19 +795,16 @@ mch_can_restore_icon(void)
 mch_get_user_name(char_u *s, int len)
 {
 #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-    int uid = getuid();
-    struct passwd *pw = getpwuid(uid);
+    struct passwd   *pwd = getpwuid(getuid());
 
-    if (pw && pw->pw_name && len > 0)
+    if (pwd != NULL && pwd->pw_name && len > 0)
     {
-        vim_strncpy(s, (char_u *) pw->pw_name, len - 1);
+        vim_strncpy(s, (char_u *)pwd->pw_name, len - 1);
         return OK;
     }
-#else
-    /* TODO: Implement this. */
+#endif
     *s = NUL;
     return FAIL;
-#endif
 }
 
 /*

@@ -1638,7 +1638,7 @@ BASIC_SRC = \
 	optionstr.c \
 	os_unix.c \
 	auto/pathdef.c \
-	popupmnu.c \
+	popupmenu.c \
 	popupwin.c \
 	profiler.c \
 	pty.c \
@@ -1654,6 +1654,7 @@ BASIC_SRC = \
 	sound.c \
 	spell.c \
 	spellfile.c \
+	spellsuggest.c \
 	syntax.c \
 	tag.c \
 	term.c \
@@ -1667,6 +1668,7 @@ BASIC_SRC = \
 	version.c \
 	viminfo.c \
 	window.c \
+	bufwrite.c \
 	$(OS_EXTRA_SRC)
 
 SRC =	$(BASIC_SRC) \
@@ -1773,7 +1775,7 @@ OBJ_COMMON = \
 	objects/optionstr.o \
 	objects/os_unix.o \
 	objects/pathdef.o \
-	objects/popupmnu.o \
+	objects/popupmenu.o \
 	objects/popupwin.o \
 	objects/profiler.o \
 	objects/pty.o \
@@ -1789,6 +1791,7 @@ OBJ_COMMON = \
 	objects/sound.o \
 	objects/spell.o \
 	objects/spellfile.o \
+	objects/spellsuggest.o \
 	objects/syntax.o \
 	objects/tag.o \
 	objects/term.o \
@@ -1802,6 +1805,7 @@ OBJ_COMMON = \
 	objects/version.o \
 	objects/viminfo.o \
 	objects/window.o \
+	objects/bufwrite.o \
 	$(GUI_OBJ) \
 	$(TERM_OBJ) \
 	$(LUA_OBJ) \
@@ -1933,7 +1937,7 @@ PRO_AUTO = \
 	optionstr.pro \
 	os_mac_conv.pro \
 	os_unix.pro \
-	popupmnu.pro \
+	popupmenu.pro \
 	popupwin.pro \
 	profiler.pro \
 	pty.pro \
@@ -1949,6 +1953,7 @@ PRO_AUTO = \
 	sound.pro \
 	spell.pro \
 	spellfile.pro \
+	spellsuggest.pro \
 	syntax.pro \
 	tag.pro \
 	term.pro \
@@ -1963,6 +1968,7 @@ PRO_AUTO = \
 	version.pro \
 	viminfo.pro \
 	window.pro \
+	bufwrite.pro \
 	beval.pro \
 	gui_beval.pro \
 	netbeans.pro \
@@ -2259,6 +2265,10 @@ test1 \
 
 # Run individual NEW style test.
 # These do not depend on the executable, compile it when needed.
+# Set $TEST_FILTER to select what test function to invoke, e.g.:
+#	export TEST_FILTER=Test_terminal_wipe_buffer
+# A partial match also works:
+#	export TEST_FILTER=wipe_buffer
 $(NEW_TESTS):
 	cd testdir; $(MAKE) $@ VIMPROG=../$(VIMTESTTARGET) $(GUI_TESTARG) SCRIPTSOURCE=../$(SCRIPTSOURCE)
 
@@ -3338,8 +3348,8 @@ objects/winclip.o: winclip.c
 objects/pathdef.o: auto/pathdef.c
 	$(CCC) -o $@ auto/pathdef.c
 
-objects/popupmnu.o: popupmnu.c
-	$(CCC) -o $@ popupmnu.c
+objects/popupmenu.o: popupmenu.c
+	$(CCC) -o $@ popupmenu.c
 
 objects/popupwin.o: popupwin.c
 	$(CCC) -o $@ popupwin.c
@@ -3386,6 +3396,9 @@ objects/spell.o: spell.c
 objects/spellfile.o: spellfile.c
 	$(CCC) -o $@ spellfile.c
 
+objects/spellsuggest.o: spellsuggest.c
+	$(CCC) -o $@ spellsuggest.c
+
 objects/syntax.o: syntax.c
 	$(CCC) -o $@ syntax.c
 
@@ -3421,6 +3434,9 @@ objects/viminfo.o: viminfo.c
 
 objects/window.o: window.c
 	$(CCC) -o $@ window.c
+
+objects/bufwrite.o: bufwrite.c
+	$(CCC) -o $@ bufwrite.c
 
 objects/netbeans.o: netbeans.c
 	$(CCC) -o $@ netbeans.c
@@ -3817,7 +3833,7 @@ objects/pathdef.o: auto/pathdef.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
-objects/popupmnu.o: popupmnu.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+objects/popupmenu.o: popupmenu.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
@@ -3881,6 +3897,10 @@ objects/spellfile.o: spellfile.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
+objects/spellsuggest.o: spellsuggest.c vim.h protodef.h auto/config.h feature.h \
+ os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
 objects/syntax.o: syntax.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
@@ -3932,6 +3952,10 @@ objects/viminfo.o: viminfo.c vim.h protodef.h auto/config.h feature.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
 objects/window.o: window.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
+objects/bufwrite.o: bufwrite.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
