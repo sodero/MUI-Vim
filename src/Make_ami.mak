@@ -103,6 +103,7 @@ SRC +=		arabic.c			\
 			blob.c				\
 			blowfish.c			\
 			buffer.c			\
+			bufwrite.c			\
 			change.c			\
 			charset.c			\
 			cmdhist.c			\
