@@ -1,0 +1,28 @@
+--------------------------------------------------------------
+MorphOS 
+--------------------------------------------------------------
+Use the included installer script.
+
+--------------------------------------------------------------
+AROS
+--------------------------------------------------------------
+Copy everything in this archive, including subdirectories, 
+to a directory of your choice, e.g "Work:Tools/Vim". 
+
+For every file F in this directory ending with ".info_", 
+rename this file to "F.info". 
+
+Create an Assign, preferably in s:user-startup, pointing to 
+the "runtime" subdirectory of the directory where the Vim 
+executable is located. In the example above, that would result 
+in the following line being added to your user-startup: 
+
+"Assign VIM: Work:Tools/Vim/runtime >NIL:"
+
+If you'd like to start Vim from the workbench you need to add 
+"C:IconX" as the "Tool" for the "gvim" project icon. You also
+need to set the S-flag of "gvim" (using "protect gvim srwed")
+
+If you intend to run Vim from the shell it's probably a good 
+idea to add the directory of the Vim executable to your path. 
+
