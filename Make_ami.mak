@@ -4,8 +4,14 @@
 UNM?=$(shell uname)
 ifeq ($(UNM),AmigaOS)
 GOP=-E
+MKF:=Make_ami.mak
+else ifeq ($(UNM),AROS)
+MKF:=Make_ami.mak
+else ifeq ($(UNM),MorphOS)
+MKF:=Make_ami.mak
 else
-GOP=
+#-This is just for testing purposes--------------------------------------------------------
+MKF:=Makefile
 endif
 
 #------------------------------------------------------------------------------------------
@@ -13,7 +19,6 @@ endif
 #------------------------------------------------------------------------------------------
 SRC:=src
 DST:=dist
-MKF:=Make_ami.mak
 VER=$(shell cat $(SRC)/.ver)
 REV=$(shell cat $(SRC)/.pat)
 
