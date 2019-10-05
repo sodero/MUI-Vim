@@ -70,7 +70,8 @@
 # include <proto/intuition.h>
 #endif
 
-#undef INSERT				/* Vim needs this one */
+#undef INSERT				/* Vim needs these */
+#undef ERROR_UNKNOWN
 
 #endif /* PROTO */
 
