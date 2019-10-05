@@ -2381,6 +2381,32 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
         { .img = MUIV_TheBar_End                   },
     };
 
+    BPTR icons = Lock("VIM:icons", ACCESS_READ);
+
+    if(!icons)
+    {
+#ifdef __amigaos4__
+        struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
+#endif
+        struct EasyStruct req =
+        {
+            .es_StructSize   = sizeof(struct EasyStruct),
+            .es_Flags        = 0, // ESF_SCREEN | ESF_TAGGED | ESF_EVENSIZE;
+            .es_Title        = (UBYTE *)"Error",
+            .es_TextFormat   = (UBYTE *)"Invalid VIM assign",
+            .es_GadgetFormat = (UBYTE *)"OK",
+#ifdef __amigaos4__
+            .es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen,
+            .es_TagList      = tags
+#endif
+        };
+
+        EasyRequest(NULL, &req, NULL, NULL);
+        ERR("Invalid VIM: assign");
+    }
+
+    UnLock(icons);
+
     obj = (Object *) DoSuperNew(cls, obj, MUIA_Group_Horiz, TRUE,
                                 MUIA_TheBar_Buttons, b,
                                 MUIA_TheBar_IgnoreAppearance, TRUE,
