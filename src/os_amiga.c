@@ -23,7 +23,6 @@
 #ifndef PROTO
 
 #ifndef LATTICE
-# include <exec/types.h>
 # include <exec/exec.h>
 # include <libraries/dos.h>
 # include <intuition/intuition.h>
@@ -33,6 +32,7 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/intuition.h>
+#include <exec/types.h>
 */
 
 #include <exec/memory.h>

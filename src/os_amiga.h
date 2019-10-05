@@ -70,6 +70,8 @@
 # include <proto/intuition.h>
 #endif
 
+#undef INSERT				/* Vim needs this one */
+
 #endif /* PROTO */
 
 #define FNAME_ILLEGAL ";*?`#%" /* illegal characters in a file name */
