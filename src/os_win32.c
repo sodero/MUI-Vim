@@ -4490,8 +4490,25 @@ mch_system_c(char *cmd, int options UNUSED)
 {
     int		ret;
     WCHAR	*wcmd;
+    char_u	*buf;
+    size_t	len;
 
-    wcmd = enc_to_utf16((char_u *)cmd, NULL);
+    // If the command starts and ends with double quotes, enclose the command
+    // in parentheses.
+    len = STRLEN(cmd);
+    if (len >= 2 && cmd[0] == '"' && cmd[len - 1] == '"')
+    {
+	len += 3;
+	buf = alloc(len);
+	if (buf == NULL)
+	    return -1;
+	vim_snprintf((char *)buf, len, "(%s)", cmd);
+	wcmd = enc_to_utf16(buf, NULL);
+	free(buf);
+    }
+    else
+	wcmd = enc_to_utf16((char_u *)cmd, NULL);
+
     if (wcmd == NULL)
 	return -1;
 
@@ -7277,7 +7294,7 @@ mch_setenv(char *var, char *value, int x UNUSED)
  * Confirm until this version.  Also the logic changes.
  * insider preview.
  */
-#define CONPTY_INSIDER_BUILD	    MAKE_VER(10, 0, 18990)
+#define CONPTY_INSIDER_BUILD	    MAKE_VER(10, 0, 18995)
 
 /*
  * Not stable now.

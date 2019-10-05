@@ -1778,28 +1778,30 @@ make_filter_cmd(
     }
     else
     {
-	char_u	*p;
+	STRCPY(buf, cmd);
+	if (itmp != NULL)
+	{
+	    char_u	*p;
 
-	/*
-	 * If there is a pipe, we have to put the '<' in front of it.
-	 * Don't do this when 'shellquote' is not empty, otherwise the
-	 * redirection would be inside the quotes.
-	 */
-	if (*p_shq == NUL)
-	{
-	    p = find_pipe(buf);
-	    if (p != NULL)
-		*p = NUL;
-	}
-	STRCAT(buf, " <");	/* " < " causes problems on Amiga */
-	STRCAT(buf, itmp);
-	if (*p_shq == NUL)
-	{
-	    p = find_pipe(cmd);
-	    if (p != NULL)
+	    // If there is a pipe, we have to put the '<' in front of it.
+	    // Don't do this when 'shellquote' is not empty, otherwise the
+	    // redirection would be inside the quotes.
+	    if (*p_shq == NUL)
 	    {
-		STRCAT(buf, " ");   /* insert a space before the '|' for DOS */
-		STRCAT(buf, p);
+		p = find_pipe(buf);
+		if (p != NULL)
+		    *p = NUL;
+	    }
+	    STRCAT(buf, " <");	// " < " causes problems on Amiga
+	    STRCAT(buf, itmp);
+	    if (*p_shq == NUL)
+	    {
+		p = find_pipe(cmd);
+		if (p != NULL)
+		{
+		    STRCAT(buf, " ");  // insert a space before the '|' for DOS
+		    STRCAT(buf, p);
+		}
 	    }
 	}
     }
@@ -5545,12 +5547,22 @@ find_help_tags(
     if (STRNICMP(arg, "expr-", 5) == 0)
     {
 	// When the string starting with "expr-" and containing '?' and matches
-	// the table, it is taken literally.  Otherwise '?' is recognized as a
-	// wildcard.
+	// the table, it is taken literally (but ~ is escaped).  Otherwise '?'
+	// is recognized as a wildcard.
 	for (i = (int)(sizeof(expr_table) / sizeof(char *)); --i >= 0; )
 	    if (STRCMP(arg + 5, expr_table[i]) == 0)
 	    {
-		STRCPY(d, arg);
+		int si = 0, di = 0;
+
+		for (;;)
+		{
+		    if (arg[si] == '~')
+			d[di++] = '\\';
+		    d[di++] = arg[si];
+		    if (arg[si] == NUL)
+			break;
+		    ++si;
+		}
 		break;
 	    }
     }

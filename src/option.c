@@ -102,7 +102,26 @@ set_init_1(int clean_arg)
 	    || ((p = (char_u *)default_shell()) != NULL && *p != NUL)
 #endif
 	    )
+#if defined(MSWIN)
+    {
+	// For MS-Windows put the path in quotes instead of escaping spaces.
+	char_u	    *cmd;
+	size_t	    len;
+
+	if (vim_strchr(p, ' ') != NULL)
+	{
+	    len = STRLEN(p) + 3;  // two quotes and a trailing NUL
+	    cmd = alloc(len);
+	    vim_snprintf((char *)cmd, len, "\"%s\"", p);
+	    set_string_default("sh", cmd);
+	    vim_free(cmd);
+	}
+	else
+	    set_string_default("sh", p);
+    }
+#else
 	set_string_default_esc("sh", p, TRUE);
+#endif
 
 #ifdef FEAT_WILDIGN
     /*
@@ -686,7 +705,7 @@ set_local_options_default(win_T *wp, int do_buffer)
 		&& (do_buffer || (p->indir & PV_BUF) == 0)
 		&& !(options[i].flags & P_NODEFAULT)
 		&& !optval_default(p, varp, FALSE))
-	    set_option_default(i, OPT_LOCAL, FALSE);
+	    set_option_default(i, OPT_FREE|OPT_LOCAL, FALSE);
     }
 
     unblock_autocmds();
