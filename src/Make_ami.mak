@@ -14,7 +14,7 @@ BUILD ?=	mui
 ifeq ($(DEBUG),no)
 	CFLAGS = -c -O3
 else
-	CFLAGS = -c -O0
+	CFLAGS = -c -O0 -Wall
 endif
 
 # Common compiler flags #############################
