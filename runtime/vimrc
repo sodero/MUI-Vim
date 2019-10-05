@@ -25,7 +25,6 @@ set nowrap
 set noeb
 set ruler
 set autoindent
-set synmaxcol=120
 set viminfo+=nVIM:viminfo
 
 " Hack to disable the netrw plugin. Its file / dir browser
@@ -33,7 +32,11 @@ set viminfo+=nVIM:viminfo
 " fact crash Vim completely in some cases.
 let g:loaded_netrwPlugin = "v156"
 
+" Disable matchparen and matchparen++ since these plugins
+" are to slow for most Amigas / clones.
+let g:loaded_matchparen = 1
+
 " Make syntax highlightning sloppy to save time.
-syntax sync minlines=256 maxlines=256
-set synmaxcol=200
+syntax sync minlines=128
+set synmaxcol=80
 syntax on
