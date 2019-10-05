@@ -33,7 +33,7 @@ set viminfo+=nVIM:viminfo
 let g:loaded_netrwPlugin = "v156"
 
 " Disable matchparen and matchparen++ since these plugins
-" are to slow for most Amigas / clones.
+" are too slow for most Amigas / clones.
 let g:loaded_matchparen = 1
 
 " Make syntax highlightning sloppy to save time.
