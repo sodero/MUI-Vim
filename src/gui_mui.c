@@ -471,11 +471,9 @@ MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
         DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
         return TRUE;
     }
-    else
-    {
-        // Nothing to do
-        return FALSE;
-    }
+
+    // Nothing to do
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -503,7 +501,6 @@ MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
     // Needed to not mess up the message loop
     my->state |= MUIV_VimCon_State_Yield;
     DoMethod(_app(obj), MUIM_Application_AboutMUI, _win(obj));
-
     return 0;
 }
 
@@ -519,7 +516,6 @@ MUIDSP IPTR VimConMUISettings(Class *cls, Object *obj)
     // Needed to not mess up the message loop
     my->state |= MUIV_VimCon_State_Yield;
     DoMethod(_app(obj), MUIM_Application_OpenConfigWindow, _win(obj));
-
     return 0;
 }
 
@@ -540,11 +536,9 @@ MUIDSP IPTR VimConStartBlink(Class *cls, Object *obj)
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
         return TRUE;
     }
-    else
-    {
-        // Nothing to do
-        return FALSE;
-    }
+
+    // Nothing to do
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -563,7 +557,6 @@ MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
     my->cursor[0] = (int) msg->Wait;
     my->cursor[1] = (int) msg->Off;
     my->cursor[2] = (int) msg->On;
-
     return TRUE;
 }
 
@@ -656,11 +649,9 @@ MUIDSP IPTR VimConSetTitle(Class *cls, Object *obj,
         set(_win(obj), MUIA_Window_Title, msg->Title);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid title string");
-        return FALSE;
-    }
+
+    WARN("Invalid title string");
+    return FALSE;
 }
 
 
@@ -706,7 +697,6 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
 
     // Make the results visible
     MUI_Redraw(obj, MADF_DRAWUPDATE);
-
     return TRUE;
 }
 
@@ -721,7 +711,6 @@ MUIDSP IPTR VimConTimeout(Class *cls, Object *obj)
 
     // Take note and keep on going
     my->state |= MUIV_VimCon_State_Timeout;
-
     return TRUE;
 }
 
@@ -820,11 +809,9 @@ MUIDSP IPTR VimConDrawHollowCursor(Class *cls, Object *obj,
         VimConDirty(cls, obj, x1, y1, x2, y2);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid geometry");
-        return FALSE;
-    }
+
+    WARN("Invalid geometry");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -851,11 +838,9 @@ MUIDSP IPTR VimConDrawPartCursor(Class *cls, Object *obj,
         VimConDirty(cls, obj, x, y, x + xs, y + ys);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid cursor size");
-        return FALSE;
-    }
+
+    WARN("Invalid cursor size");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -881,11 +866,9 @@ MUIDSP IPTR VimConInvertRect(Class *cls, Object *obj,
         VimConDirty(cls, obj, x, y, x + xs, y + ys);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid block size");
-        return FALSE;
-    }
+
+    WARN("Invalid block size");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -915,11 +898,9 @@ MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
         VimConDirty(cls, obj, x, y, x + xs, y + ys);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid block size");
-        return FALSE;
-    }
+
+    WARN("Invalid block size");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -970,14 +951,11 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
         // Blit and fill the abandoned area with Color
         MovePixelArray(xsrcdst, ysrc, &my->rp, xsrcdst, ydst , xsize, ysize);
         FillPixelArray(&my->rp, xsrcdst, yctop, xsize, ycsiz, msg->Color);
-
         return TRUE;
     }
-    else
-    {
-        WARN("No lines to delete / insert");
-        return FALSE;
-    }
+
+    WARN("No lines to delete / insert");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -998,7 +976,6 @@ MUIDSP IPTR VimConSetFgColor(Class *cls, Object *obj,
 
     struct VimConData *my = INST_DATA(cls,obj);
     SetRPAttrsA(&my->rp, tags);
-
     return TRUE;
 }
 
@@ -1023,7 +1000,6 @@ MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
     tags[0].ti_Data = msg->Color;
     #endif
     SetRPAttrsA(&my->rp, tags);
-
     return TRUE;
 }
 
@@ -1176,7 +1152,6 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
                            IDCMP_EXTENDEDMOUSE |
                            #endif
                            IDCMP_MOUSEBUTTONS;
-
     return (IPTR) obj;
 }
 
@@ -1250,7 +1225,6 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 
     // Let Vim know about changes in size (if any)
     gui_resize_shell(_mwidth(obj), _mheight(obj));
-
     return TRUE;
 }
 
@@ -1364,7 +1338,6 @@ MUIDSP int VimConMouseScrollEvent(Class *cls, Object *obj,
                 (y - _mtop(obj) >= _mheight(obj) ? MOUSE_5 : 0) |
                 (x - _mleft(obj) < 0 ? MOUSE_7 : 0) |
                 (x - _mleft(obj) >= _mwidth(obj) ? MOUSE_6 : 0);
-
     return event;
 }
 
@@ -1816,11 +1789,9 @@ MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
         mp->cb(mp);
         return TRUE;
     }
-    else
-    {
-        WARN("Invalid callback");
-        return FALSE;
-    }
+
+    WARN("Invalid callback");
+    return FALSE;
 }
 
 //------------------------------------------------------------------------------
@@ -2286,7 +2257,6 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
             // of the button. Used to translate from
             // menu item to MUI button ID.
             b->_class = (struct IClass *) msg->ID;
-
             return TRUE;
         }
         else
@@ -2326,7 +2296,6 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
             // method to disable / enable the button.
             DoMethod(obj, MUIM_TheBar_SetAttr, b->ID, MUIV_TheBar_Attr_Disabled,
                      msg->Grey);
-
             return TRUE;
         }
         else
@@ -2424,7 +2393,6 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     my = INST_DATA(cls,obj);
     my->btn = b;
-
     return (IPTR) obj;
 }
 
@@ -2550,6 +2518,7 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
         {
             DoMethod(Tlb, MUIM_VimToolbar_DisableButton, menu, msg->Grey);
         }
+
         return TRUE;
     }
 
@@ -2825,10 +2794,8 @@ int gui_mch_get_winpos(int *x, int *y)
     {
         return OK;
     }
-    else
-    {
-        return FAIL;
-    }
+
+    return FAIL;
 }
 
 //------------------------------------------------------------------------------
@@ -3348,7 +3315,6 @@ int gui_mch_init(void)
 
         EasyRequest(NULL, &req, NULL, NULL);
         ERR("MCC_TheBar required");
-
         return FAIL;
     }
 
@@ -3452,7 +3418,6 @@ int gui_mch_init(void)
     gui.scrollbar_width = 0;
     gui.border_offset = 0;
     gui.border_width = 0;
-
     return OK;
 }
 
@@ -3502,7 +3467,6 @@ int gui_mch_init_font(char_u *vim_font_name, int fontset)
 {
     (void) vim_font_name;
     (void) fontset;
-
     return OK;
 }
 
