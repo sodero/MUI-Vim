@@ -1111,7 +1111,12 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
              (GetBitMapAttr(s->RastPort.BitMap, BMA_WIDTH),
               GetBitMapAttr(s->RastPort.BitMap, BMA_HEIGHT),
               GetBitMapAttr(s->RastPort.BitMap, BMA_DEPTH),
-              BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES, NULL);
+              BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
+#ifndef __MORPHOS__
+              s->RastPort.BitMap);
+#else
+              NULL);
+#endif
 
     UnlockPubScreen(NULL, s);
 
@@ -3293,7 +3298,6 @@ int gui_mch_init(void)
     VimToolbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_TheBar, NULL,
                                             sizeof(struct CLASS_DATA(VimToolbar)),
                                             (APTR) DISPATCH_GATE(VimToolbar));
-
     if(!VimToolbarClass)
     {
 #ifdef __amigaos4__
