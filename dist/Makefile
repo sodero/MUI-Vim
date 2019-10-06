@@ -69,7 +69,7 @@ $(DST)/$(DST).info: | $(DST)
 	cp -r $(TOP)/runtime $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
 	cp "Vim installer" $(DST)
-	cp *.txt $(DST)
+	cp *.guide $(DST)
 	cp gVim $(DST)
 	cp vi $(DST)
 
