@@ -1,5 +1,0 @@
-Contributions
-=============
-Kas1e         - Amiga OS4 port and numerous bug fixes.
-Martin Merz   - Icons and toolbar graphics.
-Tom Crecelius - Hollywood syntax highlighting.
