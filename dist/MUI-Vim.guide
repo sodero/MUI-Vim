@@ -2,10 +2,8 @@
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
 @$VER: MUI-Vim.guide 8.1.TBD (20.09.19) english
-
 @{B}Contents@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
 @{" Compatibility    " LINK "Compatibility"} Plugin compatibility
 @{" Limitations      " LINK "Limitations"} Known limitations
@@ -17,20 +15,16 @@
 
 @NODE "Introduction" "What's MUI-Vim?"
 @TOC "Main"
-
-@{B}MUI-Vim@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}What's MUI-Vim?@{UB}
+@{B}-----------------------------------------------------------------------------@{UB}
 A port of Vim including a MUI GUI.
 
 @ENDNODE
 
 @NODE "Installation" "Installing MUI-Vim"
 @TOC "Main"
-
 @{B}Installing MUI-Vim@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}-----------------------------------------------------------------------------@{UB}
 @{B}TODO@{UB}
 Copy everything in this archive, including subdirectories,
 to a directory of your choice, e.g "Work:Tools/Vim".
@@ -56,57 +50,41 @@ idea to add the directory of the Vim executable to your path.
 
 @NODE "Compatibility" "Notes on plugin compatibility"
 @TOC "Main"
-
 @{B}Notes on plugin compatibility@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}-----------------------------------------------------------------------------@{UB}
 TODO
 
 @ENDNODE
 
 @NODE "Limitations" "Known limitations"
 @TOC "Main"
-
 @{B}Known limitations@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
+@{B}-----------------------------------------------------------------------------@{UB}
+On MorphOS Vim can't detect the console size in a MUI Shell. When using the
+standard shell (MorphOS, AROS and AmigaOS), Vim can detect the console size
+on startup, but if you resize the window after startup a refresh is needed
+(using ctrl+l) to make things things look the way they should again.
 
-Vim currently can't detect the terminal size when used
-in text mode in MUI Shell. When using the standard shell
-Vim can detect the size on startup, but if you resize the
-window after startup you will need to refresh Vim using
-Ctrl + l to make things look the way they should.
-
-AROS currently seems to ignore the TxSpacing member of
-struct RastPort. This results in graphical glitches when
-using anything but non smearing bitmaps fonts. Also, on
-AROS, the installer is broken due to the incompleteness
-of the AROS installer utility.
+AROS currently seems to ignore the TxSpacing member of struct RastPort. This
+results in graphical glitches when using anything but non smearing bitmaps
+fonts.
 
 @ENDNODE
 
 @NODE "Contributions" "Contributions"
 @TOC "Main"
-
 @{B}Contributions@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
-@{B}kas1e@{UB}:
-AmigaOS4 port, numerous improvements, fixes and ideas.
-
-@{B}Martin Merz@{UB}:
-Icons and toolbar graphics.
-
-@{B}Tom Crecelius@{UB}:
-Hollywood syntax highlighting.
+@{B}-----------------------------------------------------------------------------@{UB}
+@{B}kas1e@{UB}: AmigaOS4 port, numerous improvements, fixes and ideas.
+@{B}Martin Merz@{UB}: Icons and toolbar graphics.
+@{B}Tom Crecelius@{UB}: Hollywood syntax highlighting.
 
 @ENDNODE
 
 @NODE "Changelog" "Changelog"
 @TOC "Main"
-
 @{B}The complete changelog@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}-----------------------------------------------------------------------------@{UB}
 @{B}2019-TBD-TBD@{UB}
 - Update to VIM 8.1.TBD.
 - Hollywood syntax highlighting (Tom Crecelius).
@@ -199,8 +177,7 @@ Hollywood syntax highlighting.
 @TOC "Main"
 
 @{B}MUI-Vim software license@{UB}
-@{B}-----------------------------------------------------------------------@{UB}
-
+@{B}-----------------------------------------------------------------------------@{UB}
 MUI-Vim is distributed under the same license as the official Vim, see below.
 
 @{B}VIM LICENSE@{UB}
