@@ -14,5 +14,6 @@ addons:
         update: true
 
 script:
-    - lha
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos ppc-morphos-gcc --version
+    - wget http://aminet.net/dev/mui/MCC_TheBar-26.19.lha
+    - lha e MCC_TheBar-26.19.lha
+    - docker run --rm -v ${PWD}:/work -v ${PWD}/MCC_TheBar/Developer/C/include:/tools/usr/include -it amigadev/crosstools:ppc-morphos make -C src -f Make_ami.mak CC=ppc-morphos-gcc OS=MorphOS UNM=MorphOS
