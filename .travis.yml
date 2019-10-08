@@ -6,7 +6,13 @@ services:
     - docker
 
 before_install:
+    - sudo apt-get install lhasa
     - docker pull amigadev/crosstools:ppc-morphos
 
+addons:
+    apt:
+        update: true
+
 script:
+    - lha --version
     - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos ppc-morphos-gcc --version
