@@ -5,5 +5,8 @@ sudo: required
 services:
     - docker
 
+before_install:
+    - docker pull amigadev/crosstools:ppc-morphos
+
 script:
-    - echo "Hello world"
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos ppc-morphos-gcc --version
