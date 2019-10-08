@@ -14,5 +14,5 @@ addons:
         update: true
 
 script:
-    - lha --version
+    - lha
     - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos ppc-morphos-gcc --version
