@@ -1,4 +1,9 @@
 language: c
 
+sudo: required
+
+services:
+    - docker
+
 script:
     - echo "Hello world"
