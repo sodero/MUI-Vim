@@ -18,7 +18,7 @@
 BIN =		vim
 CC ?=		gcc
 LD =		$(CC)
-UNM := 		$(shell uname)
+UNM ?= 		$(shell uname)
 DEBUG ?=	no
 BUILD ?=	mui
 
