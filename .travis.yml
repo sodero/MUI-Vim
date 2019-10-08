@@ -20,7 +20,7 @@ script:
     - cp lha-114i/src/lha dist
     - ${PWD}/dist/lha e MCC_TheBar-26.19.lha
     - ls -l ${PWD}/dist
-    - docker run --rm -v ${PWD}:/work -v ${PWD}/MCC_TheBar/Developer/C/include:/tools/usr/include -it amigadev/crosstools:ppc-morphos make dist CC=ppc-morphos-gcc LHA=/work/dist/lha PRO=echo UNM=MorphOS
+    - docker run --rm -v ${PWD}:/work -v ${PWD}/MCC_TheBar/Developer/C/include:/tools/usr/include -it amigadev/crosstools:ppc-morphos make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS
 
 deploy:
     provider: releases
