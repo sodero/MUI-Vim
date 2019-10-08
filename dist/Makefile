@@ -1,6 +1,7 @@
 #------------------------------------------------------------------------------------------
 # Host settings
 #------------------------------------------------------------------------------------------
+LHA?=lha
 UNM?=$(shell uname)
 ARC?=$(shell uname -m | tr -d ower)
 ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
@@ -10,7 +11,7 @@ else ifeq ($(UNM),AROS)
 ANM:=$(ARC)-aros
 else ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
-LHO:=-3rae
+#LHO:=-3rae
 #-This is just for testing purposes--------------------------------------------------------
 else ifeq ($(UNM),Darwin)
 ANM:=$(ARC)-darwin
@@ -47,7 +48,7 @@ REV?=0
 all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
-	lha $(LHO) a $@ $(DST) $(DST).info
+	$(LHA) $(LHO) a $@ $(DST) $(DST).info
 
 #------------------------------------------------------------------------------------------
 # Populate temp

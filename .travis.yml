@@ -6,7 +6,6 @@ services:
     - docker
 
 before_install:
-    - sudo apt-get install lhasa
     - docker pull amigadev/crosstools:ppc-morphos
 
 addons:
@@ -19,5 +18,6 @@ script:
     - tar xvfz lha-114i.tar.gz
     - make -C lha-114i
     - cp lha-114i/src/lha dist
-    - dist/lha e MCC_TheBar-26.19.lha
-    - docker run --rm -v ${PWD}:/work -v ${PWD}/MCC_TheBar/Developer/C/include:/tools/usr/include -it amigadev/crosstools:ppc-morphos make -C src -f Make_ami.mak CC=ppc-morphos-gcc OS=MorphOS UNM=MorphOS
+    - ${PWD}/dist/lha e MCC_TheBar-26.19.lha
+    - ls -l ${PWD}/dist
+    - docker run --rm -v ${PWD}:/work -v ${PWD}/MCC_TheBar/Developer/C/include:/tools/usr/include -it amigadev/crosstools:ppc-morphos make dist CC=ppc-morphos-gcc LHA=/work/dist/lha PRO=echo UNM=MorphOS
