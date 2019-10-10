@@ -15,20 +15,22 @@ addons:
 script:
     - wget -nc http://aminet.net/dev/mui/MCC_TheBar-26.19.lha
     - wget -nc http://www2m.biglobe.ne.jp/~dolphin/lha/prog/lha-114i.tar.gz
+    - wget https://muidev.de/download/MUI%205.0%20-%20Release/MUI-5.0-2019R2-os4.lha
+    - wget 'http://hyperion-entertainment.biz/index.php/downloads?view=download&amp;format=raw&amp;file=69' -O SDK_53.24.lha
     - tar xvfz lha-114i.tar.gz
     - make -C lha-114i
     - cp lha-114i/src/lha dist
     - dist/lha ef MCC_TheBar-26.19.lha
+    - dist/lha ef MUI-5.0-2019R2-os4.lha
+    - dist/lha ef SDK_53.24.lha
+    - dist/lha ef sdk_install/clib2-1.205.lha
     - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
     - mkdir artefacts
     - cp dist/tmp/* artefacts
     - sudo make clean CC=ppc-morphos-gcc LHA=dist/lha ARC=ppc PRO=echo UNM=MorphOS
-
-#    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'wget -nc http://aminet.net/dev/mui/MCC_TheBar-26.19.lha && wget -nc http://www2m.biglobe.ne.jp/~dolphin/lha/prog/lha-114i.tar.gz && tar xvfz lha-114i.tar.gz && make -C lha-114i && cp lha-114i/src/lha dist && dist/lha ef MCC_TheBar-26.19.lha && cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && ls -l /opt/ppc-morphos/os-include/mui && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS && cp dist/tmp/* artefacts && make clean CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
-#wget https://muidev.de/download/MUI%205.0%20-%20Release/MUI-5.0-2019R2-os4.lha
-#lha e -f MUI-5.0-2019R2-os4.lha
-#ls SDK/MUI/C/include/
-#/opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp /opt/ppc-morphos/os-include/devices/rawkeycodes.h .'
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-amigaos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp rawkeycodes.h /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/devices && cp -r SDK/MUI/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp clib2/lib/libauto.a /opt/ppc-amigaos/ppc-amigaos/SDK/clib2/lib && make dist CC=ppc-amigaos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=AmigaOS'
+    - cp dist/tmp/* artefacts
 
 deploy:
     provider: releases

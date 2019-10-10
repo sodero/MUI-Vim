@@ -3,7 +3,9 @@
 #------------------------------------------------------------------------------------------
 UNM?=$(shell uname)
 ifeq ($(UNM),AmigaOS)
-GOP=-E
+ifeq ($(shell uname),AmigaOS)
+GOP=-E # Only if we're not cross compiling.
+endif
 MKF:=Make_ami.mak
 else ifeq ($(UNM),AROS)
 MKF:=Make_ami.mak

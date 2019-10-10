@@ -5,7 +5,7 @@ LHA?=lha
 UNM?=$(shell uname)
 ARC?=$(shell uname -m | tr -d ower)
 ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
-ifeq ($(UNM),AmigaOS4)
+ifeq ($(UNM),AmigaOS)
 ANM:=$(ARC)-amigaos
 else ifeq ($(UNM),AROS)
 ANM:=$(ARC)-aros

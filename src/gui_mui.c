@@ -28,7 +28,9 @@
 #include <proto/muimaster.h>
 #include <proto/icon.h>
 #include <proto/iffparse.h>
+#ifndef __amigaos4__
 #include <cybergraphx/cybergraphics.h>
+#endif
 #include <devices/rawkeycodes.h>
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
@@ -1172,14 +1174,6 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     if(!DoSuperMethodA (cls, obj, (Msg) msg) )
     {
         ERR("Setup failed");
-        return FALSE;
-    }
-
-    // Make sure that we're running cgfx.
-    if(!GetCyberMapAttr(my->bm, CYBRMATTR_ISCYBERGFX))
-    {
-        ERR("CyberGFX is required");
-        CoerceMethod(cls, obj, MUIM_Cleanup);
         return FALSE;
     }
 
