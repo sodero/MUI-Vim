@@ -5,33 +5,46 @@ sudo: required
 services:
     - docker
 
-before_install:
-    - docker pull amigadev/crosstools:ppc-morphos
-    - docker pull amigadev/crosstools:ppc-amigaos
-
 addons:
     apt:
         update: true
 
-script:
-    - wget -nc http://aminet.net/dev/mui/MCC_TheBar-26.19.lha
-    - wget -nc http://www2m.biglobe.ne.jp/~dolphin/lha/prog/lha-114i.tar.gz
-    - wget https://muidev.de/download/MUI%205.0%20-%20Release/MUI-5.0-2019R2-os4.lha
-    - wget 'http://hyperion-entertainment.biz/index.php/downloads?view=download&amp;format=raw&amp;file=69' -O SDK_53.24.lha
-    - tar xvfz lha-114i.tar.gz
-    - make -C lha-114i
-    - cp lha-114i/src/lha dist
-    - dist/lha ef MCC_TheBar-26.19.lha
-    - dist/lha ef MUI-5.0-2019R2-os4.lha
-    - dist/lha ef SDK_53.24.lha
-    - dist/lha ef SDK_Install/clib2-1.205.lha
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
-    - mkdir artefacts
-    - cp dist/tmp/* artefacts
-    - sudo make clean CC=ppc-morphos-gcc LHA=dist/lha ARC=ppc PRO=echo UNM=MorphOS
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp /opt/ppc-morphos/os-include/devices/rawkeycodes.h .'
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-amigaos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp rawkeycodes.h /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/devices && cp -r SDK/MUI/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp clib2/lib/libauto.a /opt/ppc-amigaos/ppc-amigaos/SDK/clib2/lib && make dist CC=ppc-amigaos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=AmigaOS'
-    - cp dist/tmp/* artefacts
+before_install:
+    - docker pull amigadev/crosstools:ppc-morphos
+    - docker pull amigadev/crosstools:ppc-amigaos
+
+jobs:
+  include:
+    - stage: Download dependencies
+      script: wget -nc -q http://aminet.net/dev/mui/MCC_TheBar-26.19.lha
+      script: wget -nc -q http://www2m.biglobe.ne.jp/~dolphin/lha/prog/lha-114i.tar.gz
+      script: wget -nc -q https://muidev.de/download/MUI%205.0%20-%20Release/MUI-5.0-2019R2-os4.lha
+      script: wget -nc -q 'http://hyperion-entertainment.biz/index.php/downloads?view=download&amp;format=raw&amp;file=69' -O SDK_53.24.lha
+    - stage: Prepare workspace
+      script: mkdir artefacts
+      script: tar xvfz lha-114i.tar.gz
+      script: docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp /opt/ppc-morphos/os-include/devices/rawkeycodes.h .'
+    - stage: Build tools
+      script: make -C lha-114i
+    - stage: Install tools
+      script: cp lha-114i/src/lha dist
+    - stage: Unpack dependencies
+      script: dist/lha efq MCC_TheBar-26.19.lha
+      script: dist/lha efq MUI-5.0-2019R2-os4.lha
+      script: dist/lha efq SDK_53.24.lha
+      script: dist/lha efq SDK_Install/clib2-1.205.lha
+    - stage: MorphOS build
+      script: docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
+    - stage: MorphOS save artefacts
+      script: cp dist/tmp/* artefacts
+    - stage: MorphOS clean up
+      script: sudo make clean CC=ppc-morphos-gcc LHA=dist/lha ARC=ppc PRO=echo UNM=MorphOS
+    - stage: AmigaOS4 build
+      script: docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-amigaos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp rawkeycodes.h /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/devices && cp -r SDK/MUI/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp clib2/lib/libauto.a /opt/ppc-amigaos/ppc-amigaos/SDK/clib2/lib && make dist CC=ppc-amigaos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=AmigaOS'
+    - stage: AmigaOS4 save artefacts
+      script: cp dist/tmp/* artefacts
+    - stage: AmigaOS4 clean up
+      script: sudo make clean CC=ppc-amigaos-gcc LHA=dist/lha ARC=ppc PRO=echo UNM=AmigaOS
 
 deploy:
     provider: releases
