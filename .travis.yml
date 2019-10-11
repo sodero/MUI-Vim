@@ -7,6 +7,7 @@ services:
 
 before_install:
     - docker pull amigadev/crosstools:ppc-morphos
+    - docker pull amigadev/crosstools:ppc-amigaos
 
 addons:
     apt:
@@ -24,6 +25,9 @@ script:
     - dist/lha ef MUI-5.0-2019R2-os4.lha
     - dist/lha ef SDK_53.24.lha
     - dist/lha ef SDK_Install/clib2-1.205.lha
+
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos ls /opt/ppc-morphos/bin/
+
     - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
     - mkdir artefacts
     - cp dist/tmp/* artefacts
