@@ -140,6 +140,7 @@ SRC +=		arabic.c			\
 			bufwrite.c			\
 			change.c			\
 			charset.c			\
+			cindent.c			\
 			cmdhist.c			\
 			cmdexpand.c			\
 			crypt.c				\
