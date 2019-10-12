@@ -1768,6 +1768,25 @@ vgetc(void)
 		c = (*mb_ptr2char)(buf);
 	    }
 
+	    if (!no_reduce_keys)
+	    {
+		// A modifier was not used for a mapping, apply it to ASCII
+		// keys.
+		if ((mod_mask & MOD_MASK_CTRL)
+			&& ((c >= '`' && c <= 0x7f)
+			    || (c >= '@' && c <= '_')))
+		{
+		    c &= 0x1f;
+		    mod_mask &= ~MOD_MASK_CTRL;
+		}
+		if ((mod_mask & (MOD_MASK_META | MOD_MASK_ALT))
+			&& c >= 0 && c <= 127)
+		{
+		    c += 0x80;
+		    mod_mask &= ~(MOD_MASK_META|MOD_MASK_ALT);
+		}
+	    }
+
 	    break;
 	}
     }
@@ -2254,7 +2273,7 @@ handle_mapping(
 		    char_u *p2 = mb_unescape(&p1);
 
 		    if (has_mbyte && p2 != NULL
-					&& MB_BYTE2LEN(tb_c1) > MB_PTR2LEN(p2))
+					&& MB_BYTE2LEN(tb_c1) > mb_ptr2len(p2))
 			mlen = 0;
 		}
 
