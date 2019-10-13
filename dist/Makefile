@@ -9,8 +9,8 @@ ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
 ifeq ($(UNM),AmigaOS)
 ANM:=$(ARC)-amigaos
 ifeq ($(shell uname),AmigaOS)
-# Native compilation
-LHAFLAGS?=-0r a
+# Native compilation (use default compression)
+LHAFLAGS?=-r a
 endif
 #- AROS -----------------------------------------------------------------------------------
 else ifeq ($(UNM),AROS)
@@ -20,8 +20,8 @@ ANM:=$(ARC)-aros
 else ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
 ifeq ($(shell uname),MorphOS)
-# Native compilation
-LHAFLAGS?=-0r a
+# Native compilation (use default compression)
+LHAFLAGS?=-r a
 endif
 #-This is just for testing purposes--------------------------------------------------------
 else ifeq ($(UNM),Darwin)
@@ -38,8 +38,8 @@ ANM:=$(ARC)-unknown
 UNM:="Unknown"
 PRO:=@echo
 endif
-#- Fallback LHA flags used with LHA for Unix ----------------------------------------------
-LHAFLAGS?=a0
+#- Fallback LHA flags (use lha5 for maximum compatibility) --------------------------------
+LHAFLAGS?=ao5
 
 #------------------------------------------------------------------------------------------
 # General settings
