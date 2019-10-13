@@ -39,7 +39,7 @@ UNM:="Unknown"
 PRO:=@echo
 endif
 #- Fallback LHA flags (use lha5 for maximum compatibility) --------------------------------
-LHAFLAGS?=ao5
+LHAFLAGS?=ao5q
 
 #------------------------------------------------------------------------------------------
 # General settings
