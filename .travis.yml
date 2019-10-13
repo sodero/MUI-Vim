@@ -13,6 +13,9 @@ addons:
     apt:
         update: true
 
+git:
+    depth: 1
+
 script:
     - wget -nc -q http://aminet.net/dev/mui/MCC_TheBar-26.19.lha
     - wget -nc -q http://www2m.biglobe.ne.jp/~dolphin/lha/prog/lha-114i.tar.gz
