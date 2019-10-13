@@ -779,9 +779,9 @@ func Test_term_rgb_response()
 endfunc
 
 " This only checks if the sequence is recognized.
-" This must be last, because it has side effects to xterm properties.
-" TODO: check that the values were parsed properly
-func Test_xx_term_style_response()
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx01_term_style_response()
   " Termresponse is only parsed when t_RV is not empty.
   set t_RV=x
 
@@ -793,6 +793,24 @@ func Test_xx_term_style_response()
   let seq = "\<Esc>P1$r2 q\<Esc>\\"
   call feedkeys(seq, 'Lx!')
   call assert_equal(seq, v:termstyleresp)
+
+  set t_RV=
+endfunc
+
+" This checks the libvterm version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+" TODO: check other terminals response
+func Test_xx02_libvterm_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+
+  let seq = "\<Esc>[>0;100;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
 
   set t_RV=
 endfunc
@@ -826,4 +844,185 @@ func Test_get_termcode()
   endif
 
   set ttybuiltin
+endfunc
+
+func GetEscCodeCSI27(key, modifier)
+  let key = printf("%d", char2nr(a:key))
+  let mod = printf("%d", a:modifier)
+  return "\<Esc>[27;" .. mod .. ';' .. key .. '~'
+endfunc
+
+func GetEscCodeCSIu(key, modifier)
+  let key = printf("%d", char2nr(a:key))
+  let mod = printf("%d", a:modifier)
+  return "\<Esc>[" .. key .. ';' .. mod .. 'u'
+endfunc
+
+" This checks the CSI sequences when in modifyOtherKeys mode.
+" The mode doesn't need to be enabled, the codes are always detected.
+func RunTest_modifyOtherKeys(func)
+  new
+  set timeoutlen=10
+
+  " Shift-X is send as 'X' with the shift modifier
+  call feedkeys('a' .. a:func('X', 2) .. "\<Esc>", 'Lx!')
+  call assert_equal('X', getline(1))
+
+  " Ctrl-i is Tab
+  call setline(1, '')
+  call feedkeys('a' .. a:func('i', 5) .. "\<Esc>", 'Lx!')
+  call assert_equal("\t", getline(1))
+
+  " Ctrl-I is also Tab
+  call setline(1, '')
+  call feedkeys('a' .. a:func('I', 5) .. "\<Esc>", 'Lx!')
+  call assert_equal("\t", getline(1))
+
+  " Alt-x is ø
+  call setline(1, '')
+  call feedkeys('a' .. a:func('x', 3) .. "\<Esc>", 'Lx!')
+  call assert_equal("ø", getline(1))
+
+  " Meta-x is also ø
+  call setline(1, '')
+  call feedkeys('a' .. a:func('x', 9) .. "\<Esc>", 'Lx!')
+  call assert_equal("ø", getline(1))
+
+  " Alt-X is Ø
+  call setline(1, '')
+  call feedkeys('a' .. a:func('X', 3) .. "\<Esc>", 'Lx!')
+  call assert_equal("Ø", getline(1))
+
+  " Meta-X is ø
+  call setline(1, '')
+  call feedkeys('a' .. a:func('X', 9) .. "\<Esc>", 'Lx!')
+  call assert_equal("Ø", getline(1))
+
+  bwipe!
+  set timeoutlen&
+endfunc
+
+func Test_modifyOtherKeys_basic()
+  call RunTest_modifyOtherKeys(function('GetEscCodeCSI27'))
+  call RunTest_modifyOtherKeys(function('GetEscCodeCSIu'))
+endfunc
+
+func RunTest_mapping_shift(key, func)
+  call setline(1, '')
+  if a:key == '|'
+    exe 'inoremap \| xyz'
+  else
+    exe 'inoremap ' .. a:key .. ' xyz'
+  endif
+  call feedkeys('a' .. a:func(a:key, 2) .. "\<Esc>", 'Lx!')
+  call assert_equal("xyz", getline(1))
+  if a:key == '|'
+    exe 'iunmap \|'
+  else
+    exe 'iunmap ' .. a:key
+  endif
+endfunc
+
+func RunTest_mapping_works_with_shift(func)
+  new
+  set timeoutlen=10
+
+  call RunTest_mapping_shift('@', a:func)
+  call RunTest_mapping_shift('A', a:func)
+  call RunTest_mapping_shift('Z', a:func)
+  call RunTest_mapping_shift('^', a:func)
+  call RunTest_mapping_shift('_', a:func)
+  call RunTest_mapping_shift('{', a:func)
+  call RunTest_mapping_shift('|', a:func)
+  call RunTest_mapping_shift('}', a:func)
+  call RunTest_mapping_shift('~', a:func)
+
+  bwipe!
+  set timeoutlen&
+endfunc
+
+func Test_mapping_works_with_shift_plain()
+  call RunTest_mapping_works_with_shift(function('GetEscCodeCSI27'))
+  call RunTest_mapping_works_with_shift(function('GetEscCodeCSIu'))
+endfunc
+
+func RunTest_mapping_mods(map, key, func, code)
+  call setline(1, '')
+  exe 'inoremap ' .. a:map .. ' xyz'
+  call feedkeys('a' .. a:func(a:key, a:code) .. "\<Esc>", 'Lx!')
+  call assert_equal("xyz", getline(1))
+  exe 'iunmap ' .. a:map
+endfunc
+
+func RunTest_mapping_works_with_mods(func, mods, code)
+  new
+  set timeoutlen=10
+
+  if a:mods !~ 'S'
+    " Shift by itself has no effect
+    call RunTest_mapping_mods('<' .. a:mods .. '-@>', '@', a:func, a:code)
+  endif
+  call RunTest_mapping_mods('<' .. a:mods .. '-A>', 'A', a:func, a:code)
+  call RunTest_mapping_mods('<' .. a:mods .. '-Z>', 'Z', a:func, a:code)
+  if a:mods !~ 'S'
+    " with Shift code is always upper case
+    call RunTest_mapping_mods('<' .. a:mods .. '-a>', 'a', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-z>', 'z', a:func, a:code)
+  endif
+  if a:mods != 'A'
+    " with Alt code is not in upper case
+    call RunTest_mapping_mods('<' .. a:mods .. '-a>', 'A', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-z>', 'Z', a:func, a:code)
+  endif
+  call RunTest_mapping_mods('<' .. a:mods .. '-á>', 'á', a:func, a:code)
+  if a:mods !~ 'S'
+    " Shift by itself has no effect
+    call RunTest_mapping_mods('<' .. a:mods .. '-^>', '^', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-_>', '_', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-{>', '{', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-\|>', '|', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-}>', '}', a:func, a:code)
+    call RunTest_mapping_mods('<' .. a:mods .. '-~>', '~', a:func, a:code)
+  endif
+
+  bwipe!
+  set timeoutlen&
+endfunc
+
+func Test_mapping_works_with_shift()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'S', 2)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'S', 2)
+endfunc
+  
+func Test_mapping_works_with_ctrl()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'C', 5)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'C', 5)
+endfunc
+
+func Test_mapping_works_with_shift_ctrl()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'C-S', 6)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'C-S', 6)
+endfunc
+
+" Below we also test the "u" code with Alt, This works, but libvterm would not
+" send the Alt key like this but by prefixing an Esc.
+  
+func Test_mapping_works_with_alt()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'A', 3)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'A', 3)
+endfunc
+
+func Test_mapping_works_with_shift_alt()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'S-A', 4)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'S-A', 4)
+endfunc
+
+func Test_mapping_works_with_ctrl_alt()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'C-A', 7)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'C-A', 7)
+endfunc
+
+func Test_mapping_works_with_shift_ctrl_alt()
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSI27'), 'C-S-A', 8)
+  call RunTest_mapping_works_with_mods(function('GetEscCodeCSIu'), 'C-S-A', 8)
 endfunc
