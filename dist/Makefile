@@ -5,13 +5,24 @@ LHA?=lha
 UNM?=$(shell uname)
 ARC?=$(shell uname -m | tr -d ower)
 ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
+#- AmigaOS --------------------------------------------------------------------------------
 ifeq ($(UNM),AmigaOS)
 ANM:=$(ARC)-amigaos
+ifeq ($(shell uname),AmigaOS)
+# Native compilation
+LHAFLAGS?=-0r a
+endif
+#- AROS -----------------------------------------------------------------------------------
 else ifeq ($(UNM),AROS)
+# Native or cross.
 ANM:=$(ARC)-aros
+#- MorphOS --------------------------------------------------------------------------------
 else ifeq ($(UNM),MorphOS)
 ANM:=$(ARC)-morphos
-#LHO:=-3rae
+ifeq ($(shell uname),MorphOS)
+# Native compilation
+LHAFLAGS?=-0r a
+endif
 #-This is just for testing purposes--------------------------------------------------------
 else ifeq ($(UNM),Darwin)
 ANM:=$(ARC)-darwin
@@ -27,6 +38,8 @@ ANM:=$(ARC)-unknown
 UNM:="Unknown"
 PRO:=@echo
 endif
+#- Fallback LHA flags used with LHA for Unix ----------------------------------------------
+LHAFLAGS?=a0
 
 #------------------------------------------------------------------------------------------
 # General settings
@@ -48,7 +61,7 @@ REV?=0
 all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
-	$(LHA) $(LHO) a $@ $(DST) $(DST).info
+	$(LHA) $(LHAFLAGS) $@ $(DST) $(DST).info
 
 #------------------------------------------------------------------------------------------
 # Populate temp
