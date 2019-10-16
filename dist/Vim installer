@@ -49,9 +49,28 @@
         (default @default-dest)
     )
 )
+
 (set @default-dest #dest-root)
 (set @default-dest (tackon @default-dest @app-name))
 (complete 20)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Copy drawer icon in archive. Workaround for bug in MorphOS Installer
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(set drawer_info (pathonly @icon))
+
+(if (= "/" (substr drawer_info (- (strlen drawer_info) 1)))
+    (
+        ; Incompatible Installer, truncate file name.
+        (set drawer_info (substr drawer_info 0 (- (strlen drawer_info) 1)))
+    )
+)
+
+(set drawer_info ("%s.info" drawer_info))
+(copyfiles
+    (source drawer_info)
+    (dest #dest-root)
+)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Copy executables and runtime data. Bail out on skip. No point in continuing.
