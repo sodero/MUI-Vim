@@ -190,7 +190,7 @@
     (prompt #assign_str_p)
     (help #assign_str_h)
     (command ("Assign %s: \"%s\"\nPath ADD >NIL: \"%s\"" @app-name #assign-dir @default-dest))
-    (confirm 1)
+    (confirm)
 )
 (complete 90)
 
