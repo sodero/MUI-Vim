@@ -55,15 +55,13 @@
 (complete 20)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Copy drawer icon in archive. Workaround for bug in MorphOS Installer
+; Copy drawer icon in archive.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (set drawer_info (pathonly @icon))
 
+; Workaround for bug in MorphOS Installer, trailing '/' shouldn't be there.
 (if (= "/" (substr drawer_info (- (strlen drawer_info) 1)))
-    (
-        ; Incompatible Installer, truncate file name.
-        (set drawer_info (substr drawer_info 0 (- (strlen drawer_info) 1)))
-    )
+    (set drawer_info (substr drawer_info 0 (- (strlen drawer_info) 1)))
 )
 
 (set drawer_info ("%s.info" drawer_info))
@@ -84,6 +82,7 @@
             (infos)
             (all)
             (confirm)
+            (optional "force")
         )
     )
     ; else
@@ -105,6 +104,13 @@
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (delete (tackon @default-dest "Vim installer") (infos))
 (delete (tackon @default-dest "INSTALLATION.txt") (infos))
+
+; Workaround for bugs in MorphOS Installer (delete (infos)) is broken, and so
+; is (if (exists..), we need to insert the (= ..) to make it work.
+(if (= (exists (tackon @default-dest "Vim installer.info")) 1)
+    (delete (tackon @default-dest "Vim installer.info"))
+)
+
 (complete 50)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
