@@ -2,7 +2,7 @@
 " If you like to have your own settings (without the risk of
 " overwriting it with a silly install script such as the one
 " provided in this archive), call it .vimrc and place it in
-" home: or s:.
+" s:.
 
 " Don't expand tabs in makefiles
 autocmd FileType make setlocal noexpandtab
