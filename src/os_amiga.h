@@ -41,7 +41,7 @@
 #endif
 
 #ifndef	DFLT_RUNTIMEPATH
-# define DFLT_RUNTIMEPATH "home:vimfiles,$VIM/vimfiles,$VIMRUNTIME,$VIM/vimfiles/after,home:vimfiles/after"
+# define DFLT_RUNTIMEPATH "$VIM/vimfiles,$VIMRUNTIME,$VIM/vimfiles/after"
 #endif
 #ifndef	CLEAN_RUNTIMEPATH
 # define CLEAN_RUNTIMEPATH "$VIM/vimfiles,$VIMRUNTIME,$VIM/vimfiles/after"
