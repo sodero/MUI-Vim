@@ -107,7 +107,9 @@
 (complete 40)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Set script attribute in case the archiver couldn't preserve S (e.g AROS lha).
+; Set script attribute in case the archiver couldn't preserve S (e.g lha for Unix).
+; For some reason (protect) doesn't work in the MorphOS installer but I don't know
+; how to do a workaround (run "protect ..") doesn't work either. File handler bug?
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (protect (tackon @default-dest "gVim") "+s")
 (protect (tackon @default-dest "vi") "+s")

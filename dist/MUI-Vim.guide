@@ -5,6 +5,7 @@
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
+@{" Installation     " LINK "Installation"} Installing MUI-Vim
 @{" Compatibility    " LINK "Compatibility"} Plugin compatibility
 @{" Limitations      " LINK "Limitations"} Known limitations
 @{" Contributions    " LINK "Contributions"} List of contributors
@@ -25,34 +26,16 @@ A port of Vim including a MUI GUI.
 @TOC "Main"
 @{B}Installing MUI-Vim@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}TODO@{UB}
-Copy everything in this archive, including subdirectories,
-to a directory of your choice, e.g "Work:Tools/Vim".
-
-For every file F in this directory ending with ".info_",
-rename this file to "F.info".
-
-Create an Assign, preferably in s:user-startup, pointing to
-the "runtime" subdirectory of the directory where the Vim
-executable is located. In the example above, that would result
-in the following line being added to your user-startup:
-
-"Assign VIM: Work:Tools/Vim/runtime >NIL:"
-
-If you'd like to start Vim from the workbench you need to add
-"C:IconX" as the "Tool" for the "gvim" project icon. You also
-need to set the S-flag of "gvim" (using "protect gvim srwed")
-
-If you intend to run Vim from the shell it's probably a good
-idea to add the directory of the Vim executable to your path.
-
+The recommended method of installation is to use the included installer.
 @ENDNODE
 
 @NODE "Compatibility" "Notes on plugin compatibility"
 @TOC "Main"
 @{B}Notes on plugin compatibility@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-TODO
+MUI-Vim should work with plugins that use Vim script. Python and perl plugins
+will not work. There are exceptions to this, e.g NetRW will sometimes lead to
+crashes.
 
 @ENDNODE
 
@@ -60,14 +43,8 @@ TODO
 @TOC "Main"
 @{B}Known limitations@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-On MorphOS Vim can't detect the console size in a MUI Shell. When using the
-standard shell (MorphOS, AROS and AmigaOS), Vim can detect the console size
-on startup, but if you resize the window after startup a refresh is needed
-(using ctrl+l) to make things things look the way they should again.
-
-AROS currently seems to ignore the TxSpacing member of struct RastPort. This
-results in graphical glitches when using anything but non smearing bitmaps
-fonts.
+Running MUI-Vim in text mode (from shell) isn't the best experience. The size
+of the console window can't be detected by Vim.
 
 @ENDNODE
 
@@ -75,9 +52,14 @@ fonts.
 @TOC "Main"
 @{B}Contributions@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}kas1e@{UB}: AmigaOS4 port, numerous improvements, fixes and ideas.
-@{B}Martin Merz@{UB}: Icons and toolbar graphics.
-@{B}Tom Crecelius@{UB}: Hollywood syntax highlighting.
+@{B}kas1e@{UB}:
+AmigaOS4 port, numerous improvements, fixes and ideas.
+
+@{B}Martin Merz@{UB}:
+Icons and toolbar graphics.
+
+@{B}Tom Crecelius@{UB}:
+Hollywood syntax highlighting.
 
 @ENDNODE
 
@@ -85,8 +67,8 @@ fonts.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2019-TBD-TBD@{UB}
-- Update to VIM 8.1.TBD.
+@{B}2019-10-TBD@{UB}
+- Update to VIM 8.1.2146.
 - Hollywood syntax highlighting (Tom Crecelius).
 - Amiga Installer script filetype detection fix.
 
