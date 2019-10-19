@@ -39,7 +39,7 @@ UNM:="Unknown"
 PRO:=@echo
 endif
 #- Fallback LHA flags (use lha5 for maximum compatibility) --------------------------------
-LHAFLAGS?=ao5q
+LHAFLAGS?=ao5
 
 #------------------------------------------------------------------------------------------
 # General settings
@@ -61,7 +61,8 @@ REV?=0
 all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
-	$(LHA) $(LHAFLAGS) $@ $(DST) $(DST).info
+	$(LHA) $(LHAFLAGS) $@ $(DST)
+	$(LHA) $(LHAFLAGS) $@ $(DST).info
 
 #------------------------------------------------------------------------------------------
 # Populate temp

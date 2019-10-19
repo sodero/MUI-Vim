@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 8.1.TBD (20.09.19) english
+@$VER: MUI-Vim.guide 8.1.2146 (20.10.19) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -26,16 +26,15 @@ A port of Vim including a MUI GUI.
 @TOC "Main"
 @{B}Installing MUI-Vim@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-The recommended method of installation is to use the included installer.
+The recommended method of installation is using the included installer.
 @ENDNODE
 
 @NODE "Compatibility" "Notes on plugin compatibility"
 @TOC "Main"
 @{B}Notes on plugin compatibility@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-MUI-Vim should work with plugins that use Vim script. Python and perl plugins
-will not work. There are exceptions to this, e.g NetRW will sometimes lead to
-crashes.
+MUI-Vim should work with plugins that use Vim script. There are exceptions to
+this, e.g NetRW which will crash badly occasionally.
 
 @ENDNODE
 
@@ -67,7 +66,7 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2019-10-TBD@{UB}
+@{B}2019-10-20@{UB}
 - Update to VIM 8.1.2146.
 - Hollywood syntax highlighting (Tom Crecelius).
 - Amiga Installer script filetype detection fix.
