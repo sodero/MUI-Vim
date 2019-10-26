@@ -72,6 +72,14 @@ func MouseMiddleClick(row, col)
   endif
 endfunc
 
+func MouseRightClick(row, col)
+  if &ttymouse ==# 'dec'
+    call DecEscapeCode(6, 1, a:row, a:col)
+  else
+    call TerminalEscapeCode(2, a:row, a:col, 'M')
+  endif
+endfunc
+
 func MouseCtrlLeftClick(row, col)
   let ctrl = 0x10
   call TerminalEscapeCode(0 + ctrl, a:row, a:col, 'M')
@@ -101,7 +109,11 @@ func MouseMiddleRelease(row, col)
 endfunc
 
 func MouseRightRelease(row, col)
-  call TerminalEscapeCode(3, a:row, a:col, 'm')
+  if &ttymouse ==# 'dec'
+    call DecEscapeCode(7, 0, a:row, a:col)
+  else
+    call TerminalEscapeCode(3, a:row, a:col, 'm')
+  endif
 endfunc
 
 func MouseLeftDrag(row, col)
@@ -139,6 +151,79 @@ func Test_term_mouse_left_click()
     call MouseLeftClick(row, col)
     call MouseLeftRelease(row, col)
     call assert_equal([0, 2, 6, 0], getpos('.'), msg)
+  endfor
+
+  let &mouse = save_mouse
+  let &term = save_term
+  let &ttymouse = save_ttymouse
+  call test_override('no_query_mouse', 0)
+  bwipe!
+endfunc
+
+func Test_xterm_mouse_right_click_extends_visual()
+  if has('mac')
+    throw "Skipped: test right click in visual mode does not work on macOs (why?)"
+  endif
+  let save_mouse = &mouse
+  let save_term = &term
+  let save_ttymouse = &ttymouse
+  call test_override('no_query_mouse', 1)
+  set mouse=a term=xterm
+
+  for visual_mode in ["v", "V", "\<C-V>"]
+    for ttymouse_val in s:ttymouse_values + s:ttymouse_dec
+      let msg = 'visual=' .. visual_mode .. ' ttymouse=' .. ttymouse_val
+      exe 'set ttymouse=' .. ttymouse_val
+
+      call setline(1, repeat([repeat('-', 7)], 7))
+      call MouseLeftClick(4, 4)
+      call MouseLeftRelease(4, 4)
+      exe  "norm! " .. visual_mode
+
+      " Right click extends top left of visual area.
+      call MouseRightClick(2, 2)
+      call MouseRightRelease(2, 2)
+
+      " Right click extends bottom bottom right of visual area.
+      call MouseRightClick(6, 6)
+      call MouseRightRelease(6, 6)
+      norm! r1gv
+
+      " Right click shrinks top left of visual area.
+      call MouseRightClick(3, 3)
+      call MouseRightRelease(3, 3)
+
+      " Right click shrinks bottom right of visual area.
+      call MouseRightClick(5, 5)
+      call MouseRightRelease(5, 5)
+      norm! r2
+
+      if visual_mode ==# 'v'
+        call assert_equal(['-------',
+              \            '-111111',
+              \            '1122222',
+              \            '2222222',
+              \            '2222211',
+              \            '111111-',
+              \            '-------'], getline(1, '$'), msg)
+      elseif visual_mode ==# 'V'
+        call assert_equal(['-------',
+              \            '1111111',
+              \            '2222222',
+              \            '2222222',
+              \            '2222222',
+              \            '1111111',
+              \            '-------'], getline(1, '$'), msg)
+      else
+        call assert_equal(['-------',
+              \            '-11111-',
+              \            '-12221-',
+              \            '-12221-',
+              \            '-12221-',
+              \            '-11111-',
+              \            '-------'], getline(1, '$'), msg)
+      endif
+    endfor
   endfor
 
   let &mouse = save_mouse
@@ -797,17 +882,149 @@ func Test_xx01_term_style_response()
   set t_RV=
 endfunc
 
+" This checks the iTerm2 version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx02_iTerm2_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  " Old versions of iTerm2 used a different style term response.
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;95;c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('xterm', &ttymouse)
+
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;95;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  set t_RV=
+endfunc
+
 " This checks the libvterm version response.
 " This must be after other tests, because it has side effects to xterm
 " properties.
-" TODO: check other terminals response
-func Test_xx02_libvterm_response()
+func Test_xx03_libvterm_response()
   " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;100;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  set t_RV=
+endfunc
+
+" This checks the Mac Terminal.app version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx04_Mac_Terminal_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>1;95;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  " Reset is_not_xterm and is_mac_terminal.
+  set t_RV=
+  set term=xterm
+  set t_RV=x
+endfunc
+
+" This checks the mintty version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx05_mintty_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>77;20905;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  set t_RV=
+endfunc
+
+" This checks the screen version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx06_screen_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  " Old versions of screen don't support SGR mouse mode.
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>83;40500;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('xterm', &ttymouse)
+
+  " screen supports SGR mouse mode starting in version 4.7.
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>83;40700;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  set t_RV=
+endfunc
+
+" This checks the xterm version response.
+" This must be after other tests, because it has side effects to xterm
+" properties.
+func Test_xx07_xterm_response()
+  " Termresponse is only parsed when t_RV is not empty.
+  set t_RV=x
+
+  " Do Terminal.app first to check that is_mac_terminal is reset.
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>1;95;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('sgr', &ttymouse)
+
+  " xterm < 95: "xterm" (actually unmodified)
+  set t_RV=
+  set term=xterm
   set t_RV=x
   set ttymouse=xterm
   call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;94;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('xterm', &ttymouse)
 
-  let seq = "\<Esc>[>0;100;0c"
+  " xterm >= 95 < 277 "xterm2"
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;267;0c"
+  call feedkeys(seq, 'Lx!')
+  call assert_equal(seq, v:termresponse)
+  call assert_equal('xterm2', &ttymouse)
+
+  " xterm >= 277: "sgr"
+  set ttymouse=xterm
+  call test_option_not_set('ttymouse')
+  let seq = "\<Esc>[>0;277;0c"
   call feedkeys(seq, 'Lx!')
   call assert_equal(seq, v:termresponse)
   call assert_equal('sgr', &ttymouse)
