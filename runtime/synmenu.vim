@@ -47,44 +47,45 @@ an 50.10.180 &Syntax.AB.AfLex :cal SetSyn("aflex")<CR>
 an 50.10.190 &Syntax.AB.ALSA\ config :cal SetSyn("alsaconf")<CR>
 an 50.10.200 &Syntax.AB.Altera\ AHDL :cal SetSyn("ahdl")<CR>
 an 50.10.210 &Syntax.AB.Amiga\ DOS :cal SetSyn("amiga")<CR>
-an 50.10.220 &Syntax.AB.AMPL :cal SetSyn("ampl")<CR>
-an 50.10.230 &Syntax.AB.Ant\ build\ file :cal SetSyn("ant")<CR>
-an 50.10.240 &Syntax.AB.ANTLR :cal SetSyn("antlr")<CR>
-an 50.10.250 &Syntax.AB.Apache\ config :cal SetSyn("apache")<CR>
-an 50.10.260 &Syntax.AB.Apache-style\ config :cal SetSyn("apachestyle")<CR>
-an 50.10.270 &Syntax.AB.Applix\ ELF :cal SetSyn("elf")<CR>
-an 50.10.280 &Syntax.AB.APT\ config :cal SetSyn("aptconf")<CR>
-an 50.10.290 &Syntax.AB.Arc\ Macro\ Language :cal SetSyn("aml")<CR>
-an 50.10.300 &Syntax.AB.Arch\ inventory :cal SetSyn("arch")<CR>
-an 50.10.310 &Syntax.AB.Arduino :cal SetSyn("arduino")<CR>
-an 50.10.320 &Syntax.AB.ART :cal SetSyn("art")<CR>
-an 50.10.330 &Syntax.AB.Ascii\ Doc :cal SetSyn("asciidoc")<CR>
-an 50.10.340 &Syntax.AB.ASP\ with\ VBScript :cal SetSyn("aspvbs")<CR>
-an 50.10.350 &Syntax.AB.ASP\ with\ Perl :cal SetSyn("aspperl")<CR>
-an 50.10.360 &Syntax.AB.Assembly.680x0 :cal SetSyn("asm68k")<CR>
-an 50.10.370 &Syntax.AB.Assembly.AVR :cal SetSyn("avra")<CR>
-an 50.10.380 &Syntax.AB.Assembly.Flat :cal SetSyn("fasm")<CR>
-an 50.10.390 &Syntax.AB.Assembly.GNU :cal SetSyn("asm")<CR>
-an 50.10.400 &Syntax.AB.Assembly.GNU\ H-8300 :cal SetSyn("asmh8300")<CR>
-an 50.10.410 &Syntax.AB.Assembly.Intel\ IA-64 :cal SetSyn("ia64")<CR>
-an 50.10.420 &Syntax.AB.Assembly.Microsoft :cal SetSyn("masm")<CR>
-an 50.10.430 &Syntax.AB.Assembly.Netwide :cal SetSyn("nasm")<CR>
-an 50.10.440 &Syntax.AB.Assembly.PIC :cal SetSyn("pic")<CR>
-an 50.10.450 &Syntax.AB.Assembly.Turbo :cal SetSyn("tasm")<CR>
-an 50.10.460 &Syntax.AB.Assembly.VAX\ Macro\ Assembly :cal SetSyn("vmasm")<CR>
-an 50.10.470 &Syntax.AB.Assembly.Z-80 :cal SetSyn("z8a")<CR>
-an 50.10.480 &Syntax.AB.Assembly.xa\ 6502\ cross\ assember :cal SetSyn("a65")<CR>
-an 50.10.490 &Syntax.AB.ASN\.1 :cal SetSyn("asn")<CR>
-an 50.10.500 &Syntax.AB.Asterisk\ config :cal SetSyn("asterisk")<CR>
-an 50.10.510 &Syntax.AB.Asterisk\ voicemail\ config :cal SetSyn("asteriskvm")<CR>
-an 50.10.520 &Syntax.AB.Atlas :cal SetSyn("atlas")<CR>
-an 50.10.530 &Syntax.AB.Autodoc :cal SetSyn("autodoc")<CR>
-an 50.10.540 &Syntax.AB.AutoHotKey :cal SetSyn("autohotkey")<CR>
-an 50.10.550 &Syntax.AB.AutoIt :cal SetSyn("autoit")<CR>
-an 50.10.560 &Syntax.AB.Automake :cal SetSyn("automake")<CR>
-an 50.10.570 &Syntax.AB.Avenue :cal SetSyn("ave")<CR>
-an 50.10.580 &Syntax.AB.Awk :cal SetSyn("awk")<CR>
-an 50.10.590 &Syntax.AB.AYacc :cal SetSyn("ayacc")<CR>
+an 50.50.220 &Syntax.AB.AmigaGuide :cal SetSyn("amigaguide")<CR>
+an 50.10.230 &Syntax.AB.AMPL :cal SetSyn("ampl")<CR>
+an 50.10.240 &Syntax.AB.Ant\ build\ file :cal SetSyn("ant")<CR>
+an 50.10.250 &Syntax.AB.ANTLR :cal SetSyn("antlr")<CR>
+an 50.10.260 &Syntax.AB.Apache\ config :cal SetSyn("apache")<CR>
+an 50.10.270 &Syntax.AB.Apache-style\ config :cal SetSyn("apachestyle")<CR>
+an 50.10.280 &Syntax.AB.Applix\ ELF :cal SetSyn("elf")<CR>
+an 50.10.290 &Syntax.AB.APT\ config :cal SetSyn("aptconf")<CR>
+an 50.10.300 &Syntax.AB.Arc\ Macro\ Language :cal SetSyn("aml")<CR>
+an 50.10.310 &Syntax.AB.Arch\ inventory :cal SetSyn("arch")<CR>
+an 50.10.320 &Syntax.AB.Arduino :cal SetSyn("arduino")<CR>
+an 50.10.330 &Syntax.AB.ART :cal SetSyn("art")<CR>
+an 50.10.340 &Syntax.AB.Ascii\ Doc :cal SetSyn("asciidoc")<CR>
+an 50.10.350 &Syntax.AB.ASP\ with\ VBScript :cal SetSyn("aspvbs")<CR>
+an 50.10.360 &Syntax.AB.ASP\ with\ Perl :cal SetSyn("aspperl")<CR>
+an 50.10.370 &Syntax.AB.Assembly.680x0 :cal SetSyn("asm68k")<CR>
+an 50.10.380 &Syntax.AB.Assembly.AVR :cal SetSyn("avra")<CR>
+an 50.10.390 &Syntax.AB.Assembly.Flat :cal SetSyn("fasm")<CR>
+an 50.10.400 &Syntax.AB.Assembly.GNU :cal SetSyn("asm")<CR>
+an 50.10.410 &Syntax.AB.Assembly.GNU\ H-8300 :cal SetSyn("asmh8300")<CR>
+an 50.10.420 &Syntax.AB.Assembly.Intel\ IA-64 :cal SetSyn("ia64")<CR>
+an 50.10.430 &Syntax.AB.Assembly.Microsoft :cal SetSyn("masm")<CR>
+an 50.10.440 &Syntax.AB.Assembly.Netwide :cal SetSyn("nasm")<CR>
+an 50.10.450 &Syntax.AB.Assembly.PIC :cal SetSyn("pic")<CR>
+an 50.10.460 &Syntax.AB.Assembly.Turbo :cal SetSyn("tasm")<CR>
+an 50.10.470 &Syntax.AB.Assembly.VAX\ Macro\ Assembly :cal SetSyn("vmasm")<CR>
+an 50.10.480 &Syntax.AB.Assembly.Z-80 :cal SetSyn("z8a")<CR>
+an 50.10.490 &Syntax.AB.Assembly.xa\ 6502\ cross\ assember :cal SetSyn("a65")<CR>
+an 50.10.500 &Syntax.AB.ASN\.1 :cal SetSyn("asn")<CR>
+an 50.10.510 &Syntax.AB.Asterisk\ config :cal SetSyn("asterisk")<CR>
+an 50.10.520 &Syntax.AB.Asterisk\ voicemail\ config :cal SetSyn("asteriskvm")<CR>
+an 50.10.530 &Syntax.AB.Atlas :cal SetSyn("atlas")<CR>
+an 50.10.540 &Syntax.AB.Autodoc :cal SetSyn("autodoc")<CR>
+an 50.10.550 &Syntax.AB.AutoHotKey :cal SetSyn("autohotkey")<CR>
+an 50.10.560 &Syntax.AB.AutoIt :cal SetSyn("autoit")<CR>
+an 50.10.570 &Syntax.AB.Automake :cal SetSyn("automake")<CR>
+an 50.10.580 &Syntax.AB.Avenue :cal SetSyn("ave")<CR>
+an 50.10.590 &Syntax.AB.Awk :cal SetSyn("awk")<CR>
+an 50.10.600 &Syntax.AB.AYacc :cal SetSyn("ayacc")<CR>
 an 50.10.610 &Syntax.AB.B :cal SetSyn("b")<CR>
 an 50.10.620 &Syntax.AB.Baan :cal SetSyn("baan")<CR>
 an 50.10.630 &Syntax.AB.Basic.FreeBasic :cal SetSyn("freebasic")<CR>

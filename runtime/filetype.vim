@@ -88,6 +88,9 @@ endif
 " AHDL
 au BufNewFile,BufRead *.tdf			setf ahdl
 
+" AmigaGuide
+au BufRead,BufNewFile *.guide		setf amigaguide
+
 " AMPL
 au BufNewFile,BufRead *.run			setf ampl
 

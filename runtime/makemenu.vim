@@ -60,6 +60,7 @@ SynMenu AB.AfLex:aflex
 SynMenu AB.ALSA\ config:alsaconf
 SynMenu AB.Altera\ AHDL:ahdl
 SynMenu AB.Amiga\ DOS:amiga
+SynMenu AB.AmigaGuide\ AmigaGuide:amigaguide
 SynMenu AB.AMPL:ampl
 SynMenu AB.Ant\ build\ file:ant
 SynMenu AB.ANTLR:antlr

@@ -68,6 +68,7 @@ Hollywood syntax highlighting.
 @{B}-----------------------------------------------------------------------------@{UB}
 @{B}2019-NOT-YET@{UB}
 - Update to VIM 8.1.X.
+- AmigaGuide syntax highlighting.
 
 @{B}2019-10-20@{UB}
 - Update to VIM 8.1.2146.
