@@ -66,6 +66,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2019-NOT-YET@{UB}
+- Update to VIM 8.1.X.
+
 @{B}2019-10-20@{UB}
 - Update to VIM 8.1.2146.
 - Hollywood syntax highlighting (Tom Crecelius).

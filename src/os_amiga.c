@@ -1818,14 +1818,3 @@ mch_setenv(char *var, char *value, int x)
 	return 0;   /* success */
     return -1;	    /* failure */
 }
-
-/*
- * Set mouse clicks on or off.
- */
-    void
-mch_setmouse(int on)
-{
-    /* Implement this. */
-    (void) on;
-}
-
