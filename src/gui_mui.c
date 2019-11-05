@@ -123,7 +123,11 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 #define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
 #define CLASS_DATA(C) C ## Data
 #define TAGBASE_sTx (TAG_USER | 27<<16)
-#define MUIDSP static inline __attribute__((always_inline))
+#ifdef __GNUC__
+# define MUIDSP static inline __attribute__((always_inline))
+#else
+# define MUIDSP static inline
+#endif
 
 //------------------------------------------------------------------------------
 // Global variables - Console, menu and toolbar
