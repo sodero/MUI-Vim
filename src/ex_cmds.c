@@ -4960,7 +4960,7 @@ prepare_tagpreview(
 	{
 	    wp = popup_find_preview_window();
 	    if (wp != NULL)
-		popup_set_wantpos_cursor(wp, wp->w_minwidth);
+		popup_set_wantpos_cursor(wp, wp->w_minwidth, NULL);
 	}
 	else if (use_popup != USEPOPUP_NONE)
 	{
@@ -4971,6 +4971,9 @@ prepare_tagpreview(
 		    popup_show(wp);
 		else
 		    popup_hide(wp);
+		// When the popup moves or resizes it may reveal part of
+		// another window.  TODO: can this be done more efficiently?
+		redraw_all_later(NOT_VALID);
 	    }
 	}
 	else

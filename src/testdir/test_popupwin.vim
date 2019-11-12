@@ -12,6 +12,7 @@ func Test_simple_popup()
 	call setline(1, range(1, 100))
 	hi PopupColor1 ctermbg=lightblue
 	hi PopupColor2 ctermbg=lightcyan
+	hi EndOfBuffer ctermbg=lightgrey
 	hi Comment ctermfg=red
 	call prop_type_add('comment', #{highlight: 'Comment'})
 	let winid = popup_create('hello there', #{line: 3, col: 11, minwidth: 20, highlight: 'PopupColor1'})
@@ -388,9 +389,9 @@ func Test_popup_nospace()
 	      \ border: [],
 	      \ })
 	" cursor in a line in top half, using "topleft" with popup that
-	" doesn't fit and "posinvert" set: flips to below.
+	" doesn't fit and "posinvert" set: flips to above.
 	normal 8G44|r%
-	let winid1 = popup_create(['one', 'two', 'tee'], #{
+	let winid1 = popup_create(['one', 'two', 'tee', 'fou', 'fiv'], #{
 	      \ line: 'cursor+1',
 	      \ col: 'cursor',
 	      \ pos: 'topleft',
@@ -1294,6 +1295,42 @@ func Test_popup_atcursor()
   bwipe!
 endfunc
 
+func Test_popup_atcursor_pos()
+  CheckScreendump
+
+  let lines =<< trim END
+	call setline(1, repeat([repeat('-', 60)], 15))
+	set so=0
+
+	normal 9G3|r#
+	let winid1 = popup_atcursor(['first', 'second'], #{
+	      \ moved: [0, 0, 0],
+	      \ })
+	normal 9G21|r&
+	let winid1 = popup_atcursor(['FIrsT', 'SEcoND'], #{
+	      \ pos: 'botright',
+	      \ moved: [0, 0, 0],
+	      \ })
+	normal 3G27|r%
+	let winid1 = popup_atcursor(['fiRSt', 'seCOnd'], #{
+	      \ pos: 'topleft',
+	      \ moved: [0, 0, 0],
+	      \ })
+	normal 3G45|r@
+	let winid1 = popup_atcursor(['First', 'SeconD'], #{
+	      \ pos: 'topright',
+	      \ moved: [0, 0, 0],
+	      \ })
+  END
+  call writefile(lines, 'XtestPopupAtcursorPos')
+  let buf = RunVimInTerminal('-S XtestPopupAtcursorPos', #{rows: 12})
+  call VerifyScreenDump(buf, 'Test_popupwin_atcursor_pos', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupAtcursorPos')
+endfunc
+
 func Test_popup_beval()
   CheckScreendump
   CheckFeature balloon_eval_term
@@ -2161,6 +2198,47 @@ func Test_popupwin_filter_mode()
   call assert_equal('y', s:typed)
   call assert_equal('something', @x)  " yank command is filtered out
   call feedkeys('v', 'xt')  " end Visual mode
+
+  call popup_close(winid)
+  delfunc MyPopupFilter
+endfunc
+
+func Test_popupwin_filter_mouse()
+  func MyPopupFilter(winid, c)
+    let g:got_mouse_col = v:mouse_col
+    let g:got_mouse_lnum = v:mouse_lnum
+    let g:got_mouse_winid = v:mouse_winid
+    return 0
+  endfunc
+
+  let winid = popup_create(['short', 'long line that will wrap', 'short'], #{
+	\ line: 4,
+	\ col: 8,
+	\ maxwidth: 12,
+	\ filter: 'MyPopupFilter',
+	\ })
+  redraw
+  call test_setmouse(4, 8)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call assert_equal(1, g:got_mouse_col)
+  call assert_equal(1, g:got_mouse_lnum)
+  call assert_equal(winid, g:got_mouse_winid)
+
+  call test_setmouse(5, 8)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call assert_equal(1, g:got_mouse_col)
+  call assert_equal(2, g:got_mouse_lnum)
+
+  call test_setmouse(6, 8)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call assert_equal(13, g:got_mouse_col)
+  call assert_equal(2, g:got_mouse_lnum)
+
+  call test_setmouse(7, 20)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call assert_equal(13, g:got_mouse_col)
+  call assert_equal(3, g:got_mouse_lnum)
+  call assert_equal(winid, g:got_mouse_winid)
 
   call popup_close(winid)
   delfunc MyPopupFilter
