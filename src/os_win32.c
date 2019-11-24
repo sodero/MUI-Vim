@@ -921,14 +921,6 @@ static const struct
 };
 
 
-#ifdef _MSC_VER
-// The ToAscii bug destroys several registers.	Need to turn off optimization
-// or the GetConsoleKeyboardLayoutName hack will fail in non-debug versions
-# pragma warning(push)
-# pragma warning(disable: 4748)
-# pragma optimize("", off)
-#endif
-
 #if defined(__GNUC__) && !defined(__MINGW32__)  && !defined(__CYGWIN__)
 # define UChar UnicodeChar
 #else
@@ -980,20 +972,6 @@ win32_kbd_patch_key(
 
     return s_iIsDead;
 }
-
-#ifdef _MSC_VER
-/* MUST switch optimization on again here, otherwise a call to
- * decode_key_event() may crash (e.g. when hitting caps-lock) */
-# pragma optimize("", on)
-# pragma warning(pop)
-
-# if (_MSC_VER < 1100)
-/* MUST turn off global optimisation for this next function, or
- * pressing ctrl-minus in insert mode crashes Vim when built with
- * VC4.1. -- negri. */
-#  pragma optimize("g", off)
-# endif
-#endif
 
 static BOOL g_fJustGotFocus = FALSE;
 
@@ -1119,10 +1097,6 @@ decode_key_event(
 
     return (*pch != NUL);
 }
-
-#ifdef _MSC_VER
-# pragma optimize("", on)
-#endif
 
 #endif /* FEAT_GUI_MSWIN */
 
@@ -4660,8 +4634,8 @@ mch_call_shell(
 		++cmdbase;
 
 	// Check the command does not begin with "start "
-	if (cmdbase == NULL
-		|| STRNICMP(cmdbase, "start", 5) != 0 || !VIM_ISWHITE(cmdbase[5]))
+	if (cmdbase == NULL || STRNICMP(cmdbase, "start", 5) != 0
+						   || !VIM_ISWHITE(cmdbase[5]))
 	{
 	    // Use a terminal window to run the command in.
 	    x = mch_call_shell_terminal(cmd, options);
@@ -7269,6 +7243,11 @@ mch_setenv(char *var, char *value, int x UNUSED)
 #define CONPTY_1903_BUILD	    MAKE_VER(10, 0, 18362)
 
 /*
+ * version 1909 (November 2019 update).
+ */
+#define CONPTY_1909_BUILD	    MAKE_VER(10, 0, 18363)
+
+/*
  * Confirm until this version.  Also the logic changes.
  * insider preview.
  */
@@ -7308,6 +7287,8 @@ vtp_flag_init(void)
 
     if (ver <= CONPTY_INSIDER_BUILD)
 	conpty_type = 3;
+    if (ver <= CONPTY_1909_BUILD)
+	conpty_type = 2;
     if (ver <= CONPTY_1903_BUILD)
 	conpty_type = 2;
     if (ver < CONPTY_FIRST_SUPPORT_BUILD)

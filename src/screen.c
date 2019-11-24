@@ -2406,7 +2406,7 @@ check_for_delay(int check_msg_scroll)
 	    && emsg_silent == 0)
     {
 	out_flush();
-	ui_delay(1000L, TRUE);
+	ui_delay(1006L, TRUE);
 	emsg_on_display = FALSE;
 	if (check_msg_scroll)
 	    msg_scroll = FALSE;
@@ -4041,19 +4041,6 @@ showmode(void)
 		msg_puts_attr(" XIM", attr);
 # endif
 #endif
-#if defined(FEAT_HANGULIN) && defined(FEAT_GUI)
-	    if (gui.in_use)
-	    {
-		if (hangul_input_state_get())
-		{
-		    /* HANGUL */
-		    if (enc_utf8)
-			msg_puts_attr(" \355\225\234\352\270\200", attr);
-		    else
-			msg_puts_attr(" \307\321\261\333", attr);
-		}
-	    }
-#endif
 	    /* CTRL-X in Insert mode */
 	    if (edit_submode != NULL && !shortmess(SHM_COMPLETIONMENU))
 	    {
@@ -4615,7 +4602,7 @@ number_width(win_T *wp)
 # ifdef FEAT_SIGNS
     // If 'signcolumn' is set to 'number' and there is a sign to display, then
     // the minimal width for the number column is 2.
-    if (n < 2 && (wp->w_buffer->b_signlist != NULL)
+    if (n < 2 && get_first_valid_sign(wp) != NULL
 	    && (*wp->w_p_scl == 'n' && *(wp->w_p_scl + 1) == 'u'))
 	n = 2;
 # endif

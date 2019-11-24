@@ -52,6 +52,8 @@ static int	ccheck_abbr(int);
 
 #ifdef FEAT_CMDWIN
 static int	open_cmdwin(void);
+
+static int	cedit_key INIT(= -1);	// key value of 'cedit' option
 #endif
 
 
@@ -195,6 +197,7 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
     exarg_T	ea;
     pos_T	save_cursor;
     int		use_last_pat;
+    int		retval = FALSE;
 
     *skiplen = 0;
     *patlen = ccline.cmdlen;
@@ -211,6 +214,7 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
     if (firstc != ':')
 	return FALSE;
 
+    ++emsg_off;
     vim_memset(&ea, 0, sizeof(ea));
     ea.line1 = 1;
     ea.line2 = 1;
@@ -222,13 +226,13 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
 
     cmd = skip_range(ea.cmd, NULL);
     if (vim_strchr((char_u *)"sgvl", *cmd) == NULL)
-	return FALSE;
+	goto theend;
 
     // Skip over "substitute" to find the pattern separator.
     for (p = cmd; ASCII_ISALPHA(*p); ++p)
 	;
     if (*skipwhite(p) == NUL)
-	return FALSE;
+	goto theend;
 
     if (STRNCMP(cmd, "substitute", p - cmd) == 0
 	    || STRNCMP(cmd, "smagic", p - cmd) == 0
@@ -246,7 +250,7 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
 	while (ASCII_ISALPHA(*(p = skipwhite(p))))
 	    ++p;
 	if (*p == NUL)
-	    return FALSE;
+	    goto theend;
     }
     else if (STRNCMP(cmd, "vimgrep", MAX(p - cmd, 3)) == 0
 	|| STRNCMP(cmd, "vimgrepadd", MAX(p - cmd, 8)) == 0
@@ -259,13 +263,13 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
 	{
 	    p++;
 	    if (*skipwhite(p) == NUL)
-		return FALSE;
+		goto theend;
 	}
 	if (*cmd != 'g')
 	    delim_optional = TRUE;
     }
     else
-	return FALSE;
+	goto theend;
 
     p = skipwhite(p);
     delim = (delim_optional && vim_isIDc(*p)) ? ' ' : *p++;
@@ -274,7 +278,7 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
     use_last_pat = end == p && *end == delim;
 
     if (end == p && !use_last_pat)
-	return FALSE;
+	goto theend;
 
     // Don't do 'hlsearch' highlighting if the pattern matches everything.
     if (!use_last_pat)
@@ -286,7 +290,7 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
 	empty = empty_pattern(p);
 	*end = c;
 	if (empty)
-	    return FALSE;
+	    goto theend;
     }
 
     // found a non-empty pattern or //
@@ -319,7 +323,10 @@ do_incsearch_highlighting(int firstc, incsearch_state_T *is_state,
     }
 
     curwin->w_cursor = save_cursor;
-    return TRUE;
+    retval = TRUE;
+theend:
+    --emsg_off;
+    return retval;
 }
 
     static void
@@ -2460,6 +2467,60 @@ getcmdline_prompt(
 #endif
 
 /*
+ * Read the 'wildmode' option, fill wim_flags[].
+ */
+    int
+check_opt_wim(void)
+{
+    char_u	new_wim_flags[4];
+    char_u	*p;
+    int		i;
+    int		idx = 0;
+
+    for (i = 0; i < 4; ++i)
+	new_wim_flags[i] = 0;
+
+    for (p = p_wim; *p; ++p)
+    {
+	for (i = 0; ASCII_ISALPHA(p[i]); ++i)
+	    ;
+	if (p[i] != NUL && p[i] != ',' && p[i] != ':')
+	    return FAIL;
+	if (i == 7 && STRNCMP(p, "longest", 7) == 0)
+	    new_wim_flags[idx] |= WIM_LONGEST;
+	else if (i == 4 && STRNCMP(p, "full", 4) == 0)
+	    new_wim_flags[idx] |= WIM_FULL;
+	else if (i == 4 && STRNCMP(p, "list", 4) == 0)
+	    new_wim_flags[idx] |= WIM_LIST;
+	else if (i == 8 && STRNCMP(p, "lastused", 8) == 0)
+	    new_wim_flags[idx] |= WIM_BUFLASTUSED;
+	else
+	    return FAIL;
+	p += i;
+	if (*p == NUL)
+	    break;
+	if (*p == ',')
+	{
+	    if (idx == 3)
+		return FAIL;
+	    ++idx;
+	}
+    }
+
+    /* fill remaining entries with last flag */
+    while (idx < 3)
+    {
+	new_wim_flags[idx + 1] = new_wim_flags[idx];
+	++idx;
+    }
+
+    /* only when there are no errors, wim_flags[] is changed */
+    for (i = 0; i < 4; ++i)
+	wim_flags[i] = new_wim_flags[i];
+    return OK;
+}
+
+/*
  * Return TRUE when the text must not be changed and we can't switch to
  * another window or buffer.  Used when editing the command line, evaluating
  * 'balloonexpr', etc.
@@ -4027,6 +4088,27 @@ get_list_range(char_u **str, int *num1, int *num2)
 }
 
 #if defined(FEAT_CMDWIN) || defined(PROTO)
+/*
+ * Check value of 'cedit' and set cedit_key.
+ * Returns NULL if value is OK, error message otherwise.
+ */
+    char *
+check_cedit(void)
+{
+    int n;
+
+    if (*p_cedit == NUL)
+	cedit_key = -1;
+    else
+    {
+	n = string_to_key(p_cedit, FALSE);
+	if (vim_isprintc(n))
+	    return e_invarg;
+	cedit_key = n;
+    }
+    return NULL;
+}
+
 /*
  * Open a window on the current command line and history.  Allow editing in
  * the window.  Returns when the window is closed.

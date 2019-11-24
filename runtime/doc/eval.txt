@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.1.  Last change: 2019 Nov 06
+*eval.txt*	For Vim version 8.1.  Last change: 2019 Nov 21
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -488,7 +488,7 @@ as a key.
 To avoid having to put quotes around every key the #{} form can be used.  This
 does require the key to consist only of ASCII letters, digits, '-' and '_'.
 Example: >
-	let mydict = #{zero: 0, one_key: 1, two-key: 2, 333: 3}
+	:let mydict = #{zero: 0, one_key: 1, two-key: 2, 333: 3}
 Note that 333 here is the string "333".  Empty keys are not possible with #{}.
 
 A value can be any expression.  Using a Dictionary for a value creates a
@@ -1956,15 +1956,11 @@ v:mouse_winid	Window ID for a mouse click obtained with |getchar()|.
 
 					*v:mouse_lnum* *mouse_lnum-variable*
 v:mouse_lnum	Line number for a mouse click obtained with |getchar()|.
-		Also used for a click in a popup window when the filter is
-		invoked.
 		This is the text line number, not the screen line number.  The
 		value is zero when there was no mouse button click.
 
 					*v:mouse_col* *mouse_col-variable*
 v:mouse_col	Column number for a mouse click obtained with |getchar()|.
-		Also used for a click in a popup window when the filter is
-		invoked.
 		This is the screen column number, like with |virtcol()|.  The
 		value is zero when there was no mouse button click.
 
@@ -2484,6 +2480,7 @@ getline({lnum})			String	line {lnum} of current buffer
 getline({lnum}, {end})		List	lines {lnum} to {end} of current buffer
 getloclist({nr} [, {what}])	List	list of location list items
 getmatches([{win}])		List	list of current matches
+getmousepos()			Dict	last known mouse position
 getpid()			Number	process ID of Vim
 getpos({expr})			List	position of cursor, mark, etc.
 getqflist([{what}])		List	list of quickfix items
@@ -2670,7 +2667,7 @@ remote_read({serverid} [, {timeout}])
 remote_send({server}, {string} [, {idvar}])
 				String	send key sequence
 remote_startserver({name})	none	become server {name}
-remove({list}, {idx} [, {end}])	any/List 
+remove({list}, {idx} [, {end}])	any/List
 					remove items {idx}-{end} from {list}
 remove({blob}, {idx} [, {end}])	Number/Blob
 					remove bytes {idx}-{end} from {blob}
@@ -2773,7 +2770,7 @@ strchars({expr} [, {skipcc}])	Number	character length of the String {expr}
 strcharpart({str}, {start} [, {len}])
 				String	{len} characters of {str} at {start}
 strdisplaywidth({expr} [, {col}]) Number display length of the String {expr}
-strftime({format} [, {time}])	String	time in specified format
+strftime({format} [, {time}])	String	format time with a specified format
 strgetchar({str}, {index})	Number	get char {index} from {str}
 stridx({haystack}, {needle} [, {start}])
 				Number	index of {needle} in {haystack}
@@ -2781,6 +2778,8 @@ string({expr})			String	String representation of {expr} value
 strlen({expr})			Number	length of the String {expr}
 strpart({str}, {start} [, {len}])
 				String	{len} characters of {str} at {start}
+strptime({format}, {timestring})
+				Number	Convert {timestring} to unix timestamp
 strridx({haystack}, {needle} [, {start}])
 				Number	last index of {needle} in {haystack}
 strtrans({expr})		String	translate string to make it printable
@@ -4922,8 +4921,9 @@ getchar([expr])						*getchar()*
 
 		When the user clicks a mouse button, the mouse event will be
 		returned.  The position can then be found in |v:mouse_col|,
-		|v:mouse_lnum|, |v:mouse_winid| and |v:mouse_win|.  This
-		example positions the mouse as it would normally happen: >
+		|v:mouse_lnum|, |v:mouse_winid| and |v:mouse_win|.
+		|getmousepos()| can also be used.  This example positions the
+		mouse as it would normally happen: >
 			let c = getchar()
 			if c == "\<LeftMouse>" && v:mouse_win > 0
 			  exe v:mouse_win . "wincmd w"
@@ -5333,6 +5333,35 @@ getmatches([{win}])					*getmatches()*
 			'pattern': 'FIXME', 'priority': 10, 'id': 2}] >
 			:unlet m
 <
+getmousepos()						*getmousepos()*
+		Returns a Dictionary with the last known position of the
+		mouse.  This can be used in a mapping for a mouse click or in
+		a filter of a popup window.  The items are:
+			screenrow	screen row
+			screencol	screen column
+			winid		Window ID of the click
+			winrow		row inside "winid"
+			wincol		column inside "winid"
+			line		text line inside "winid"
+			column		text column inside "winid"
+		All numbers are 1-based.
+
+		If not over a window, e.g. when in the command line, then only
+		"screenrow" and "screencol" are valid, the others are zero.
+
+		When on the status line below a window or the vertical
+		separater right of a window, the "line" and "column" values
+		are zero.
+
+		When the position is after the text then "column" is the
+		length of the text in bytes.
+
+		If the mouse is over a popup window then that window is used.
+
+
+		When using |getchar()| the Vim variables |v:mouse_lnum|,
+		|v:mouse_col| and |v:mouse_winid| also provide these values.
+
 							*getpid()*
 getpid()	Return a Number which is the process ID of the Vim process.
 		On Unix and MS-Windows this is a unique number, until Vim
@@ -5607,7 +5636,7 @@ getwininfo([{winid}])					*getwininfo()*
 			terminal	1 if a terminal window
 					{only with the +terminal feature}
 			tabnr		tab page number
-			topline		first displayed buffer line 
+			topline		first displayed buffer line
 			variables	a reference to the dictionary with
 					window-local variables
 			width		window width
@@ -5625,7 +5654,7 @@ getwininfo([{winid}])					*getwininfo()*
 
 getwinpos([{timeout}])					*getwinpos()*
 		The result is a list with two numbers, the result of
-		getwinposx() and getwinposy() combined:
+		|getwinposx()| and |getwinposy()| combined:
 			[x-pos, y-pos]
 		{timeout} can be used to specify how long to wait in msec for
 		a response from the terminal.  When omitted 100 msec is used.
@@ -6587,7 +6616,7 @@ listener_remove({id})					*listener_remove()*
 
 localtime()						*localtime()*
 		Return the current time, measured as seconds since 1st Jan
-		1970.  See also |strftime()| and |getftime()|.
+		1970.  See also |strftime()|, |strptime()| and |getftime()|.
 
 
 log({expr})						*log()*
@@ -7076,9 +7105,9 @@ mkdir({name} [, {path} [, {prot}]])
 
 		There is no error if the directory already exists and the "p"
 		flag is passed (since patch 8.0.1708).  However, without the
-		"p" option the call will fail.  
+		"p" option the call will fail.
 
-		The function result is a Number, which is 1 if the call was 
+		The function result is a Number, which is 1 if the call was
 		successful or 0 if the directory creation failed or partly
 		failed.
 
@@ -9240,7 +9269,7 @@ strftime({format} [, {time}])				*strftime()*
 		{format} depends on your system, thus this is not portable!
 		See the manual page of the C function strftime() for the
 		format.  The maximum length of the result is 80 characters.
-		See also |localtime()| and |getftime()|.
+		See also |localtime()|, |getftime()| and |strptime()|.
 		The language can be changed with the |:language| command.
 		Examples: >
 		  :echo strftime("%c")		   Sun Apr 27 11:49:23 1997
@@ -9340,6 +9369,34 @@ strpart({src}, {start} [, {len}])			*strpart()*
 <
 		Can also be used as a |method|: >
 			GetText()->strpart(5)
+
+strptime({format}, {timestring})				*strptime()*
+		The result is a Number, which is a unix timestamp representing
+		the date and time in {timestring}, which is expected to match
+		the format specified in {format}.
+
+		The accepted {format} depends on your system, thus this is not
+		portable!  See the manual page of the C function strptime()
+		for the format.  Especially avoid "%c".  The value of $TZ also
+		matters.
+
+		If the {timestring} cannot be parsed with {format} zero is
+		returned.  If you do not know the format of {timestring} you
+		can try different {format} values until you get a non-zero
+		result.
+
+		See also |strftime()|.
+		Examples: >
+		  :echo strptime("%Y %b %d %X", "1997 Apr 27 11:49:23")
+<		  862156163 >
+		  :echo strftime("%c", strptime("%y%m%d %T", "970427 11:53:55"))
+<		  Sun Apr 27 11:53:55 1997 >
+		  :echo strftime("%c", strptime("%Y%m%d%H%M%S", "19970427115355") + 3600)
+<		  Sun Apr 27 12:53:55 1997
+
+		Not available on all systems.  To check use: >
+			:if exists("*strptime")
+
 
 strridx({haystack}, {needle} [, {start}])			*strridx()*
 		The result is a Number, which gives the byte index in
@@ -11558,21 +11615,6 @@ text...
 			Unlock the internal variable {name}.  Does the
 			opposite of |:lockvar|.
 
-							*:eval*
-:eval {expr}		Evaluate {expr} and discard the result.  Example: >
-				:eval Getlist()->Filter()->append('$')
-
-<			The expression is supposed to have a side effect,
-			since the resulting value is not used.  In the example
-			the `append()` call appends the List with text to the
-			buffer.  This is similar to `:call` but works with any
-			expression.
-
-			The command can be shortened to `:ev` or `:eva`, but
-			these are hard to recognize and therefore not to be
-			used.
-
-
 :if {expr1}			*:if* *:end* *:endif* *:en* *E171* *E579* *E580*
 :en[dif]		Execute the commands until the next matching ":else"
 			or ":endif" if {expr1} evaluates to non-zero.
@@ -11859,6 +11901,21 @@ text...
 			And to get a beep: >
 		:exe "normal \<Esc>"
 <
+							*:eval*
+:eval {expr}		Evaluate {expr} and discard the result.  Example: >
+				:eval Getlist()->Filter()->append('$')
+
+<			The expression is supposed to have a side effect,
+			since the resulting value is not used.  In the example
+			the `append()` call appends the List with text to the
+			buffer.  This is similar to `:call` but works with any
+			expression.
+
+			The command can be shortened to `:ev` or `:eva`, but
+			these are hard to recognize and therefore not to be
+			used.
+
+
 							*:exe* *:execute*
 :exe[cute] {expr1} ..	Executes the string that results from the evaluation
 			of {expr1} as an Ex command.
