@@ -85,6 +85,7 @@ indenttest:
 #    overwritten!
 #    To do all this you need the Unix archive and compiled binaries.
 #    Before creating an archive first delete all backup files, *.orig, etc.
+endif
 
 MAJOR = 8
 MINOR = 2
@@ -245,6 +246,7 @@ VERSION = $(MAJOR)$(MINOR)
 VDOT	= $(MAJOR).$(MINOR)
 VIMRTDIR = vim$(VERSION)
 
+ifeq ("bloody","boring")
 # Vim used for conversion from "unix" to "dos"
 VIM	= vim
 
