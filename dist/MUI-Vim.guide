@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 8.1.2146 (20.10.19) english
+@$VER: MUI-Vim.guide 8.2.25 (21.12.19) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,7 +67,7 @@ Hollywood syntax highlighting.
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{B}2019-12-21@{UB}
-- Update to VIM 8.2.0025.
+- Update to VIM 8.2.25.
 - AmigaGuide syntax highlighting.
 
 @{B}2019-10-20@{UB}
@@ -80,7 +80,7 @@ Hollywood syntax highlighting.
 
 @{B}2019-02-16@{UB}
 - Amiga Installer script V44 syntax highlighting.
-- Update to VIM 8.1.0932.
+- Update to VIM 8.1.932.
 
 @{B}2018-10-23@{UB}
 - Minor fix in Amiga Installer script syntax highlighting.
