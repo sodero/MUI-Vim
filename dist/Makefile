@@ -63,6 +63,13 @@ all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 $(DST)_$(VER)-$(ANM).lha: $(DST)/vim
 	$(LHA) $(LHAFLAGS) $@ $(DST)
 	$(LHA) $(LHAFLAGS) $@ $(DST).info
+ifeq ($(UNM),AROS)
+	# This is a weird workaround for a problem that I don't understand;
+	# for some reason these two directories are left out on AROS unless
+	# they are explicitly included.
+	$(LHA) $(LHAFLAGS) $@ $(DST)/runtime/tutor
+	$(LHA) $(LHAFLAGS) $@ $(DST)/runtime/tools
+endif
 
 #------------------------------------------------------------------------------------------
 # Populate temp
