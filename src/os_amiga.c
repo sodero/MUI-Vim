@@ -225,7 +225,7 @@ mch_avail_mem(int special)
 #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
     return (long_u)AvailMem(MEMF_ANY) >> 10;
 #else
-    return (long_u) (AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
+    return (long_u)(AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
 #endif
 }
 
@@ -749,9 +749,7 @@ mch_settitle(char_u *title, char_u *icon)
     }
 #endif
     if (wb_window != NULL && title != NULL)
-    {
-       SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
-    }
+	SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
 }
 
 /*
@@ -985,7 +983,6 @@ mch_isdir(char_u *name)
 	retval = ((fib->fib_DirEntryType >= 0) ? TRUE : FALSE);
 	free_fib(fib);
     }
-
     return retval;
 }
 
@@ -998,7 +995,7 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock)
+    if (lock != NULL)
     {
 	UnLock(lock);
 	return 0;
@@ -1193,9 +1190,9 @@ mch_get_shellsize(void)
 	term_console = FALSE;
 	goto out;
     }
-    if (!oldwindowtitle)
+    if (oldwindowtitle == NULL)
 	oldwindowtitle = (char_u *)wb_window->Title;
-    if (!id->id_InUse)
+    if (id->id_InUse == (BPTR)NULL)
     {
 	mch_errmsg(_("mch_get_shellsize: not a console??\n"));
 	return FAIL;
@@ -1382,7 +1379,7 @@ mch_call_shell(
 # ifdef FEAT_ARP
 	if (dos2)
 # endif
-	    x = SystemTags(cmd, SYS_UserShell, TRUE, TAG_DONE);
+	    x = SystemTags((char *)cmd, SYS_UserShell, TRUE, TAG_DONE);
 # ifdef FEAT_ARP
 	else
 	    x = Execute((char *)cmd, 0L, raw_out);
@@ -1602,8 +1599,8 @@ mch_expandpath(
     struct AnchorPath	*Anchor;
     LONG		Result;
     char_u		*starbuf, *sp, *dp;
-    int			start_len = gap->ga_len;
-    int			matches = 0;
+    int			start_len;
+    int			matches;
 #ifdef __amigaos4__
     struct TagItem	AnchorTags[] = {
 	{ADO_Strlen, ANCHOR_BUF_SIZE},
@@ -1612,7 +1609,9 @@ mch_expandpath(
     };
 #endif
 
-    /* Get our AnchorBase */
+    start_len = gap->ga_len;
+
+    // Get our AnchorBase
 #ifdef __amigaos4__
     Anchor = AllocDosObject(DOS_ANCHORPATH, AnchorTags);
 #else
