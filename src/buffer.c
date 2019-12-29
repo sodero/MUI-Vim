@@ -2702,6 +2702,15 @@ ExpandBufnames(
 	    {
 		if (!buf->b_p_bl)	// skip unlisted buffers
 		    continue;
+#ifdef FEAT_DIFF
+		if (options & BUF_DIFF_FILTER)
+		    // Skip buffers not suitable for
+		    // :diffget or :diffput completion.
+		    if (buf == curbuf
+			    || !diff_mode_buf(curbuf) || !diff_mode_buf(buf))
+			continue;
+#endif
+
 		p = buflist_match(&regmatch, buf, p_wic);
 		if (p != NULL)
 		{
@@ -3746,19 +3755,17 @@ maketitle(void)
 	    if (stl_syntax & STL_IN_TITLE)
 	    {
 		int	use_sandbox = FALSE;
-		int	save_called_emsg = called_emsg;
+		int	called_emsg_before = called_emsg;
 
 # ifdef FEAT_EVAL
 		use_sandbox = was_set_insecurely((char_u *)"titlestring", 0);
 # endif
-		called_emsg = FALSE;
 		build_stl_str_hl(curwin, title_str, sizeof(buf),
 					      p_titlestring, use_sandbox,
 					      0, maxlen, NULL, NULL);
-		if (called_emsg)
+		if (called_emsg > called_emsg_before)
 		    set_string_option_direct((char_u *)"titlestring", -1,
 					   (char_u *)"", OPT_FREE, SID_ERROR);
-		called_emsg |= save_called_emsg;
 	    }
 	    else
 #endif
@@ -3879,19 +3886,17 @@ maketitle(void)
 	    if (stl_syntax & STL_IN_ICON)
 	    {
 		int	use_sandbox = FALSE;
-		int	save_called_emsg = called_emsg;
+		int	called_emsg_before = called_emsg;
 
 # ifdef FEAT_EVAL
 		use_sandbox = was_set_insecurely((char_u *)"iconstring", 0);
 # endif
-		called_emsg = FALSE;
 		build_stl_str_hl(curwin, icon_str, sizeof(buf),
 						    p_iconstring, use_sandbox,
 						    0, 0, NULL, NULL);
-		if (called_emsg)
+		if (called_emsg > called_emsg_before)
 		    set_string_option_direct((char_u *)"iconstring", -1,
 					   (char_u *)"", OPT_FREE, SID_ERROR);
-		called_emsg |= save_called_emsg;
 	    }
 	    else
 #endif
