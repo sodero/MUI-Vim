@@ -85,7 +85,7 @@ static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
 static BPTR		raw_out = (BPTR)NULL;
-static int		close_win = FALSE;  /* set if Vim opened the window */
+static int		close_win = FALSE;  // set if Vim opened the window
 
 /* Use autoopen for AmigaOS4, AROS and MorphOS */
 #if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
@@ -1145,9 +1145,58 @@ mch_screenmode(char_u *arg)
 #endif
 
 /*
- * try to get the real window size
- * return FAIL for failure, OK otherwise
+ * Try to get console size in a system friendly way.
+ * Return FAIL for failure, OK otherwise
  */
+#ifdef NEW_SHELLSIZE
+int mch_get_shellsize(void)
+{
+    if(!term_console)
+    {
+        return FAIL;
+    }
+
+    if(GetConsoleTask())
+    {
+        BPTR con = Open("CONSOLE:", MODE_OLDFILE);
+
+        if(con)
+        {
+            const char ctrl[] = "\x9b""0 q",
+                       scan[] = "\x9b""1;1;%d;%d r",
+                       answ[sizeof(scan) + 8] = { '\0' };
+
+            // Set RAW mode.
+            SetMode(con, 1);
+
+            // Write control sequence to CON.
+            if(Write(con, ctrl, sizeof(ctrl)) == sizeof(ctrl))
+            {
+                // Read return sequence from CON.
+                if(Read(con, answ, sizeof(answ) - 1) > 0)
+                {
+                    // Parse result and set Vim globals.
+                    if (sscanf(answ, scan, &Rows, &Columns) == 2)
+                    {
+                        Close(con);
+                        return OK;
+                    }
+                }
+            }
+
+            // Failed writing to CON.
+            Close(con);
+        }
+    }
+
+    // No console or I/O error. Default size fallback.
+    term_console = FALSE;
+    Columns = 80;
+    Rows = 24;
+
+    return FAIL;
+}
+#else // NEW_SHELLSIZE
     int
 mch_get_shellsize(void)
 {
@@ -1218,6 +1267,7 @@ out:
 
     return FAIL;
 }
+#endif // NEW_SHELLSIZE
 
 /*
  * Try to set the real window size to Rows and Columns.
