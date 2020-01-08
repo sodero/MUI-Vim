@@ -1,15 +1,36 @@
 ; Vim
-; $VER: Vim 8.1
+; $VER: Vim 8.2
 
 (set @app-name "Vim")
-(set @default-dest "RAM:")
+(set @default-dest (getassign "VIM"))
 (set #root "")
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Workaround for bug in MorphOS Installer, cut trailing '/'.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(procedure p_chomp path
+    (if (= "/" (substr path (- (strlen path) 1)))
+        (set path (substr path 0 (- (strlen path) 1)))
+    )
+    (cat path)
+)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; If this is a fresh install, default destination is T:, VIM:// otherwise.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(set @default-dest (p_chomp (expandpath @default-dest)))
+(set @default-dest ("%s///" @default-dest))
+
+(if (= (exists @default-dest) 2)
+    (set @default-dest (expandpath @default-dest))
+    (set @default-dest "T:")
+)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Strings
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (set #grey_str_c1 "Mason")
-(set #grey_str_c2 "Grey")
+(set #grey_str_c2 "Grey and dull")
 
 (if (= @language "svenska")
     (
@@ -49,9 +70,19 @@
         (default @default-dest)
     )
 )
+
 (set @default-dest #dest-root)
 (set @default-dest (tackon @default-dest @app-name))
 (complete 20)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Copy drawer icon in archive.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Workaround for bug in MorphOS Installer, cut trailing '/'.
+(copyfiles
+    (source ("%s.info" (p_chomp (pathonly @icon))))
+    (dest #dest-root)
+)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Copy executables and runtime data. Bail out on skip. No point in continuing.
@@ -65,6 +96,7 @@
             (infos)
             (all)
             (confirm)
+            (optional "force")
         )
     )
     ; else
@@ -75,7 +107,9 @@
 (complete 40)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Set script attribute in case the archiver couldn't preserve S (e.g AROS lha).
+; Set script attribute in case the archiver couldn't preserve S (e.g lha for Unix).
+; For some reason (protect) doesn't work in the MorphOS installer but I don't know
+; how to do a workaround (run "protect ..") doesn't work either. File handler bug?
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (protect (tackon @default-dest "gVim") "+s")
 (protect (tackon @default-dest "vi") "+s")
@@ -86,6 +120,15 @@
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (delete (tackon @default-dest "Vim installer") (infos))
 (delete (tackon @default-dest "INSTALLATION.txt") (infos))
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Workaround for bugs in MorphOS Installer (delete (infos)) is broken, and so
+; is (if (exists..), we need to insert the (= ..) to make it work.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(if (= (exists (tackon @default-dest "Vim installer.info")) 1)
+    (delete (tackon @default-dest "Vim installer.info"))
+)
+
 (complete 50)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
@@ -165,7 +208,7 @@
     (prompt #assign_str_p)
     (help #assign_str_h)
     (command ("Assign %s: \"%s\"\nPath ADD >NIL: \"%s\"" @app-name #assign-dir @default-dest))
-    (confirm 1)
+    (confirm)
 )
 (complete 90)
 

@@ -16,6 +16,7 @@ void mch_settitle(char_u *title, char_u *icon);
 void mch_restore_title(int which);
 int mch_can_restore_title(void);
 int mch_can_restore_icon(void);
+void mch_setmouse(int on);
 int mch_get_user_name(char_u *s, int len);
 void mch_get_host_name(char_u *s, int len);
 long mch_get_pid(void);
@@ -44,4 +45,5 @@ int mch_has_exp_wildcard(char_u *p);
 int mch_has_wildcard(char_u *p);
 char_u *mch_getenv(char_u *var);
 int mch_setenv(char *var, char *value, int x);
+void mch_setmouse(int on);
 /* vim: set ft=c : */

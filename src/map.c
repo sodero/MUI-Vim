@@ -554,7 +554,7 @@ do_map(
 		for ( ; mp != NULL && !got_int; mp = mp->m_next)
 		{
 		    // check entries with the same mode
-		    if ((mp->m_mode & mode) != 0)
+		    if (!mp->m_simplified && (mp->m_mode & mode) != 0)
 		    {
 			if (!haskey)		    // show all entries
 			{
@@ -599,15 +599,19 @@ do_map(
 		for (mp = *mpp; mp != NULL && !got_int; mp = *mpp)
 		{
 
-		    if (!(mp->m_mode & mode))   // skip entries with wrong mode
+		    if ((mp->m_mode & mode) == 0)
 		    {
+			// skip entries with wrong mode
 			mpp = &(mp->m_next);
 			continue;
 		    }
 		    if (!haskey)	// show all entries
 		    {
-			showmap(mp, map_table != maphash);
-			did_it = TRUE;
+			if (!mp->m_simplified)
+			{
+			    showmap(mp, map_table != maphash);
+			    did_it = TRUE;
+			}
 		    }
 		    else	// do we have a match?
 		    {
@@ -643,8 +647,11 @@ do_map(
 			    }
 			    else if (!hasarg)	// show matching entry
 			    {
-				showmap(mp, map_table != maphash);
-				did_it = TRUE;
+				if (!mp->m_simplified)
+				{
+				    showmap(mp, map_table != maphash);
+				    did_it = TRUE;
+				}
 			    }
 			    else if (n != len)	// new entry is ambiguous
 			    {
@@ -690,7 +697,7 @@ do_map(
 #ifdef FEAT_EVAL
 				    mp->m_expr = expr;
 				    mp->m_script_ctx = current_sctx;
-				    mp->m_script_ctx.sc_lnum += sourcing_lnum;
+				    mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
 #endif
 				    did_it = TRUE;
 				}
@@ -789,7 +796,7 @@ do_map(
 #ifdef FEAT_EVAL
 	mp->m_expr = expr;
 	mp->m_script_ctx = current_sctx;
-	mp->m_script_ctx.sc_lnum += sourcing_lnum;
+	mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
 #endif
 
 	// add the new entry in front of the abbrlist or maphash[] list
@@ -1908,16 +1915,15 @@ check_map_keycodes(void)
     char_u	*p;
     int		i;
     char_u	buf[3];
-    char_u	*save_name;
     int		abbr;
     int		hash;
     buf_T	*bp;
 
     validate_maphash();
-    save_name = sourcing_name;
-    sourcing_name = (char_u *)"mappings"; // avoids giving error messages
+    // avoids giving error messages
+    estack_push(ETYPE_INTERNAL, (char_u *)"mappings", 0);
 
-    // This this once for each buffer, and then once for global
+    // Do this once for each buffer, and then once for global
     // mappings/abbreviations with bp == NULL
     for (bp = firstbuf; ; bp = bp->b_next)
     {
@@ -1972,7 +1978,7 @@ check_map_keycodes(void)
 	if (bp == NULL)
 	    break;
     }
-    sourcing_name = save_name;
+    estack_pop();
 }
 
 #if defined(FEAT_EVAL) || defined(PROTO)
