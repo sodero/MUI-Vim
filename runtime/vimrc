@@ -30,7 +30,8 @@ set viminfo+=nVIM:viminfo
 " Hack to disable the netrw plugin. Its file / dir browser
 " doesn't work very well on Amiga like systems, it will in
 " fact crash Vim completely in some cases.
-let g:loaded_netrwPlugin = "v156"
+let g:loaded_netrw       = 1
+let g:loaded_netrwPlugin = 1
 
 " Disable matchparen and matchparen++ since these plugins
 " are too slow for most Amigas / clones.
@@ -38,5 +39,5 @@ let g:loaded_matchparen = 1
 
 " Make syntax highlightning sloppy to save time.
 syntax sync minlines=128
-set synmaxcol=80
+set synmaxcol=160
 syntax on
