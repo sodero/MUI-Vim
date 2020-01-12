@@ -1156,40 +1156,40 @@ int mch_get_shellsize(void)
         return FAIL;
     }
 
-    if(GetConsoleTask())
+    if(raw_in && raw_out)
     {
-        BPTR con = Open("CONSOLE:", MODE_OLDFILE);
+        // Save current term mode.
+        int old_tmode = cur_tmode;
 
-        if(con)
-        {
-            const char ctrl[] = "\x9b""0 q",
-                       scan[] = "\x9b""1;1;%d;%d r",
+        // Set RAW term mode.
+        mch_settmode(TMODE_RAW);
+
+        const char ctrl[] = "\x9b""0 q";
+
+	// Write control sequence to term.
+	if(Write(raw_out, ctrl, sizeof(ctrl)) == sizeof(ctrl))
+	{
+            const char scan[] = "\x9b""1;1;%d;%d r",
                        answ[sizeof(scan) + 8] = { '\0' };
 
-            // Set RAW mode.
-            SetMode(con, 1);
+	    // Read return sequence from input.
+	    if(Read(raw_in, answ, sizeof(answ) - 1) > 0)
+	    {
+		// Parse result and set Vim globals.
+		if(sscanf(answ, scan, &Rows, &Columns) == 2)
+		{
+                    // Restore term mode.
+                    mch_settmode(old_tmode);
+		    return OK;
+		}
+	    }
+	}
 
-            // Write control sequence to CON.
-            if(Write(con, ctrl, sizeof(ctrl)) == sizeof(ctrl))
-            {
-                // Read return sequence from CON.
-                if(Read(con, answ, sizeof(answ) - 1) > 0)
-                {
-                    // Parse result and set Vim globals.
-                    if (sscanf(answ, scan, &Rows, &Columns) == 2)
-                    {
-                        Close(con);
-                        return OK;
-                    }
-                }
-            }
-
-            // Failed writing to CON.
-            Close(con);
-        }
+        // Restore term mode.
+        mch_settmode(old_tmode);
     }
 
-    // No console or I/O error. Default size fallback.
+    // I/O error. Default size fallback.
     term_console = FALSE;
     Columns = 80;
     Rows = 24;
