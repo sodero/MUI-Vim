@@ -42,8 +42,8 @@ this, e.g NetRW which will crash badly occasionally.
 @TOC "Main"
 @{B}Known limitations@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-Running MUI-Vim in text mode (from shell) isn't the best experience. The size
-of the console window can't be detected by Vim.
+When running Vim in text mode, window resizing isn't detected by Vim. After a
+window resize, press Ctrl + L to resize and redraw the Vim console.
 
 @ENDNODE
 
@@ -66,8 +66,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2019-NOT-YET@{UB}
+@{B}2020-NOT-YET@{UB}
 - Update to VIM 8.2.XYZ.
+- Vim now correctly detects initial Window size when executed in text mode.
 
 @{B}2019-12-21@{UB}
 - Update to VIM 8.2.25.

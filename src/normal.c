@@ -3380,11 +3380,11 @@ nv_clear(cmdarg_T *cap)
 {
     if (!checkclearop(cap->oap))
     {
-#if defined(__MORPHOS__) || defined(__BEOS__) && !USE_THREAD_FOR_INPUT_WITH_TIMEOUT
+#if defined(__AROS__) || defined(__amigaos4__) || defined(__MORPHOS__) || defined(__BEOS__) && !USE_THREAD_FOR_INPUT_WITH_TIMEOUT
 	/*
-	 * Right now, the BeBox and MorphOS doesn't seem to have an easy way to detect
-	 * window resizing, so we cheat and make the user detect it
-	 * manually with CTRL-L instead
+	 * Right now, AROS, AmigaOS4, MorphOS and the BeBox and don't
+	 * seem to have an easy way to detect window resizing, so we
+	 * cheat and make the user detect it manually with CTRL-L instead
 	 */
 	ui_get_shellsize();
 #endif
