@@ -288,7 +288,7 @@ add_char_buff(buffheader_T *buf, int c)
 	    temp[3] = NUL;
 	}
 #ifdef FEAT_GUI
-	else if (c == CSI)
+	else if (gui.in_use && c == CSI)
 	{
 	    // Translate a CSI to a CSI - KS_EXTRA - KE_CSI sequence
 	    temp[0] = CSI;
@@ -726,7 +726,7 @@ read_redo(int init, int old_redo)
 		p += 2;
 	    }
 #ifdef FEAT_GUI
-	    if (c == CSI)	// escaped CSI
+	    if (gui.in_use && c == CSI)	// escaped CSI
 		p += 2;
 #endif
 	    if (*++p == NUL && bp->b_next != NULL)
