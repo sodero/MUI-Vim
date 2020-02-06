@@ -39,11 +39,15 @@
         (set #destination_str_h "")
         (set #copy_str_p "Kopierar program och programdata...")
         (set #toolbar_str_p "Vänligen välj knappradstema")
-
         (set #assign_str_p "Skapa tilldelning och utöka sökvägen i \"user-startup\"?")
         (set #assign_str_h "")
+        (set #install_str_p "Vänligen välj vilka / vilken variant(er) av Vim som ska installeras")
+        (set #install_str_h "")
+        (set #gvim_str "gVim - Full Vim med GUI")
+        (set #vi_str "Vi - Endast konsollgränssnitt")
+        (set #egvim_str "egVim - Lägeslös 'easy' Vim med GUI")
     )
-; else
+    ; else
     (
         (set #welcome_str "Welcome to the Vim installer")
         (set #destination_str_p "Please choose a location for installing Vim.\nA drawer called \"Vim\" will be created there.")
@@ -52,6 +56,11 @@
         (set #toolbar_str_p "Please choose toolbar theme")
         (set #assign_str_p "Create Vim assign and add Vim to path in \"user-startup\"?")
         (set #assign_str_h "")
+        (set #install_str_p "Please choose what flavor(s) of Vim to install")
+        (set #install_str_h "")
+        (set #gvim_str "gVim - Full Vim with GUI")
+        (set #vi_str "Vi - Console only interface")
+        (set #egvim_str "egVim - Modeless 'easy' Vim with GUI")
     )
 )
 
@@ -59,6 +68,22 @@
 ; Welcome
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (welcome #welcome_str_p)
+
+;---------------------------------------------------------------------------------------------------------------------------------------------
+; Choose what to install. Exit if there's nothing to do.
+;---------------------------------------------------------------------------------------------------------------------------------------------
+(set #gvim 1 #vi 2 #egvim 4)
+(set #install
+    (askoptions
+        (prompt #install_str_p)
+        (help #install_str_h)
+        (default (bitor #gvim #vi))
+        (choices #gvim_str #vi_str #egvim_str)
+    )
+)
+(if (= #install 0)
+    (exit (quiet))
+)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Choose destination
@@ -70,7 +95,6 @@
         (default @default-dest)
     )
 )
-
 (set @default-dest #dest-root)
 (set @default-dest (tackon @default-dest @app-name))
 (complete 20)
@@ -78,46 +102,50 @@
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Copy drawer icon in archive.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Workaround for bug in MorphOS Installer, cut trailing '/'.
 (copyfiles
     (source ("%s.info" (p_chomp (pathonly @icon))))
     (dest #dest-root)
 )
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Copy executables and runtime data. Bail out on skip. No point in continuing.
+; Copy executables and runtime data.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(if (= 0
-        (copyfiles
-            (source #root)
-            (dest @default-dest)
-            (prompt #copy_str_p)
-            (help @copyfiles-help)
-            (infos)
-            (all)
-            (confirm)
-            (optional "force")
-        )
-    )
-    ; else
-    (
-        (exit (quiet))
-    )
+(copyfiles
+    (source #root)
+    (dest @default-dest)
+    (prompt #copy_str_p)
+    (help @copyfiles-help)
+    (infos)
+    (all)
+    (confirm)
+    (optional "force")
 )
-(complete 40)
+(complete 44)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Set script attribute in case the archiver couldn't preserve S (e.g lha for Unix).
-; For some reason (protect) doesn't work in the MorphOS installer but I don't know
-; how to do a workaround (run "protect ..") doesn't work either. File handler bug?
+; Create 'easy' Vim by copying gVim.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(protect (tackon @default-dest "gVim") "+s")
-(protect (tackon @default-dest "vi") "+s")
+(if (bitand #install #egvim)
+    (copyfiles
+        (source (tackon @default-dest "gVim"))
+        (dest @default-dest)
+        (optional "force")
+        (newname "egVim")
+        (confirm)
+        (infos)
+    )
+)
 (complete 45)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Clean up redundant files
 ;---------------------------------------------------------------------------------------------------------------------------------------------
+(if (= 0 (bitand #install #gvim))
+    (delete (tackon @default-dest "gVim") (infos))
+)
+(if (= 0 (bitand #install #vi))
+    (delete (tackon @default-dest "vi"))
+)
 (delete (tackon @default-dest "Vim installer") (infos))
 (delete (tackon @default-dest "INSTALLATION.txt") (infos))
 
@@ -128,7 +156,6 @@
 (if (= (exists (tackon @default-dest "Vim installer.info")) 1)
     (delete (tackon @default-dest "Vim installer.info"))
 )
-
 (complete 50)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------

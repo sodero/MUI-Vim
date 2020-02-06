@@ -1,3 +1,0 @@
-.KEY vim_args/F
-stack 2097152
-vim -g <vim_args>
