@@ -98,3 +98,6 @@ src/pixmaps
 
 # other possible files build by tools
 src/cscope.out
+
+# CLion
+.idea/
