@@ -129,7 +129,15 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
   struct MUI_CustomClass * C ## Class; \
   struct C ## Data
 #endif
-#define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
+
+#ifdef __AROS__
+# define DISPATCH(C) BOOPSI_DISPATCHER(IPTR, C ## Dispatch, cls, obj, msg)
+# define DISPATCH_END BOOPSI_DISPATCHER_END
+#else
+# define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
+# define DISPATCH_END
+#endif
+
 #define CLASS_DATA(C) C ## Data
 #define TAGBASE_sTx (TAG_USER | 27<<16)
 #ifdef __GNUC__
@@ -566,7 +574,7 @@ MUIDSP IPTR VimConStartBlink(Class *cls, Object *obj)
 MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
                               struct MUIP_VimCon_SetBlinking *msg)
 {
-        struct VimConData *my = INST_DATA(cls,obj);
+    struct VimConData *my = INST_DATA(cls,obj);
 
     // Accept anything. Filter later.
     my->cursor[0] = (int) msg->Wait;
@@ -2205,6 +2213,7 @@ DISPATCH(VimCon)
     // Unknown method, promote to parent.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // VimToolbar - MUI custom class handling the toolbar. Currently this class
@@ -2436,6 +2445,7 @@ DISPATCH(VimToolbar)
     // Unknown method, the parent class might be able to care of it.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // VimMenu - MUI custom class handling the menu. Currently it's not possible
@@ -2545,7 +2555,14 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
         return FALSE;
     }
 
-    SetAttrs(m, MUIA_Menuitem_Enabled, msg->Grey ? FALSE : TRUE, TAG_END);
+    BOOL currentSetting;
+    GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
+
+    // Zune handles menu item updates very inefficiently, so only update if value is changed
+    if (currentSetting != (BOOL) msg->Grey)
+    {
+        SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey, TAG_DONE);
+    }
     return TRUE;
 }
 
@@ -2742,6 +2759,7 @@ DISPATCH(VimMenu)
     // Unknown method, the parent class might be able to care of it.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // Vim interface - The functions below, all prefixed with (gui|clip)_mch, are
