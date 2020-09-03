@@ -261,6 +261,11 @@ mch_suspend(void)
     void
 mch_init(void)
 {
+    if(gui.starting)
+    {
+        return;
+    }
+
 #if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     static char	    intlibname[] = "intuition.library";
 #endif

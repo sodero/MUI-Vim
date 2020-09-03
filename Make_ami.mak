@@ -25,11 +25,17 @@ VER=$(shell cat $(SRC)/.ver)
 PAT=$(shell cat $(SRC)/.pat)
 
 #------------------------------------------------------------------------------------------
-# Build Vim
+# Build Vim - Both MUI and Huge.
 #------------------------------------------------------------------------------------------
 .PHONY: vim
 vim: $(SRC)/.ver $(SRC)/.pat
-	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT)
+	$(MAKE) -C $(SRC) -f $(MKF) clean
+	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILD=mui
+	mv $(SRC)/vim $@
+	$(MAKE) -C $(SRC) -f $(MKF) clean
+	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILD=huge
+	mv $(SRC)/vim $(SRC)/vi
+	mv $@ $(SRC)/vim
 
 #------------------------------------------------------------------------------------------
 # Create archive

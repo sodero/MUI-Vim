@@ -26,17 +26,14 @@ endif
 #-This is just for testing purposes--------------------------------------------------------
 else ifeq ($(UNM),Darwin)
 ANM:=$(ARC)-darwin
-PRO:=@echo
 SED:=gsed
 #-This is just for testing purposes--------------------------------------------------------
 else ifeq ($(UNM),Linux)
 ANM:=$(ARC)-linux
-PRO:=@echo
 else
 #-This is just for testing purposes--------------------------------------------------------
 ANM:=$(ARC)-unknown
 UNM:="Unknown"
-PRO:=@echo
 endif
 #- Fallback LHA flags (use lha5 for maximum compatibility) --------------------------------
 LHAFLAGS?=ao5
@@ -47,7 +44,7 @@ LHAFLAGS?=ao5
 TOP:=..
 SRC:=$(TOP)/src
 VIM:=$(SRC)/vim
-PRO?=protect
+VI:=$(SRC)/vi
 EXT:=extras
 DST:=Vim
 SED?=sed
@@ -60,7 +57,7 @@ REV?=0
 .PHONY: all
 all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
 
-$(DST)_$(VER)-$(ANM).lha: $(DST)/vim
+$(DST)_$(VER)-$(ANM).lha: $(DST)/gVim $(DST)/vi
 	$(LHA) $(LHAFLAGS) $@ $(DST)
 	$(LHA) $(LHAFLAGS) $@ $(DST).info
 ifeq ($(UNM),AROS)
@@ -92,16 +89,15 @@ $(DST)/$(DST).info: | $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
 	cp "Vim installer" $(DST)
 	cp *.guide $(DST)
-	cp gVim $(DST)
-	cp vi $(DST)
 
 $(DST).info: | $(DST)/$(DST).info
 	mv $(DST)/$(DST).info .
-	$(PRO) $(DST)/gVim +s
-	$(PRO) $(DST)/vi +s
 
-$(DST)/vim: | $(DST).info
+$(DST)/gVim: | $(DST).info
 	cp $(VIM) $@
+
+$(DST)/vi: | $(DST).info
+	cp $(VI) $@
 
 $(DST):
 	mkdir $@
@@ -111,4 +107,4 @@ $(DST):
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf tmp Vim Vim.info *.lha
+	rm -Rf tmp gVim vi *.info *.lha

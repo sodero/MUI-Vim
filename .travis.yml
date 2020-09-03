@@ -28,12 +28,12 @@ script:
     - dist/lha efq MUI-5.0-2019R2-os4.lha
     - dist/lha efq SDK_53.24.lha
     - dist/lha efq SDK_Install/clib2-1.205.lha
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=MorphOS'
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-morphos/os-include/ && make dist CC=ppc-morphos-gcc LHA=/work/dist/lha ARC=ppc UNM=MorphOS'
     - mkdir artefacts
     - cp dist/tmp/* artefacts
-    - sudo make clean CC=ppc-morphos-gcc LHA=dist/lha ARC=ppc PRO=echo UNM=MorphOS
+    - sudo make clean CC=ppc-morphos-gcc LHA=dist/lha ARC=ppc UNM=MorphOS
     - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-morphos bash -c 'cp /opt/ppc-morphos/os-include/devices/rawkeycodes.h .'
-    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-amigaos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp rawkeycodes.h /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/devices && cp -r SDK/MUI/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp clib2/lib/libauto.a /opt/ppc-amigaos/ppc-amigaos/SDK/clib2/lib && make dist CC=ppc-amigaos-gcc LHA=/work/dist/lha ARC=ppc PRO=echo UNM=AmigaOS'
+    - docker run --rm -v ${PWD}:/work -it amigadev/crosstools:ppc-amigaos bash -c 'cp -r MCC_TheBar/Developer/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp rawkeycodes.h /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h/devices && cp -r SDK/MUI/C/include/* /opt/ppc-amigaos/ppc-amigaos/SDK/include/include_h && cp clib2/lib/libauto.a /opt/ppc-amigaos/ppc-amigaos/SDK/clib2/lib && make dist CC=ppc-amigaos-gcc LHA=/work/dist/lha ARC=ppc UNM=AmigaOS'
     - cp dist/tmp/* artefacts
 
 deploy:

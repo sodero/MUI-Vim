@@ -1118,11 +1118,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
               GetBitMapAttr(s->RastPort.BitMap, BMA_HEIGHT),
               GetBitMapAttr(s->RastPort.BitMap, BMA_DEPTH),
               BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
-#ifndef __MORPHOS__
               s->RastPort.BitMap);
-#else
-              NULL);
-#endif
 
     UnlockPubScreen(NULL, s);
 
