@@ -12,7 +12,7 @@
  * *****************************************************************
  * *****************************************************************
  *
- * MUI support by Ola Söder. AmigaOS4 port by KAS1E.
+ * MUI support by Ola SÃ¶der. AmigaOS4 port by KAS1E.
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
  * Do ":help credits" in Vim to see a list of people who contributed.
@@ -28,9 +28,11 @@
 #include <proto/muimaster.h>
 #include <proto/icon.h>
 #include <proto/iffparse.h>
+
 #ifndef __amigaos4__
 #include <cybergraphx/cybergraphics.h>
 #endif
+
 #include <devices/rawkeycodes.h>
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
@@ -38,6 +40,13 @@
 #include <proto/graphics.h>
 #include <proto/cybergraphics.h>
 #include <proto/keymap.h>
+
+#ifdef __AROS__
+    #include <proto/arossupport.h>
+    #ifndef KPrintF
+        #define KPrintF kprintf
+    #endif
+#endif
 
 #ifdef __amigaos4__
 
@@ -120,7 +129,15 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
   struct MUI_CustomClass * C ## Class; \
   struct C ## Data
 #endif
-#define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
+
+#ifdef __AROS__
+# define DISPATCH(C) BOOPSI_DISPATCHER(IPTR, C ## Dispatch, cls, obj, msg)
+# define DISPATCH_END BOOPSI_DISPATCHER_END
+#else
+# define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
+# define DISPATCH_END
+#endif
+
 #define CLASS_DATA(C) C ## Data
 #define TAGBASE_sTx (TAG_USER | 27<<16)
 #ifdef __GNUC__
@@ -189,130 +206,130 @@ CLASS_DEF(VimCon)
 
 struct MUIP_VimCon_SetFgColor
 {
-    ULONG MethodID;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_SetBgColor
 {
-    ULONG MethodID;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_Browse
 {
-    ULONG MethodID;
-    ULONG Title;
-    ULONG Drawer;
+    STACKED ULONG MethodID;
+    STACKED ULONG Title;
+    STACKED ULONG Drawer;
 };
 
 struct MUIP_VimCon_SetTitle
 {
-    ULONG MethodID;
-    ULONG Title;
+    STACKED ULONG MethodID;
+    STACKED ULONG Title;
 };
 
 struct MUIP_VimCon_GetScreenDim
 {
-    ULONG MethodID;
-    ULONG WidthPtr;
-    ULONG HeightPtr;
+    STACKED ULONG MethodID;
+    STACKED IPTR WidthPtr;
+    STACKED IPTR HeightPtr;
 };
 
 struct MUIP_VimCon_SetTimeout
 {
-    ULONG MethodID;
-    ULONG Timeout;
+    STACKED ULONG MethodID;
+    STACKED ULONG Timeout;
 };
 
 struct MUIP_VimCon_Callback
 {
-    ULONG MethodID;
-    IPTR VimMenuPtr;
+    STACKED ULONG MethodID;
+    STACKED IPTR VimMenuPtr;
 };
 
 struct MUIP_VimCon_SetBlinking
 {
-    ULONG MethodID;
-    ULONG Wait;
-    ULONG On;
-    ULONG Off;
+    STACKED ULONG MethodID;
+    STACKED ULONG Wait;
+    STACKED ULONG On;
+    STACKED ULONG Off;
 };
 
 struct MUIP_VimCon_DrawHollowCursor
 {
-    ULONG MethodID;
-    ULONG Row;
-    ULONG Col;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row;
+    STACKED ULONG Col;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_DrawString
 {
-    ULONG MethodID;
-    ULONG Row;
-    ULONG Col;
-    IPTR  Str;
-    ULONG Len;
-    ULONG Flags;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row;
+    STACKED ULONG Col;
+    STACKED IPTR  Str;
+    STACKED ULONG Len;
+    STACKED ULONG Flags;
 };
 
 struct MUIP_VimCon_FillBlock
 {
-    ULONG MethodID;
-    ULONG Row1;
-    ULONG Col1;
-    ULONG Row2;
-    ULONG Col2;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row1;
+    STACKED ULONG Col1;
+    STACKED ULONG Row2;
+    STACKED ULONG Col2;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_InvertRect
 {
-    ULONG MethodID;
-    ULONG Row;
-    ULONG Col;
-    ULONG Rows;
-    ULONG Cols;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row;
+    STACKED ULONG Col;
+    STACKED ULONG Rows;
+    STACKED ULONG Cols;
 };
 
 struct MUIP_VimCon_DrawPartCursor
 {
-    ULONG MethodID;
-    ULONG Row;
-    ULONG Col;
-    ULONG Width;
-    ULONG Height;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row;
+    STACKED ULONG Col;
+    STACKED ULONG Width;
+    STACKED ULONG Height;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_DeleteLines
 {
-    ULONG MethodID;
-    ULONG Row;
-    ULONG Lines;
-    ULONG RegLeft;
-    ULONG RegRight;
-    ULONG RegBottom;
-    ULONG Color;
+    STACKED ULONG MethodID;
+    STACKED ULONG Row;
+    STACKED ULONG Lines;
+    STACKED ULONG RegLeft;
+    STACKED ULONG RegRight;
+    STACKED ULONG RegBottom;
+    STACKED ULONG Color;
 };
 
 struct MUIP_VimCon_AppMessage
 {
-    ULONG MethodID;
-    ULONG Message;
+    STACKED ULONG MethodID;
+    STACKED IPTR Message;
 };
 
 struct MUIP_VimCon_Copy
 {
-    ULONG MethodID;
-    ULONG Clipboard;
+    STACKED ULONG MethodID;
+    STACKED ULONG Clipboard;
 };
 
 struct MUIP_VimCon_Paste
 {
-    ULONG MethodID;
-    ULONG Clipboard;
+    STACKED ULONG MethodID;
+    STACKED ULONG Clipboard;
 };
 
 //------------------------------------------------------------------------------
@@ -620,16 +637,16 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
 //                      off screen buffer used to render text. This might not
 //                      be the same as the screen dimensions, but as far as
 //                      Vim is concerned, it is.
-// Input:               WidthPtr - ULONG * to contain (output) width
-//                      HeightPtr - ULONG * to contain (output) height
+// Input:               WidthPtr - IPTR * to contain (output) width
+//                      HeightPtr - IPTR * to contain (output) height
 // Return:              Buffer area
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
                                struct MUIP_VimCon_GetScreenDim *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    ULONG *w = (ULONG *) msg->WidthPtr;
-    ULONG *h = (ULONG *) msg->HeightPtr;
+    IPTR *w = (IPTR*)msg->WidthPtr;
+    IPTR *h = (IPTR*)msg->HeightPtr;
 
     if(!my->bm)
     {
@@ -639,6 +656,7 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 
     *w = GetBitMapAttr(my->bm, BMA_WIDTH);
     *h = GetBitMapAttr(my->bm, BMA_HEIGHT);
+
     return (*w) * (*h);
 }
 
@@ -1279,7 +1297,7 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
 // Input:           IDCMP event to add
 // Return:          -
 //------------------------------------------------------------------------------
-static void VimConAddEvent(Class *cls, Object *obj, ULONG event)
+static void VimConAddEvent(Class *cls, Object *obj, IPTR event)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
@@ -1889,7 +1907,7 @@ MUIDSP ULONG VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 
         if(iffh)
         {
-            iffh->iff_Stream = (ULONG) OpenClipboard(PRIMARY_CLIP);
+            iffh->iff_Stream = (IPTR) OpenClipboard(PRIMARY_CLIP);
 
             if(iffh->iff_Stream)
             {
@@ -1949,7 +1967,7 @@ MUIDSP ULONG VimConPaste(Class *cls, Object *obj,
 
     if(iffh)
     {
-        iffh->iff_Stream = (ULONG) OpenClipboard(PRIMARY_CLIP);
+        iffh->iff_Stream = (IPTR) OpenClipboard(PRIMARY_CLIP);
         if(iffh->iff_Stream)
         {
             LONG ftxt = MAKE_ID('F','T','X','T'),
@@ -2191,6 +2209,7 @@ DISPATCH(VimCon)
     // Unknown method, promote to parent.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // VimToolbar - MUI custom class handling the toolbar. Currently this class
@@ -2212,17 +2231,17 @@ CLASS_DEF(VimToolbar)
 
 struct MUIP_VimToolbar_AddButton
 {
-    ULONG MethodID;
-    ULONG ID;
-    IPTR Label;
-    IPTR Help;
+    STACKED ULONG MethodID;
+    STACKED IPTR ID;
+    STACKED IPTR Label;
+    STACKED IPTR Help;
 };
 
 struct MUIP_VimToolbar_DisableButton
 {
-    ULONG MethodID;
-    ULONG ID;
-    ULONG Grey;
+    STACKED ULONG MethodID;
+    STACKED ULONG ID;
+    STACKED ULONG Grey;
 };
 
 //------------------------------------------------------------------------------
@@ -2240,21 +2259,21 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
 
     // Traverse our static toolbar and set up
     // a notification if we find a match.
-    while(b->img != MUIV_TheBar_End)
+    while(b->img != (IPTR) MUIV_TheBar_End)
     {
         const char *n = (const char *) msg->Label, *h = b->help;
-
-        if(h && !strcmp(n, h))
+                if(h && !strcmp(n, h))
         {
-            DoMethod(obj, MUIM_TheBar_Notify, b->ID,
+            DoMethod(obj, MUIM_TheBar_Notify, (IPTR) b->ID,
                       MUIA_Pressed, FALSE, Con, 2,
-                      MUIM_VimCon_Callback, msg->ID);
+                      MUIM_VimCon_Callback, (IPTR) msg->ID);
 
             // This is a bit of a hack; save the Vim
             // menu item pointer as the parent class
             // of the button. Used to translate from
             // menu item to MUI button ID.
             b->_class = (struct IClass *) msg->ID;
+
             return TRUE;
         }
         else
@@ -2286,9 +2305,10 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
     // for a Vim menu item match. If we find
     // one, we can translate this into a MUI
     // ID and use the proper TheBar method.
+
     while(b->img != MUIV_TheBar_End)
     {
-        if(msg->ID == (ULONG) b->_class)
+        if(msg->ID == (IPTR) b->_class)
         {
             // We found the MUI ID. Use the proper TheBar
             // method to disable / enable the button.
@@ -2421,6 +2441,7 @@ DISPATCH(VimToolbar)
     // Unknown method, the parent class might be able to care of it.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // VimMenu - MUI custom class handling the menu. Currently it's not possible
@@ -2446,38 +2467,39 @@ CLASS_DEF(VimMenu)
 
 struct MUIP_VimMenu_AddSpacer
 {
-    ULONG MethodID;
-    ULONG ParentID;
+    STACKED ULONG MethodID;
+    STACKED ULONG ParentID;
 };
 
 struct MUIP_VimMenu_AddMenu
 {
-    ULONG MethodID;
-    ULONG ParentID;
-    ULONG ID;
-    IPTR Label;
+    STACKED ULONG MethodID;
+    STACKED ULONG ParentID;
+    STACKED ULONG ID;
+    STACKED IPTR Label;
 };
 
 struct MUIP_VimMenu_AddMenuItem
 {
-    ULONG MethodID;
-    ULONG ParentID;
-    ULONG ID;
-    IPTR Label;
+    STACKED ULONG MethodID;
+    STACKED ULONG ParentID;
+    STACKED ULONG ID;
+    STACKED IPTR Label;
 };
 
 struct MUIP_VimMenu_RemoveMenu
 {
-    ULONG MethodID;
-    ULONG ID;
+    STACKED ULONG MethodID;
+    STACKED ULONG ID;
 };
 
 struct MUIP_VimMenu_Grey
 {
-    ULONG MethodID;
-    ULONG ID;
-    ULONG Grey;
+    STACKED ULONG MethodID;
+    STACKED IPTR ID;
+    STACKED ULONG Grey;
 };
+
 
 //------------------------------------------------------------------------------
 // VimMenuGrey - Enable/disable menu item
@@ -2529,7 +2551,14 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
         return FALSE;
     }
 
-    SetAttrs(m, MUIA_Menuitem_Enabled, msg->Grey ? FALSE : TRUE, TAG_END);
+    BOOL currentSetting;
+    GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
+
+    // Zune handles menu item updates very inefficiently, so only update if value is changed
+    if (currentSetting != (BOOL) msg->Grey)
+    {
+        SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey, TAG_DONE);
+    }
     return TRUE;
 }
 
@@ -2726,6 +2755,7 @@ DISPATCH(VimMenu)
     // Unknown method, the parent class might be able to care of it.
     return DoSuperMethodA(cls, obj, msg);
 }
+DISPATCH_END
 
 //------------------------------------------------------------------------------
 // Vim interface - The functions below, all prefixed with (gui|clip)_mch, are
@@ -3046,10 +3076,10 @@ int gui_mch_wait_for_chars(int wtime)
 
     while(!vim_is_input_buf_full())
     {
-        static ULONG sig;
+        static IPTR sig;
 
         // Pass control over to MUI.
-        if(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) != (ULONG)
+        if(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) != (IPTR)
                     MUIV_Application_ReturnID_Quit)
         {
             // Get current input state.
@@ -3389,7 +3419,7 @@ int gui_mch_init(void)
     set(Win, MUIA_Window_DefaultObject, Con);
 
     // Exit application upon close request (trap this later on)
-    DoMethod(Win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, App, 2,
+    DoMethod(Win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, (IPTR)App, 2,
              MUIM_Application_ReturnID, MUIV_Application_ReturnID_Quit);
 
     // Set up drag and drop notifications
@@ -3477,7 +3507,7 @@ void gui_mch_exit(int rc)
     if(Con)
     {
         // Save icon pointer
-        ULONG icon = 0;
+        IPTR icon = 0;
         get(_app(Con), MUIA_Application_DiskObject, &icon);
 
         // Close window and destroy app
