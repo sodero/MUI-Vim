@@ -1,4 +1,4 @@
-*map.txt*       For Vim version 8.2.  Last change: 2019 Dec 19
+*map.txt*       For Vim version 8.2.  Last change: 2020 Aug 30
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -191,6 +191,12 @@ whether to use the "," mapping or the longer one.  To avoid this add the
 <nowait> argument.  Then the mapping will be used when it matches, Vim does
 not wait for more characters to be typed.  However, if the characters were
 already typed they are used.
+Note that this works when the <nowait> mapping fully matches and is found
+before any partial matches.  This works when:
+- There is only one matching buffer-local mapping, since these are always
+  found before global mappings.
+- There is another buffer-local mapping that partly matches, but it is was
+  defined earlier (last defined mapping is found first).
 
 						*:map-<silent>* *:map-silent*
 To define a mapping which will not be echoed on the command line, add
@@ -595,7 +601,7 @@ construct can be used:
 	<Char-033>	character 27
 	<Char-0x7f>	character 127
 	<S-Char-114>    character 114 ('r') shifted ('R')
-This is useful to specify a (multi-byte) character in a 'keymap' file.
+This is useful to specify a (multibyte) character in a 'keymap' file.
 Upper and lowercase differences are ignored.
 
 							*map-comments*
@@ -843,10 +849,10 @@ When modifyOtherKeys is enabled you can map <C-[> and <C-S-{>: >
 	imap <C-S-{> {{{
 Without modifyOtherKeys <C-[> and <C-S-{> are indistinguishable from Esc.
 
-A known side effect effect is that in Insert mode the raw escape sequence is
-inserted after the CTRL-V key.  This can be used to check whether
-modifyOtherKeys is enabled: In Insert mode type CTRL-V CTRL-V, if you get
-one byte then modifyOtherKeys is off, if you get <1b>27;5;118~ then it is on.
+A known side effect is that in Insert mode the raw escape sequence is inserted
+after the CTRL-V key.  This can be used to check whether modifyOtherKeys is
+enabled: In Insert mode type CTRL-SHIFT-V CTRL-V, if you get one byte then
+modifyOtherKeys is off, if you get <1b>27;5;118~ then it is on.
 
 When the 'esckeys' option is off, then modifyOtherKeys will be disabled in
 Insert mode to avoid every key with a modifier causing Insert mode to end.
@@ -1166,6 +1172,10 @@ used.
 When executing an autocommand or a user command, it will run in the context of
 the script it was defined in.  This makes it possible that the command calls a
 local function or uses a local mapping.
+
+In case the value is used in a context where <SID> cannot be correctly
+expanded, use the expand() function: >
+	let &includexpr = expand('<SID>') .. 'My_includeexpr()'
 
 Otherwise, using "<SID>" outside of a script context is an error.
 
@@ -1491,7 +1501,7 @@ The valid escape sequences are
 	<bang>	(See the '-bang' attribute) Expands to a ! if the
 		command was executed with a ! modifier, otherwise
 		expands to nothing.
-						*<mods>*
+						*<mods>* *:command-modifiers*
 	<mods>  The command modifiers, if specified. Otherwise, expands to
 		nothing. Supported modifiers are |:aboveleft|, |:belowright|,
 		|:botright|, |:browse|, |:confirm|, |:hide|, |:keepalt|,

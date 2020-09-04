@@ -8,8 +8,49 @@ func Test_ptag_with_notagstack()
   CheckFeature quickfix
 
   set notagstack
-  call assert_fails('ptag does_not_exist_tag_name', 'E426')
+  call assert_fails('ptag does_not_exist_tag_name', 'E433')
   set tagstack&vim
+endfunc
+
+func Test_ptjump()
+  CheckFeature quickfix
+
+  set tags=Xtags
+  call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
+        \ "one\tXfile\t1",
+        \ "three\tXfile\t3",
+        \ "two\tXfile\t2"],
+        \ 'Xtags')
+  call writefile(['one', 'two', 'three'], 'Xfile')
+
+  %bw!
+  ptjump two
+  call assert_equal(2, winnr())
+  wincmd p
+  call assert_equal(1, &previewwindow)
+  call assert_equal('Xfile', expand("%:p:t"))
+  call assert_equal(2, line('.'))
+  call assert_equal(2, winnr('$'))
+  call assert_equal(1, winnr())
+  close
+  call setline(1, ['one', 'two', 'three'])
+  exe "normal 3G\<C-W>g}"
+  call assert_equal(2, winnr())
+  wincmd p
+  call assert_equal(1, &previewwindow)
+  call assert_equal('Xfile', expand("%:p:t"))
+  call assert_equal(3, line('.'))
+  call assert_equal(2, winnr('$'))
+  call assert_equal(1, winnr())
+  close
+  exe "normal 3G5\<C-W>\<C-G>}"
+  wincmd p
+  call assert_equal(5, winheight(0))
+  close
+
+  call delete('Xtags')
+  call delete('Xfile')
+  set tags&
 endfunc
 
 func Test_cancel_ptjump()
@@ -151,9 +192,8 @@ endfunction
 " Test for jumping to a tag with 'hidden' set, with symbolic link in path of
 " tag.  This only works for Unix, because of the symbolic link.
 func Test_tag_symbolic()
-  if !has('unix')
-    return
-  endif
+  CheckUnix
+
   set hidden
   call delete("Xtest.dir", "rf")
   call system("ln -s . Xtest.dir")
@@ -189,11 +229,11 @@ endfunc
 " Depends on the test83-tags2 and test83-tags3 files.
 func Test_tag_file_encoding()
   if has('vms')
-    return
+    throw 'Skipped: does not work on VMS'
   endif
 
   if !has('iconv') || iconv("\x82\x60", "cp932", "utf-8") != "\uff21"
-    return
+    throw 'Skipped: iconv does not work'
   endif
 
   let save_enc = &encoding
@@ -240,10 +280,10 @@ func Test_tag_file_encoding()
   call delete('Xtags1')
 endfunc
 
+" Test for emacs-style tags file (TAGS)
 func Test_tagjump_etags()
-  if !has('emacs_tags')
-    return
-  endif
+  CheckFeature emacs_tags
+
   call writefile([
         \ "void foo() {}",
         \ "int main(int argc, char **argv)",
@@ -263,8 +303,52 @@ func Test_tagjump_etags()
   ta foo
   call assert_equal('void foo() {}', getline('.'))
 
+  " Test for including another tags file
+  call writefile([
+        \ "\x0c",
+        \ "Xmain.c,64",
+        \ "void foo() {}\x7ffoo\x011,0",
+        \ "\x0c",
+        \ "Xnonexisting,include",
+        \ "\x0c",
+        \ "Xtags2,include"
+        \ ], 'Xtags')
+  call writefile([
+        \ "\x0c",
+        \ "Xmain.c,64",
+        \ "int main(int argc, char **argv)\x7fmain\x012,14",
+        \ ], 'Xtags2')
+  tag main
+  call assert_equal(2, line('.'))
+
+  " corrupted tag line
+  call writefile([
+        \ "\x0c",
+        \ "Xmain.c,8",
+        \ "int main"
+        \ ], 'Xtags', 'b')
+  call assert_fails('tag foo', 'E426:')
+
+  " invalid line number
+  call writefile([
+	\ "\x0c",
+        \ "Xmain.c,64",
+        \ "void foo() {}\x7ffoo\x0abc,0",
+	\ ], 'Xtags')
+  call assert_fails('tag foo', 'E426:')
+
+  " invalid tag name
+  call writefile([
+	\ "\x0c",
+        \ "Xmain.c,64",
+        \ ";;;;\x7f1,0",
+	\ ], 'Xtags')
+  call assert_fails('tag foo', 'E431:')
+
   call delete('Xtags')
+  call delete('Xtags2')
   call delete('Xmain.c')
+  set tags&
   bwipe!
 endfunc
 
@@ -285,6 +369,7 @@ func Test_getsettagstack()
   call assert_fails("call settagstack(1, {'items' : 10})", 'E714')
   call assert_fails("call settagstack(1, {'items' : []}, 10)", 'E928')
   call assert_fails("call settagstack(1, {'items' : []}, 'b')", 'E962')
+  call assert_equal(-1, settagstack(0, test_null_dict()))
 
   set tags=Xtags
   call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
@@ -544,7 +629,7 @@ func Test_tselect()
   call writefile(lines, 'XTest_tselect')
   let buf = RunVimInTerminal('-S XTest_tselect', {'rows': 10, 'cols': 50})
 
-  call term_wait(buf, 100)
+  call TermWait(buf, 50)
   call term_sendkeys(buf, ":tselect main\<CR>2\<CR>")
   call VerifyScreenDump(buf, 'Test_tselect_1', {})
 
@@ -893,6 +978,11 @@ func Test_tag_multimatch()
   tag FIRST
   tnext
   call assert_equal(2, line('.'))
+  tlast
+  tprev
+  call assert_equal(2, line('.'))
+  tNext
+  call assert_equal(1, line('.'))
   set ignorecase&
 
   call delete('Xtags')
@@ -1005,7 +1095,7 @@ func Test_tselect_listing()
   call writefile([
         \ "!_TAG_FILE_ENCODING\tutf-8\t//",
         \ "first\tXfoo\t1" .. ';"' .. "\tv\ttyperef:typename:int\tfile:",
-        \ "first\tXfoo\t2" .. ';"' .. "\tv\ttyperef:typename:char\tfile:"],
+        \ "first\tXfoo\t2" .. ';"' .. "\tkind:v\ttyperef:typename:char\tfile:"],
         \ 'Xtags')
   set tags=Xtags
 
@@ -1025,7 +1115,7 @@ func Test_tselect_listing()
   2 FS  v    first             Xfoo
                typeref:typename:char 
                2
-Type number and <Enter> (empty cancels): 
+Type number and <Enter> (q or empty cancels): 
 [DATA]
   call assert_equal(expected, l)
 
@@ -1033,6 +1123,314 @@ Type number and <Enter> (empty cancels):
   call delete('Xfoo')
   set tags&
   %bwipe
+endfunc
+
+" Test for :isearch, :ilist, :ijump and :isplit commands
+" Test for [i, ]i, [I, ]I, [ CTRL-I, ] CTRL-I and CTRL-W i commands
+func Test_inc_search()
+  new
+  call setline(1, ['1:foo', '2:foo', 'foo', '3:foo', '4:foo'])
+  call cursor(3, 1)
+
+  " Test for [i and ]i
+  call assert_equal('1:foo', execute('normal [i'))
+  call assert_equal('2:foo', execute('normal 2[i'))
+  call assert_fails('normal 3[i', 'E387:')
+  call assert_equal('3:foo', execute('normal ]i'))
+  call assert_equal('4:foo', execute('normal 2]i'))
+  call assert_fails('normal 3]i', 'E389:')
+
+  " Test for :isearch
+  call assert_equal('1:foo', execute('isearch foo'))
+  call assert_equal('3:foo', execute('isearch 4 /foo/'))
+  call assert_fails('isearch 3 foo', 'E387:')
+  call assert_equal('3:foo', execute('+1,$isearch foo'))
+  call assert_fails('1,.-1isearch 3 foo', 'E389:')
+  call assert_fails('isearch bar', 'E389:')
+  call assert_fails('isearch /foo/3', 'E488:')
+
+  " Test for [I and ]I
+  call assert_equal([
+        \ '  1:    1 1:foo',
+        \ '  2:    2 2:foo',
+        \ '  3:    3 foo',
+        \ '  4:    4 3:foo',
+        \ '  5:    5 4:foo'], split(execute('normal [I'), "\n"))
+  call assert_equal([
+        \ '  1:    4 3:foo',
+        \ '  2:    5 4:foo'], split(execute('normal ]I'), "\n"))
+
+  " Test for :ilist
+  call assert_equal([
+        \ '  1:    1 1:foo',
+        \ '  2:    2 2:foo',
+        \ '  3:    3 foo',
+        \ '  4:    4 3:foo',
+        \ '  5:    5 4:foo'], split(execute('ilist foo'), "\n"))
+  call assert_equal([
+        \ '  1:    4 3:foo',
+        \ '  2:    5 4:foo'], split(execute('+1,$ilist /foo/'), "\n"))
+  call assert_fails('ilist bar', 'E389:')
+
+  " Test for [ CTRL-I and ] CTRL-I
+  exe "normal [\t"
+  call assert_equal([1, 3], [line('.'), col('.')])
+  exe "normal 2j4[\t"
+  call assert_equal([4, 3], [line('.'), col('.')])
+  call assert_fails("normal k3[\t", 'E387:')
+  call assert_fails("normal 6[\t", 'E389:')
+  exe "normal ]\t"
+  call assert_equal([4, 3], [line('.'), col('.')])
+  exe "normal k2]\t"
+  call assert_equal([5, 3], [line('.'), col('.')])
+  call assert_fails("normal 2k3]\t", 'E389:')
+
+  " Test for :ijump
+  call cursor(3, 1)
+  ijump foo
+  call assert_equal([1, 3], [line('.'), col('.')])
+  call cursor(3, 1)
+  ijump 4 /foo/
+  call assert_equal([4, 3], [line('.'), col('.')])
+  call cursor(3, 1)
+  call assert_fails('ijump 3 foo', 'E387:')
+  +,$ijump 2 foo
+  call assert_equal([5, 3], [line('.'), col('.')])
+  call assert_fails('ijump bar', 'E389:')
+
+  " Test for CTRL-W i
+  call cursor(3, 1)
+  wincmd i
+  call assert_equal([1, 3, 3], [line('.'), col('.'), winnr('$')])
+  close
+  5wincmd i
+  call assert_equal([5, 3, 3], [line('.'), col('.'), winnr('$')])
+  close
+  call assert_fails('3wincmd i', 'E387:')
+  call assert_fails('6wincmd i', 'E389:')
+
+  " Test for :isplit
+  isplit foo
+  call assert_equal([1, 3, 3], [line('.'), col('.'), winnr('$')])
+  close
+  isplit 5 /foo/
+  call assert_equal([5, 3, 3], [line('.'), col('.'), winnr('$')])
+  close
+  call assert_fails('isplit 3 foo', 'E387:')
+  call assert_fails('isplit 6 foo', 'E389:')
+  call assert_fails('isplit bar', 'E389:')
+
+  close!
+endfunc
+
+" Test for :dsearch, :dlist, :djump and :dsplit commands
+" Test for [d, ]d, [D, ]D, [ CTRL-D, ] CTRL-D and CTRL-W d commands
+func Test_macro_search()
+  new
+  call setline(1, ['#define FOO 1', '#define FOO 2', '#define FOO 3',
+        \ '#define FOO 4', '#define FOO 5'])
+  call cursor(3, 9)
+
+  " Test for [d and ]d
+  call assert_equal('#define FOO 1', execute('normal [d'))
+  call assert_equal('#define FOO 2', execute('normal 2[d'))
+  call assert_fails('normal 3[d', 'E387:')
+  call assert_equal('#define FOO 4', execute('normal ]d'))
+  call assert_equal('#define FOO 5', execute('normal 2]d'))
+  call assert_fails('normal 3]d', 'E388:')
+
+  " Test for :dsearch
+  call assert_equal('#define FOO 1', execute('dsearch FOO'))
+  call assert_equal('#define FOO 5', execute('dsearch 5 /FOO/'))
+  call assert_fails('dsearch 3 FOO', 'E387:')
+  call assert_equal('#define FOO 4', execute('+1,$dsearch FOO'))
+  call assert_fails('1,.-1dsearch 3 FOO', 'E388:')
+  call assert_fails('dsearch BAR', 'E388:')
+
+  " Test for [D and ]D
+  call assert_equal([
+        \ '  1:    1 #define FOO 1',
+        \ '  2:    2 #define FOO 2',
+        \ '  3:    3 #define FOO 3',
+        \ '  4:    4 #define FOO 4',
+        \ '  5:    5 #define FOO 5'], split(execute('normal [D'), "\n"))
+  call assert_equal([
+        \ '  1:    4 #define FOO 4',
+        \ '  2:    5 #define FOO 5'], split(execute('normal ]D'), "\n"))
+
+  " Test for :dlist
+  call assert_equal([
+        \ '  1:    1 #define FOO 1',
+        \ '  2:    2 #define FOO 2',
+        \ '  3:    3 #define FOO 3',
+        \ '  4:    4 #define FOO 4',
+        \ '  5:    5 #define FOO 5'], split(execute('dlist FOO'), "\n"))
+  call assert_equal([
+        \ '  1:    4 #define FOO 4',
+        \ '  2:    5 #define FOO 5'], split(execute('+1,$dlist /FOO/'), "\n"))
+  call assert_fails('dlist BAR', 'E388:')
+
+  " Test for [ CTRL-D and ] CTRL-D
+  exe "normal [\<C-D>"
+  call assert_equal([1, 9], [line('.'), col('.')])
+  exe "normal 2j4[\<C-D>"
+  call assert_equal([4, 9], [line('.'), col('.')])
+  call assert_fails("normal k3[\<C-D>", 'E387:')
+  call assert_fails("normal 6[\<C-D>", 'E388:')
+  exe "normal ]\<C-D>"
+  call assert_equal([4, 9], [line('.'), col('.')])
+  exe "normal k2]\<C-D>"
+  call assert_equal([5, 9], [line('.'), col('.')])
+  call assert_fails("normal 2k3]\<C-D>", 'E388:')
+
+  " Test for :djump
+  call cursor(3, 9)
+  djump FOO
+  call assert_equal([1, 9], [line('.'), col('.')])
+  call cursor(3, 9)
+  djump 4 /FOO/
+  call assert_equal([4, 9], [line('.'), col('.')])
+  call cursor(3, 9)
+  call assert_fails('djump 3 FOO', 'E387:')
+  +,$djump 2 FOO
+  call assert_equal([5, 9], [line('.'), col('.')])
+  call assert_fails('djump BAR', 'E388:')
+
+  " Test for CTRL-W d
+  call cursor(3, 9)
+  wincmd d
+  call assert_equal([1, 9, 3], [line('.'), col('.'), winnr('$')])
+  close
+  5wincmd d
+  call assert_equal([5, 9, 3], [line('.'), col('.'), winnr('$')])
+  close
+  call assert_fails('3wincmd d', 'E387:')
+  call assert_fails('6wincmd d', 'E388:')
+  new
+  call assert_fails("normal \<C-W>d", 'E349:')
+  call assert_fails("normal \<C-W>\<C-D>", 'E349:')
+  close
+
+  " Test for :dsplit
+  dsplit FOO
+  call assert_equal([1, 9, 3], [line('.'), col('.'), winnr('$')])
+  close
+  dsplit 5 /FOO/
+  call assert_equal([5, 9, 3], [line('.'), col('.'), winnr('$')])
+  close
+  call assert_fails('dsplit 3 FOO', 'E387:')
+  call assert_fails('dsplit 6 FOO', 'E388:')
+  call assert_fails('dsplit BAR', 'E388:')
+
+  close!
+endfunc
+
+" Test for [*, [/, ]* and ]/
+func Test_comment_search()
+  new
+  call setline(1, ['', '/*', ' *', ' *', ' */'])
+  normal! 4gg[/
+  call assert_equal([2, 1], [line('.'), col('.')])
+  normal! 3gg[*
+  call assert_equal([2, 1], [line('.'), col('.')])
+  normal! 3gg]/
+  call assert_equal([5, 3], [line('.'), col('.')])
+  normal! 3gg]*
+  call assert_equal([5, 3], [line('.'), col('.')])
+  %d
+  call setline(1, ['', '/*', ' *', ' *'])
+  call assert_beeps('normal! 3gg]/')
+  %d
+  call setline(1, ['', ' *', ' *', ' */'])
+  call assert_beeps('normal! 4gg[/')
+  %d
+  call setline(1, '        /* comment */')
+  normal! 15|[/
+  call assert_equal(9, col('.'))
+  normal! 15|]/
+  call assert_equal(21, col('.'))
+  call setline(1, '         comment */')
+  call assert_beeps('normal! 15|[/')
+  call setline(1, '        /* comment')
+  call assert_beeps('normal! 15|]/')
+  close!
+endfunc
+
+" Test for the 'taglength' option
+func Test_tag_length()
+  set tags=Xtags
+  call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
+        \ "tame\tXfile1\t1;",
+        \ "tape\tXfile2\t1;"], 'Xtags')
+  call writefile(['tame'], 'Xfile1')
+  call writefile(['tape'], 'Xfile2')
+
+  " Jumping to the tag 'tape', should instead jump to 'tame'
+  new
+  set taglength=2
+  tag tape
+  call assert_equal('Xfile1', @%)
+  " Tag search should jump to the right tag
+  enew
+  tag /^tape$
+  call assert_equal('Xfile2', @%)
+
+  call delete('Xtags')
+  call delete('Xfile1')
+  call delete('Xfile2')
+  set tags& taglength&
+endfunc
+
+" Tests for errors in a tags file
+func Test_tagfile_errors()
+  set tags=Xtags
+
+  " missing search pattern or line number for a tag
+  call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
+        \ "foo\tXfile\t"], 'Xtags', 'b')
+  call writefile(['foo'], 'Xfile')
+
+  enew
+  tag foo
+  call assert_equal('', @%)
+  let caught_431 = v:false
+  try
+    eval taglist('.*')
+  catch /:E431:/
+    let caught_431 = v:true
+  endtry
+  call assert_equal(v:true, caught_431)
+
+  call delete('Xtags')
+  call delete('Xfile')
+  set tags&
+endfunc
+
+" When :stag fails to open the file, should close the new window
+func Test_stag_close_window_on_error()
+  new | only
+  set tags=Xtags
+  call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
+        \ "foo\tXfile\t1"], 'Xtags')
+  call writefile(['foo'], 'Xfile')
+  call writefile([], '.Xfile.swp')
+  " Remove the catch-all that runtest.vim adds
+  au! SwapExists
+  augroup StagTest
+    au!
+    autocmd SwapExists Xfile let v:swapchoice='q'
+  augroup END
+
+  stag foo
+  call assert_equal(1, winnr('$'))
+  call assert_equal('', @%)
+
+  augroup StagTest
+    au!
+  augroup END
+  call delete('Xfile')
+  call delete('.Xfile.swp')
+  set tags&
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

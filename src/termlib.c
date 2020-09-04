@@ -426,6 +426,7 @@ tgoto(
 		break;
 	    case '+':				// %+c: add c
 		line += *ptr++;
+		// FALLTHRU
 	    case '.':				// print x/y
 		if (line == '\t' ||		// these are
 		   line == '\n' ||		// chars that

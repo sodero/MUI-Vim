@@ -231,14 +231,14 @@ mch_avail_mem(int special)
 
 /*
  * Waits a specified amount of time, or until input arrives if
- * ignoreinput is FALSE.
+ * flags does not have MCH_DELAY_IGNOREINPUT.
  */
     void
-mch_delay(long msec, int ignoreinput)
+mch_delay(long msec, int flags)
 {
     if (msec > 0)
     {
-	if (ignoreinput)
+	if (flags & MCH_DELAY_IGNOREINPUT)
 	    Delay(msec / 20L);	    // Delay works with 20 msec intervals
 	else
 	    WaitForChar(raw_in, msec * 1000L);
@@ -1112,7 +1112,7 @@ mch_exit(int r)
  *	it sends a 0 to the console to make it back into a CON: from a RAW:
  */
     void
-mch_settmode(int tmode)
+mch_settmode(tmode_T tmode)
 {
 #if defined(__AROS__) || defined(__amigaos4__) || defined(__MORPHOS__)
     if (!SetMode(raw_in, tmode == TMODE_RAW ? 1 : 0))
@@ -1121,16 +1121,6 @@ mch_settmode(int tmode)
 					  tmode == TMODE_RAW ? -1L : 0L) == 0)
 #endif
 	mch_errmsg(_("cannot change console mode ?!\n"));
-}
-
-/*
- * set screen mode, always fails.
- */
-    int
-mch_screenmode(char_u *arg)
-{
-    emsg(_(e_screenmode));
-    return FAIL;
 }
 
 /*
@@ -1169,13 +1159,13 @@ int mch_get_shellsize(void)
         // Set RAW term mode.
         mch_settmode(TMODE_RAW);
 
-        const char ctrl[] = "\x9b""0 q";
+        char ctrl[] = "\x9b""0 q";
 
 	// Write control sequence to term.
 	if(Write(raw_out, ctrl, sizeof(ctrl)) == sizeof(ctrl))
 	{
-            const char scan[] = "\x9b""1;1;%d;%d r",
-                       answ[sizeof(scan) + 8] = { '\0' };
+            char scan[] = "\x9b""1;1;%d;%d r",
+                 answ[sizeof(scan) + 8] = { '\0' };
 
 	    // Read return sequence from input.
 	    if(Read(raw_in, answ, sizeof(answ) - 1) > 0)
@@ -1582,7 +1572,11 @@ mch_call_shell(
     if ((mydir = CurrentDir(mydir)) != 0) // make sure we stay in the same directory
 	UnLock(mydir);
     if (tmode == TMODE_RAW)
+    {
+	// The shell may have messed with the mode, always set it.
+	cur_tmode = TMODE_UNKNOWN;
 	settmode(TMODE_RAW);		// set to raw mode
+    }
 #ifdef FEAT_TITLE
     resettitle();
 #endif

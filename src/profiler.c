@@ -440,7 +440,7 @@ prof_inchar_exit(void)
 prof_def_func(void)
 {
     if (current_sctx.sc_sid > 0)
-	return SCRIPT_ITEM(current_sctx.sc_sid).sn_pr_force;
+	return SCRIPT_ITEM(current_sctx.sc_sid)->sn_pr_force;
     return FALSE;
 }
 
@@ -761,9 +761,9 @@ script_prof_save(
 {
     scriptitem_T    *si;
 
-    if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len)
+    if (SCRIPT_ID_VALID(current_sctx.sc_sid))
     {
-	si = &SCRIPT_ITEM(current_sctx.sc_sid);
+	si = SCRIPT_ITEM(current_sctx.sc_sid);
 	if (si->sn_prof_on && si->sn_pr_nest++ == 0)
 	    profile_start(&si->sn_pr_child);
     }
@@ -778,9 +778,9 @@ script_prof_restore(proftime_T *tm)
 {
     scriptitem_T    *si;
 
-    if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len)
+    if (SCRIPT_ID_VALID(current_sctx.sc_sid))
     {
-	si = &SCRIPT_ITEM(current_sctx.sc_sid);
+	si = SCRIPT_ITEM(current_sctx.sc_sid);
 	if (si->sn_prof_on && --si->sn_pr_nest == 0)
 	{
 	    profile_end(&si->sn_pr_child);
@@ -805,7 +805,7 @@ script_dump_profile(FILE *fd)
 
     for (id = 1; id <= script_items.ga_len; ++id)
     {
-	si = &SCRIPT_ITEM(id);
+	si = SCRIPT_ITEM(id);
 	if (si->sn_prof_on)
 	{
 	    fprintf(fd, "SCRIPT  %s\n", si->sn_name);
@@ -903,9 +903,9 @@ script_line_start(void)
     scriptitem_T    *si;
     sn_prl_T	    *pp;
 
-    if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len)
+    if (!SCRIPT_ID_VALID(current_sctx.sc_sid))
 	return;
-    si = &SCRIPT_ITEM(current_sctx.sc_sid);
+    si = SCRIPT_ITEM(current_sctx.sc_sid);
     if (si->sn_prof_on && SOURCING_LNUM >= 1)
     {
 	// Grow the array before starting the timer, so that the time spent
@@ -938,9 +938,9 @@ script_line_exec(void)
 {
     scriptitem_T    *si;
 
-    if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len)
+    if (!SCRIPT_ID_VALID(current_sctx.sc_sid))
 	return;
-    si = &SCRIPT_ITEM(current_sctx.sc_sid);
+    si = SCRIPT_ITEM(current_sctx.sc_sid);
     if (si->sn_prof_on && si->sn_prl_idx >= 0)
 	si->sn_prl_execed = TRUE;
 }
@@ -954,9 +954,9 @@ script_line_end(void)
     scriptitem_T    *si;
     sn_prl_T	    *pp;
 
-    if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len)
+    if (!SCRIPT_ID_VALID(current_sctx.sc_sid))
 	return;
-    si = &SCRIPT_ITEM(current_sctx.sc_sid);
+    si = SCRIPT_ITEM(current_sctx.sc_sid);
     if (si->sn_prof_on && si->sn_prl_idx >= 0
 				     && si->sn_prl_idx < si->sn_prl_ga.ga_len)
     {

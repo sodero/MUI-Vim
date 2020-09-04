@@ -296,6 +296,12 @@
 #define CF_WORD		0x01
 #define CF_UPPER	0x02
 
+/*
+ * Loop through all the siblings of a node (including the node)
+ */
+#define FOR_ALL_NODE_SIBLINGS(node, np) \
+    for ((np) = (node); (np) != NULL; (np) = (np)->wn_sibling)
+
 static int set_spell_finish(spelltab_T	*new_st);
 static int write_spell_prefcond(FILE *fd, garray_T *gap);
 static int read_region_section(FILE *fd, slang_T *slang, int len);
@@ -309,7 +315,7 @@ static int read_compound(FILE *fd, slang_T *slang, int len);
 static int set_sofo(slang_T *lp, char_u *from, char_u *to);
 static void set_sal_first(slang_T *lp);
 static int *mb_str2wide(char_u *s);
-static int spell_read_tree(FILE *fd, char_u **bytsp, idx_T **idxsp, int prefixtree, int prefixcnt);
+static int spell_read_tree(FILE *fd, char_u **bytsp, long *bytsp_len, idx_T **idxsp, int prefixtree, int prefixcnt);
 static idx_T read_tree_node(FILE *fd, char_u *byts, idx_T *idxs, int maxidx, idx_T startidx, int prefixtree, int maxprefcondnr);
 static void set_spell_charflags(char_u *flags, int cnt, char_u *upp);
 static int set_spell_chartab(char_u *fol, char_u *low, char_u *upp);
@@ -513,7 +519,7 @@ spell_load_file(
 		lp->sl_syllable = read_string(fd, len);	// <syllable>
 		if (lp->sl_syllable == NULL)
 		    goto endFAIL;
-		if (init_syl_tab(lp) == FAIL)
+		if (init_syl_tab(lp) != OK)
 		    goto endFAIL;
 		break;
 
@@ -547,17 +553,18 @@ truncerr:
     }
 
     // <LWORDTREE>
-    res = spell_read_tree(fd, &lp->sl_fbyts, &lp->sl_fidxs, FALSE, 0);
+    res = spell_read_tree(fd, &lp->sl_fbyts, &lp->sl_fbyts_len,
+						      &lp->sl_fidxs, FALSE, 0);
     if (res != 0)
 	goto someerror;
 
     // <KWORDTREE>
-    res = spell_read_tree(fd, &lp->sl_kbyts, &lp->sl_kidxs, FALSE, 0);
+    res = spell_read_tree(fd, &lp->sl_kbyts, NULL, &lp->sl_kidxs, FALSE, 0);
     if (res != 0)
 	goto someerror;
 
     // <PREFIXTREE>
-    res = spell_read_tree(fd, &lp->sl_pbyts, &lp->sl_pidxs, TRUE,
+    res = spell_read_tree(fd, &lp->sl_pbyts, NULL, &lp->sl_pidxs, TRUE,
 							    lp->sl_prefixcnt);
     if (res != 0)
 	goto someerror;
@@ -731,7 +738,7 @@ suggest_load_files(void)
 	     * <SUGWORDTREE>: <wordtree>
 	     * Read the trie with the soundfolded words.
 	     */
-	    if (spell_read_tree(fd, &slang->sl_sbyts, &slang->sl_sidxs,
+	    if (spell_read_tree(fd, &slang->sl_sbyts, NULL, &slang->sl_sidxs,
 							       FALSE, 0) != 0)
 	    {
 someerror:
@@ -809,11 +816,15 @@ read_cnt_string(FILE *fd, int cnt_bytes, int *cntp)
 
     // read the length bytes, MSB first
     for (i = 0; i < cnt_bytes; ++i)
-	cnt = (cnt << 8) + getc(fd);
-    if (cnt < 0)
     {
-	*cntp = SP_TRUNCERROR;
-	return NULL;
+	int c = getc(fd);
+
+	if (c == EOF)
+	{
+	    *cntp = SP_TRUNCERROR;
+	    return NULL;
+	}
+	cnt = (cnt << 8) + (unsigned)c;
     }
     *cntp = cnt;
     if (cnt == 0)
@@ -987,7 +998,6 @@ read_sal_section(FILE *fd, slang_T *slang)
     salitem_T	*smp;
     int		ccnt;
     char_u	*p;
-    int		c = NUL;
 
     slang->sl_sofo = FALSE;
 
@@ -1011,6 +1021,8 @@ read_sal_section(FILE *fd, slang_T *slang)
     // <sal> : <salfromlen> <salfrom> <saltolen> <salto>
     for (; gap->ga_len < cnt; ++gap->ga_len)
     {
+	int	c = NUL;
+
 	smp = &((salitem_T *)gap->ga_data)[gap->ga_len];
 	ccnt = getc(fd);			// <salfromlen>
 	if (ccnt < 0)
@@ -1565,6 +1577,7 @@ mb_str2wide(char_u *s)
 spell_read_tree(
     FILE	*fd,
     char_u	**bytsp,
+    long	*bytsp_len,
     idx_T	**idxsp,
     int		prefixtree,	// TRUE for the prefix tree
     int		prefixcnt)	// when "prefixtree" is TRUE: prefix count
@@ -1589,6 +1602,8 @@ spell_read_tree(
 	if (bp == NULL)
 	    return SP_OTHERERROR;
 	*bytsp = bp;
+	if (bytsp_len != NULL)
+	    *bytsp_len = len;
 
 	// Allocate the index array.
 	ip = lalloc_clear(len * sizeof(int), TRUE);
@@ -1737,7 +1752,7 @@ spell_reload_one(
     slang_T	*slang;
     int		didit = FALSE;
 
-    for (slang = first_lang; slang != NULL; slang = slang->sl_next)
+    FOR_ALL_SPELL_LANGS(slang)
     {
 	if (fullpathcmp(fname, slang->sl_fname, FALSE, TRUE) == FPC_SAME)
 	{
@@ -1988,8 +2003,8 @@ static int store_word(spellinfo_T *spin, char_u *word, int flags, int region, ch
 static int tree_add_word(spellinfo_T *spin, char_u *word, wordnode_T *tree, int flags, int region, int affixID);
 static wordnode_T *get_wordnode(spellinfo_T *spin);
 static void free_wordnode(spellinfo_T *spin, wordnode_T *n);
-static void wordtree_compress(spellinfo_T *spin, wordnode_T *root);
-static int node_compress(spellinfo_T *spin, wordnode_T *node, hashtab_T *ht, int *tot);
+static void wordtree_compress(spellinfo_T *spin, wordnode_T *root, char *name);
+static long node_compress(spellinfo_T *spin, wordnode_T *node, hashtab_T *ht, long *tot);
 static int node_equal(wordnode_T *n1, wordnode_T *n2);
 static void clear_node(wordnode_T *node);
 static int put_node(FILE *fd, wordnode_T *node, int idx, int regionmask, int prefixtree);
@@ -2013,7 +2028,8 @@ static void init_spellfile(void);
 #define CONDIT_AFF	8	// word already has an affix
 
 /*
- * Tunable parameters for when the tree is compressed.  See 'mkspellmem'.
+ * Tunable parameters for when the tree is compressed.  Filled from the
+ * 'mkspellmem' option.
  */
 static long compress_start = 30000;	// memory / SBLOCKSIZE
 static long compress_inc = 100;		// memory / SBLOCKSIZE
@@ -2081,7 +2097,7 @@ spell_clear_flags(wordnode_T *node)
 {
     wordnode_T	*np;
 
-    for (np = node; np != NULL; np = np->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, np)
     {
 	np->wn_u1.index = FALSE;
 	spell_clear_flags(np->wn_child);
@@ -3494,6 +3510,7 @@ spell_read_dic(spellinfo_T *spin, char_u *fname, afffile_T *affile)
     char_u	message[MAXLINELEN + MAXWLEN];
     int		flags;
     int		duplicate = 0;
+    time_T	last_msg_time = 0;
 
     /*
      * Open the file.
@@ -3516,8 +3533,7 @@ spell_read_dic(spellinfo_T *spin, char_u *fname, afffile_T *affile)
     spin->si_msg_count = 999999;
 
     // Read and ignore the first line: word count.
-    (void)vim_fgets(line, MAXLINELEN, fd);
-    if (!vim_isdigit(*skipwhite(line)))
+    if (vim_fgets(line, MAXLINELEN, fd) || !vim_isdigit(*skipwhite(line)))
 	semsg(_("E760: No word count in %s"), fname);
 
     /*
@@ -3582,19 +3598,24 @@ spell_read_dic(spellinfo_T *spin, char_u *fname, afffile_T *affile)
 	    continue;
 	}
 
-	// This takes time, print a message every 10000 words.
+	// This takes time, print a message every 10000 words, but not more
+	// often than once per second.
 	if (spin->si_verbose && spin->si_msg_count > 10000)
 	{
 	    spin->si_msg_count = 0;
-	    vim_snprintf((char *)message, sizeof(message),
-		    _("line %6d, word %6ld - %s"),
-		       lnum, spin->si_foldwcount + spin->si_keepwcount, w);
-	    msg_start();
-	    msg_outtrans_long_attr(message, 0);
-	    msg_clr_eos();
-	    msg_didout = FALSE;
-	    msg_col = 0;
-	    out_flush();
+	    if (vim_time() > last_msg_time)
+	    {
+		last_msg_time = vim_time();
+		vim_snprintf((char *)message, sizeof(message),
+			_("line %6d, word %6ld - %s"),
+			   lnum, spin->si_foldwcount + spin->si_keepwcount, w);
+		msg_start();
+		msg_outtrans_long_attr(message, 0);
+		msg_clr_eos();
+		msg_didout = FALSE;
+		msg_col = 0;
+		out_flush();
+	    }
 	}
 
 	// Store the word in the hashtable to be able to find duplicates.
@@ -4115,7 +4136,7 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 	    pc = string_convert(&spin->si_conv, rline, NULL);
 	    if (pc == NULL)
 	    {
-		smsg(_("Conversion failure for word in %s line %d: %s"),
+		smsg(_("Conversion failure for word in %s line %ld: %s"),
 							   fname, lnum, rline);
 		continue;
 	    }
@@ -4133,10 +4154,10 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 	    if (STRNCMP(line, "encoding=", 9) == 0)
 	    {
 		if (spin->si_conv.vc_type != CONV_NONE)
-		    smsg(_("Duplicate /encoding= line ignored in %s line %d: %s"),
+		    smsg(_("Duplicate /encoding= line ignored in %s line %ld: %s"),
 						       fname, lnum, line - 1);
 		else if (did_word)
-		    smsg(_("/encoding= line after word ignored in %s line %d: %s"),
+		    smsg(_("/encoding= line after word ignored in %s line %ld: %s"),
 						       fname, lnum, line - 1);
 		else
 		{
@@ -4159,13 +4180,13 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 	    if (STRNCMP(line, "regions=", 8) == 0)
 	    {
 		if (spin->si_region_count > 1)
-		    smsg(_("Duplicate /regions= line ignored in %s line %d: %s"),
+		    smsg(_("Duplicate /regions= line ignored in %s line %ld: %s"),
 						       fname, lnum, line);
 		else
 		{
 		    line += 8;
 		    if (STRLEN(line) > MAXREGIONS * 2)
-			smsg(_("Too many regions in %s line %d: %s"),
+			smsg(_("Too many regions in %s line %ld: %s"),
 						       fname, lnum, line);
 		    else
 		    {
@@ -4179,7 +4200,7 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 		continue;
 	    }
 
-	    smsg(_("/ line ignored in %s line %d: %s"),
+	    smsg(_("/ line ignored in %s line %ld: %s"),
 						       fname, lnum, line - 1);
 	    continue;
 	}
@@ -4209,7 +4230,7 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 		    l = *p - '0';
 		    if (l == 0 || l > spin->si_region_count)
 		    {
-			smsg(_("Invalid region nr in %s line %d: %s"),
+			smsg(_("Invalid region nr in %s line %ld: %s"),
 							  fname, lnum, p);
 			break;
 		    }
@@ -4217,7 +4238,7 @@ spell_read_wordfile(spellinfo_T *spin, char_u *fname)
 		}
 		else
 		{
-		    smsg(_("Unrecognized flags in %s line %d: %s"),
+		    smsg(_("Unrecognized flags in %s line %ld: %s"),
 							      fname, lnum, p);
 		    break;
 		}
@@ -4427,7 +4448,7 @@ tree_add_word(
 	{
 	    --node->wn_refs;
 	    copyprev = prev;
-	    for (copyp = node; copyp != NULL; copyp = copyp->wn_sibling)
+	    FOR_ALL_NODE_SIBLINGS(node, copyp)
 	    {
 		// Allocate a new node and copy the info.
 		np = get_wordnode(spin);
@@ -4570,9 +4591,9 @@ tree_add_word(
 	// compression useful, or one of them is small, which means
 	// compression goes fast.  But when filling the soundfold word tree
 	// there is no keep-case tree.
-	wordtree_compress(spin, spin->si_foldroot);
+	wordtree_compress(spin, spin->si_foldroot, "case-folded");
 	if (affixID >= 0)
-	    wordtree_compress(spin, spin->si_keeproot);
+	    wordtree_compress(spin, spin->si_keeproot, "keep-case");
     }
 
     return OK;
@@ -4594,7 +4615,7 @@ get_wordnode(spellinfo_T *spin)
     {
 	n = spin->si_first_free;
 	spin->si_first_free = n->wn_child;
-	vim_memset(n, 0, sizeof(wordnode_T));
+	CLEAR_POINTER(n);
 	--spin->si_free_count;
     }
 #ifdef SPELL_PRINTTREE
@@ -4618,7 +4639,7 @@ deref_wordnode(spellinfo_T *spin, wordnode_T *node)
 
     if (--node->wn_refs == 0)
     {
-	for (np = node; np != NULL; np = np->wn_sibling)
+	FOR_ALL_NODE_SIBLINGS(node, np)
 	{
 	    if (np->wn_child != NULL)
 		cnt += deref_wordnode(spin, np->wn_child);
@@ -4646,12 +4667,12 @@ free_wordnode(spellinfo_T *spin, wordnode_T *n)
  * Compress a tree: find tails that are identical and can be shared.
  */
     static void
-wordtree_compress(spellinfo_T *spin, wordnode_T *root)
+wordtree_compress(spellinfo_T *spin, wordnode_T *root, char *name)
 {
     hashtab_T	    ht;
-    int		    n;
-    int		    tot = 0;
-    int		    perc;
+    long	    n;
+    long	    tot = 0;
+    long	    perc;
 
     // Skip the root itself, it's not actually used.  The first sibling is the
     // start of the tree.
@@ -4671,8 +4692,8 @@ wordtree_compress(spellinfo_T *spin, wordnode_T *root)
 	    else
 		perc = (tot - n) * 100 / tot;
 	    vim_snprintf((char *)IObuff, IOSIZE,
-			  _("Compressed %d of %d nodes; %d (%d%%) remaining"),
-						       n, tot, tot - n, perc);
+		       _("Compressed %s: %ld of %ld nodes; %ld (%ld%%) remaining"),
+						       name, n, tot, tot - n, perc);
 	    spell_message(spin, IObuff);
 	}
 #ifdef SPELL_PRINTTREE
@@ -4686,12 +4707,12 @@ wordtree_compress(spellinfo_T *spin, wordnode_T *root)
  * Compress a node, its siblings and its children, depth first.
  * Returns the number of compressed nodes.
  */
-    static int
+    static long
 node_compress(
     spellinfo_T	*spin,
     wordnode_T	*node,
     hashtab_T	*ht,
-    int		*tot)	    // total count of nodes before compressing,
+    long	*tot)	    // total count of nodes before compressing,
 			    // incremented while going through the tree
 {
     wordnode_T	*np;
@@ -4699,9 +4720,9 @@ node_compress(
     wordnode_T	*child;
     hash_T	hash;
     hashitem_T	*hi;
-    int		len = 0;
+    long	len = 0;
     unsigned	nr, n;
-    int		compressed = 0;
+    long	compressed = 0;
 
     /*
      * Go through the list of siblings.  Compress each child and then try
@@ -4761,7 +4782,7 @@ node_compress(
      */
     node->wn_u1.hashkey[0] = len;
     nr = 0;
-    for (np = node; np != NULL; np = np->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, np)
     {
 	if (np->wn_byte == NUL)
 	    // end node: use wn_flags, wn_region and wn_affixID
@@ -4784,7 +4805,7 @@ node_compress(
     node->wn_u1.hashkey[5] = NUL;
 
     // Check for CTRL-C pressed now and then.
-    fast_breakcheck();
+    veryfast_breakcheck();
 
     return compressed;
 }
@@ -5252,7 +5273,7 @@ clear_node(wordnode_T *node)
     wordnode_T	*np;
 
     if (node != NULL)
-	for (np = node; np != NULL; np = np->wn_sibling)
+	FOR_ALL_NODE_SIBLINGS(node, np)
 	{
 	    np->wn_u1.index = 0;
 	    np->wn_u2.wnode = NULL;
@@ -5296,7 +5317,7 @@ put_node(
     node->wn_u1.index = idx;
 
     // Count the number of siblings.
-    for (np = node; np != NULL; np = np->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, np)
 	++siblingcount;
 
     // Write the sibling count.
@@ -5304,7 +5325,7 @@ put_node(
 	putc(siblingcount, fd);				// <siblingcount>
 
     // Write each sibling byte and optionally extra info.
-    for (np = node; np != NULL; np = np->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, np)
     {
 	if (np->wn_byte == 0)
 	{
@@ -5392,7 +5413,7 @@ put_node(
     newindex += siblingcount + 1;
 
     // Recursively dump the children of each sibling.
-    for (np = node; np != NULL; np = np->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, np)
 	if (np->wn_byte != 0 && np->wn_child->wn_u2.wnode == node)
 	    newindex = put_node(fd, np->wn_child, newindex, regionmask,
 								  prefixtree);
@@ -5447,7 +5468,7 @@ spell_make_sugfile(spellinfo_T *spin, char_u *wfname)
      * of the code for the soundfolding stuff.
      * It might have been done already by spell_reload_one().
      */
-    for (slang = first_lang; slang != NULL; slang = slang->sl_next)
+    FOR_ALL_SPELL_LANGS(slang)
 	if (fullpathcmp(wfname, slang->sl_fname, FALSE, TRUE) == FPC_SAME)
 	    break;
     if (slang == NULL)
@@ -5493,7 +5514,7 @@ spell_make_sugfile(spellinfo_T *spin, char_u *wfname)
      * Compress the soundfold trie.
      */
     spell_message(spin, (char_u *)_(msg_compressing));
-    wordtree_compress(spin, spin->si_foldroot);
+    wordtree_compress(spin, spin->si_foldroot, "case-folded");
 
     /*
      * Write the .sug file.
@@ -5595,8 +5616,8 @@ sug_filltree(spellinfo_T *spin, slang_T *slang)
 		spin->si_blocks_cnt = 0;
 
 		// Skip over any other NUL bytes (same word with different
-		// flags).
-		while (byts[n + 1] == 0)
+		// flags).  But don't go over the end.
+		while (n + 1 < slang->sl_fbyts_len && byts[n + 1] == 0)
 		{
 		    ++n;
 		    ++curi[depth];
@@ -5666,7 +5687,7 @@ sug_filltable(
     int		nr;
     int		prev_nr;
 
-    for (p = node; p != NULL; p = p->wn_sibling)
+    FOR_ALL_NODE_SIBLINGS(node, p)
     {
 	if (p->wn_byte == NUL)
 	{
@@ -5880,7 +5901,7 @@ mkspell(
     int		error = FALSE;
     spellinfo_T spin;
 
-    vim_memset(&spin, 0, sizeof(spin));
+    CLEAR_FIELD(spin);
     spin.si_verbose = !added_word;
     spin.si_ascii = ascii;
     spin.si_followup = TRUE;
@@ -5895,7 +5916,8 @@ mkspell(
     spin.si_newcompID = 127;	// start compound ID at first maximum
 
     // default: fnames[0] is output file, following are input files
-    innames = &fnames[1];
+    // When "fcount" is 1 there is only one file.
+    innames = &fnames[fcount == 1 ? 0 : 1];
     incount = fcount - 1;
 
     wfname = alloc(MAXPATHL);
@@ -5909,14 +5931,12 @@ mkspell(
 	{
 	    // For ":mkspell path/en.latin1.add" output file is
 	    // "path/en.latin1.add.spl".
-	    innames = &fnames[0];
 	    incount = 1;
 	    vim_snprintf((char *)wfname, MAXPATHL, "%s.spl", fnames[0]);
 	}
 	else if (fcount == 1)
 	{
 	    // For ":mkspell path/vim" output file is "path/vim.latin1.spl".
-	    innames = &fnames[0];
 	    incount = 1;
 	    vim_snprintf((char *)wfname, MAXPATHL, SPL_FNAME_TMPL,
 		  fnames[0], spin.si_ascii ? (char_u *)"ascii" : spell_enc());
@@ -6056,9 +6076,9 @@ mkspell(
 	     * Combine tails in the tree.
 	     */
 	    spell_message(&spin, (char_u *)_(msg_compressing));
-	    wordtree_compress(&spin, spin.si_foldroot);
-	    wordtree_compress(&spin, spin.si_keeproot);
-	    wordtree_compress(&spin, spin.si_prefroot);
+	    wordtree_compress(&spin, spin.si_foldroot, "case-folded");
+	    wordtree_compress(&spin, spin.si_keeproot, "keep-case");
+	    wordtree_compress(&spin, spin.si_prefroot, "prefixes");
 	}
 
 	if (!error && !got_int)
@@ -6652,6 +6672,5 @@ set_map_str(slang_T *lp, char_u *map)
 	}
     }
 }
-
 
 #endif  // FEAT_SPELL

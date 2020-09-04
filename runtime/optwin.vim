@@ -1,7 +1,7 @@
 " These commands create the option window.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2019 Nov 07
+" Last Change:	2020 aug 30
 
 " If there already is an option window, jump to that one.
 let buf = bufnr('option-window')
@@ -145,13 +145,13 @@ exe $OPTWIN_CMD . ' new option-window'
 setlocal ts=15 tw=0 noro buftype=nofile
 
 " Insert help and a "set" command for each option.
-call append(0, '" Each "set" line shows the current value of an option (on the left).')
-call append(1, '" Hit <CR> on a "set" line to execute it.')
-call append(2, '"            A boolean option will be toggled.')
-call append(3, '"            For other options you can edit the value before hitting <CR>.')
-call append(4, '" Hit <CR> on a help line to open a help window on this option.')
-call append(5, '" Hit <CR> on an index line to jump there.')
-call append(6, '" Hit <Space> on a "set" line to refresh it.')
+call append(0, gettext('" Each "set" line shows the current value of an option (on the left).'))
+call append(1, gettext('" Hit <Enter> on a "set" line to execute it.'))
+call append(2, gettext('"            A boolean option will be toggled.'))
+call append(3, gettext('"            For other options you can edit the value before hitting <Enter>.'))
+call append(4, gettext('" Hit <Enter> on a help line to open a help window on this option.'))
+call append(5, gettext('" Hit <Enter> on an index line to jump there.'))
+call append(6, gettext('" Hit <Space> on a "set" line to refresh it.'))
 
 " These functions are called often below.  Keep them fast!
 
@@ -447,6 +447,9 @@ if has("syntax")
   call append("$", "spellcapcheck\tpattern to locate the end of a sentence")
   call append("$", "\t(local to buffer)")
   call <SID>OptionL("spc")
+  call append("$", "spelloptions\tflags to change how spell checking works")
+  call append("$", "\t(local to buffer)")
+  call <SID>OptionL("spo")
   call append("$", "spellsuggest\tmethods used to suggest corrections")
   call <SID>OptionG("sps", &sps)
   call append("$", "mkspellmem\tamount of memory used by :mkspell before compressing")
@@ -1153,7 +1156,7 @@ call <SID>BinOptionG("warn", &warn)
 
 
 if has("quickfix")
-  call <SID>Header("running make and jumping to errors")
+  call <SID>Header("running make and jumping to errors (quickfix)")
   call append("$", "errorfile\tname of the file that contains error messages")
   call <SID>OptionG("ef", &ef)
   call append("$", "errorformat\tlist of formats for error messages")
@@ -1174,6 +1177,8 @@ if has("quickfix")
   call append("$", "makeencoding\tencoding of the \":make\" and \":grep\" output")
   call append("$", "\t(global or local to buffer)")
   call <SID>OptionG("menc", &menc)
+  call append("$", "quickfixtextfunc\tfunction to display text in the quickfix window")
+  call <SID>OptionG("qftf", &qftf)
 endif
 
 

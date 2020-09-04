@@ -1136,7 +1136,12 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
               GetBitMapAttr(s->RastPort.BitMap, BMA_HEIGHT),
               GetBitMapAttr(s->RastPort.BitMap, BMA_DEPTH),
               BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
-              s->RastPort.BitMap);
+#ifndef __MORPHOS__
+              s->RastPort.BitMap
+#else
+              NULL
+#endif
+              );
 
     UnlockPubScreen(NULL, s);
 
@@ -1667,6 +1672,7 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
         {
             break;
         }
+        // FALLTHRU
 
     default:
         // Leave the rest to our parent class
@@ -2551,11 +2557,11 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
         return FALSE;
     }
 
-    BOOL currentSetting;
+    ULONG currentSetting;
     GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
 
     // Zune handles menu item updates very inefficiently, so only update if value is changed
-    if (currentSetting != (BOOL) msg->Grey)
+    if (currentSetting != msg->Grey)
     {
         SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey, TAG_DONE);
     }
@@ -2884,6 +2890,24 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
     (void) h;
 
     INFO("Not supported");
+}
+
+//------------------------------------------------------------------------------
+// gui_mch_get_scrollbar_xpadding - Not supported
+//------------------------------------------------------------------------------
+int gui_mch_get_scrollbar_xpadding(void)
+{
+    INFO("Not supported");
+    return 0;
+}
+
+//------------------------------------------------------------------------------
+// gui_mch_get_scrollbar_ypadding - Not supported
+//------------------------------------------------------------------------------
+int gui_mch_get_scrollbar_ypadding(void)
+{
+    INFO("Not supported");
+    return 0;
 }
 
 //------------------------------------------------------------------------------

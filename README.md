@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/sodero/MUI-Vim.svg?branch=master)](https://travis-ci.org/sodero/InstallerLG)
+[![Build Status](https://travis-ci.org/sodero/MUI-Vim.svg?branch=master)]
 
 # MUI-Vim
 

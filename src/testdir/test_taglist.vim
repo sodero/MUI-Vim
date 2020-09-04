@@ -1,5 +1,8 @@
 " test taglist(), tagfiles() functions and :tags command
 
+source check.vim
+source view_util.vim
+
 func Test_taglist()
   call writefile([
 	\ "FFoo\tXfoo\t1",
@@ -7,6 +10,7 @@ func Test_taglist()
 	\ "BFoo\tXbar\t1",
 	\ "BBar\tXbar\t2",
 	\ "Kindly\tXbar\t3;\"\tv\tfile:",
+	\ "Lambda\tXbar\t3;\"\tλ\tfile:",
 	\ "Command\tXbar\tcall cursor(3, 4)|;\"\td",
 	\ ], 'Xtags')
   set tags=Xtags
@@ -17,17 +21,23 @@ func Test_taglist()
   call assert_equal(['FFoo', 'BFoo'], map(taglist("Foo", "Xfoo"), {i, v -> v.name}))
   call assert_equal(['BFoo', 'FFoo'], map(taglist("Foo", "Xbar"), {i, v -> v.name}))
 
-  let kind = taglist("Kindly")
-  call assert_equal(1, len(kind))
-  call assert_equal('v', kind[0]['kind'])
-  call assert_equal('3', kind[0]['cmd'])
-  call assert_equal(1, kind[0]['static'])
-  call assert_equal('Xbar', kind[0]['filename'])
+  let kindly = taglist("Kindly")
+  call assert_equal(1, len(kindly))
+  call assert_equal('v', kindly[0]['kind'])
+  call assert_equal('3', kindly[0]['cmd'])
+  call assert_equal(1, kindly[0]['static'])
+  call assert_equal('Xbar', kindly[0]['filename'])
+
+  let lambda = taglist("Lambda")
+  call assert_equal(1, len(lambda))
+  call assert_equal('λ', lambda[0]['kind'])
 
   let cmd = taglist("Command")
   call assert_equal(1, len(cmd))
   call assert_equal('d', cmd[0]['kind'])
   call assert_equal('call cursor(3, 4)', cmd[0]['cmd'])
+
+  call assert_fails("let l=taglist([])", 'E730:')
 
   call delete('Xtags')
   set tags&
@@ -35,9 +45,8 @@ func Test_taglist()
 endfunc
 
 func Test_taglist_native_etags()
-  if !has('emacs_tags')
-    return
-  endif
+  CheckFeature emacs_tags
+
   call writefile([
 	\ "\x0c",
 	\ "src/os_unix.c,13491",
@@ -55,9 +64,8 @@ func Test_taglist_native_etags()
 endfunc
 
 func Test_taglist_ctags_etags()
-  if !has('emacs_tags')
-    return
-  endif
+  CheckFeature emacs_tags
+
   call writefile([
 	\ "\x0c",
 	\ "src/os_unix.c,13491",
@@ -75,7 +83,7 @@ func Test_taglist_ctags_etags()
 endfunc
 
 func Test_tags_too_long()
-  call assert_fails('tag ' . repeat('x', 1020), 'E426')
+  call assert_fails('tag ' . repeat('x', 1020), ['E433', 'E426'])
   tags
 endfunc
 
@@ -211,3 +219,21 @@ func Test_format_error()
   set tags&
   call delete('Xtags')
 endfunc
+
+" Test for :tag command completion with 'wildoptions' set to 'tagfile'
+func Test_tag_complete_wildoptions()
+  call writefile(["foo\ta.c\t10;\"\tf", "bar\tb.c\t20;\"\td"], 'Xtags')
+  set tags=Xtags
+  set wildoptions=tagfile
+
+  call feedkeys(":tag \<C-D>\<C-R>=Screenline(&lines - 1)\<CR> : "
+        \ .. "\<C-R>=Screenline(&lines - 2)\<CR>\<C-B>\"\<CR>", 'xt')
+
+  call assert_equal('"tag bar d b.c : foo f a.c', @:)
+
+  call delete('Xtags')
+  set wildoptions&
+  set tags&
+endfunc
+
+" vim: shiftwidth=2 sts=2 expandtab

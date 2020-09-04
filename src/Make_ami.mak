@@ -21,15 +21,7 @@ LD =		$(CC)
 UNM ?= 		$(shell uname)
 DEBUG ?=	no
 BUILD ?=	mui
-
-#------------------------------------------------------------------------------------------
-# Debug or default build
-#------------------------------------------------------------------------------------------
-ifeq ($(DEBUG),no)
-	CFLAGS = -c -O3
-else
-	CFLAGS = -c -O0
-endif
+CFLAGS = 	-c -O3
 
 #------------------------------------------------------------------------------------------
 # Common compiler flags
@@ -142,6 +134,8 @@ SRC +=		arabic.c			\
 			change.c			\
 			charset.c			\
 			cindent.c			\
+			clientserver.c		\
+			clipboard.c			\
 			cmdhist.c			\
 			cmdexpand.c			\
 			crypt.c				\
@@ -170,15 +164,18 @@ SRC +=		arabic.c			\
 			getchar.c			\
 			hardcopy.c			\
 			hashtab.c			\
+			help.c				\
 			highlight.c			\
 			if_cscope.c			\
 			indent.c			\
 			insexpand.c			\
 			json.c				\
 			list.c				\
+			locale.c			\
 			main.c				\
 			mark.c				\
 			map.c				\
+			match.c				\
 			mbyte.c				\
 			memfile.c			\
 			memline.c			\
@@ -212,13 +209,21 @@ SRC +=		arabic.c			\
 			term.c				\
 			termlib.c			\
 			testing.c			\
+			textformat.c		\
+			textobject.c		\
 			textprop.c			\
+			time.c				\
+			typval.c			\
 			ui.c				\
 			undo.c				\
 			usercmd.c			\
 			userfunc.c			\
 			version.c			\
 			viminfo.c			\
+			vim9compile.c		\
+			vim9execute.c		\
+			vim9script.c		\
+			vim9type.c			\
 			window.c			\
 			xdiff/xdiffi.c      \
 			xdiff/xemit.c       \
