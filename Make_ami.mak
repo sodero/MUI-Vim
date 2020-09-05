@@ -63,4 +63,4 @@ $(SRC)/.pat: $(SRC)/version.c
 clean:
 	$(MAKE) -C $(DST) $@
 	$(MAKE) -C $(SRC) -f $(MKF) $@
-	rm -f $(SRC)/.pat $(SRC)/.ver
+	rm -f $(SRC)/.pat $(SRC)/.ver $(SRC)/vi $(SRC)/vim

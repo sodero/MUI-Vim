@@ -107,4 +107,4 @@ $(DST):
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf tmp gVim vi *.info *.lha
+	rm -Rf $(DST) tmp gVim vi *.info *.lha
