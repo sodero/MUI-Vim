@@ -161,13 +161,17 @@
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Select toolbar
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(set #toolbar
-    (askchoice
-        (prompt #toolbar_str_p)
-        (help @askchoice-help)
-        (choices #grey_str_c1 #grey_str_c2)
-        (default 0)
+(if (or (bitand #install #gvim) (bitand #install #egvim))
+    (set #toolbar
+        (askchoice
+            (prompt #toolbar_str_p)
+            (help @askchoice-help)
+            (choices #grey_str_c1 #grey_str_c2)
+            (default 0)
+        )
     )
+    ;else
+    (set #toolbar 0)
 )
 (complete 60)
 
