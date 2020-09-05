@@ -261,10 +261,12 @@ mch_suspend(void)
     void
 mch_init(void)
 {
+#ifdef FEAT_GUI
     if(gui.starting)
     {
         return;
     }
+#endif
 
 #if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     static char	    intlibname[] = "intuition.library";

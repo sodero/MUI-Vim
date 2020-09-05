@@ -80,16 +80,14 @@ else
 # Vim 'small' build
 #------------------------------------------------------------------------------------------
 ifeq ($(BUILD),small)
-CFLAGS +=	-DFEAT_TERMRESPONSE \
-			-DFEAT_SMALL
+CFLAGS +=	-DFEAT_SMALL
 else
 
 #------------------------------------------------------------------------------------------
 # Vim 'tiny' build
 #------------------------------------------------------------------------------------------
 ifeq ($(BUILD),tiny)
-CFLAGS +=	-DFEAT_TERMRESPONSE \
-			-DFEAT_TINY
+CFLAGS +=	-DFEAT_TINY
 endif
 endif
 endif
