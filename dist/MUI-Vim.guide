@@ -67,8 +67,9 @@ Hollywood syntax highlighting.
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{B}2020-NOT-YET@{UB}
-- Update to VIM 8.2.XYZ.
+- Update to VIM 8.2.1583.
 - Vim now correctly detects initial Window size when executed in text mode.
+- CLI only and easy builds are now included in the archive.
 
 @{B}2019-12-21@{UB}
 - Update to VIM 8.2.25.
