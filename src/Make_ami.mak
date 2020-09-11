@@ -31,7 +31,6 @@ CFLAGS +=	-DNO_ARP			\
 			-DHAVE_STDARG_H		\
 			-DHAVE_TGETENT		\
 			-DHAVE_TERMCAP		\
-			-DNEW_SHELLSIZE		\
 			-I proto			\
 			-Wno-attributes 	\
 			-Wextra

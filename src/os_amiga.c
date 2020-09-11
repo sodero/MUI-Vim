@@ -1142,10 +1142,10 @@ mch_settmode(tmode_T tmode)
 #endif
 
 /*
- * Try to get console size in a system friendly way.
+ * Get console size in a system friendly way on AROS and MorphOS.
  * Return FAIL for failure, OK otherwise
  */
-#ifdef NEW_SHELLSIZE
+#if defined(__AROS__) || defined(__MORPHOS__)
 int mch_get_shellsize(void)
 {
     if(!term_console)
@@ -1193,7 +1193,7 @@ int mch_get_shellsize(void)
 
     return FAIL;
 }
-#else // NEW_SHELLSIZE
+#else
     int
 mch_get_shellsize(void)
 {
@@ -1264,7 +1264,7 @@ out:
 
     return FAIL;
 }
-#endif // NEW_SHELLSIZE
+#endif
 
 /*
  * Try to set the real window size to Rows and Columns.
