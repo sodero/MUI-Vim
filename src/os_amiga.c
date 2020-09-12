@@ -1152,13 +1152,17 @@ mch_settmode(tmode_T tmode)
 #if defined(__AROS__) || defined(__MORPHOS__)
 int mch_get_shellsize(void)
 {
-    if(!term_console)
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
     {
-	KPrintF("%s:%d\n", __func__, __LINE__);
         return FAIL;
     }
+#endif
 
-    KPrintF("%s:%d\n", __func__, __LINE__);
+    if(!term_console)
+    {
+        return FAIL;
+    }
 
     if(raw_in && raw_out)
     {
@@ -1204,13 +1208,17 @@ int mch_get_shellsize(void)
     int
 mch_get_shellsize(void)
 {
-    if(!term_console)
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
     {
-	KPrintF("%s:%d\n", __func__, __LINE__);
         return FAIL;
     }
+#endif
 
-    KPrintF("%s:%d\n", __func__, __LINE__);
+    if(!term_console)
+    {
+        return FAIL;
+    }
 
     struct ConUnit  *conUnit;
 #ifndef __amigaos4__
