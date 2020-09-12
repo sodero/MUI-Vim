@@ -1150,8 +1150,11 @@ int mch_get_shellsize(void)
 {
     if(!term_console)
     {
+	KPrintF("%s:%d\n", __func__, __LINE__);
         return FAIL;
     }
+
+    KPrintF("%s:%d\n", __func__, __LINE__);
 
     if(raw_in && raw_out)
     {
@@ -1197,14 +1200,19 @@ int mch_get_shellsize(void)
     int
 mch_get_shellsize(void)
 {
+    if(!term_console)
+    {
+	KPrintF("%s:%d\n", __func__, __LINE__);
+        return FAIL;
+    }
+
+    KPrintF("%s:%d\n", __func__, __LINE__);
+
     struct ConUnit  *conUnit;
 #ifndef __amigaos4__
     char	    id_a[sizeof(struct InfoData) + 3];
 #endif
     struct InfoData *id=0;
-
-    if (!term_console)	// not an amiga window
-	goto out;
 
     // insure longword alignment
 #ifdef __amigaos4__
