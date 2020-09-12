@@ -28,6 +28,10 @@
 # include <intuition/intuition.h>
 #endif
 
+#ifdef __amigaos4__
+# define KPrintF DebugPrintF
+#endif
+
 // XXX These are included from os_amiga.h
 // #include <proto/exec.h>
 // #include <proto/dos.h>
