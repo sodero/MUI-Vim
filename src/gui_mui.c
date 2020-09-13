@@ -2560,10 +2560,12 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     ULONG currentSetting;
     GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
 
-    // Zune handles menu item updates very inefficiently, so only update if value is changed
+    // Zune handles menu item updates very inefficiently, so only update if
+    // value is changed
     if (currentSetting != msg->Grey)
     {
-        SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey, TAG_DONE);
+        SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE,
+		 TAG_DONE);
     }
     return TRUE;
 }
