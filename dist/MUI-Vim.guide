@@ -66,10 +66,12 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2020-NOT-YET@{UB}
+@{B}2020-09-13@{UB}
 - Update to VIM 8.2.1583.
-- Vim now correctly detects initial Window size when executed in text mode.
 - CLI only and easy builds are now included in the archive.
+- Vim correctly detects initial console size when executed in text mode. On
+  AmigaOS4 resizing is also working, while on MorphOS and AROS a manual
+  refresh using CTRL+L is required.
 
 @{B}2019-12-21@{UB}
 - Update to VIM 8.2.25.
