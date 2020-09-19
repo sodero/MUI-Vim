@@ -28,6 +28,10 @@
 # include <intuition/intuition.h>
 #endif
 
+#ifdef __amigaos4__
+# define KPrintF DebugPrintF
+#endif
+
 // XXX These are included from os_amiga.h
 // #include <proto/exec.h>
 // #include <proto/dos.h>
@@ -1142,12 +1146,19 @@ mch_settmode(tmode_T tmode)
 #endif
 
 /*
- * Try to get console size in a system friendly way.
+ * Get console size in a system friendly way on AROS and MorphOS.
  * Return FAIL for failure, OK otherwise
  */
-#ifdef NEW_SHELLSIZE
+#if defined(__AROS__) || defined(__MORPHOS__)
 int mch_get_shellsize(void)
 {
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
+    {
+        return FAIL;
+    }
+#endif
+
     if(!term_console)
     {
         return FAIL;
@@ -1193,18 +1204,27 @@ int mch_get_shellsize(void)
 
     return FAIL;
 }
-#else // NEW_SHELLSIZE
+#else
     int
 mch_get_shellsize(void)
 {
+#ifdef FEAT_GUI
+    if (gui.in_use || gui.starting)
+    {
+        return FAIL;
+    }
+#endif
+
+    if(!term_console)
+    {
+        return FAIL;
+    }
+
     struct ConUnit  *conUnit;
 #ifndef __amigaos4__
     char	    id_a[sizeof(struct InfoData) + 3];
 #endif
     struct InfoData *id=0;
-
-    if (!term_console)	// not an amiga window
-	goto out;
 
     // insure longword alignment
 #ifdef __amigaos4__
@@ -1264,7 +1284,7 @@ out:
 
     return FAIL;
 }
-#endif // NEW_SHELLSIZE
+#endif
 
 /*
  * Try to set the real window size to Rows and Columns.
