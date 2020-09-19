@@ -976,11 +976,11 @@ endfunc
 func Test_win_execute_closing_curwin()
   split
   let winid = popup_create('some text', {})
-  call assert_fails('call win_execute(winid, winnr() .. "close")', 'E994')
+  call assert_fails('call win_execute(winid, winnr() .. "close")', 'E994:')
   call popup_clear()
 
   let winid = popup_create('some text', {})
-  call assert_fails('call win_execute(winid, printf("normal! :\<C-u>call popup_close(%d)\<CR>", winid))', 'E994')
+  call assert_fails('call win_execute(winid, printf("normal! :\<C-u>call popup_close(%d)\<CR>", winid))', 'E994:')
   call popup_clear()
 endfunc
 
@@ -3516,7 +3516,44 @@ func Test_popupwin_filter_close_ctrl_c()
   call VerifyScreenDump(buf, 'Test_popupwin_ctrl_c', {})
 
   call StopVimInTerminal(buf)
-  call delete('XtestPopupCorners')
+  call delete('XtestPopupCtrlC')
+endfunc
+
+func Test_popupwin_filter_close_wrong_name()
+  CheckScreendump
+
+  let lines =<< trim END
+      call popup_create('one two three...', {'filter': 'NoSuchFunc'})
+  END
+  call writefile(lines, 'XtestPopupWrongName')
+
+  let buf = RunVimInTerminal('-S XtestPopupWrongName', #{rows: 10})
+
+  call term_sendkeys(buf, "j")
+  call VerifyScreenDump(buf, 'Test_popupwin_wrong_name', {})
+
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupWrongName')
+endfunc
+
+func Test_popupwin_filter_close_three_errors()
+  CheckScreendump
+
+  let lines =<< trim END
+      set cmdheight=2
+      call popup_create('one two three...', {'filter': 'filter'})
+  END
+  call writefile(lines, 'XtestPopupThreeErrors')
+
+  let buf = RunVimInTerminal('-S XtestPopupThreeErrors', #{rows: 10})
+
+  call term_sendkeys(buf, "jj")
+  call VerifyScreenDump(buf, 'Test_popupwin_three_errors_1', {})
+  call term_sendkeys(buf, "j")
+  call VerifyScreenDump(buf, 'Test_popupwin_three_errors_2', {})
+
+  call StopVimInTerminal(buf)
+  call delete('XtestPopupThreeErrors')
 endfunc
 
 func Test_popupwin_atcursor_far_right()
