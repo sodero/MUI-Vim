@@ -2561,11 +2561,13 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
 
     // Zune handles menu item updates very inefficiently, so only update if
-    // value is changed
-    if (currentSetting != msg->Grey)
+    // value is changed. Please note that msg->Grey is true if we're going to
+    // disable the menuitem, and that currentSetting is true if the item is
+    // enabled, therefore update when msg->Grey == currentSetting.
+    if (currentSetting == msg->Grey)
     {
         SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE,
-		 TAG_DONE);
+		         TAG_DONE);
     }
     return TRUE;
 }
