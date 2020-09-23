@@ -646,7 +646,7 @@ static funcentry_T global_functions[] =
     {"getcmdtype",	0, 0, 0,	  ret_string,	f_getcmdtype},
     {"getcmdwintype",	0, 0, 0,	  ret_string,	f_getcmdwintype},
     {"getcompletion",	2, 3, FEARG_1,	  ret_list_string, f_getcompletion},
-    {"getcurpos",	0, 0, 0,	  ret_list_number, f_getcurpos},
+    {"getcurpos",	0, 1, FEARG_1,	  ret_list_number, f_getcurpos},
     {"getcwd",		0, 2, FEARG_1,	  ret_string,	f_getcwd},
     {"getenv",		1, 1, FEARG_1,	  ret_string,	f_getenv},
     {"getfontname",	0, 1, 0,	  ret_string,	f_getfontname},
@@ -753,7 +753,8 @@ static funcentry_T global_functions[] =
     {"matcharg",	1, 1, FEARG_1,	  ret_list_string, f_matcharg},
     {"matchdelete",	1, 2, FEARG_1,	  ret_number,	f_matchdelete},
     {"matchend",	2, 4, FEARG_1,	  ret_number,	f_matchend},
-    {"matchfuzzy",	2, 2, FEARG_1,	  ret_list_string,	f_matchfuzzy},
+    {"matchfuzzy",	2, 3, FEARG_1,	  ret_list_string,	f_matchfuzzy},
+    {"matchfuzzypos",	2, 3, FEARG_1,	  ret_list_any,	f_matchfuzzypos},
     {"matchlist",	2, 4, FEARG_1,	  ret_list_string, f_matchlist},
     {"matchstr",	2, 4, FEARG_1,	  ret_string,	f_matchstr},
     {"matchstrpos",	2, 4, FEARG_1,	  ret_list_any,	f_matchstrpos},
@@ -2609,7 +2610,13 @@ f_feedkeys(typval_T *argvars, typval_T *rettv UNUSED)
 		    ++ex_normal_busy;
 		exec_normal(TRUE, lowlevel, TRUE);
 		if (!dangerous)
+		{
 		    --ex_normal_busy;
+#ifdef FEAT_PROP_POPUP
+		    if (ex_normal_busy == 0)
+			ex_normal_busy_done = FALSE;
+#endif
+		}
 
 		msg_scroll |= save_msg_scroll;
 	    }
@@ -3258,7 +3265,8 @@ getpos_both(
     typval_T	*rettv,
     int		getcurpos)
 {
-    pos_T	*fp;
+    pos_T	*fp = NULL;
+    win_T	*wp = curwin;
     list_T	*l;
     int		fnum = -1;
 
@@ -3266,7 +3274,16 @@ getpos_both(
     {
 	l = rettv->vval.v_list;
 	if (getcurpos)
-	    fp = &curwin->w_cursor;
+	{
+	    if (argvars[0].v_type != VAR_UNKNOWN)
+	    {
+		wp = find_win_by_nr_or_id(&argvars[0]);
+		if (wp != NULL)
+		    fp = &wp->w_cursor;
+	    }
+	    else
+		fp = &curwin->w_cursor;
+	}
 	else
 	    fp = var2fpos(&argvars[0], TRUE, &fnum);
 	if (fnum != -1)
@@ -3286,13 +3303,14 @@ getpos_both(
 	    colnr_T save_curswant = curwin->w_curswant;
 	    colnr_T save_virtcol = curwin->w_virtcol;
 
-	    update_curswant();
-	    list_append_number(l, curwin->w_curswant == MAXCOL ?
-		    (varnumber_T)MAXCOL : (varnumber_T)curwin->w_curswant + 1);
+	    if (wp == curwin)
+		update_curswant();
+	    list_append_number(l, wp == NULL ? 0 : wp->w_curswant == MAXCOL
+		    ?  (varnumber_T)MAXCOL : (varnumber_T)wp->w_curswant + 1);
 
 	    // Do not change "curswant", as it is unexpected that a get
 	    // function has a side effect.
-	    if (save_set_curswant)
+	    if (wp == curwin && save_set_curswant)
 	    {
 		curwin->w_set_curswant = save_set_curswant;
 		curwin->w_curswant = save_curswant;

@@ -4408,7 +4408,10 @@ compile_nested_function(exarg_T *eap, cctx_T *cctx)
 	return eap->skip ? (char_u *)"" : NULL;
     if (ufunc->uf_def_status == UF_TO_BE_COMPILED
 	    && compile_def_function(ufunc, TRUE, cctx) == FAIL)
+    {
+	func_ptr_unref(ufunc);
 	return NULL;
+    }
 
     if (is_global)
     {
@@ -4622,15 +4625,18 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 	eap->cookie = cctx;
 	l = heredoc_get(eap, op + 3, FALSE);
 
-	// Push each line and the create the list.
-	FOR_ALL_LIST_ITEMS(l, li)
+	if (cctx->ctx_skip != SKIP_YES)
 	{
-	    generate_PUSHS(cctx, li->li_tv.vval.v_string);
-	    li->li_tv.vval.v_string = NULL;
+	    // Push each line and the create the list.
+	    FOR_ALL_LIST_ITEMS(l, li)
+	    {
+		generate_PUSHS(cctx, li->li_tv.vval.v_string);
+		li->li_tv.vval.v_string = NULL;
+	    }
+	    generate_NEWLIST(cctx, l->lv_len);
+	    type = &t_list_string;
+	    member_type = &t_list_string;
 	}
-	generate_NEWLIST(cctx, l->lv_len);
-	type = &t_list_string;
-	member_type = &t_list_string;
 	list_free(l);
 	p += STRLEN(p);
 	end = p;
@@ -5077,12 +5083,14 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 			}
 			else
 			{
-			    // An empty list or dict has a &t_void member,
+			    // An empty list or dict has a &t_unknown member,
 			    // for a variable that implies &t_any.
 			    if (stacktype == &t_list_empty)
 				lvar->lv_type = &t_list_any;
 			    else if (stacktype == &t_dict_empty)
 				lvar->lv_type = &t_dict_any;
+			    else if (stacktype == &t_unknown)
+				lvar->lv_type = &t_any;
 			    else
 				lvar->lv_type = stacktype;
 			}
