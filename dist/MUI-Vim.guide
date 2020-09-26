@@ -66,6 +66,11 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2020-09-26@{UB}
+- Update to VIM 8.2.1749.
+- AmigaOS4: Fixed crash when removing iconified Vim with Exchange.
+- AmigaOS4: Use Mason icon when iconified.
+
 @{B}2020-09-13@{UB}
 - Update to VIM 8.2.1583.
 - CLI only and easy builds are now included in the archive.
