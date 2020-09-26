@@ -149,7 +149,7 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 //------------------------------------------------------------------------------
 // Global variables - Console, menu and toolbar
 //------------------------------------------------------------------------------
-static Object *Con, *Mnu, *Tlb;
+static Object *App, *Con, *Mnu, *Tlb;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -3314,7 +3314,7 @@ void gui_mch_set_menu_pos(int x, int y, int w, int h)
 int gui_mch_init(void)
 {
     char vs[64];
-    Object *App, *Win, *Set = NULL, *Abo = NULL;
+    Object *Win, *Set = NULL, *Abo = NULL;
 
 #ifdef __amigaos4__
     if(!(MUIMasterBase = OpenLibrary("muimaster.library", 19)))
@@ -3536,15 +3536,15 @@ void gui_mch_exit(int rc)
 {
     (void) rc;
 
-    if(Con)
+    if(App)
     {
         // Save icon pointer
         IPTR icon = 0;
-        get(_app(Con), MUIA_Application_DiskObject, &icon);
+        get(App, MUIA_Application_DiskObject, &icon);
 
         // Close window and destroy app
-        set(_win(Con), MUIA_Window_Open, FALSE);
-        MUI_DisposeObject(_app(Con));
+        set(_win(App), MUIA_Window_Open, FALSE);
+        MUI_DisposeObject(App);
 
         // Free icon resources, MUI won't do this
         if(icon)
