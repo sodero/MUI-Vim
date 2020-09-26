@@ -3415,7 +3415,11 @@ int gui_mch_init(void)
         MUIA_Application_Title, "Vim",
         MUIA_Application_Version, vs,
         MUIA_Application_DiskObject,
+#ifdef __amigaos4__
+            GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColorsMason"),
+#else
             GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColors"),
+#endif
         MUIA_Application_Window, Win =
             MUI_NewObject(MUIC_Window,
             MUIA_Window_Title, (IPTR) "Vim",
