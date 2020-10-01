@@ -42,8 +42,9 @@ this, e.g NetRW which will crash badly occasionally.
 @TOC "Main"
 @{B}Known limitations@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-When running Vim in text mode, window resizing isn't detected by Vim. After a
-window resize, press Ctrl + L to resize and redraw the Vim console.
+When running Vim in text mode on MorphOS and AROS, window resizing isn't
+detected by Vim. After a window resize, press Ctrl + L to resize and redraw
+the Vim console.
 
 @ENDNODE
 
@@ -66,6 +67,10 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2020-NOT-YEY@{UB}
+- Update to VIM 8.2.X
+- ?
+
 @{B}2020-09-26@{UB}
 - Update to VIM 8.2.1749.
 - AmigaOS4: Fixed crash when removing iconified Vim with Exchange.
