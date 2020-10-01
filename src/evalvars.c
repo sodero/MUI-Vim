@@ -146,6 +146,7 @@ static struct vimvar
     {VV_NAME("echospace",	 VAR_NUMBER), VV_RO},
     {VV_NAME("argv",		 VAR_LIST), VV_RO},
     {VV_NAME("collate",		 VAR_STRING), VV_RO},
+    {VV_NAME("disallow_let",	 VAR_NUMBER), 0}, // TODO: remove
 };
 
 // shorthand
@@ -558,6 +559,7 @@ heredoc_get(exarg_T *eap, char_u *cmd, int script_get)
     int		text_indent_len = 0;
     char_u	*text_indent = NULL;
     char_u	dot[] = ".";
+    int		comment_char = in_vim9script() ? '#' : '"';
 
     if (eap->getline == NULL)
     {
@@ -585,11 +587,11 @@ heredoc_get(exarg_T *eap, char_u *cmd, int script_get)
     }
 
     // The marker is the next word.
-    if (*cmd != NUL && *cmd != '"')
+    if (*cmd != NUL && *cmd != comment_char)
     {
 	marker = skipwhite(cmd);
 	p = skiptowhite(marker);
-	if (*skipwhite(p) != NUL && *skipwhite(p) != '"')
+	if (*skipwhite(p) != NUL && *skipwhite(p) != comment_char)
 	{
 	    semsg(_(e_trailing_arg), p);
 	    return NULL;
@@ -732,6 +734,12 @@ ex_let(exarg_T *eap)
 	    // In legacy Vim script ":final" is short for ":finally".
 	    ex_finally(eap);
 	    return;
+    }
+    if (get_vim_var_nr(VV_DISALLOW_LET)
+				      && eap->cmdidx == CMD_let && vim9script)
+    {
+	emsg(_(e_cannot_use_let_in_vim9_script));
+	return;
     }
     if (eap->cmdidx == CMD_const && !vim9script && !eap->forceit)
 	// In legacy Vim script ":const" works like ":final".
@@ -2485,6 +2493,11 @@ eval_variable(
 		    rettv->v_type = VAR_FUNC;
 		    rettv->vval.v_string = vim_strsave(import->imp_funcname);
 		}
+	    }
+	    else if (import->imp_all)
+	    {
+		emsg("Sorry, 'import * as X' not implemented yet");
+		ret = FAIL;
 	    }
 	    else
 	    {

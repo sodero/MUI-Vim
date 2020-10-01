@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.2.  Last change: 2020 Sep 22
+*eval.txt*	For Vim version 8.2.  Last change: 2020 Sep 25
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -877,7 +877,7 @@ Example: >
 All expressions within one level are parsed from left to right.
 
 
-expr1							*expr1* *E109*
+expr1							*expr1* *trinary* *E109*
 -----
 
 expr2 ? expr1 : expr1
@@ -10348,7 +10348,9 @@ synIDattr({synID}, {what} [, {mode}])			*synIDattr()*
 		"bg"		background color (as with "fg")
 		"font"		font name (only available in the GUI)
 				|highlight-font|
-		"sp"		special color (as with "fg") |highlight-guisp|
+		"sp"		special color for the GUI (as with "fg")
+				|highlight-guisp|
+		"ul"		underline color for cterm: number as a string
 		"fg#"		like "fg", but for the GUI and the GUI is
 				running the name in "#RRGGBB" form
 		"bg#"		like "fg#" for "bg"

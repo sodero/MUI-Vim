@@ -1982,7 +1982,7 @@ f_deepcopy(typval_T *argvars, typval_T *rettv)
     if (argvars[1].v_type != VAR_UNKNOWN)
 	noref = (int)tv_get_bool_chk(&argvars[1], NULL);
     if (noref < 0 || noref > 1)
-	emsg(_(e_invarg));
+	semsg(_(e_using_number_as_bool_nr), noref);
     else
     {
 	copyID = get_copyID();
@@ -2616,15 +2616,15 @@ f_feedkeys(typval_T *argvars, typval_T *rettv UNUSED)
 		msg_scroll = FALSE;
 
 		if (!dangerous)
+		{
 		    ++ex_normal_busy;
+		    ++in_feedkeys;
+		}
 		exec_normal(TRUE, lowlevel, TRUE);
 		if (!dangerous)
 		{
 		    --ex_normal_busy;
-#ifdef FEAT_PROP_POPUP
-		    if (ex_normal_busy == 0)
-			ex_normal_busy_done = FALSE;
-#endif
+		    --in_feedkeys;
 		}
 
 		msg_scroll |= save_msg_scroll;
@@ -8193,7 +8193,7 @@ f_strchars(typval_T *argvars, typval_T *rettv)
     if (argvars[1].v_type != VAR_UNKNOWN)
 	skipcc = (int)tv_get_bool(&argvars[1]);
     if (skipcc < 0 || skipcc > 1)
-	emsg(_(e_invarg));
+	semsg(_(e_using_number_as_bool_nr), skipcc);
     else
     {
 	func_mb_ptr2char_adv = skipcc ? mb_ptr2char_adv : mb_cptr2char_adv;
@@ -8604,7 +8604,9 @@ f_synIDattr(typval_T *argvars UNUSED, typval_T *rettv)
 		break;
 
 	case 'u':
-		if (STRLEN(what) <= 5 || TOLOWER_ASC(what[5]) != 'c')
+		if (TOLOWER_ASC(what[1]) == 'l')	// ul
+		    p = highlight_color(id, what, modec);
+		else if (STRLEN(what) <= 5 || TOLOWER_ASC(what[5]) != 'c')
 							// underline
 		    p = highlight_has_attr(id, HL_UNDERLINE, modec);
 		else
