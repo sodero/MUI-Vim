@@ -1056,6 +1056,8 @@ def Test_func_type_part()
   CheckDefFailure(['var RefAny: func(): any', 'RefAny = FuncNoArgNoRet'], 'E1012: Type mismatch; expected func(): any but got func()')
   CheckDefFailure(['var RefAny: func(): any', 'RefAny = FuncOneArgNoRet'], 'E1012: Type mismatch; expected func(): any but got func(number)')
 
+  var RefAnyNoArgs: func: any = RefAny
+
   var RefNr: func: number
   RefNr = FuncNoArgRetNumber
   RefNr = FuncOneArgRetNumber
@@ -1098,6 +1100,22 @@ def Test_func_return_type()
   str->assert_equal('yes')
 
   CheckDefFailure(['var str: string', 'str = FuncNoArgRetNumber()'], 'E1012: Type mismatch; expected string but got number')
+enddef
+
+def Test_func_common_type()
+  def FuncOne(n: number): number
+    return n
+  enddef
+  def FuncTwo(s: string): number
+    return len(s)
+  enddef
+  def FuncThree(n: number, s: string): number
+    return n + len(s)
+  enddef
+  var list = [FuncOne, FuncTwo, FuncThree]
+  assert_equal(8, list[0](8))
+  assert_equal(4, list[1]('word'))
+  assert_equal(7, list[2](3, 'word'))
 enddef
 
 def MultiLine(
@@ -1721,6 +1739,14 @@ def Test_mapcheck()
   iunabbrev foo
 enddef
 
+def Test_maparg_mapset()
+  nnoremap <F3> :echo "hit F3"<CR>
+  var mapsave = maparg('<F3>', 'n', false, true)
+  mapset('n', false, mapsave)
+
+  nunmap <F3>
+enddef
+
 def Test_nr2char()
   nr2char(97, true)->assert_equal('a')
 enddef
@@ -1898,6 +1924,32 @@ def Test_closure_in_map()
   delete('XclosureDir', 'rf')
 enddef
 
+def Test_invalid_function_name()
+  var lines =<< trim END
+      vim9script
+      def s: list<string>
+  END
+  CheckScriptFailure(lines, 'E129:')
+
+  lines =<< trim END
+      vim9script
+      def g: list<string>
+  END
+  CheckScriptFailure(lines, 'E129:')
+
+  lines =<< trim END
+      vim9script
+      def <SID>: list<string>
+  END
+  CheckScriptFailure(lines, 'E884:')
+
+  lines =<< trim END
+      vim9script
+      def F list<string>
+  END
+  CheckScriptFailure(lines, 'E488:')
+enddef
+
 def Test_partial_call()
   var Xsetlist = function('setloclist', [0])
   Xsetlist([], ' ', {'title': 'test'})
@@ -1914,6 +1966,9 @@ def Test_partial_call()
   Xsetlist = function('setqflist', [[], ' '])
   Xsetlist({'title': 'test'})
   getqflist({'title': 1})->assert_equal({'title': 'test'})
+
+  var Len: func: number = function('len', ['word'])
+  assert_equal(4, Len())
 enddef
 
 def Test_cmd_modifier()
