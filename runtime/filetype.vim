@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2020 Sep 28
+" Last Change:	2020 Sep 30
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -1344,13 +1344,6 @@ au BufNewFile,BufRead *.rego			setf rego
 
 " Rexx
 au BufNewFile,BufRead *.rex,*.orx,*.rxo,*.rxj,*.jrexx,*.rexxj,*.rexx,*.testGroup,*.testUnit	setf rexx
-
-" R (Splus)
-if has("fname_case")
-  au BufNewFile,BufRead *.s,*.S			setf r
-else
-  au BufNewFile,BufRead *.s			setf r
-endif
 
 " R Help file
 if has("fname_case")

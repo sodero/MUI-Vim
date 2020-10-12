@@ -887,6 +887,17 @@ get_lval(
 	    return NULL;
 	}
 
+	if (in_vim9script() && lp->ll_valtype == NULL
+		&& lp->ll_tv == &v->di_tv
+		&& ht != NULL && ht == get_script_local_ht())
+	{
+	    svar_T  *sv = find_typval_in_script(lp->ll_tv);
+
+	    // Vim9 script local variable: get the type
+	    if (sv != NULL)
+		lp->ll_valtype = sv->sv_type;
+	}
+
 	len = -1;
 	if (*p == '.')
 	{
@@ -1037,6 +1048,10 @@ get_lval(
 		}
 	    }
 
+	    if (lp->ll_valtype != NULL)
+		// use the type of the member
+		lp->ll_valtype = lp->ll_valtype->tt_member;
+
 	    if (lp->ll_di == NULL)
 	    {
 		// Can't add "v:" or "a:" variable.
@@ -1147,6 +1162,10 @@ get_lval(
 		    semsg(_(e_listidx), lp->ll_n1);
 		return NULL;
 	    }
+
+	    if (lp->ll_valtype != NULL)
+		// use the type of the member
+		lp->ll_valtype = lp->ll_valtype->tt_member;
 
 	    /*
 	     * May need to find the item or absolute index for the second
@@ -1383,6 +1402,11 @@ set_var_lval(
 	    emsg(_("E996: Cannot lock a list or dict"));
 	    return;
 	}
+
+	if (lp->ll_valtype != NULL
+			&& check_typval_type(lp->ll_valtype, rettv, 0) == FAIL)
+	    return;
+
 	if (lp->ll_newkey != NULL)
 	{
 	    if (op != NULL && *op != '=')
@@ -1944,6 +1968,29 @@ eval_func(
 }
 
 /*
+ * Get the next line source line without advancing.  But do skip over comment
+ * lines.
+ */
+    static char_u *
+getline_peek_skip_comments(evalarg_T *evalarg)
+{
+    for (;;)
+    {
+	char_u *next = getline_peek(evalarg->eval_getline,
+							 evalarg->eval_cookie);
+	char_u *p;
+
+	if (next == NULL)
+	    break;
+	p = skipwhite(next);
+	if (*p != NUL && !vim9_comment_start(p))
+	    return next;
+	(void)eval_next_line(evalarg);
+    }
+    return NULL;
+}
+
+/*
  * If inside Vim9 script, "arg" points to the end of a line (ignoring a #
  * comment) and there is a next line, return the next line (skipping blanks)
  * and set "getnext".
@@ -1964,7 +2011,7 @@ eval_next_non_blank(char_u *arg, evalarg_T *evalarg, int *getnext)
 	char_u *next;
 
 	if (evalarg->eval_cookie != NULL)
-	    next = getline_peek(evalarg->eval_getline, evalarg->eval_cookie);
+	    next = getline_peek_skip_comments(evalarg);
 	else
 	    next = peek_next_line_from_context(evalarg->eval_cctx);
 
@@ -3960,21 +4007,12 @@ partial_free(partial_T *pt)
     else
 	func_ptr_unref(pt->pt_func);
 
+    // Decrease the reference count for the context of a closure.  If down
+    // to the minimum it may be time to free it.
     if (pt->pt_funcstack != NULL)
     {
-	// Decrease the reference count for the context of a closure.  If down
-	// to zero free it and clear the variables on the stack.
-	if (--pt->pt_funcstack->fs_refcount == 0)
-	{
-	    garray_T	*gap = &pt->pt_funcstack->fs_ga;
-	    typval_T	*stack = gap->ga_data;
-
-	    for (i = 0; i < gap->ga_len; ++i)
-		clear_tv(stack + i);
-	    ga_clear(gap);
-	    vim_free(pt->pt_funcstack);
-	}
-	pt->pt_funcstack = NULL;
+	--pt->pt_funcstack->fs_refcount;
+	funcstack_check_refcount(pt->pt_funcstack);
     }
 
     vim_free(pt);
@@ -3987,8 +4025,16 @@ partial_free(partial_T *pt)
     void
 partial_unref(partial_T *pt)
 {
-    if (pt != NULL && --pt->pt_refcount <= 0)
-	partial_free(pt);
+    if (pt != NULL)
+    {
+	if (--pt->pt_refcount <= 0)
+	    partial_free(pt);
+
+	// If the reference count goes down to one, the funcstack may be the
+	// only reference and can be freed if no other partials reference it.
+	else if (pt->pt_refcount == 1 && pt->pt_funcstack != NULL)
+	    funcstack_check_refcount(pt->pt_funcstack);
+    }
 }
 
 /*
