@@ -105,6 +105,8 @@
 (copyfiles
     (source ("%s.info" (p_chomp (pathonly @icon))))
     (dest #dest-root)
+    (prompt #copy_str_p)
+    (help @copyfiles-help)
 )
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
@@ -129,6 +131,8 @@
     (copyfiles
         (source (tackon @default-dest "gVim"))
         (dest @default-dest)
+        (prompt #copy_str_p)
+        (help @copyfiles-help)
         (optional "force")
         (newname "egVim")
         (confirm)
