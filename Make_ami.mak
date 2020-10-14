@@ -23,6 +23,7 @@ SRC:=src
 DST:=dist
 VER=$(shell cat $(SRC)/.ver)
 PAT=$(shell cat $(SRC)/.pat)
+BLD=$(shell date +%d.%m.%Y || echo Unknown)
 
 #------------------------------------------------------------------------------------------
 # Build Vim - Both MUI and Huge.
@@ -30,10 +31,10 @@ PAT=$(shell cat $(SRC)/.pat)
 .PHONY: vim
 vim: $(SRC)/.ver $(SRC)/.pat
 	$(MAKE) -C $(SRC) -f $(MKF) clean
-	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILD=mui
+	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=mui
 	mv $(SRC)/vim $@
 	$(MAKE) -C $(SRC) -f $(MKF) clean
-	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILD=huge
+	$(MAKE) -C $(SRC) -f $(MKF) PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=huge
 	mv $(SRC)/vim $(SRC)/vi
 	mv $@ $(SRC)/vim
 
