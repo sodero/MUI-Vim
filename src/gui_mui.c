@@ -3387,8 +3387,15 @@ int gui_mch_init(void)
     }
 
     // Generate full version string
-    snprintf(vs, sizeof(vs), " Vim %d.%d.%d",
-              VIM_VERSION_MAJOR, VIM_VERSION_MINOR, highest_patch());
+    snprintf(vs, sizeof(vs), "Vim %d.%d.%d"
+#ifdef BUILDDATE
+            " (%s)"
+#endif
+            , VIM_VERSION_MAJOR, VIM_VERSION_MINOR, highest_patch()
+#ifdef BUILDDATE
+            , BUILDDATE
+#endif
+            );
 
     // Set up the class hierachy
     App = MUI_NewObject(MUIC_Application,
@@ -3422,7 +3429,8 @@ int gui_mch_init(void)
 #endif
         MUIA_Application_Window, Win =
             MUI_NewObject(MUIC_Window,
-            MUIA_Window_Title, (IPTR) "Vim",
+            MUIA_Window_Title, vs,
+            MUIA_Window_ScreenTitle, vs,
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
