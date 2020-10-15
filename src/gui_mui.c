@@ -3313,7 +3313,6 @@ void gui_mch_set_menu_pos(int x, int y, int w, int h)
 //------------------------------------------------------------------------------
 int gui_mch_init(void)
 {
-    char vs[64];
     Object *Win, *Set = NULL, *Abo = NULL;
 
 #ifdef __amigaos4__
@@ -3387,7 +3386,12 @@ int gui_mch_init(void)
     }
 
     // Generate full version string
-    snprintf(vs, sizeof(vs), "Vim %d.%d.%d"
+    static char vs[64];
+    snprintf(vs, sizeof(vs),
+#ifdef __MORPHOS__
+            " "
+#endif
+            "Vim %d.%d.%d"
 #ifdef BUILDDATE
             " (%s)"
 #endif
