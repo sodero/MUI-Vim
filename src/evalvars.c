@@ -146,7 +146,6 @@ static struct vimvar
     {VV_NAME("echospace",	 VAR_NUMBER), VV_RO},
     {VV_NAME("argv",		 VAR_LIST), VV_RO},
     {VV_NAME("collate",		 VAR_STRING), VV_RO},
-    {VV_NAME("disallow_let",	 VAR_NUMBER), 0}, // TODO: remove
 };
 
 // shorthand
@@ -243,9 +242,6 @@ evalvars_init(void)
 
     set_vim_var_nr(VV_ECHOSPACE,    sc_col - 1);
 
-    // TODO: remove later
-    set_vim_var_nr(VV_DISALLOW_LET, 1);
-
     // Default for v:register is not 0 but '"'.  This is adjusted once the
     // clipboard has been setup by calling reset_reg_var().
     set_reg_var(0);
@@ -303,11 +299,23 @@ garbage_collect_vimvars(int copyID)
     int
 garbage_collect_scriptvars(int copyID)
 {
-    int		i;
-    int		abort = FALSE;
+    int		    i;
+    int		    idx;
+    int		    abort = FALSE;
+    scriptitem_T    *si;
 
     for (i = 1; i <= script_items.ga_len; ++i)
+    {
 	abort = abort || set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
+
+	si = SCRIPT_ITEM(i);
+	for (idx = 0; idx < si->sn_var_vals.ga_len; ++idx)
+	{
+	    svar_T    *sv = ((svar_T *)si->sn_var_vals.ga_data) + idx;
+
+	    abort = abort || set_ref_in_item(sv->sv_tv, copyID, NULL, NULL);
+	}
+    }
 
     return abort;
 }
@@ -737,8 +745,7 @@ ex_let(exarg_T *eap)
 	    ex_finally(eap);
 	    return;
     }
-    if (get_vim_var_nr(VV_DISALLOW_LET)
-				      && eap->cmdidx == CMD_let && vim9script)
+    if (eap->cmdidx == CMD_let && vim9script)
     {
 	emsg(_(e_cannot_use_let_in_vim9_script));
 	return;

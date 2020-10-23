@@ -550,7 +550,7 @@ call_bfunc(int func_idx, int argcount, ectx_T *ectx)
 {
     typval_T	argvars[MAX_FUNC_ARGS];
     int		idx;
-    int		did_emsg_before = did_emsg;
+    int		called_emsg_before = called_emsg;
     ectx_T	*prev_ectx = current_ectx;
 
     if (call_prepare(argcount, argvars, ectx) == FAIL)
@@ -566,7 +566,7 @@ call_bfunc(int func_idx, int argcount, ectx_T *ectx)
     for (idx = 0; idx < argcount; ++idx)
 	clear_tv(&argvars[idx]);
 
-    if (did_emsg != did_emsg_before)
+    if (called_emsg != called_emsg_before)
 	return FAIL;
     return OK;
 }
@@ -830,6 +830,8 @@ call_def_function(
     int		breakcheck_count = 0;
     int		called_emsg_before = called_emsg;
     int		save_suppress_errthrow = suppress_errthrow;
+    msglist_T	**saved_msg_list = NULL;
+    msglist_T	*private_msg_list = NULL;
 
 // Get pointer to item in the stack.
 #define STACK_TV(idx) (((typval_T *)ectx.ec_stack.ga_data) + idx)
@@ -981,6 +983,11 @@ call_def_function(
     estack_push_ufunc(ufunc, 1);
     current_sctx = ufunc->uf_script_ctx;
     current_sctx.sc_version = SCRIPT_VERSION_VIM9;
+
+    // Use a specific location for storing error messages to be converted to an
+    // exception.
+    saved_msg_list = msg_list;
+    msg_list = &private_msg_list;
 
     // Do turn errors into exceptions.
     suppress_errthrow = FALSE;
@@ -1381,6 +1388,8 @@ call_def_function(
 		tv = STACK_TV_BOT(0);
 		tv->v_type = VAR_STRING;
 		tv->v_lock = 0;
+		// This may result in NULL, which should be equivalent to an
+		// empty string.
 		tv->vval.v_string = get_reg_contents(
 					  iptr->isn_arg.number, GREG_EXPR_SRC);
 		++ectx.ec_stack.ga_len;
@@ -2082,6 +2091,15 @@ call_def_function(
 	    case ISN_THROW:
 		--ectx.ec_stack.ga_len;
 		tv = STACK_TV_BOT(0);
+		if (tv->vval.v_string == NULL
+				       || *skipwhite(tv->vval.v_string) == NUL)
+		{
+		    vim_free(tv->vval.v_string);
+		    SOURCING_LNUM = iptr->isn_lnum;
+		    emsg(_(e_throw_with_empty_string));
+		    goto failed;
+		}
+
 		if (throw_exception(tv->vval.v_string, ET_USER, NULL) == FAIL)
 		{
 		    vim_free(tv->vval.v_string);
@@ -2265,11 +2283,55 @@ call_def_function(
 		    typval_T *tv1 = STACK_TV_BOT(-2);
 		    typval_T *tv2 = STACK_TV_BOT(-1);
 
+		    // add two lists or blobs
 		    if (iptr->isn_type == ISN_ADDLIST)
 			eval_addlist(tv1, tv2);
 		    else
 			eval_addblob(tv1, tv2);
 		    clear_tv(tv2);
+		    --ectx.ec_stack.ga_len;
+		}
+		break;
+
+	    case ISN_LISTAPPEND:
+		{
+		    typval_T	*tv1 = STACK_TV_BOT(-2);
+		    typval_T	*tv2 = STACK_TV_BOT(-1);
+		    list_T	*l = tv1->vval.v_list;
+
+		    // add an item to a list
+		    if (l == NULL)
+		    {
+			SOURCING_LNUM = iptr->isn_lnum;
+			emsg(_(e_cannot_add_to_null_list));
+			goto on_error;
+		    }
+		    if (list_append_tv(l, tv2) == FAIL)
+			goto failed;
+		    clear_tv(tv2);
+		    --ectx.ec_stack.ga_len;
+		}
+		break;
+
+	    case ISN_BLOBAPPEND:
+		{
+		    typval_T	*tv1 = STACK_TV_BOT(-2);
+		    typval_T	*tv2 = STACK_TV_BOT(-1);
+		    blob_T	*b = tv1->vval.v_blob;
+		    int		error = FALSE;
+		    varnumber_T n;
+
+		    // add a number to a blob
+		    if (b == NULL)
+		    {
+			SOURCING_LNUM = iptr->isn_lnum;
+			emsg(_(e_cannot_add_to_null_blob));
+			goto on_error;
+		    }
+		    n = tv_get_number_chk(tv2, &error);
+		    if (error)
+			goto on_error;
+		    ga_append(&b->bv_ga, (int)n);
 		    --ectx.ec_stack.ga_len;
 		}
 		break;
@@ -2809,6 +2871,19 @@ failed:
 
     estack_pop();
     current_sctx = save_current_sctx;
+
+    if (*msg_list != NULL && saved_msg_list != NULL)
+    {
+	msglist_T **plist = saved_msg_list;
+
+	// Append entries from the current msg_list (uncaught exceptions) to
+	// the saved msg_list.
+	while (*plist != NULL)
+	    plist = &(*plist)->next;
+
+	*plist = *msg_list;
+    }
+    msg_list = saved_msg_list;
 
 failed_early:
     // Free all local variables, but not arguments.
@@ -3380,6 +3455,8 @@ ex_disassemble(exarg_T *eap)
 	    case ISN_CONCAT: smsg("%4d CONCAT", current); break;
 	    case ISN_STRINDEX: smsg("%4d STRINDEX", current); break;
 	    case ISN_STRSLICE: smsg("%4d STRSLICE", current); break;
+	    case ISN_LISTAPPEND: smsg("%4d LISTAPPEND", current); break;
+	    case ISN_BLOBAPPEND: smsg("%4d BLOBAPPEND", current); break;
 	    case ISN_LISTINDEX: smsg("%4d LISTINDEX", current); break;
 	    case ISN_LISTSLICE: smsg("%4d LISTSLICE", current); break;
 	    case ISN_ANYINDEX: smsg("%4d ANYINDEX", current); break;

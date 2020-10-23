@@ -2375,7 +2375,8 @@ f_popup_filter_menu(typval_T *argvars, typval_T *rettv)
 	c = TO_SPECIAL(key[1], key[2]);
 
     // consume all keys until done
-    rettv->vval.v_number = 1;
+    rettv->v_type = VAR_BOOL;
+    rettv->vval.v_number = VVAL_TRUE;
     res.v_type = VAR_NUMBER;
 
     old_lnum = wp->w_cursor.lnum;
@@ -2429,7 +2430,8 @@ f_popup_filter_yesno(typval_T *argvars, typval_T *rettv)
 	c = TO_SPECIAL(key[1], key[2]);
 
     // consume all keys until done
-    rettv->vval.v_number = 1;
+    rettv->v_type = VAR_BOOL;
+    rettv->vval.v_number = VVAL_TRUE;
 
     if (c == 'y' || c == 'Y')
 	res.vval.v_number = 1;
@@ -3147,7 +3149,7 @@ invoke_popup_filter(win_T *wp, int c)
     typval_T	argv[3];
     char_u	buf[NUMBUFLEN];
     linenr_T	old_lnum = wp->w_cursor.lnum;
-    int		prev_called_emsg = called_emsg;
+    int		prev_did_emsg = did_emsg;
 
     // Emergency exit: CTRL-C closes the popup.
     if (c == Ctrl_C)
@@ -3191,12 +3193,12 @@ invoke_popup_filter(win_T *wp, int c)
 	if (win_valid_popup(wp) && old_lnum != wp->w_cursor.lnum)
 	    popup_highlight_curline(wp);
 
-	// If an error was given always return FALSE, so that keys are not
-	// consumed and the user can type something.
+	// If an error message was given always return FALSE, so that keys are
+	// not consumed and the user can type something.
 	// If we get three errors in a row then close the popup.  Decrement the
 	// error count by 1/10 if there are no errors, thus allowing up to 1 in
 	// 10 calls to cause an error.
-	if (win_valid_popup(wp) && called_emsg > prev_called_emsg)
+	if (win_valid_popup(wp) && did_emsg > prev_did_emsg)
 	{
 	    wp->w_filter_errors += 10;
 	    if (wp->w_filter_errors >= 30)

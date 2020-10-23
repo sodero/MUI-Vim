@@ -253,29 +253,64 @@ enddef
 def Test_block_local_vars()
   var lines =<< trim END
       vim9script
+      v:testing = 1
       if true
-        var text = 'hello'
-        def SayHello(): string
+        var text = ['hello']
+        def SayHello(): list<string>
           return text
         enddef
         def SetText(v: string)
-          text = v
+          text = [v]
         enddef
       endif
 
       if true
-        var text = 'again'
-        def SayAgain(): string
+        var text = ['again']
+        def SayAgain(): list<string>
           return text
         enddef
       endif
+
+      # test that the "text" variables are not cleaned up
+      test_garbagecollect_now()
+
       defcompile
 
-      assert_equal('hello', SayHello())
-      assert_equal('again', SayAgain())
+      assert_equal(['hello'], SayHello())
+      assert_equal(['again'], SayAgain())
 
       SetText('foobar')
-      assert_equal('foobar', SayHello())
+      assert_equal(['foobar'], SayHello())
+
+      call writefile(['ok'], 'Xdidit')
+      qall!
+  END
+
+  # need to execute this with a separate Vim instance to avoid the current
+  # context gets garbage collected.
+  writefile(lines, 'Xscript')
+  RunVim([], [], '-S Xscript')
+  assert_equal(['ok'], readfile('Xdidit'))
+
+  delete('Xscript')
+  delete('Xdidit')
+enddef
+
+def Test_block_local_vars_with_func()
+  var lines =<< trim END
+      vim9script
+      if true
+        var foo = 'foo'
+        if true
+          var bar = 'bar'
+          def Func(): list<string>
+            return [foo, bar]
+          enddef
+        endif
+      endif
+      # function is compiled here, after blocks have finished, can still access
+      # "foo" and "bar"
+      assert_equal(['foo', 'bar'], Func())
   END
   CheckScriptSuccess(lines)
 enddef
@@ -599,6 +634,22 @@ def Test_throw_vimscript()
       catch
         assert_equal('onetwo', v:exception)
       endtry
+  END
+  CheckScriptSuccess(lines)
+
+  lines =<< trim END
+    vim9script
+    @r = ''
+    def Func()
+      throw @r
+    enddef
+    var result = ''
+    try
+      Func()
+    catch /E1129:/
+      result = 'caught'
+    endtry
+    assert_equal('caught', result)
   END
   CheckScriptSuccess(lines)
 enddef
@@ -2785,6 +2836,27 @@ def Test_script_var_scope()
       echo one
   END
   CheckScriptFailure(lines, 'E121:', 6)
+enddef
+
+def Test_catch_exception_in_callback()
+  var lines =<< trim END
+    vim9script
+    def Callback(...l: any)
+      try
+        var x: string
+        var y: string
+        # this error should be caught with CHECKLEN
+        [x, y] = ['']
+      catch
+        g:caught = 'yes'
+      endtry
+    enddef
+    popup_menu('popup', #{callback: Callback})
+    feedkeys("\r", 'xt')
+  END
+  CheckScriptSuccess(lines)
+
+  unlet g:caught
 enddef
 
 " Keep this last, it messes up highlighting.

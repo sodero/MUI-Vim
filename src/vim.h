@@ -1306,7 +1306,8 @@ enum auto_event
     EVENT_INSERTCHANGE,		// when changing Insert/Replace mode
     EVENT_INSERTCHARPRE,	// before inserting a char
     EVENT_INSERTENTER,		// when entering Insert mode
-    EVENT_INSERTLEAVE,		// when leaving Insert mode
+    EVENT_INSERTLEAVEPRE,	// just before leaving Insert mode
+    EVENT_INSERTLEAVE,		// just after leaving Insert mode
     EVENT_MENUPOPUP,		// just before popup menu is displayed
     EVENT_OPTIONSET,		// option was set
     EVENT_QUICKFIXCMDPOST,	// after :make, :grep etc.
@@ -1333,7 +1334,8 @@ enum auto_event
     EVENT_TABNEW,		// when entering a new tab page
     EVENT_TERMCHANGED,		// after changing 'term'
     EVENT_TERMINALOPEN,		// after a terminal buffer was created
-    EVENT_TERMINALWINOPEN,	// after a terminal buffer was created and entering its window
+    EVENT_TERMINALWINOPEN,	// after a terminal buffer was created and
+				// entering its window
     EVENT_TERMRESPONSE,		// after setting "v:termresponse"
     EVENT_TEXTCHANGED,		// text was modified not in Insert mode
     EVENT_TEXTCHANGEDI,         // text was modified in Insert mode
@@ -2000,8 +2002,7 @@ typedef int sock_T;
 #define VV_ECHOSPACE	93
 #define VV_ARGV		94
 #define VV_COLLATE      95
-#define VV_DISALLOW_LET 96	// TODO: remove again
-#define VV_LEN		97	// number of v: vars
+#define VV_LEN		96	// number of v: vars
 
 // used for v_number in VAR_BOOL and VAR_SPECIAL
 #define VVAL_FALSE	0L	// VAR_BOOL
