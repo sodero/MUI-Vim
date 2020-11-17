@@ -67,9 +67,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2020-NOT-YEY@{UB}
-- Update to VIM 8.2.X
-- ?
+@{B}2020-11-17@{UB}
+- Update to VIM 8.2.2000
+- AmigaOS4: 8 colors enabled in CLI mode.
 
 @{B}2020-09-26@{UB}
 - Update to VIM 8.2.1749.
