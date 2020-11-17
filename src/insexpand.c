@@ -298,7 +298,7 @@ has_compl_option(int dict_opt)
 	msg_attr(dict_opt ? _("'dictionary' option is empty")
 			  : _("'thesaurus' option is empty"),
 							      HL_ATTR(HLF_E));
-	if (emsg_silent == 0)
+	if (emsg_silent == 0 && !in_assert_fails)
 	{
 	    vim_beep(BO_COMPL);
 	    setcursor();
@@ -1822,7 +1822,7 @@ ins_compl_prep(int c)
 
     // Ignore end of Select mode mapping and mouse scroll buttons.
     if (c == K_SELECT || c == K_MOUSEDOWN || c == K_MOUSEUP
-	    || c == K_MOUSELEFT || c == K_MOUSERIGHT)
+	    || c == K_MOUSELEFT || c == K_MOUSERIGHT || c == K_COMMAND)
 	return retval;
 
 #ifdef FEAT_PROP_POPUP

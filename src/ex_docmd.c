@@ -1719,6 +1719,7 @@ do_one_cmd(
 #ifdef FEAT_EVAL
     int		may_have_range;
     int		vim9script = in_vim9script();
+    int		did_set_expr_line = FALSE;
 #endif
 
     CLEAR_FIELD(ea);
@@ -1781,24 +1782,44 @@ do_one_cmd(
  */
     cmd = ea.cmd;
 #ifdef FEAT_EVAL
-    // In Vim9 script a colon is required before the range.
-    may_have_range = !vim9script || starts_with_colon;
+    // In Vim9 script a colon is required before the range.  This may also be
+    // after command modifiers.
+    if (vim9script)
+    {
+	may_have_range = FALSE;
+	for (p = ea.cmd; p >= *cmdlinep; --p)
+	{
+	    if (*p == ':')
+		may_have_range = TRUE;
+	    if (p < ea.cmd && !VIM_ISWHITE(*p))
+		break;
+	}
+    }
+    else
+	may_have_range = TRUE;
     if (may_have_range)
 #endif
 	ea.cmd = skip_range(ea.cmd, TRUE, NULL);
 
 #ifdef FEAT_EVAL
-    if (vim9script && !starts_with_colon)
+    if (vim9script && !may_have_range)
     {
 	if (ea.cmd == cmd + 1 && *cmd == '$')
 	    // should be "$VAR = val"
 	    --ea.cmd;
-	else if (ea.cmd > cmd)
-	{
-	    emsg(_(e_colon_required_before_a_range));
-	    goto doend;
-	}
 	p = find_ex_command(&ea, NULL, lookup_scriptvar, NULL);
+	if (ea.cmdidx == CMD_SIZE)
+	{
+	    char_u *ar = skip_range(ea.cmd, TRUE, NULL);
+
+	    // If a ':' before the range is missing, give a clearer error
+	    // message.
+	    if (ar > ea.cmd)
+	    {
+		emsg(_(e_colon_required_before_a_range));
+		goto doend;
+	    }
+	}
     }
     else
 #endif
@@ -2315,8 +2336,9 @@ do_one_cmd(
 	    // for '=' register: accept the rest of the line as an expression
 	    if (ea.arg[-1] == '=' && ea.arg[0] != NUL)
 	    {
-		set_expr_line(vim_strsave(ea.arg));
+		set_expr_line(vim_strsave(ea.arg), &ea);
 		ea.arg += STRLEN(ea.arg);
+		did_set_expr_line = TRUE;
 	    }
 #endif
 	    ea.arg = skipwhite(ea.arg);
@@ -2595,6 +2617,9 @@ doend:
     do_errthrow(cstack,
 	    (ea.cmdidx != CMD_SIZE && !IS_USER_CMDIDX(ea.cmdidx))
 			? cmdnames[(int)ea.cmdidx].cmd_name : (char_u *)NULL);
+
+    if (did_set_expr_line)
+	set_expr_line(NULL, NULL);
 #endif
 
     undo_cmdmod(&cmdmod);
@@ -2758,7 +2783,7 @@ parse_command_modifiers(
 			    }
 #ifdef FEAT_EVAL
 			    // Avoid that "filter(arg)" is recognized.
-			    if (in_vim9script() && !VIM_ISWHITE(*p))
+			    if (in_vim9script() && !VIM_ISWHITE(p[-1]))
 				break;
 #endif
 			    if (skip_only)
@@ -6481,7 +6506,7 @@ ex_open(exarg_T *eap)
 }
 
 /*
- * ":edit", ":badd", ":visual".
+ * ":edit", ":badd", ":balt", ":visual".
  */
     static void
 ex_edit(exarg_T *eap)
@@ -6596,7 +6621,8 @@ do_exedit(
 		    + (eap->forceit ? ECMD_FORCEIT : 0)
 		      // after a split we can use an existing buffer
 		    + (old_curwin != NULL ? ECMD_OLDBUF : 0)
-		    + (eap->cmdidx == CMD_badd ? ECMD_ADDBUF : 0 )
+		    + (eap->cmdidx == CMD_badd ? ECMD_ADDBUF : 0)
+		    + (eap->cmdidx == CMD_balt ? ECMD_ALTBUF : 0)
 		    , old_curwin == NULL ? curwin : NULL) == FAIL)
 	{
 	    // Editing the file failed.  If the window was split, close it.
@@ -8122,6 +8148,9 @@ ex_startinsert(exarg_T *eap)
 	    restart_edit = 'i';
 	curwin->w_curswant = 0;	    // avoid MAXCOL
     }
+
+    if (VIsual_active)
+	showmode();
 }
 
 /*
@@ -8447,7 +8476,7 @@ find_cmdline_var(char_u *src, int *usedlen)
  * Evaluate cmdline variables.
  *
  * change '%'	    to curbuf->b_ffname
- *	  '#'	    to curwin->w_altfile
+ *	  '#'	    to curwin->w_alt_fnum
  *	  '<cword>' to word under the cursor
  *	  '<cWORD>' to WORD under the cursor
  *	  '<cexpr>' to C-expression under the cursor

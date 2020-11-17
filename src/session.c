@@ -397,6 +397,19 @@ put_view(
 	}
     }
 
+    if (wp->w_alt_fnum)
+    {
+	buf_T *alt = buflist_findnr(wp->w_alt_fnum);
+
+	// Set the alternate file.
+	if (alt != NULL
+		&& alt->b_fname != NULL
+		&& *alt->b_fname != NUL
+		&& (fputs("balt ", fd) < 0
+		|| ses_fname(fd, alt, flagp, TRUE) == FAIL))
+	    return FAIL;
+    }
+
     // Local mappings and abbreviations.
     if ((*flagp & (SSOP_OPTIONS | SSOP_LOCALOPTIONS))
 					 && makemap(fd, wp->w_buffer) == FAIL)
@@ -1216,7 +1229,7 @@ ex_mkrc(exarg_T	*eap)
 #ifdef FEAT_SESSION
 	if (!failed && view_session)
 	{
-	    if (put_line(fd, "let s:so_save = &so | let s:siso_save = &siso | set so=0 siso=0") == FAIL)
+	    if (put_line(fd, "let s:so_save = &g:so | let s:siso_save = &g:siso | setg so=0 siso=0 | setl so=-1 siso=-1") == FAIL)
 		failed = TRUE;
 	    if (eap->cmdidx == CMD_mksession)
 	    {
@@ -1261,7 +1274,7 @@ ex_mkrc(exarg_T	*eap)
 		failed |= (put_view(fd, curwin, !using_vdir, flagp, -1, NULL)
 								      == FAIL);
 	    }
-	    if (put_line(fd, "let &so = s:so_save | let &siso = s:siso_save")
+	    if (put_line(fd, "let &g:so = s:so_save | let &g:siso = s:siso_save")
 								      == FAIL)
 		failed = TRUE;
 #ifdef FEAT_SEARCH_EXTRA

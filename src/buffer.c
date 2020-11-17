@@ -2154,7 +2154,7 @@ buflist_new(
 	if (top_file_num < 0)		// wrap around (may cause duplicates)
 	{
 	    emsg(_("W14: Warning: List of file names overflow"));
-	    if (emsg_silent == 0)
+	    if (emsg_silent == 0 && !in_assert_fails)
 	    {
 		out_flush();
 		ui_delay(3001L, TRUE);	// make sure it is noticed
@@ -5648,8 +5648,19 @@ buf_spname(buf_T *buf)
     }
 
     if (buf->b_fname == NULL)
-	return (char_u *)_("[No Name]");
+	return buf_get_fname(buf);
     return NULL;
+}
+
+/*
+ * Get "buf->b_fname", use "[No Name]" if it is NULL.
+ */
+    char_u *
+buf_get_fname(buf_T *buf)
+{
+    if (buf->b_fname == NULL)
+	return (char_u *)_("[No Name]");
+    return buf->b_fname;
 }
 
 /*

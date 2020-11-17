@@ -27,8 +27,8 @@ EXTERN char e_assert_fails_second_arg[]
 	INIT(= N_("E856: \"assert_fails()\" second argument must be a string or a list with one or two strings"));
 EXTERN char e_cannot_index_special_variable[]
 	INIT(= N_("E909: Cannot index a special variable"));
-EXTERN char e_missing_let_str[]
-	INIT(= N_("E1100: Missing :let: %s"));
+EXTERN char e_missing_var_str[]
+	INIT(= N_("E1100: Missing :var: %s"));
 EXTERN char e_variable_not_found_str[]
 	INIT(= N_("E1001: Variable not found: %s"));
 EXTERN char e_syntax_error_at_str[]
@@ -89,8 +89,8 @@ EXTERN char e_compiling_def_function_failed[]
 	INIT(= N_("E1028: Compiling :def function failed"));
 EXTERN char e_expected_str_but_got_str[]
 	INIT(= N_("E1029: Expected %s but got %s"));
-EXTERN char e_using_string_as_number[]
-	INIT(= N_("E1030: Using a String as a Number"));
+EXTERN char e_using_string_as_number_str[]
+	INIT(= N_("E1030: Using a String as a Number: \"%s\""));
 EXTERN char e_cannot_use_void_value[]
 	INIT(= N_("E1031: Cannot use void value"));
 EXTERN char e_missing_catch_or_finally[]
@@ -286,4 +286,18 @@ EXTERN char e_cannot_add_to_null_list[]
 	INIT(= N_("E1130: Cannot add to null list"));
 EXTERN char e_cannot_add_to_null_blob[]
 	INIT(= N_("E1131: Cannot add to null blob"));
+EXTERN char e_missing_function_argument[]
+	INIT(= N_("E1132: Missing function argument"));
+EXTERN char e_cannot_extend_null_dict[]
+	INIT(= N_("E1133: Cannot extend a null dict"));
+EXTERN char e_cannot_extend_null_list[]
+	INIT(= N_("E1134: Cannot extend a null list"));
+EXTERN char e_using_string_as_bool_str[]
+	INIT(= N_("E1135: Using a String as a Bool: \"%s\""));
 #endif
+EXTERN char e_cmd_mapping_must_end_with_cr[]
+	INIT(=N_("E1135: <Cmd> mapping must end with <CR>"));
+EXTERN char e_cmd_mapping_must_end_with_cr_before_second_cmd[]
+	INIT(=N_("E1136: <Cmd> mapping must end with <CR> before second <Cmd>"));
+EXTERN char e_cmd_maping_must_not_include_str_key[]
+	INIT(= N_("E1137: <Cmd> mapping must not include %s key"));

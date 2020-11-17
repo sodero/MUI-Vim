@@ -464,7 +464,8 @@ screen_line(
     // First char of a popup window may go on top of the right half of a
     // double-wide character. Clear the left half to avoid it getting the popup
     // window background color.
-    if (coloff > 0 && ScreenLines[off_to] == 0
+    if (coloff > 0 && enc_utf8
+		   && ScreenLines[off_to] == 0
 		   && ScreenLinesUC[off_to - 1] != 0
 		   && (*mb_char2cells)(ScreenLinesUC[off_to - 1]) > 1)
     {
@@ -2490,7 +2491,8 @@ check_for_delay(int check_msg_scroll)
 {
     if ((emsg_on_display || (check_msg_scroll && msg_scroll))
 	    && !did_wait_return
-	    && emsg_silent == 0)
+	    && emsg_silent == 0
+	    && !in_assert_fails)
     {
 	out_flush();
 	ui_delay(1006L, TRUE);
@@ -4190,7 +4192,8 @@ showmode(void)
 #endif
 		    msg_puts_attr(_(" INSERT"), attr);
 		}
-		else if (restart_edit == 'I' || restart_edit == 'A')
+		else if (restart_edit == 'I' || restart_edit == 'i' ||
+			restart_edit == 'a' || restart_edit == 'A')
 		    msg_puts_attr(_(" (insert)"), attr);
 		else if (restart_edit == 'R')
 		    msg_puts_attr(_(" (replace)"), attr);

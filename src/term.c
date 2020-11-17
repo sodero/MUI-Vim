@@ -1800,7 +1800,7 @@ report_default_term(char_u *term)
     mch_errmsg(_("defaulting to '"));
     mch_errmsg((char *)term);
     mch_errmsg("'\r\n");
-    if (emsg_silent == 0)
+    if (emsg_silent == 0 && !in_assert_fails)
     {
 	screen_start();	// don't know where cursor is now
 	out_flush();
@@ -4462,7 +4462,8 @@ modifiers2keycode(int modifiers, int *key, char_u *string)
     if (modifiers != 0)
     {
 	// Some keys have the modifier included.  Need to handle that here to
-	// make mappings work.
+	// make mappings work.  This may result in a special key, such as
+	// K_S_TAB.
 	*key = simplify_key(*key, &modifiers);
 	if (modifiers != 0)
 	{
@@ -4793,7 +4794,13 @@ handle_key_with_modifier(
     // insert modifiers with KS_MODIFIER
     new_slen = modifiers2keycode(modifiers, &key, string);
 
-    if (has_mbyte)
+    if (IS_SPECIAL(key))
+    {
+	string[new_slen++] = K_SPECIAL;
+	string[new_slen++] = KEY2TERMCAP0(key);
+	string[new_slen++] = KEY2TERMCAP1(key);
+    }
+    else if (has_mbyte)
 	new_slen += (*mb_char2bytes)(key, string + new_slen);
     else
 	string[new_slen++] = key;

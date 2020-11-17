@@ -629,6 +629,14 @@ def HasSomething()
   endif
 enddef
 
+def HasGuiRunning()
+  if has("gui_running")
+    echo "yes"
+  else
+    echo "no"
+  endif
+enddef
+
 def Test_disassemble_const_expr()
   assert_equal("\nyes", execute('HasEval()'))
   var instr = execute('disassemble HasEval')
@@ -676,6 +684,68 @@ def Test_disassemble_const_expr()
   assert_notmatch('PUSHS "something"', instr)
   assert_notmatch('PUSHS "less"', instr)
   assert_notmatch('JUMP', instr)
+
+  var result: string
+  var instr_expected: string
+  if has('gui')
+    if has('gui_running')
+      # GUI already running, always returns "yes"
+      result = "\nyes"
+      instr_expected = 'HasGuiRunning.*' ..
+          'if has("gui_running")\_s*' ..
+          '  echo "yes"\_s*' ..
+          '\d PUSHS "yes"\_s*' ..
+          '\d ECHO 1\_s*' ..
+          'else\_s*' ..
+          '  echo "no"\_s*' ..
+          'endif'
+    else
+      result = "\nno"
+      if has('unix')
+        # GUI not running but can start later, call has()
+        instr_expected = 'HasGuiRunning.*' ..
+            'if has("gui_running")\_s*' ..
+            '\d PUSHS "gui_running"\_s*' ..
+            '\d BCALL has(argc 1)\_s*' ..
+            '\d COND2BOOL\_s*' ..
+            '\d JUMP_IF_FALSE -> \d\_s*' ..
+            '  echo "yes"\_s*' ..
+            '\d PUSHS "yes"\_s*' ..
+            '\d ECHO 1\_s*' ..
+            'else\_s*' ..
+            '\d JUMP -> \d\_s*' ..
+            '  echo "no"\_s*' ..
+            '\d PUSHS "no"\_s*' ..
+            '\d ECHO 1\_s*' ..
+            'endif'
+      else
+        # GUI not running, always return "no"
+        instr_expected = 'HasGuiRunning.*' ..
+            'if has("gui_running")\_s*' ..
+            '  echo "yes"\_s*' ..
+            'else\_s*' ..
+            '  echo "no"\_s*' ..
+            '\d PUSHS "no"\_s*' ..
+            '\d ECHO 1\_s*' ..
+            'endif'
+      endif
+    endif
+  else
+    # GUI not supported, always return "no"
+    result = "\nno"
+    instr_expected = 'HasGuiRunning.*' ..
+        'if has("gui_running")\_s*' ..
+        '  echo "yes"\_s*' ..
+        'else\_s*' ..
+        '  echo "no"\_s*' ..
+        '\d PUSHS "no"\_s*' ..
+        '\d ECHO 1\_s*' ..
+        'endif'
+  endif
+
+  assert_equal(result, execute('HasGuiRunning()'))
+  instr = execute('disassemble HasGuiRunning')
+  assert_match(instr_expected, instr)
 enddef
 
 def ReturnInIf(): string
@@ -691,14 +761,15 @@ def Test_disassemble_return_in_if()
   assert_match('ReturnInIf\_s*' ..
         'if g:cond\_s*' ..
         '0 LOADG g:cond\_s*' ..
-        '1 JUMP_IF_FALSE -> 4\_s*' ..
+        '1 COND2BOOL\_s*' ..
+        '2 JUMP_IF_FALSE -> 5\_s*' ..
         'return "yes"\_s*' ..
-        '2 PUSHS "yes"\_s*' ..
-        '3 RETURN\_s*' ..
+        '3 PUSHS "yes"\_s*' ..
+        '4 RETURN\_s*' ..
         'else\_s*' ..
         ' return "no"\_s*' ..
-        '4 PUSHS "no"\_s*' ..
-        '5 RETURN$',
+        '5 PUSHS "no"\_s*' ..
+        '6 RETURN$',
         instr)
 enddef
 
@@ -784,6 +855,28 @@ def Test_disassemble_lambda()
         '\d CONCAT\_s*' ..
         '\d PUSHS "X"\_s*' ..
         '\d CONCAT\_s*' ..
+        '\d RETURN',
+        instr)
+enddef
+
+def LambdaWithType(): number
+  var Ref = {a: number -> a + 10}
+  return Ref(g:value)
+enddef
+
+def Test_disassemble_lambda_with_type()
+  g:value = 5
+  assert_equal(15, LambdaWithType())
+  var instr = execute('disassemble LambdaWithType')
+  assert_match('LambdaWithType\_s*' ..
+        'var Ref = {a: number -> a + 10}\_s*' ..
+        '\d FUNCREF <lambda>\d\+\_s*' ..
+        '\d STORE $0\_s*' ..
+        'return Ref(g:value)\_s*' ..
+        '\d LOADG g:value\_s*' ..
+        '\d LOAD $0\_s*' ..
+        '\d CHECKTYPE number stack\[-2\]\_s*' ..
+        '\d PCALL (argc 1)\_s*' ..
         '\d RETURN',
         instr)
 enddef
@@ -1266,16 +1359,17 @@ def Test_disassemble_return_bool()
   assert_match('ReturnBool\_s*' ..
         'var name: bool = 1 && 0 || 1\_s*' ..
         '0 PUSHNR 1\_s*' ..
-        '1 JUMP_IF_COND_FALSE -> 3\_s*' ..
-        '2 PUSHNR 0\_s*' ..
-        '3 COND2BOOL\_s*' ..
-        '4 JUMP_IF_COND_TRUE -> 6\_s*' ..
-        '5 PUSHNR 1\_s*' ..
-        '6 2BOOL (!!val)\_s*' ..
+        '1 2BOOL (!!val)\_s*' ..
+        '2 JUMP_IF_COND_FALSE -> 5\_s*' ..
+        '3 PUSHNR 0\_s*' ..
+        '4 2BOOL (!!val)\_s*' ..
+        '5 JUMP_IF_COND_TRUE -> 8\_s*' ..
+        '6 PUSHNR 1\_s*' ..
+        '7 2BOOL (!!val)\_s*' ..
         '\d STORE $0\_s*' ..
         'return name\_s*' ..
-        '\d LOAD $0\_s*' ..   
-        '\d RETURN',
+        '\d\+ LOAD $0\_s*' ..   
+        '\d\+ RETURN',
         instr)
   assert_equal(true, InvertBool())
 enddef

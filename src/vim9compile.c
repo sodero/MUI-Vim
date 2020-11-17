@@ -820,7 +820,7 @@ generate_TYPECHECK(
  * Return TRUE if "actual" could be "expected" and a runtime typecheck is to be
  * used.  Return FALSE if the types will never match.
  */
-    static int
+    int
 use_typecheck(type_T *actual, type_T *expected)
 {
     if (actual->tt_type == VAR_ANY
@@ -877,6 +877,28 @@ need_type(
     if (!silent)
 	type_mismatch(expected, actual);
     return FAIL;
+}
+
+/*
+ * Check that the top of the type stack has a type that can be used as a
+ * condition.  Give an error and return FAIL if not.
+ */
+    static int
+bool_on_stack(cctx_T *cctx)
+{
+    garray_T	*stack = &cctx->ctx_type_stack;
+    type_T	*type;
+
+    type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
+    if (type == &t_bool)
+	return OK;
+
+    if (type == &t_any || type == &t_number)
+	// Number 0 and 1 are OK to use as a bool.  "any" could also be a bool.
+	// This requires a runtime type check.
+	return generate_COND2BOOL(cctx);
+
+    return need_type(type, &t_bool, -1, cctx, FALSE, FALSE);
 }
 
 /*
@@ -1687,13 +1709,37 @@ generate_PCALL(
 
 	    if (argcount < type->tt_min_argcount - varargs)
 	    {
-		semsg(_(e_toofewarg), "[reference]");
+		semsg(_(e_toofewarg), name);
 		return FAIL;
 	    }
 	    if (!varargs && argcount > type->tt_argcount)
 	    {
-		semsg(_(e_toomanyarg), "[reference]");
+		semsg(_(e_toomanyarg), name);
 		return FAIL;
+	    }
+	    if (type->tt_args != NULL)
+	    {
+		int i;
+
+		for (i = 0; i < argcount; ++i)
+		{
+		    int	    offset = -argcount + i - 1;
+		    type_T *actual = ((type_T **)stack->ga_data)[
+						       stack->ga_len + offset];
+		    type_T *expected;
+
+		    if (varargs && i >= type->tt_min_argcount - 1)
+			expected = type->tt_args[
+					 type->tt_min_argcount - 1]->tt_member;
+		    else
+			expected = type->tt_args[i];
+		    if (need_type(actual, expected, offset,
+						    cctx, TRUE, FALSE) == FAIL)
+		    {
+			arg_type_mismatch(expected, actual, i + 1);
+			return FAIL;
+		    }
+		}
 	    }
 	}
 	ret_type = type->tt_member;
@@ -2596,7 +2642,8 @@ compile_call(
 	else if (*s == '\'')
 	    (void)eval_lit_string(&s, &argvars[0], TRUE);
 	s = skipwhite(s);
-	if (*s == ')' && argvars[0].v_type == VAR_STRING)
+	if (*s == ')' && argvars[0].v_type == VAR_STRING
+		&& !dynamic_feature(argvars[0].vval.v_string))
 	{
 	    typval_T	*tv = &ppconst->pp_tv[ppconst->pp_used];
 
@@ -2642,6 +2689,7 @@ compile_call(
 		type_T	    *type = ((type_T **)stack->ga_data)[
 							    stack->ga_len - 2];
 
+		// add() can be compiled to instructions if we know the type
 		if (type->tt_type == VAR_LIST)
 		{
 		    // inline "add(list, item)" so that the type can be checked
@@ -2834,7 +2882,7 @@ compile_lambda(char_u **arg, cctx_T *cctx)
     evalarg.eval_cctx = cctx;
 
     // Get the funcref in "rettv".
-    if (get_lambda_tv(arg, &rettv, &evalarg) != OK)
+    if (get_lambda_tv(arg, &rettv, TRUE, &evalarg) != OK)
     {
 	clear_evalarg(&evalarg, NULL);
 	return FAIL;
@@ -2843,7 +2891,6 @@ compile_lambda(char_u **arg, cctx_T *cctx)
     ufunc = rettv.vval.v_partial->pt_func;
     ++ufunc->uf_refcount;
     clear_tv(&rettv);
-    ga_init2(&ufunc->uf_type_list, sizeof(type_T *), 10);
 
     // The function will have one line: "return {expr}".
     // Compile it into instructions.
@@ -2879,7 +2926,7 @@ compile_lambda_call(char_u **arg, cctx_T *cctx)
     int		ret = FAIL;
 
     // Get the funcref in "rettv".
-    if (get_lambda_tv(arg, &rettv, &EVALARG_EVALUATE) == FAIL)
+    if (get_lambda_tv(arg, &rettv, TRUE, &EVALARG_EVALUATE) == FAIL)
 	return FAIL;
 
     if (**arg != '(')
@@ -3795,10 +3842,12 @@ compile_expr7(
 	 */
 	case '{':   {
 			char_u *start = skipwhite(*arg + 1);
+			garray_T ga_arg;
 
 			// Find out what comes after the arguments.
 			ret = get_function_args(&start, '-', NULL,
-					   NULL, NULL, NULL, TRUE, NULL, NULL);
+					&ga_arg, TRUE, NULL, NULL,
+							     TRUE, NULL, NULL);
 			if (ret != FAIL && *start == '>')
 			    ret = compile_lambda(arg, cctx);
 			else
@@ -4279,8 +4328,6 @@ compile_and_or(
     {
 	garray_T	*instr = &cctx->ctx_instr;
 	garray_T	end_ga;
-	garray_T	*stack = &cctx->ctx_type_stack;
-	int		all_bool_values = TRUE;
 
 	/*
 	 * Repeat until there is no following "||" or "&&"
@@ -4304,8 +4351,12 @@ compile_and_or(
 	    // evaluating to bool
 	    generate_ppconst(cctx, ppconst);
 
-	    if (((type_T **)stack->ga_data)[stack->ga_len - 1] != &t_bool)
-		all_bool_values = FALSE;
+	    // Every part must evaluate to a bool.
+	    if (bool_on_stack(cctx) == FAIL)
+	    {
+		ga_clear(&end_ga);
+		return FAIL;
+	    }
 
 	    if (ga_grow(&end_ga, 1) == FAIL)
 	    {
@@ -4333,6 +4384,13 @@ compile_and_or(
 	}
 	generate_ppconst(cctx, ppconst);
 
+	// Every part must evaluate to a bool.
+	if (bool_on_stack(cctx) == FAIL)
+	{
+	    ga_clear(&end_ga);
+	    return FAIL;
+	}
+
 	// Fill in the end label in all jumps.
 	while (end_ga.ga_len > 0)
 	{
@@ -4344,10 +4402,6 @@ compile_and_or(
 	    isn->isn_arg.jump.jump_where = instr->ga_len;
 	}
 	ga_clear(&end_ga);
-
-	// The resulting type is converted to bool if needed.
-	if (!all_bool_values)
-	    generate_COND2BOOL(cctx);
     }
 
     return OK;
@@ -4358,11 +4412,11 @@ compile_and_or(
  *
  * Produces instructions:
  *	EVAL expr4a		Push result of "expr4a"
+ *	COND2BOOL		convert to bool if needed
  *	JUMP_IF_COND_FALSE end
  *	EVAL expr4b		Push result of "expr4b"
  *	JUMP_IF_COND_FALSE end
  *	EVAL expr4c		Push result of "expr4c"
- *	COND2BOOL
  * end:
  */
     static int
@@ -4383,11 +4437,11 @@ compile_expr3(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
  *
  * Produces instructions:
  *	EVAL expr3a		Push result of "expr3a"
+ *	COND2BOOL		convert to bool if needed
  *	JUMP_IF_COND_TRUE end
  *	EVAL expr3b		Push result of "expr3b"
  *	JUMP_IF_COND_TRUE end
  *	EVAL expr3c		Push result of "expr3c"
- *	COND2BOOL
  * end:
  */
     static int
@@ -5330,14 +5384,14 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 	member_type = type;
 	if (var_end > var_start + varlen)
 	{
-	    // Something follows after the variable: "var[idx]".
+	    // Something follows after the variable: "var[idx]" or "var.key".
 	    if (is_decl)
 	    {
 		emsg(_(e_cannot_use_index_when_declaring_variable));
 		goto theend;
 	    }
 
-	    if (var_start[varlen] == '[')
+	    if (var_start[varlen] == '[' || var_start[varlen] == '.')
 	    {
 		has_index = TRUE;
 		if (type->tt_member == NULL)
@@ -5581,21 +5635,33 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 	{
 	    int r;
 
-	    // Compile the "idx" in "var[idx]".
+	    // Compile the "idx" in "var[idx]" or "key" in "var.key".
 	    if (new_local)
 		--cctx->ctx_locals.ga_len;
-	    p = skipwhite(var_start + varlen + 1);
-	    r = compile_expr0(&p, cctx);
+	    p = var_start + varlen;
+	    if (*p == '[')
+	    {
+		p = skipwhite(p + 1);
+		r = compile_expr0(&p, cctx);
+		if (r == OK && *skipwhite(p) != ']')
+		{
+		    // this should not happen
+		    emsg(_(e_missbrac));
+		    r = FAIL;
+		}
+	    }
+	    else // if (*p == '.')
+	    {
+		char_u *key_end = to_name_end(p + 1, TRUE);
+		char_u *key = vim_strnsave(p + 1, key_end - p - 1);
+
+		r = generate_PUSHS(cctx, key);
+	    }
 	    if (new_local)
 		++cctx->ctx_locals.ga_len;
 	    if (r == FAIL)
 		goto theend;
-	    if (*skipwhite(p) != ']')
-	    {
-		// this should not happen
-		emsg(_(e_missbrac));
-		goto theend;
-	    }
+
 	    if (type == &t_any)
 	    {
 		type_T	    *idx_type = ((type_T **)stack->ga_data)[
@@ -5938,23 +6004,6 @@ drop_scope(cctx_T *cctx)
 	    break;
     }
     vim_free(scope);
-}
-
-/*
- * Check that the top of the type stack has a type that can be used as a
- * condition.  Give an error and return FAIL if not.
- */
-    static int
-bool_on_stack(cctx_T *cctx)
-{
-    garray_T	*stack = &cctx->ctx_type_stack;
-    type_T	*type;
-
-    type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
-    if (type != &t_bool && type != &t_number && type != &t_any
-	    && need_type(type, &t_bool, -1, cctx, FALSE, FALSE) == FAIL)
-	return FAIL;
-    return OK;
 }
 
 /*
@@ -6998,12 +7047,11 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
     char	*errormsg = NULL;	// error message
     cctx_T	cctx;
     garray_T	*instr;
-    int		called_emsg_before = called_emsg;
+    int		did_emsg_before = did_emsg;
     int		ret = FAIL;
     sctx_T	save_current_sctx = current_sctx;
     int		save_estack_compiling = estack_compiling;
     int		do_estack_push;
-    int		emsg_before = called_emsg;
     int		new_def_function = FALSE;
 
     // When using a function that was compiled before: Free old instructions.
@@ -7107,7 +7155,7 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 
 	// Bail out on the first error to avoid a flood of errors and report
 	// the right line number when inside try/catch.
-	if (emsg_before != called_emsg)
+	if (did_emsg_before != did_emsg)
 	    goto erret;
 
 	if (line != NULL && *line == '|')
@@ -7127,7 +7175,6 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 		// beyond the last line
 		break;
 	}
-	emsg_before = called_emsg;
 
 	CLEAR_FIELD(ea);
 	ea.cmdlinep = &line;
@@ -7175,10 +7222,6 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 		    continue;
 		}
 		break;
-
-	    case ':':
-		starts_with_colon = TRUE;
-		break;
 	}
 
 	/*
@@ -7196,6 +7239,16 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 	}
 	generate_cmdmods(&cctx, &local_cmdmod);
 	undo_cmdmod(&local_cmdmod);
+
+	// Check if there was a colon after the last command modifier or before
+	// the current position.
+	for (p = ea.cmd; p >= line; --p)
+	{
+	    if (*p == ':')
+		starts_with_colon = TRUE;
+	    if (p < ea.cmd && !VIM_ISWHITE(*p))
+		break;
+	}
 
 	// Skip ":call" to get to the function name.
 	p = ea.cmd;
@@ -7585,7 +7638,7 @@ erret:
 
 	if (errormsg != NULL)
 	    emsg(errormsg);
-	else if (called_emsg == called_emsg_before)
+	else if (did_emsg == did_emsg_before)
 	    emsg(_(e_compiling_def_function_failed));
     }
 

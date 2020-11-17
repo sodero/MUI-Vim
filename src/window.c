@@ -1461,6 +1461,30 @@ win_valid(win_T *win)
 }
 
 /*
+ * Find window "id" in the current tab page.
+ * Also find popup windows.
+ * Return NULL if not found.
+ */
+    win_T *
+win_find_by_id(int id)
+{
+    win_T   *wp;
+
+    FOR_ALL_WINDOWS(wp)
+	if (wp->w_id == id)
+	    return wp;
+#ifdef FEAT_PROP_POPUP
+    FOR_ALL_POPUPWINS(wp)
+	if (wp->w_id == id)
+	    return wp;
+    FOR_ALL_POPUPWINS_IN_TAB(curtab, wp)
+	if (wp->w_id == id)
+	    return wp;
+#endif
+    return NULL;
+}
+
+/*
  * Check if "win" is a pointer to an existing window in any tab page.
  */
     int
@@ -2569,7 +2593,12 @@ win_close(win_T *win, int free_buf)
 
     // Now we are really going to close the window.  Disallow any autocommand
     // to split a window to avoid trouble.
+    // Also bail out of parse_queued_messages() to avoid it tries to update the
+    // screen.
     ++split_disallowed;
+#ifdef MESSAGE_QUEUE
+    ++dont_parse_messages;
+#endif
 
     // Free the memory used for the window and get the window that received
     // the screen space.
@@ -2626,6 +2655,9 @@ win_close(win_T *win, int free_buf)
     }
 
     --split_disallowed;
+#ifdef MESSAGE_QUEUE
+    --dont_parse_messages;
+#endif
 
     /*
      * If last window has a status line now and we don't want one,
