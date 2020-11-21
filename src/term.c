@@ -86,6 +86,9 @@ static void del_termcode_idx(int idx);
 static int find_term_bykeys(char_u *src);
 static int term_is_builtin(char_u *name);
 static int term_7to8bit(char_u *p);
+#ifdef USE_TERM_CONSOLE
+static int term_is_console(char_u *name);
+#endif
 
 #ifdef HAVE_TGETENT
 static char *tgetent_error(char_u *, char_u *);
@@ -1320,6 +1323,102 @@ static struct builtin_term builtin_termcaps[] =
     {(int)KS_CM,	IF_EB("\033[%i%d;%dH", ESC_STR "[%i%d;%dH")},
 #endif
 
+# if defined(AMIGA) || defined(ALL_BUILTIN_TCAPS)
+/*
+ * MorphOS
+ */
+    {(int)KS_NAME,	"morphos"},
+    {(int)KS_CE,	"\033[K"},
+    {(int)KS_CD,	"\033[J"},
+    {(int)KS_AL,	"\033[L"},
+#  ifdef TERMINFO
+    {(int)KS_CAL,	"\033[%p1%dL"},
+#  else
+    {(int)KS_CAL,	"\033[%dL"},
+#  endif
+    {(int)KS_DL,	"\033[M"},
+#  ifdef TERMINFO
+    {(int)KS_CDL,	"\033[%p1%dM"},
+#  else
+    {(int)KS_CDL,	"\033[%dM"},
+#  endif
+    {(int)KS_CL,	"\014"},
+    {(int)KS_VI,	"\033[0 p"},
+    {(int)KS_VE,	"\033[1 p"},
+    {(int)KS_ME,	"\033[0m"},
+    {(int)KS_MR,	"\033[7m"},
+    {(int)KS_MD,	"\033[1m"},
+    {(int)KS_SE,	"\033[0m"},
+    {(int)KS_SO,	"\033[33m"},
+    {(int)KS_US,	"\033[4m"},
+    {(int)KS_UE,	"\033[0m"},
+    {(int)KS_CZH,	"\033[3m"},
+    {(int)KS_CZR,	"\033[0m"},
+    {(int)KS_CCO,	"8"},		// allow 8 colors
+#  ifdef TERMINFO
+    {(int)KS_CAB,	"\033[4%p1%dm"},// set background color
+    {(int)KS_CAF,	"\033[3%p1%dm"},// set foreground color
+#  else
+    {(int)KS_CAB,	"\033[4%dm"},	// set background color
+    {(int)KS_CAF,	"\033[3%dm"},	// set foreground color
+#  endif
+    {(int)KS_OP,	"\033[m"},	// reset colors
+    {(int)KS_MS,	"y"},
+    {(int)KS_UT,	"y"},		// guessed
+    {(int)KS_LE,	"\b"},
+#  ifdef TERMINFO
+    {(int)KS_CM,	"\033[%i%p1%d;%p2%dH"},
+#  else
+    {(int)KS_CM,	"\033[%i%d;%dH"},
+#  endif
+    {(int)KS_SR,	"\033M"},
+#  ifdef TERMINFO
+    {(int)KS_CRI,	"\033[%p1%dC"},
+#  else
+    {(int)KS_CRI,	"\033[%dC"},
+#  endif
+    {K_UP,		"\233A"},
+    {K_DOWN,		"\233B"},
+    {K_LEFT,		"\233D"},
+    {K_RIGHT,		"\233C"},
+    {K_S_UP,		"\233T"},
+    {K_S_DOWN,		"\233S"},
+    {K_S_LEFT,		"\233 A"},
+    {K_S_RIGHT,		"\233 @"},
+    {K_S_TAB,		"\233Z"},
+    {K_F1,		"\233\060~"},// some compilers don't dig "\2330"
+    {K_F2,		"\233\061~"},
+    {K_F3,		"\233\062~"},
+    {K_F4,		"\233\063~"},
+    {K_F5,		"\233\064~"},
+    {K_F6,		"\233\065~"},
+    {K_F7,		"\233\066~"},
+    {K_F8,		"\233\067~"},
+    {K_F9,		"\233\070~"},
+    {K_F10,		"\233\071~"},
+    {K_S_F1,		"\233\061\060~"},
+    {K_S_F2,		"\233\061\061~"},
+    {K_S_F3,		"\233\061\062~"},
+    {K_S_F4,		"\233\061\063~"},
+    {K_S_F5,		"\233\061\064~"},
+    {K_S_F6,		"\233\061\065~"},
+    {K_S_F7,		"\233\061\066~"},
+    {K_S_F8,		"\233\061\067~"},
+    {K_S_F9,		"\233\061\070~"},
+    {K_S_F10,		"\233\061\071~"},
+    {K_HELP,		"\233?~"},
+    {K_INS,		"\233\064\060~"},	// 101 key keyboard
+    {K_PAGEUP,		"\233\064\061~"},	// 101 key keyboard
+    {K_PAGEDOWN,	"\233\064\062~"},	// 101 key keyboard
+    {K_HOME,		"\233\064\064~"},	// 101 key keyboard
+    {K_END,		"\233\064\065~"},	// 101 key keyboard
+
+    {BT_EXTRA_KEYS,	""},
+    {TERMCAP2KEY('#', '2'), "\233\065\064~"},	// shifted home key
+    {TERMCAP2KEY('#', '3'), "\233\065\060~"},	// shifted insert key
+    {TERMCAP2KEY('*', '7'), "\233\065\065~"},	// shifted end key
+# endif
+
 /*
  * end marker
  */
@@ -2046,7 +2145,7 @@ set_termname(char_u *term)
 
 #ifdef USE_TERM_CONSOLE
     // DEFAULT_TERM indicates that it is the machine console.
-    if (STRCMP(term, DEFAULT_TERM) != 0)
+    if (!term_is_console(term))
 	term_console = FALSE;
     else
     {
@@ -2342,6 +2441,18 @@ term_is_builtin(char_u *name)
 {
     return (STRNCMP(name, "builtin_", (size_t)8) == 0);
 }
+
+#ifdef USE_TERM_CONSOLE
+static int
+term_is_console(char_u *name)
+{
+#ifdef AMIGA
+    return mch_is_console(name);
+#else
+    return STRCMP(name, DEFAULT_TERM) == 0;
+#endif
+}
+#endif
 
 /*
  * Return TRUE if terminal "name" uses CSI instead of <Esc>[.

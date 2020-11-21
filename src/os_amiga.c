@@ -1832,6 +1832,16 @@ mch_has_wildcard(char_u *p)
 }
 
 /*
+ * Return TRUE if "name" is a valid console
+ */
+    int
+mch_is_console(char_u *name)
+{
+    return STRCMP(name, "amiga") == 0 ||
+	   STRCMP(name, "morphos") == 0;
+}
+
+/*
  * With AmigaDOS 2.0 support for reading local environment variables
  *
  * Two buffers are allocated:

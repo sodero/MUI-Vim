@@ -45,4 +45,5 @@ int mch_has_wildcard(char_u *p);
 char_u *mch_getenv(char_u *var);
 int mch_setenv(char *var, char *value, int x);
 void mch_setmouse(int on);
+int mch_is_console(char_u *name);
 /* vim: set ft=c : */
