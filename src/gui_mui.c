@@ -166,7 +166,9 @@ CLASS_DEF(VimCon)
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
     struct MUI_InputHandlerNode ticker;
+#ifdef FEAT_TIMEOUT
     struct MUI_InputHandlerNode timeout;
+#endif
 };
 
 //------------------------------------------------------------------------------
@@ -182,8 +184,10 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_DeleteLines      (TAGBASE_sTx + 108)
 #define MUIM_VimCon_DrawPartCursor   (TAGBASE_sTx + 109)
 #define MUIM_VimCon_DrawHollowCursor (TAGBASE_sTx + 110)
+#ifdef FEAT_TIMEOUT
 #define MUIM_VimCon_SetTimeout       (TAGBASE_sTx + 111)
 #define MUIM_VimCon_Timeout          (TAGBASE_sTx + 112)
+#endif
 #define MUIM_VimCon_Beep             (TAGBASE_sTx + 113)
 #define MUIM_VimCon_Ticker           (TAGBASE_sTx + 114)
 #define MUIM_VimCon_SetBlinking      (TAGBASE_sTx + 115)
@@ -201,7 +205,9 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
+#ifdef FEAT_TIMEOUT
 #define MUIV_VimCon_State_Timeout    (1 << 2)
+#endif
 #define MUIV_VimCon_State_Unknown    (0)
 
 struct MUIP_VimCon_SetFgColor
@@ -236,11 +242,13 @@ struct MUIP_VimCon_GetScreenDim
     STACKED IPTR HeightPtr;
 };
 
+#ifdef FEAT_TIMEOUT
 struct MUIP_VimCon_SetTimeout
 {
     STACKED ULONG MethodID;
     STACKED ULONG Timeout;
 };
+#endif
 
 struct MUIP_VimCon_Callback
 {
@@ -724,6 +732,7 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     return TRUE;
 }
 
+#ifdef FEAT_TIMEOUT
 //------------------------------------------------------------------------------
 // VimConTimeout - Timeout handler
 // Input:          -
@@ -771,6 +780,7 @@ MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
 
     return FALSE;
 }
+#endif
 
 //------------------------------------------------------------------------------
 // VimConDirty - Tag rectangular part of raster port as dirty
@@ -1165,10 +1175,12 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->xdelta = my->ydelta = 1;
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
+#ifdef FEAT_TIMEOUT
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
     my->timeout.ihn_Flags = MUIIHNF_TIMER;
     my->timeout.ihn_Method = MUIM_VimCon_Timeout;
+#endif
     my->ticker.ihn_Object = obj;
     my->ticker.ihn_Flags = MUIIHNF_TIMER;
     my->ticker.ihn_Method = MUIM_VimCon_Ticker;
@@ -1229,11 +1241,13 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // Install the main event handler
     DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
 
+#ifdef FEAT_TIMEOUT
     // Install timeout timer if previously present
     if(my->timeout.ihn_Millis)
     {
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
     }
+#endif
 
     // Install blink handler if previously present
     if(my->blink)
@@ -1278,11 +1292,13 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
+#ifdef FEAT_TIMEOUT
     // Remove timeout timer if present
     if(my->timeout.ihn_Millis)
     {
         DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->timeout);
     }
+#endif
 
     // Remove cursor blink timer if present
     if(my->blink)
@@ -1839,12 +1855,14 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
         return MUIV_VimCon_State_Yield;
     }
 
+#ifdef FEAT_TIMEOUT
     // Timeout takes precedence over nothing
     if(my->state & MUIV_VimCon_State_Timeout)
     {
         my->state = MUIV_VimCon_State_Idle;
         return MUIV_VimCon_State_Timeout;
     }
+#endif
 
     // Real trouble
     ERR("Unknown state");
@@ -2160,9 +2178,14 @@ DISPATCH(VimCon)
         return VimConDrawHollowCursor(cls, obj,
                (struct MUIP_VimCon_DrawHollowCursor *) msg);
 
+#ifdef FEAT_TIMEOUT
     case MUIM_VimCon_SetTimeout:
         return VimConSetTimeout(cls, obj,
                (struct MUIP_VimCon_SetTimeout *) msg);
+
+    case MUIM_VimCon_Timeout:
+        return VimConTimeout(cls, obj);
+#endif
 
     case MUIM_VimCon_SetBlinking:
         return VimConSetBlinking(cls, obj,
@@ -2182,9 +2205,6 @@ DISPATCH(VimCon)
 
     case MUIM_VimCon_GetState:
         return VimConGetState(cls, obj);
-
-    case MUIM_VimCon_Timeout:
-        return VimConTimeout(cls, obj);
 
     case MUIM_VimCon_Ticker:
         return VimConTicker(cls, obj);
@@ -3133,8 +3153,11 @@ int gui_mch_wait_for_chars(int wtime)
             {
                 // Something happened. Either input, a voluntary
                 // yield or a timeout.
-                if(state != MUIV_VimCon_State_Yield &&
-                   state != MUIV_VimCon_State_Timeout)
+                if(state != MUIV_VimCon_State_Yield
+#ifdef FEAT_TIMEOUT
+                   && state != MUIV_VimCon_State_Timeout
+#endif
+                )
                 {
                     ERR("Unknown state");
                     getout_preserve_modified(0);
