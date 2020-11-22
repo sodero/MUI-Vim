@@ -67,6 +67,11 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2021-NOT-YET@{UB}
+- Update to VIM 8.WHAT.EVER
+- MorphOS TCAP.
+- ?
+
 @{B}2020-11-17@{UB}
 - Update to VIM 8.2.2000
 - AmigaOS4: 8 colors enabled in CLI mode.
