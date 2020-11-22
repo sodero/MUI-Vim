@@ -227,6 +227,10 @@ call_dfunc(int cdf_idx, int argcount_arg, ectx_T *ectx)
 								       == FAIL)
 	return FAIL;
 
+    // If depth of calling is getting too high, don't execute the function.
+    if (funcdepth_increment() == FAIL)
+	return FAIL;
+
     // Move the vararg-list to below the missing optional arguments.
     if (vararg_count > 0 && arg_to_add > 0)
 	*STACK_TV_BOT(arg_to_add - 1) = *STACK_TV_BOT(-1);
@@ -503,6 +507,7 @@ func_return(ectx_T *ectx)
     ectx->ec_stack.ga_len = top + 1;
     *STACK_TV_BOT(-1) = *STACK_TV(idx);
 
+    funcdepth_decrement();
     return OK;
 }
 
@@ -828,13 +833,14 @@ call_def_function(
     int		defcount = ufunc->uf_args.ga_len - argc;
     sctx_T	save_current_sctx = current_sctx;
     int		breakcheck_count = 0;
-    int		did_emsg_before = did_emsg;
+    int		did_emsg_before = did_emsg_cumul + did_emsg;
     int		save_suppress_errthrow = suppress_errthrow;
     msglist_T	**saved_msg_list = NULL;
     msglist_T	*private_msg_list = NULL;
     cmdmod_T	save_cmdmod;
     int		restore_cmdmod = FALSE;
     int		trylevel_at_start = trylevel;
+    int		orig_funcdepth;
 
 // Get pointer to item in the stack.
 #define STACK_TV(idx) (((typval_T *)ectx.ec_stack.ga_data) + idx)
@@ -853,7 +859,7 @@ call_def_function(
 	    || (ufunc->uf_def_status == UF_TO_BE_COMPILED
 			  && compile_def_function(ufunc, FALSE, NULL) == FAIL))
     {
-	if (did_emsg == did_emsg_before)
+	if (did_emsg_cumul + did_emsg == did_emsg_before)
 	    semsg(_(e_function_is_not_compiled_str),
 						   printable_func_name(ufunc));
 	return FAIL;
@@ -870,11 +876,19 @@ call_def_function(
 	}
     }
 
+    // If depth of calling is getting too high, don't execute the function.
+    orig_funcdepth = funcdepth_get();
+    if (funcdepth_increment() == FAIL)
+	return FAIL;
+
     CLEAR_FIELD(ectx);
     ectx.ec_dfunc_idx = ufunc->uf_dfunc_idx;
     ga_init2(&ectx.ec_stack, sizeof(typval_T), 500);
     if (ga_grow(&ectx.ec_stack, 20) == FAIL)
+    {
+	funcdepth_decrement();
 	return FAIL;
+    }
     ga_init2(&ectx.ec_trystack, sizeof(trycmd_T), 10);
     ga_init2(&ectx.ec_funcrefs, sizeof(partial_T *), 10);
 
@@ -1072,13 +1086,10 @@ call_def_function(
 	    // execute Ex command line
 	    case ISN_EXEC:
 		{
-		    int save_did_emsg = did_emsg;
-
 		    SOURCING_LNUM = iptr->isn_lnum;
 		    do_cmdline_cmd(iptr->isn_arg.string);
-		    // do_cmdline_cmd() will reset did_emsg, but we want to
-		    // keep track of the count to compare with did_emsg_before.
-		    did_emsg += save_did_emsg;
+		    if (did_emsg)
+			goto on_error;
 		}
 		break;
 
@@ -1189,7 +1200,10 @@ call_def_function(
 		    }
 		    ectx.ec_stack.ga_len -= count;
 		    if (failed)
+		    {
+			ga_clear(&ga);
 			goto on_error;
+		    }
 
 		    if (ga.ga_data != NULL)
 		    {
@@ -1197,6 +1211,11 @@ call_def_function(
 			{
 			    SOURCING_LNUM = iptr->isn_lnum;
 			    do_cmdline_cmd((char_u *)ga.ga_data);
+			    if (did_emsg)
+			    {
+				ga_clear(&ga);
+				goto on_error;
+			    }
 			}
 			else
 			{
@@ -1948,6 +1967,20 @@ call_def_function(
 		    newfunc_T	*newfunc = &iptr->isn_arg.newfunc;
 
 		    copy_func(newfunc->nf_lambda, newfunc->nf_global);
+		}
+		break;
+
+	    // List functions
+	    case ISN_DEF:
+		if (iptr->isn_arg.string == NULL)
+		    list_functions(NULL);
+		else
+		{
+		    exarg_T ea;
+
+		    CLEAR_FIELD(ea);
+		    ea.cmd = ea.arg = iptr->isn_arg.string;
+		    define_function(&ea, NULL);
 		}
 		break;
 
@@ -2880,7 +2913,7 @@ func_return:
 
 on_error:
 	// If "emsg_silent" is set then ignore the error.
-	if (did_emsg == did_emsg_before && emsg_silent)
+	if (did_emsg_cumul + did_emsg == did_emsg_before && emsg_silent)
 	    continue;
 
 	// If we are not inside a try-catch started here, abort execution.
@@ -2938,9 +2971,10 @@ failed_early:
     // Not sure if this is necessary.
     suppress_errthrow = save_suppress_errthrow;
 
-    if (ret != OK && did_emsg == did_emsg_before)
+    if (ret != OK && did_emsg_cumul + did_emsg == did_emsg_before)
 	semsg(_(e_unknown_error_while_executing_str),
 						   printable_func_name(ufunc));
+    funcdepth_restore(orig_funcdepth);
     return ret;
 }
 
@@ -3348,6 +3382,15 @@ ex_disassemble(exarg_T *eap)
 
 		    smsg("%4d NEWFUNC %s %s", current,
 				       newfunc->nf_lambda, newfunc->nf_global);
+		}
+		break;
+
+	    case ISN_DEF:
+		{
+		    char_u *name = iptr->isn_arg.string;
+
+		    smsg("%4d DEF %s", current,
+					   name == NULL ? (char_u *)"" : name);
 		}
 		break;
 

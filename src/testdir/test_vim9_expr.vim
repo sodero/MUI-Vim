@@ -1292,6 +1292,13 @@ func Test_expr5_fails()
   call CheckDefFailure(["var x = 'a' .. 0z32"], 'E1105:', 1)
   call CheckDefFailure(["var x = 'a' .. function('len')"], 'E1105:', 1)
   call CheckDefFailure(["var x = 'a' .. function('len', ['a'])"], 'E1105:', 1)
+
+  call CheckScriptFailure(['vim9script', 'var x = 1 + v:none'], 'E611:', 2)
+  call CheckScriptFailure(['vim9script', 'var x = 1 + v:null'], 'E611:', 2)
+  call CheckScriptFailure(['vim9script', 'var x = 1 + v:true'], 'E1138:', 2)
+  call CheckScriptFailure(['vim9script', 'var x = 1 + v:false'], 'E1138:', 2)
+  call CheckScriptFailure(['vim9script', 'var x = 1 + true'], 'E1138:', 2)
+  call CheckScriptFailure(['vim9script', 'var x = 1 + false'], 'E1138:', 2)
 endfunc
 
 func Test_expr5_fails_channel()
@@ -1876,6 +1883,9 @@ def Test_epxr7_funcref()
   CheckDefAndScriptSuccess(lines)
 enddef
 
+let g:test_space_dict = {'': 'empty', ' ': 'space'}
+let g:test_hash_dict = #{one: 1, two: 2}
+
 def Test_expr7_dict()
   # dictionary
   var lines =<< trim END
@@ -1884,17 +1894,17 @@ def Test_expr7_dict()
       assert_equal(g:dict_one, {'one': 1})
       var key = 'one'
       var val = 1
-      assert_equal(g:dict_one, {key: val})
+      assert_equal(g:dict_one, {[key]: val})
 
-      var numbers: dict<number> = #{a: 1, b: 2, c: 3}
+      var numbers: dict<number> = {a: 1, b: 2, c: 3}
       numbers = #{a: 1}
       numbers = #{}
 
-      var strings: dict<string> = #{a: 'a', b: 'b', c: 'c'}
+      var strings: dict<string> = {a: 'a', b: 'b', c: 'c'}
       strings = #{a: 'x'}
       strings = #{}
 
-      var mixed: dict<any> = #{a: 'a', b: 42}
+      var mixed: dict<any> = {a: 'a', b: 42}
       mixed = #{a: 'x'}
       mixed = #{a: 234}
       mixed = #{}
@@ -1908,6 +1918,9 @@ def Test_expr7_dict()
       dictdict = #{one: #{}, two: #{}}
 
       assert_equal({'': 0}, {matchstr('string', 'wont match'): 0})
+
+      assert_equal(g:test_space_dict, {['']: 'empty', [' ']: 'space'})
+      assert_equal(g:test_hash_dict, {one: 1, two: 2})
   END
   CheckDefAndScriptSuccess(lines)
  
@@ -1922,7 +1935,7 @@ def Test_expr7_dict()
   CheckDefFailure(["var x = #{xxx: 1", "var y = 2"], 'E722:', 2)
   CheckDefFailure(["var x = #{xxx: 1,"], 'E723:', 2)
   CheckDefFailure(["var x = {'a': xxx}"], 'E1001:', 1)
-  CheckDefFailure(["var x = {xxx: 8}"], 'E1001:', 1)
+  CheckDefFailure(["var x = {xx-x: 8}"], 'E1001:', 1)
   CheckDefFailure(["var x = #{a: 1, a: 2}"], 'E721:', 1)
   CheckDefFailure(["var x = #"], 'E1015:', 1)
   CheckDefExecFailure(["var x = g:anint.member"], 'E715:', 1)
@@ -2293,12 +2306,29 @@ def Test_expr7_parens_vim9script()
   CheckScriptSuccess(lines)
 enddef
 
-def Test_expr7_negate()
+def Test_expr7_negate_add()
   assert_equal(-99, -99)
+  assert_equal(-99, - 99)
   assert_equal(99, --99)
+  assert_equal(99, -- 99)
+  assert_equal(99, - - 99)
+  assert_equal(99, +99)
+  assert_equal(-99, -+99)
+  assert_equal(-99, -+ 99)
+  assert_equal(-99, - +99)
+  assert_equal(-99, - + 99)
+  assert_equal(-99, +-99)
+  assert_equal(-99, + -99)
+  assert_equal(-99, + - 99)
+
   var nr = 88
   assert_equal(-88, -nr)
-  assert_equal(88, --nr)
+  assert_equal(-88, - nr)
+  assert_equal(-88, - +nr)
+  assert_equal(88, -- nr)
+  assert_equal(88, + nr)
+  assert_equal(88, --+ nr)
+  assert_equal(88, - - nr)
 enddef
 
 def Echo(arg: any): string

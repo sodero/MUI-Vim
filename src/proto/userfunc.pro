@@ -14,6 +14,10 @@ ufunc_T *find_func(char_u *name, int is_global, cctx_T *cctx);
 int func_is_global(ufunc_T *ufunc);
 int func_name_refcount(char_u *name);
 void copy_func(char_u *lambda, char_u *global);
+int funcdepth_increment(void);
+void funcdepth_decrement(void);
+int funcdepth_get(void);
+void funcdepth_restore(int depth);
 int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rettv, funcexe_T *funcexe, dict_T *selfdict);
 void save_funccal(funccal_entry_T *entry);
 void restore_funccal(void);
@@ -29,6 +33,7 @@ int call_func(char_u *funcname, int len, typval_T *rettv, int argcount_in, typva
 char_u *printable_func_name(ufunc_T *fp);
 char_u *trans_function_name(char_u **pp, int *is_global, int skip, int flags, funcdict_T *fdp, partial_T **partial);
 char_u *untrans_function_name(char_u *name);
+void list_functions(regmatch_T *regmatch);
 ufunc_T *define_function(exarg_T *eap, char_u *name_arg);
 void ex_function(exarg_T *eap);
 void ex_defcompile(exarg_T *eap);

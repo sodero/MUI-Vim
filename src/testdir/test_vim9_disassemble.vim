@@ -749,6 +749,9 @@ def Test_disassemble_const_expr()
 enddef
 
 def ReturnInIf(): string
+  if 1 < 0
+    return "maybe"
+  endif
   if g:cond
     return "yes"
   else
@@ -759,6 +762,9 @@ enddef
 def Test_disassemble_return_in_if()
   var instr = execute('disassemble ReturnInIf')
   assert_match('ReturnInIf\_s*' ..
+        'if 1 < 0\_s*' ..
+        '  return "maybe"\_s*' ..
+        'endif\_s*' ..
         'if g:cond\_s*' ..
         '0 LOADG g:cond\_s*' ..
         '1 COND2BOOL\_s*' ..
@@ -894,6 +900,29 @@ def Test_nested_func()
         'echomsg "inner"\_s*' ..
         'enddef\_s*' ..
         '\d NEWFUNC <lambda>\d\+ Inner\_s*' ..
+        '\d PUSHNR 0\_s*' ..
+        '\d RETURN',
+        instr)
+enddef
+
+def NestedDefList()
+  def
+  def Info
+  def /Info
+  def /Info/
+enddef
+
+def Test_nested_def_list()
+   var instr = execute('disassemble NestedDefList')
+   assert_match('NestedDefList\_s*' ..
+        'def\_s*' ..
+        '\d DEF \_s*' ..
+        'def Info\_s*' ..
+        '\d DEF Info\_s*' ..
+        'def /Info\_s*' ..
+        '\d DEF /Info\_s*' ..
+        'def /Info/\_s*' ..
+        '\d DEF /Info/\_s*' ..
         '\d PUSHNR 0\_s*' ..
         '\d RETURN',
         instr)

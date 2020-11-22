@@ -1433,6 +1433,26 @@ generate_NEWFUNC(cctx_T *cctx, char_u *lambda_name, char_u *func_name)
 }
 
 /*
+ * Generate an ISN_DEF instruction: list functions
+ */
+    static int
+generate_DEF(cctx_T *cctx, char_u *name, size_t len)
+{
+    isn_T	*isn;
+
+    RETURN_OK_IF_SKIP(cctx);
+    if ((isn = generate_instr(cctx, ISN_DEF)) == NULL)
+	return FAIL;
+    if (len > 0)
+    {
+	isn->isn_arg.string = vim_strnsave(name, len);
+	if (isn->isn_arg.string == NULL)
+	    return FAIL;
+    }
+    return OK;
+}
+
+/*
  * Generate an ISN_JUMP instruction.
  */
     static int
@@ -2626,7 +2646,7 @@ compile_call(
     char_u	fname_buf[FLEN_FIXED + 1];
     char_u	*tofree = NULL;
     int		error = FCERR_NONE;
-    ufunc_T	*ufunc;
+    ufunc_T	*ufunc = NULL;
     int		res = FAIL;
     int		is_autoload;
 
@@ -2712,13 +2732,19 @@ compile_call(
 	goto theend;
     }
 
-    // If we can find the function by name generate the right call.
-    // Skip global functions here, a local funcref takes precedence.
-    ufunc = find_func(name, FALSE, cctx);
-    if (ufunc != NULL && !func_is_global(ufunc))
+    // An argument or local variable can be a function reference, this
+    // overrules a function name.
+    if (lookup_local(namebuf, varlen, cctx) == NULL
+	    && arg_exists(namebuf, varlen, NULL, NULL, NULL, cctx) != OK)
     {
-	res = generate_CALL(cctx, ufunc, argcount);
-	goto theend;
+	// If we can find the function by name generate the right call.
+	// Skip global functions here, a local funcref takes precedence.
+	ufunc = find_func(name, FALSE, cctx);
+	if (ufunc != NULL && !func_is_global(ufunc))
+	{
+	    res = generate_CALL(cctx, ufunc, argcount);
+	    goto theend;
+	}
     }
 
     // If the name is a variable, load it and use PCALL.
@@ -2761,12 +2787,12 @@ theend:
 /*
  * Find the end of a variable or function name.  Unlike find_name_end() this
  * does not recognize magic braces.
- * When "namespace" is TRUE recognize "b:", "s:", etc.
+ * When "use_namespace" is TRUE recognize "b:", "s:", etc.
  * Return a pointer to just after the name.  Equal to "arg" if there is no
  * valid name.
  */
-    static char_u *
-to_name_end(char_u *arg, int namespace)
+    char_u *
+to_name_end(char_u *arg, int use_namespace)
 {
     char_u	*p;
 
@@ -2778,7 +2804,7 @@ to_name_end(char_u *arg, int namespace)
 	// Include a namespace such as "s:var" and "v:var".  But "n:" is not
 	// and can be used in slice "[n:]".
 	if (*p == ':' && (p != arg + 1
-			     || !namespace
+			     || !use_namespace
 			     || vim_strchr(VIM9_NAMESPACE_CHAR, *arg) == NULL))
 	    break;
     return p;
@@ -2982,7 +3008,8 @@ compile_dict(char_u **arg, cctx_T *cctx, int literal, ppconst_T *ppconst)
     *arg = skipwhite(*arg + 1);
     for (;;)
     {
-	char_u *key = NULL;
+	char_u	    *key = NULL;
+	char_u	    *end;
 
 	if (may_get_next_line(whitep, arg, cctx) == FAIL)
 	{
@@ -2993,10 +3020,14 @@ compile_dict(char_u **arg, cctx_T *cctx, int literal, ppconst_T *ppconst)
 	if (**arg == '}')
 	    break;
 
-	if (literal)
+	// Eventually {name: value} will use "name" as a literal key and
+	// {[expr]: value} for an evaluated key.
+	// Temporarily: if "name" is indeed a valid key, or "[expr]" is
+	// used, use the new method, like JavaScript.  Otherwise fall back
+	// to the old method.
+	end = to_name_end(*arg, FALSE);
+	if (literal || *end == ':')
 	{
-	    char_u *end = to_name_end(*arg, !literal);
-
 	    if (end == *arg)
 	    {
 		semsg(_(e_invalid_key_str), *arg);
@@ -3009,8 +3040,11 @@ compile_dict(char_u **arg, cctx_T *cctx, int literal, ppconst_T *ppconst)
 	}
 	else
 	{
-	    isn_T		*isn;
+	    isn_T	*isn;
+	    int		has_bracket = **arg == '[';
 
+	    if (has_bracket)
+		*arg = skipwhite(*arg + 1);
 	    if (compile_expr0(arg, cctx) == FAIL)
 		return FAIL;
 	    isn = ((isn_T *)instr->ga_data) + instr->ga_len - 1;
@@ -3019,10 +3053,20 @@ compile_dict(char_u **arg, cctx_T *cctx, int literal, ppconst_T *ppconst)
 	    else
 	    {
 		type_T *keytype = ((type_T **)stack->ga_data)
-							   [stack->ga_len - 1];
+						       [stack->ga_len - 1];
 		if (need_type(keytype, &t_string, -1, cctx,
-							 FALSE, FALSE) == FAIL)
+						     FALSE, FALSE) == FAIL)
 		    return FAIL;
+	    }
+	    if (has_bracket)
+	    {
+		*arg = skipwhite(*arg);
+		if (**arg != ']')
+		{
+		    emsg(_(e_missing_matching_bracket_after_dict_key));
+		    return FAIL;
+		}
+		++*arg;
 	    }
 	}
 
@@ -3356,6 +3400,8 @@ compile_leader(cctx_T *cctx, int numeric_only, char_u *start, char_u **end)
     while (p > start)
     {
 	--p;
+	while (VIM_ISWHITE(*p))
+	    --p;
 	if (*p == '-' || *p == '+')
 	{
 	    int	    negate = *p == '-';
@@ -4688,21 +4734,24 @@ compile_return(char_u *arg, int set_return_type, cctx_T *cctx)
 	if (compile_expr0(&p, cctx) == FAIL)
 	    return NULL;
 
-	stack_type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
-	if (set_return_type)
-	    cctx->ctx_ufunc->uf_ret_type = stack_type;
-	else
+	if (cctx->ctx_skip != SKIP_YES)
 	{
-	    if (cctx->ctx_ufunc->uf_ret_type->tt_type == VAR_VOID
-		    && stack_type->tt_type != VAR_VOID
-		    && stack_type->tt_type != VAR_UNKNOWN)
+	    stack_type = ((type_T **)stack->ga_data)[stack->ga_len - 1];
+	    if (set_return_type)
+		cctx->ctx_ufunc->uf_ret_type = stack_type;
+	    else
 	    {
-		emsg(_(e_returning_value_in_function_without_return_type));
-		return NULL;
-	    }
-	    if (need_type(stack_type, cctx->ctx_ufunc->uf_ret_type, -1,
+		if (cctx->ctx_ufunc->uf_ret_type->tt_type == VAR_VOID
+			&& stack_type->tt_type != VAR_VOID
+			&& stack_type->tt_type != VAR_UNKNOWN)
+		{
+		    emsg(_(e_returning_value_in_function_without_return_type));
+		    return NULL;
+		}
+		if (need_type(stack_type, cctx->ctx_ufunc->uf_ret_type, -1,
 						   cctx, FALSE, FALSE) == FAIL)
-		return NULL;
+		    return NULL;
+	    }
 	}
     }
     else
@@ -4719,8 +4768,7 @@ compile_return(char_u *arg, int set_return_type, cctx_T *cctx)
 	// No argument, return zero.
 	generate_PUSHNR(cctx, 0);
     }
-
-    if (generate_instr(cctx, ISN_RETURN) == NULL)
+    if (cctx->ctx_skip != SKIP_YES && generate_instr(cctx, ISN_RETURN) == NULL)
 	return NULL;
 
     // "return val | endif" is possible
@@ -4771,6 +4819,27 @@ compile_nested_function(exarg_T *eap, cctx_T *cctx)
     {
 	emsg(_(e_cannot_use_bang_with_nested_def));
 	return NULL;
+    }
+
+    if (*name_start == '/')
+    {
+	name_end = skip_regexp(name_start + 1, '/', TRUE);
+	if (*name_end == '/')
+	    ++name_end;
+	eap->nextcmd = check_nextcmd(name_end);
+    }
+    if (name_end == name_start || *skipwhite(name_end) != '(')
+    {
+	if (!ends_excmd2(name_start, name_end))
+	{
+	    semsg(_(e_invalid_command_str), eap->cmd);
+	    return NULL;
+	}
+
+	// "def" or "def Name": list functions
+	if (generate_DEF(cctx, name_start, name_end - name_start) == FAIL)
+	    return NULL;
+	return eap->nextcmd == NULL ? (char_u *)"" : eap->nextcmd;
     }
 
     // Only g:Func() can use a namespace.
@@ -7708,22 +7777,23 @@ delete_instr(isn_T *isn)
 {
     switch (isn->isn_type)
     {
+	case ISN_DEF:
 	case ISN_EXEC:
+	case ISN_LOADB:
 	case ISN_LOADENV:
 	case ISN_LOADG:
-	case ISN_LOADB:
-	case ISN_LOADW:
-	case ISN_LOADT:
 	case ISN_LOADOPT:
-	case ISN_STRINGMEMBER:
+	case ISN_LOADT:
+	case ISN_LOADW:
 	case ISN_PUSHEXC:
+	case ISN_PUSHFUNC:
 	case ISN_PUSHS:
+	case ISN_STOREB:
 	case ISN_STOREENV:
 	case ISN_STOREG:
-	case ISN_STOREB:
-	case ISN_STOREW:
 	case ISN_STORET:
-	case ISN_PUSHFUNC:
+	case ISN_STOREW:
+	case ISN_STRINGMEMBER:
 	    vim_free(isn->isn_arg.string);
 	    break;
 
