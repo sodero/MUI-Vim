@@ -12,7 +12,7 @@
  * *****************************************************************
  * *****************************************************************
  *
- * MUI support by Ola SÃ¶der. AmigaOS4 port by KAS1E.
+ * MUI support by Ola Söder. AmigaOS4 port by KAS1E.
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
  * Do ":help credits" in Vim to see a list of people who contributed.
@@ -1145,10 +1145,11 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
              (GetBitMapAttr(s->RastPort.BitMap, BMA_WIDTH),
               GetBitMapAttr(s->RastPort.BitMap, BMA_HEIGHT),
               GetBitMapAttr(s->RastPort.BitMap, BMA_DEPTH),
-              BMF_CLEAR | BMF_DISPLAYABLE | BMF_MINPLANES,
 #ifndef __MORPHOS__
+              BMF_CLEAR,
               s->RastPort.BitMap
 #else
+              BMF_CLEAR | BMF_REQUESTVMEM,
               NULL
 #endif
               );
