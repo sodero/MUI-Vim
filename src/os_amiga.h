@@ -33,7 +33,9 @@
 # if defined(__DATE__) && defined(__TIME__)
 #  define HAVE_DATE_TIME
 # endif
-
+# define HAVE_STDARG_H
+# define HAVE_TGETENT
+# define HAVE_TERMCAP
 #endif // HAVE_CONFIG_H
 
 #ifndef	DFLT_ERRORFILE
@@ -152,14 +154,14 @@ typedef long off_t;
 #endif
 
 #ifndef USR_EXRC_FILE
-# define USR_EXRC_FILE	"s:.exrc"
+# define USR_EXRC_FILE	"$VIM/.exrc"
 #endif
 #ifndef USR_EXRC_FILE2
 # define USR_EXRC_FILE2	"home:.exrc"
 #endif
 
 #ifndef USR_VIMRC_FILE
-# define USR_VIMRC_FILE	"s:.vimrc"
+# define USR_VIMRC_FILE	"$VIM/.vimrc"
 #endif
 #ifndef USR_VIMRC_FILE2
 # define USR_VIMRC_FILE2 "home:.vimrc"
@@ -168,7 +170,7 @@ typedef long off_t;
 # define USR_VIMRC_FILE3 "home:vimfiles:vimrc"
 #endif
 #ifndef USR_VIMRC_FILE4
-# define USR_VIMRC_FILE4 "$VIM/.vimrc"
+# define USR_VIMRC_FILE4 "s:.vimrc"
 #endif
 #ifndef VIM_DEFAULTS_FILE
 # define VIM_DEFAULTS_FILE "$VIMRUNTIME/defaults.vim"
@@ -178,7 +180,7 @@ typedef long off_t;
 #endif
 
 #ifndef USR_GVIMRC_FILE
-# define USR_GVIMRC_FILE "s:.gvimrc"
+# define USR_GVIMRC_FILE "$VIM/.gvimrc"
 #endif
 #ifndef USR_GVIMRC_FILE2
 # define USR_GVIMRC_FILE2 "home:.gvimrc"
@@ -187,13 +189,11 @@ typedef long off_t;
 # define USR_GVIMRC_FILE3 "home:vimfiles:gvimrc"
 #endif
 #ifndef USR_GVIMRC_FILE4
-# define USR_GVIMRC_FILE4 "$VIM/.gvimrc"
+# define USR_GVIMRC_FILE4 "s:.gvimrc"
 #endif
 
-#ifdef FEAT_VIMINFO
-# ifndef VIMINFO_FILE
-#  define VIMINFO_FILE	"s:.viminfo"
-# endif
+#ifndef VIMINFO_FILE
+# define VIMINFO_FILE	"$VIM/.viminfo"
 #endif
 
 #ifndef EXRC_FILE
@@ -221,10 +221,19 @@ typedef long off_t;
 #endif
 
 #ifndef DFLT_MAXMEM
-# define DFLT_MAXMEM	256		// use up to 256Kbyte for buffer
+# if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
+#  define DFLT_MAXMEM	(5*1024)	// use up to 5 Mbyte for buffer
+# else
+#  define DFLT_MAXMEM	256		// use up to 256Kbyte for buffer
+# endif
 #endif
+
 #ifndef DFLT_MAXMEMTOT
-# define DFLT_MAXMEMTOT	0		// decide in set_init
+# if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
+#  define DFLT_MAXMEMTOT	(10*1024)	// use up to 10 Mbyte for Vim
+# else
+#  define DFLT_MAXMEMTOT	512		// use up to 512Kbyte for Vim
+# endif
 #endif
 
 #if defined(SASC)

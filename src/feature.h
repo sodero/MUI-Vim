@@ -303,7 +303,7 @@
 #if defined(FEAT_HUGE) \
 	&& defined(FEAT_EVAL) \
 	&& ((defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)) \
-		|| defined(MSWIN))
+		|| defined(MSWIN) || defined(AMIGA))
 # define FEAT_PROFILE
 #endif
 
@@ -313,7 +313,7 @@
 #if defined(FEAT_NORMAL) \
 	&& defined(FEAT_EVAL) \
 	&& ((defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)) \
-		|| defined(MSWIN))
+		|| defined(MSWIN) || defined(AMIGA))
 # define FEAT_RELTIME
 #endif
 
@@ -1089,7 +1089,8 @@
 /*
  * +ARP			Amiga only. Use arp.library, DOS 2.0 is not required.
  */
-#if !defined(NO_ARP) && !defined(__amigaos4__)
+#if defined(AMIGA) && !defined(NO_ARP) && !defined(__amigaos4__) \
+	&& !defined(__MORPHOS__) && !defined(__AROS__)
 # define FEAT_ARP
 #endif
 

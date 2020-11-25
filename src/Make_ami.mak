@@ -11,11 +11,7 @@ CFLAGS = -c -O3
 
 # Common compiler flags
 CFLAGS += \
-	-DNO_ARP \
 	-DUSE_TMPNAM \
-	-DHAVE_STDARG_H \
-	-DHAVE_TGETENT \
-	-DHAVE_TERMCAP \
 	-DNEW_SHELLSIZE \
 	-I proto \
 	-Wno-attributes \
@@ -84,6 +80,8 @@ else
 ifeq ($(UNM),MorphOS)
 CFLAGS += -noixemul
 LDFLAGS = -ldebug -noixemul
+else
+CFLAGS += DNO_ARP
 endif
 endif
 endif
@@ -169,6 +167,7 @@ SRC += \
 	os_amiga.c \
 	popupmenu.c \
 	popupwin.c \
+	profiler.c \
 	quickfix.c \
 	regexp.c \
 	register.c \
