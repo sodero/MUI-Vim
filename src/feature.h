@@ -303,7 +303,7 @@
 #if defined(FEAT_HUGE) \
 	&& defined(FEAT_EVAL) \
 	&& ((defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)) \
-		|| defined(MSWIN) || defined(AMIGA))
+		|| defined(MSWIN))
 # define FEAT_PROFILE
 #endif
 
@@ -313,7 +313,7 @@
 #if defined(FEAT_NORMAL) \
 	&& defined(FEAT_EVAL) \
 	&& ((defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)) \
-		|| defined(MSWIN) || defined(AMIGA))
+		|| defined(MSWIN))
 # define FEAT_RELTIME
 #endif
 
