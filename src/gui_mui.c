@@ -176,7 +176,6 @@ CLASS_DEF(VimCon)
 //------------------------------------------------------------------------------
 #define MUIM_VimCon_Callback         (TAGBASE_sTx + 101)
 #define MUIM_VimCon_GetState         (TAGBASE_sTx + 102)
-#define MUIM_VimCon_Flush            (TAGBASE_sTx + 103)
 #define MUIM_VimCon_DrawString       (TAGBASE_sTx + 104)
 #define MUIM_VimCon_SetFgColor       (TAGBASE_sTx + 105)
 #define MUIM_VimCon_SetBgColor       (TAGBASE_sTx + 106)
@@ -1475,14 +1474,12 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     static char_u s[6];
     static struct InputEvent ie = { .ie_Class = IECLASS_RAWKEY };
 
-    WORD w;
-    int l = 0, c, m;
-
     ie.ie_Code = msg->imsg->Code;
     ie.ie_Qualifier = msg->imsg->Qualifier;
 
     // Are we dealing with a vanilla key?
-    w = MapRawKey(&ie, (STRPTR) b, 4, 0);
+    WORD w = MapRawKey(&ie, (STRPTR) b, 4, 0);
+
     if(w == 1)
     {
         // If yes, we're done
@@ -1491,6 +1488,8 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     }
 
     // No, something else....
+    int c;
+
     switch(msg->imsg->Code)
     {
     case RAWKEY_UP:
@@ -1584,40 +1583,39 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     case RAWKEY_NM_WHEEL_DOWN:
         gui_send_mouse_event(MOUSE_5, msg->imsg->MouseX, msg->imsg->MouseY,
                              FALSE, 0);
-        c = 0;
-        break;
+        return TRUE;
 
     case RAWKEY_NM_WHEEL_UP:
         gui_send_mouse_event(MOUSE_4, msg->imsg->MouseX, msg->imsg->MouseY,
                              FALSE, 0);
-        c = 0;
-        break;
+        return TRUE;
 
     case RAWKEY_NM_WHEEL_LEFT:
         gui_send_mouse_event(MOUSE_7, msg->imsg->MouseX, msg->imsg->MouseY,
                              FALSE, 0);
-        c = 0;
-        break;
+        return TRUE;
 
     case RAWKEY_NM_WHEEL_RIGHT:
         gui_send_mouse_event(MOUSE_6, msg->imsg->MouseX, msg->imsg->MouseY,
                              FALSE, 0);
-        c = 0;
-        break;
+        return TRUE;
 
     default:
-        c = 0;
+        return TRUE;
     }
 
     if(c)
     {
-        m = (msg->imsg->Qualifier & IEQUALIFIER_CONTROL) ? MOD_MASK_CTRL : 0;
+        int l = 0, m = (msg->imsg->Qualifier & IEQUALIFIER_CONTROL) ?
+                        MOD_MASK_CTRL : 0;
+
         m |= (msg->imsg->Qualifier &
              (IEQUALIFIER_LALT|IEQUALIFIER_RALT)) ? MOD_MASK_ALT : 0;
         m |= (msg->imsg->Qualifier &
              (IEQUALIFIER_LSHIFT|IEQUALIFIER_RSHIFT)) ? MOD_MASK_SHIFT : 0;
         m |= (msg->imsg->Qualifier &
              (IEQUALIFIER_LCOMMAND|IEQUALIFIER_RCOMMAND)) ? MOD_MASK_META : 0;
+
         c = simplify_key(c, &m);
 
         if(m)
@@ -1637,9 +1635,10 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
         {
             s[l++] = (char_u) c;
         }
+
+        add_to_input_buf(s, l);
     }
 
-    add_to_input_buf(s, l);
     return TRUE;
 }
 
@@ -1664,15 +1663,25 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
     case IDCMP_EXTENDEDMOUSE:
         if(msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
         {
-            struct IntuiWheelData *iwd = (struct IntuiWheelData *)msg->imsg->IAddress;
+            struct IntuiWheelData *iwd = (struct IntuiWheelData *)
+                   msg->imsg->IAddress;
+
             if(iwd->WheelY<0)
+            {
                 msg->imsg->Code=RAWKEY_NM_WHEEL_UP;
+            }
             else if(iwd->WheelY>0)
+            {
                 msg->imsg->Code=RAWKEY_NM_WHEEL_DOWN;
+            }
             else if(iwd->WheelX<0)
+            {
                 msg->imsg->Code=RAWKEY_NM_WHEEL_LEFT;
+            }
             else if(iwd->WheelX>0)
+            {
                 msg->imsg->Code=RAWKEY_NM_WHEEL_RIGHT;
+            }
 
             VimConHandleRaw(cls, obj, msg);
         }
@@ -1790,14 +1799,11 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 
             lh = h;
         }
-        else
+        else if(lw != w || lh != h)
         {
-            if(lw != w || lh != h)
-            {
-                lw = w;
-                lh = h;
-                w = h = 0;
-            }
+            lw = w;
+            lh = h;
+            w = h = 0;
         }
     }
 
@@ -2103,8 +2109,7 @@ DISPATCH(VimCon)
     switch(msg->MethodID)
     {
     case OM_NEW:
-        return VimConNew(cls, obj,
-               (struct opSet *) msg);
+        return VimConNew(cls, obj, (struct opSet *) msg);
 
     case OM_DISPOSE:
         return VimConDispose(cls, obj, msg);
@@ -2114,38 +2119,31 @@ DISPATCH(VimCon)
                (struct MUIP_VimCon_AppMessage *) msg);
 
     case MUIM_Setup:
-        return VimConSetup(cls, obj,
-               (struct MUI_RenderInfo *) msg);
+        return VimConSetup(cls, obj, (struct MUI_RenderInfo *) msg);
 
     case MUIM_Cleanup:
         return VimConCleanup(cls, obj, msg);
 
     case MUIM_HandleEvent:
-        return VimConHandleEvent(cls, obj,
-               (struct MUIP_HandleEvent *) msg);
+        return VimConHandleEvent(cls, obj, (struct MUIP_HandleEvent *) msg);
 
     case MUIM_AskMinMax:
-        return VimConMinMax(cls, obj,
-               (struct MUIP_AskMinMax *) msg);
+        return VimConMinMax(cls, obj, (struct MUIP_AskMinMax *) msg);
 
     case MUIM_Draw:
-        return VimConDraw(cls, obj,
-               (struct MUIP_Draw *) msg);
+        return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
 
     case MUIM_Show:
         return VimConShow(cls, obj, msg);
 
     case MUIM_VimCon_Copy:
-        return VimConCopy(cls, obj,
-               (struct MUIP_VimCon_Copy *) msg);
+        return VimConCopy(cls, obj, (struct MUIP_VimCon_Copy *) msg);
 
     case MUIM_VimCon_Paste:
-        return VimConPaste(cls, obj,
-               (struct MUIP_VimCon_Paste *) msg);
+        return VimConPaste(cls, obj, (struct MUIP_VimCon_Paste *) msg);
 
     case MUIM_VimCon_Callback:
-        return VimConCallback(cls, obj,
-               (struct MUIP_VimCon_Callback *) msg);
+        return VimConCallback(cls, obj, (struct MUIP_VimCon_Callback *) msg);
 
     case MUIM_VimCon_DrawString:
         return VimConDrawString(cls, obj,
@@ -2160,8 +2158,7 @@ DISPATCH(VimCon)
                (struct MUIP_VimCon_SetBgColor *) msg);
 
     case MUIM_VimCon_FillBlock:
-        return VimConFillBlock(cls, obj,
-               (struct MUIP_VimCon_FillBlock *) msg);
+        return VimConFillBlock(cls, obj, (struct MUIP_VimCon_FillBlock *) msg);
 
     case MUIM_VimCon_InvertRect:
         return VimConInvertRect(cls, obj,
@@ -2193,8 +2190,7 @@ DISPATCH(VimCon)
                (struct MUIP_VimCon_SetBlinking *) msg);
 
     case MUIM_VimCon_Browse:
-        return VimConBrowse(cls, obj,
-               (struct MUIP_VimCon_Browse *) msg);
+        return VimConBrowse(cls, obj, (struct MUIP_VimCon_Browse *) msg);
 
     case MUIM_VimCon_SetTitle:
         return VimConSetTitle(cls, obj,
@@ -2227,10 +2223,6 @@ DISPATCH(VimCon)
 
     case MUIM_VimCon_MUISettings:
         return VimConMUISettings(cls, obj);
-
-    case MUIM_VimCon_Flush:
-        MUI_Redraw(obj, MADF_DRAWUPDATE);
-        return 0;
     }
 
     // Unknown method, promote to parent.
@@ -3107,7 +3099,8 @@ void gui_mch_update(void)
 //------------------------------------------------------------------------------
 int gui_mch_wait_for_chars(int wtime)
 {
-    DoMethod(Con, MUIM_VimCon_Flush);
+    // Flush dirt if there is any.
+    MUI_Redraw(Con, MADF_DRAWUPDATE);
 
     // Don't enable timeouts for now, it might cause
     // problems in the MUI message loop. Passing the
