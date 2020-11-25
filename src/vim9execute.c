@@ -467,6 +467,7 @@ funcstack_check_refcount(funcstack_T *funcstack)
 func_return(ectx_T *ectx)
 {
     int		idx;
+    int		ret_idx;
     dfunc_T	*dfunc = ((dfunc_T *)def_functions.ga_data)
 							  + ectx->ec_dfunc_idx;
     int		argcount = ufunc_argcount(dfunc->df_ufunc);
@@ -490,6 +491,12 @@ func_return(ectx_T *ectx)
 					idx < ectx->ec_stack.ga_len - 1; ++idx)
 	clear_tv(STACK_TV(idx));
 
+    // The return value should be on top of the stack.  However, when aborting
+    // it may not be there and ec_frame_idx is the top of the stack.
+    ret_idx = ectx->ec_stack.ga_len - 1;
+    if (ret_idx == ectx->ec_frame_idx + 4)
+	ret_idx = 0;
+
     // Restore the previous frame.
     ectx->ec_dfunc_idx = STACK_TV(ectx->ec_frame_idx)->vval.v_number;
     ectx->ec_iidx = STACK_TV(ectx->ec_frame_idx + 1)->vval.v_number;
@@ -501,11 +508,16 @@ func_return(ectx_T *ectx)
     dfunc = ((dfunc_T *)def_functions.ga_data) + ectx->ec_dfunc_idx;
     ectx->ec_instr = dfunc->df_instr;
 
-    // Reset the stack to the position before the call, move the return value
-    // to the top of the stack.
-    idx = ectx->ec_stack.ga_len - 1;
-    ectx->ec_stack.ga_len = top + 1;
-    *STACK_TV_BOT(-1) = *STACK_TV(idx);
+    if (ret_idx > 0)
+    {
+	// Reset the stack to the position before the call, with a spot for the
+	// return value, moved there from above the frame.
+	ectx->ec_stack.ga_len = top + 1;
+	*STACK_TV_BOT(-1) = *STACK_TV(ret_idx);
+    }
+    else
+	// Reset the stack to the position before the call.
+	ectx->ec_stack.ga_len = top;
 
     funcdepth_decrement();
     return OK;
@@ -2877,11 +2889,84 @@ call_def_function(
 		restore_cmdmod = FALSE;
 		break;
 
+	    case ISN_UNPACK:
+		{
+		    int		count = iptr->isn_arg.unpack.unp_count;
+		    int		semicolon = iptr->isn_arg.unpack.unp_semicolon;
+		    list_T	*l;
+		    listitem_T	*li;
+		    int		i;
+
+		    // Check there is a valid list to unpack.
+		    tv = STACK_TV_BOT(-1);
+		    if (tv->v_type != VAR_LIST)
+		    {
+			SOURCING_LNUM = iptr->isn_lnum;
+			emsg(_(e_for_argument_must_be_sequence_of_lists));
+			goto on_error;
+		    }
+		    l = tv->vval.v_list;
+		    if (l == NULL
+				|| l->lv_len < (semicolon ? count - 1 : count))
+		    {
+			SOURCING_LNUM = iptr->isn_lnum;
+			emsg(_(e_list_value_does_not_have_enough_items));
+			goto on_error;
+		    }
+		    else if (!semicolon && l->lv_len > count)
+		    {
+			SOURCING_LNUM = iptr->isn_lnum;
+			emsg(_(e_list_value_has_more_items_than_targets));
+			goto on_error;
+		    }
+
+		    CHECK_LIST_MATERIALIZE(l);
+		    if (GA_GROW(&ectx.ec_stack, count - 1) == FAIL)
+			goto failed;
+		    ectx.ec_stack.ga_len += count - 1;
+
+		    // Variable after semicolon gets a list with the remaining
+		    // items.
+		    if (semicolon)
+		    {
+			list_T	*rem_list =
+				  list_alloc_with_items(l->lv_len - count + 1);
+
+			if (rem_list == NULL)
+			    goto failed;
+			tv = STACK_TV_BOT(-count);
+			tv->vval.v_list = rem_list;
+			++rem_list->lv_refcount;
+			tv->v_lock = 0;
+			li = l->lv_first;
+			for (i = 0; i < count - 1; ++i)
+			    li = li->li_next;
+			for (i = 0; li != NULL; ++i)
+			{
+			    list_set_item(rem_list, i, &li->li_tv);
+			    li = li->li_next;
+			}
+			--count;
+		    }
+
+		    // Produce the values in reverse order, first item last.
+		    li = l->lv_first;
+		    for (i = 0; i < count; ++i)
+		    {
+			tv = STACK_TV_BOT(-i - 1);
+			copy_tv(&li->li_tv, tv);
+			li = li->li_next;
+		    }
+
+		    list_unref(l);
+		}
+		break;
+
 	    case ISN_SHUFFLE:
 		{
-		    typval_T	    tmp_tv;
-		    int		    item = iptr->isn_arg.shuffle.shfl_item;
-		    int		    up = iptr->isn_arg.shuffle.shfl_up;
+		    typval_T	tmp_tv;
+		    int		item = iptr->isn_arg.shuffle.shfl_item;
+		    int		up = iptr->isn_arg.shuffle.shfl_up;
 
 		    tmp_tv = *STACK_TV_BOT(-item);
 		    for ( ; up > 0 && item > 1; --up)
@@ -3606,6 +3691,10 @@ ex_disassemble(exarg_T *eap)
 		}
 	    case ISN_CMDMOD_REV: smsg("%4d CMDMOD_REV", current); break;
 
+	    case ISN_UNPACK: smsg("%4d UNPACK %d%s", current,
+			iptr->isn_arg.unpack.unp_count,
+			iptr->isn_arg.unpack.unp_semicolon ? " semicolon" : "");
+			      break;
 	    case ISN_SHUFFLE: smsg("%4d SHUFFLE %d up %d", current,
 					 iptr->isn_arg.shuffle.shfl_item,
 					 iptr->isn_arg.shuffle.shfl_up);

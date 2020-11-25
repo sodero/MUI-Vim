@@ -1094,7 +1094,6 @@
 # define FEAT_ARP
 #endif
 
-
 /*
  * +ole			Win32 OLE automation: Use Makefile.ovc.
  */
