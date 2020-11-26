@@ -1896,12 +1896,13 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
+
     InvertPixelArray(&my->rp, 0, 0, _mwidth(obj), _mheight(obj));
     MUI_Redraw(obj, MADF_DRAWOBJECT);
-    Delay(1);
-    InvertPixelArray(&my->rp, 0, 0, _mwidth(obj), _mheight(obj));
-    MUI_Redraw(obj, MADF_DRAWOBJECT);
-    Delay(1);
+    Delay(8);
+
+    // Add FF to clear terminal.
+    add_to_input_buf("\f", 1);
     return TRUE;
 }
 
@@ -3099,9 +3100,6 @@ void gui_mch_update(void)
 //------------------------------------------------------------------------------
 int gui_mch_wait_for_chars(int wtime)
 {
-    // Flush dirt if there is any.
-    MUI_Redraw(Con, MADF_DRAWUPDATE);
-
     // Don't enable timeouts for now, it might cause
     // problems in the MUI message loop. Passing the
     // control over to Vim at any time is not safe.
@@ -3116,60 +3114,57 @@ int gui_mch_wait_for_chars(int wtime)
     }
 #endif
 
-    while(!vim_is_input_buf_full())
+    // Flush dirt if there is any.
+    MUI_Redraw(Con, MADF_DRAWUPDATE);
+
+    static IPTR sig;
+
+    // Pass control over to MUI.
+    if(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) == (IPTR)
+                MUIV_Application_ReturnID_Quit)
     {
-        static IPTR sig;
-
-        // Pass control over to MUI.
-        if(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) != (IPTR)
-                    MUIV_Application_ReturnID_Quit)
-        {
-            // Get current input state.
-            int state = DoMethod(Con, MUIM_VimCon_GetState);
-
-            // Wait for something to happen if we're idle.
-            if(state == MUIV_VimCon_State_Idle)
-            {
-                // For some reason MUI returns 0 when jumping
-                // to the same screen that we're currently on.
-                // If so, just pass control over to Vim.
-                if(sig)
-                {
-                    sig = Wait(sig | SIGBREAKF_CTRL_C);
-
-                    if(sig & SIGBREAKF_CTRL_C)
-                    {
-                        getout_preserve_modified(0);
-                    }
-                }
-            }
-            else
-            {
-                // Something happened. Either input, a voluntary
-                // yield or a timeout.
-                if(state != MUIV_VimCon_State_Yield
-#ifdef FEAT_TIMEOUT
-                   && state != MUIV_VimCon_State_Timeout
-#endif
-                )
-                {
-                    ERR("Unknown state");
-                    getout_preserve_modified(0);
-                }
-
-                // No input == a timeout has occurred
-                return state == MUIV_VimCon_State_Yield ? OK : FAIL;
-            }
-        }
-        else
-        {
-            // Quit.
-            gui_shell_closed();
-        }
+        // Quit.
+        gui_shell_closed();
+        return OK;
     }
 
-    // We have probably filled the buffer with mouse events
-    return FAIL;
+    // Get current input state.
+    int state = DoMethod(Con, MUIM_VimCon_GetState);
+
+    // Wait for something to happen if we're idle.
+    if(state == MUIV_VimCon_State_Idle)
+    {
+        // For some reason MUI returns 0 when jumping
+        // to the same screen that we're currently on.
+        // If so, just pass control over to Vim.
+        if(sig)
+        {
+            sig = Wait(sig | SIGBREAKF_CTRL_C);
+
+            if(sig & SIGBREAKF_CTRL_C)
+            {
+                getout_preserve_modified(0);
+            }
+        }
+
+        // input maasybe
+        return OK;
+    }
+
+    // Something happened. Either input, a voluntary
+    // yield or a timeout.
+    if(state != MUIV_VimCon_State_Yield
+#ifdef FEAT_TIMEOUT
+       && state != MUIV_VimCon_State_Timeout
+#endif
+    )
+    {
+        ERR("Unknown state");
+        getout_preserve_modified(0);
+    }
+
+    // No input == a timeout has occurred
+    return state == MUIV_VimCon_State_Yield ? OK : FAIL;
 }
 
 //------------------------------------------------------------------------------
