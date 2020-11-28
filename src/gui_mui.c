@@ -75,7 +75,8 @@ Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...)
     va_list args;
 
     va_startlinear(args, obj);
-    rc = (Object *) DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG), NULL);
+    rc = (Object *) DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG),
+                                  NULL);
     va_end(args);
 
     return rc;
@@ -153,15 +154,12 @@ static Object *App, *Con, *Mnu, *Tlb;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
-//          takes care of when running Vim in text mode. It requires CGFX but
-//          you probably wouldn't like to run gvim without RTG anyway.
+//          takes care of when running Vim in text mode.
 //------------------------------------------------------------------------------
 CLASS_DEF(VimCon)
 {
     int cursor[3];
-    int state, blink;
-    int xdelta, ydelta, space;
-    int xd1, yd1, xd2, yd2;
+    int state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2;
     struct BitMap *bm;
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
@@ -347,139 +345,126 @@ struct MUIP_VimCon_Paste
 MUIDSP ULONG VimConAppMessage(Class *cls, Object *obj,
                               struct MUIP_VimCon_AppMessage *msg)
 {
-    // We assume that all arguments are valid files that we
-    // have the permission to read from, the number of file
-    // names equals the number of arguments from Workbench
+    // We assume that all arguments are valid files that we have the permission
+    // to read from, the number of files equals the number of arguments.
     struct AppMessage *m = (struct AppMessage *) msg->Message;
     char_u **fnames = calloc(m->am_NumArgs, sizeof(char_u *));
-    BPTR owd = CurrentDir(m->am_ArgList->wa_Lock);
 
-    if(fnames)
+    if(!fnames)
     {
-        BPTR f;
-        int arg = 0;
-        int nfiles = 0;
+        ERR("Out of memory");
+        return 0;
+    }
 
-        // Traverse whatever we get in and save the names
-        // of everything that we have permission to read
-        while(arg < m->am_NumArgs)
+    BPTR owd = CurrentDir(m->am_ArgList->wa_Lock);
+    int arg = 0, nfiles = 0;
+
+    // Save the names of everything we have the permission to read from.
+    while(arg < m->am_NumArgs)
+    {
+        CurrentDir(m->am_ArgList[arg].wa_Lock);
+
+        // If we can get a read lock, Vim might be able to use this.
+        BPTR f = Lock((STRPTR) m->am_ArgList[arg++].wa_Name, ACCESS_READ);
+
+        if(!f)
         {
-            // If we can get a read lock, Vim might be able to use this.
-            CurrentDir(m->am_ArgList[arg].wa_Lock);
-            f = Lock((STRPTR) m->am_ArgList[arg++].wa_Name, ACCESS_READ);
-
-            if(f)
-            {
-                // Find out what the lock is refering to.
-                char_u *fn = calloc(PATH_MAX, sizeof(char_u));
-
-                if(fn)
-                {
-                    struct FileInfoBlock *fib = (struct FileInfoBlock *)
-                           AllocDosObject(DOS_FIB, NULL);
-
-                    if(fib)
-                    {
-                        // If it's a file, save it in the list.
-                        if(Examine(f, fib) && fib->fib_DirEntryType < 0)
-                        {
-                            NameFromLock(f, (STRPTR) fn, PATH_MAX);
-                            fnames[nfiles++] = fn;
-                        }
-
-                        // Otherwise, skip it.
-                        FreeDosObject(DOS_FIB, fib);
-                    }
-
-                    // Done.
-                    UnLock(f);
-                }
-                else
-                {
-                    // Free and bail.
-                    while(nfiles--)
-                    {
-                        free(fnames[nfiles]);
-                    }
-
-                    UnLock(f);
-                    ERR("Out of memory");
-                    break;
-                }
-            }
-            else
-            {
-                // Something else. Pretend this
-                // didn't happen.
-                WARN("Could not acquire lock");
-            }
+            // Pretend this didn't happen.
+            WARN("Could not acquire lock");
+            continue;
         }
 
-        // Don't do anything if all we get is garbage
-        if(nfiles > 0)
+        // Allocate buffer for current filename.
+        char_u *fn = calloc(PATH_MAX, sizeof(char_u));
+
+        if(!fn)
         {
-            // Transpose and cap mouse coordinates
-            int x = m->am_MouseX - _mleft(obj);
-            int y = m->am_MouseY - _mtop(obj);
+            UnLock(f);
 
-            x = x > 0 ? x : 0;
-            y = y > 0 ? y : 0;
-            x = x >= _mwidth(obj) ? _mwidth(obj) - 1 : x;
-            y = y >= _mheight(obj) ? _mheight(obj) - 1 : y;
-
-            // There was something among the arguments that we
-            // could not acquire a read lock for. Shrink list
-            // of files before handing it over to Vim
-            if(nfiles < m->am_NumArgs)
+            while(nfiles--)
             {
-                char_u **shrunk = calloc(nfiles, sizeof(char_u *));
+                // Free all entries.
+                free(fnames[nfiles]);
+            }
 
-                if(shrunk)
+            ERR("Out of memory");
+            break;
+        }
+
+        // Find out what the lock is refering to.
+        struct FileInfoBlock *fib = (struct FileInfoBlock *) AllocDosObject
+                                    (DOS_FIB, NULL);
+
+        if(fib)
+        {
+            // If it's a file, save it in the list.
+            if(Examine(f, fib) && fib->fib_DirEntryType < 0)
+            {
+                NameFromLock(f, (STRPTR) fn, PATH_MAX);
+                fnames[nfiles++] = fn;
+            }
+
+            // Otherwise, skip it.
+            FreeDosObject(DOS_FIB, fib);
+        }
+
+        UnLock(f);
+    }
+
+    // Don't do anything if all we get is garbage.
+    if(nfiles > 0)
+    {
+        // Transpose and cap mouse coordinates.
+        int x = m->am_MouseX - _mleft(obj);
+        int y = m->am_MouseY - _mtop(obj);
+
+        x = x > 0 ? x : 0;
+        y = y > 0 ? y : 0;
+        x = x >= _mwidth(obj) ? _mwidth(obj) - 1 : x;
+        y = y >= _mheight(obj) ? _mheight(obj) - 1 : y;
+
+        // There was something among the arguments that we could not acquire a
+        // read lock for. Shrink list of files before handing it over to Vim.
+        if(nfiles < m->am_NumArgs)
+        {
+            char_u **shrunk = calloc(nfiles, sizeof(char_u *));
+
+            if(shrunk)
+            {
+                // Copy old contents to new list.
+                for(arg = 0; arg < nfiles; ++arg)
                 {
-                    // Copy old contents to new list.
-                    for(arg = 0; arg < nfiles; ++arg)
-                    {
-                        shrunk[arg] = fnames[arg];
-                    }
+                    shrunk[arg] = fnames[arg];
                 }
-
-                // Replace old list with new list.
-                free(fnames);
-                fnames = shrunk;
             }
 
-            // We might be empty handed here, the
-            // shrunk allocation could have failed.
-            if(fnames)
-            {
-                // In some cases Vim will try to interact with the
-                // user when handling the file drop. Activate the
-                // window to save one annoying mouse click in that
-                // case
-                set(_win(obj), MUIA_Window_Activate, TRUE);
-                gui_handle_drop(x, y, 0, fnames, nfiles);
-            }
-            else
-            {
-                // Shrinkage failed.
-                ERR("Out of memory");
-            }
+            // Replace old list with new list.
+            free(fnames);
+            fnames = shrunk;
+        }
+
+        // The shrunk allocation could have failed.
+        if(fnames)
+        {
+            // Vim will sometimes try to interact with the user when handling
+            // the file drop. Activate the window to save one annoying mouse
+            // click if that's the case.
+            set(_win(obj), MUIA_Window_Activate, TRUE);
+            gui_handle_drop(x, y, 0, fnames, nfiles);
         }
         else
         {
-            // Since we can't pass anything over to
-            // Vim we need to do this ourselves
-            free(fnames);
+            // Shrinkage failed.
+            ERR("Out of memory");
         }
     }
     else
     {
-        ERR("Out of memory");
+        // Nothing to pass over to Vim we need to free this ourselves.
+        free(fnames);
     }
 
-    // Go back to where we started and
-    // show whatever (if anything) was
-    // read from disk on screen
+    // Go back to where we started and show whatever was read.
     CurrentDir(owd);
     MUI_Redraw(obj, MADF_DRAWUPDATE);
     return 0;
@@ -494,16 +479,16 @@ MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // If enabled, remove input handler and reset status
-    if(my->blink)
+    if(!my->blink)
     {
-        my->blink = 0;
-        DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
-        return TRUE;
+        // Nothing to do
+        return FALSE;
     }
 
-    // Nothing to do
-    return FALSE;
+    // Remove input handler and reset status
+    DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
+    my->blink = 0;
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -627,10 +612,6 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
             STRCPY(res, req->fr_Drawer);
             AddPart(res, req->fr_File, s);
         }
-        else
-        {
-            ERR("Out of memory");
-        }
     }
 
     // Free memory and wake up!
@@ -657,7 +638,7 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 
     if(!my->bm)
     {
-        ERR("No off screen buffer");
+        ERR("No screen");
         return 0;
     }
 
@@ -675,14 +656,14 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 MUIDSP IPTR VimConSetTitle(Class *cls, Object *obj,
                            struct MUIP_VimCon_SetTitle *msg)
 {
-    if(msg->Title)
+    if(!msg->Title)
     {
-        set(_win(obj), MUIA_Window_Title, msg->Title);
-        return TRUE;
+        WARN("No title");
+        return FALSE;
     }
 
-    WARN("Invalid title string");
-    return FALSE;
+    set(_win(obj), MUIA_Window_Title, msg->Title);
+    return TRUE;
 }
 
 
@@ -758,26 +739,26 @@ MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Only act if old timeout != new timout
-    if(my->timeout.ihn_Millis != msg->Timeout)
+    if(my->timeout.ihn_Millis == msg->Timeout)
     {
-        // If old timeout exists, remove it
-        if(my->timeout.ihn_Millis)
-        {
-            DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->timeout);
-            my->timeout.ihn_Millis = 0;
-        }
-
-        // If new timeout > 0, install new handler
-        if(msg->Timeout)
-        {
-            my->timeout.ihn_Millis = (UWORD) msg->Timeout;
-            DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
-        }
-
-        return TRUE;
+        return FALSE;
     }
 
-    return FALSE;
+    // If old timeout exists, remove it
+    if(my->timeout.ihn_Millis)
+    {
+        DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->timeout);
+        my->timeout.ihn_Millis = 0;
+    }
+
+    // If new timeout > 0, install new handler
+    if(msg->Timeout)
+    {
+        my->timeout.ihn_Millis = (UWORD) msg->Timeout;
+        DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
+    }
+
+    return TRUE;
 }
 #endif
 
@@ -825,26 +806,21 @@ MUIDSP IPTR VimConDrawHollowCursor(Class *cls, Object *obj,
                                    struct MUIP_VimCon_DrawHollowCursor *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    int x1 = msg->Col * my->xdelta;
-    int y1 = msg->Row * my->ydelta;
-    int x2 = x1 + my->xdelta - my->space;
-    int y2 = y1 + my->ydelta;
+    int x1 = msg->Col * my->xdelta, y1 = msg->Row * my->ydelta,
+        x2 = x1 + my->xdelta - my->space, y2 = y1 + my->ydelta;
 
-    if(x2 > x1 && y2 > y1)
+    if(x2 <= x1 || y2 <= y1)
     {
-        // Stick to CGFX
-        FillPixelArray(&my->rp, x1, y1, my->xdelta, 1, msg->Color);
-        FillPixelArray(&my->rp, x1, y1, 1, my->ydelta, msg->Color);
-        FillPixelArray(&my->rp, x1, y2, my->xdelta, 1, msg->Color);
-        FillPixelArray(&my->rp, x2, y1, 1, my->ydelta, msg->Color);
-
-        // There's no hollow dirt
-        VimConDirty(cls, obj, x1, y1, x2, y2);
-        return TRUE;
+        WARN("Invalid geometry");
+        return FALSE;
     }
 
-    WARN("Invalid geometry");
-    return FALSE;
+    FillPixelArray(&my->rp, x1, y1, my->xdelta, 1, msg->Color);
+    FillPixelArray(&my->rp, x1, y1, 1, my->ydelta, msg->Color);
+    FillPixelArray(&my->rp, x1, y2, my->xdelta, 1, msg->Color);
+    FillPixelArray(&my->rp, x2, y1, 1, my->ydelta, msg->Color);
+    VimConDirty(cls, obj, x1, y1, x2, y2);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -860,20 +836,19 @@ MUIDSP IPTR VimConDrawPartCursor(Class *cls, Object *obj,
                                  struct MUIP_VimCon_DrawPartCursor *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    int x = msg->Col * my->xdelta;
-    int xs = msg->Width;
-    int y = msg->Row * my->ydelta + my->ydelta - msg->Height;
-    int ys = msg->Height - my->space;
+    int x = msg->Col * my->xdelta, xs = msg->Width,
+        y = msg->Row * my->ydelta + my->ydelta - msg->Height,
+        ys = msg->Height - my->space;
 
-    if(xs > 0 && ys > 0)
+    if(xs < 1 || ys < 1)
     {
-        FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
-        VimConDirty(cls, obj, x, y, x + xs, y + ys);
-        return TRUE;
+        WARN("Invalid cursor size");
+        return FALSE;
     }
 
-    WARN("Invalid cursor size");
-    return FALSE;
+    FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
+    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -888,20 +863,18 @@ MUIDSP IPTR VimConInvertRect(Class *cls, Object *obj,
                              struct MUIP_VimCon_InvertRect *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    int x = msg->Col * my->xdelta;
-    int xs = my->xdelta * msg->Cols;
-    int y = msg->Row * my->ydelta;
-    int ys = my->ydelta * msg->Rows;
+    int x = msg->Col * my->xdelta, xs = my->xdelta * msg->Cols,
+        y = msg->Row * my->ydelta, ys = my->ydelta * msg->Rows;
 
-    if( ys > 0 )
+    if(ys < 1)
     {
-        InvertPixelArray(&my->rp, x, y, xs, ys);
-        VimConDirty(cls, obj, x, y, x + xs, y + ys);
-        return TRUE;
+        WARN("Invalid block size");
+        return FALSE;
     }
 
-    WARN("Invalid block size");
-    return FALSE;
+    InvertPixelArray(&my->rp, x, y, xs, ys);
+    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -917,23 +890,21 @@ MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
                             struct MUIP_VimCon_FillBlock *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    int x = msg->Col1 * my->xdelta;
-    int xs = my->xdelta * (msg->Col2 + 1) - x;
-    int y = msg->Row1 * my->ydelta;
-    int ys = my->ydelta * (msg->Row2 + 1) - y;
+    int x = msg->Col1 * my->xdelta, xs = my->xdelta * (msg->Col2 + 1) - x,
+        y = msg->Row1 * my->ydelta, ys = my->ydelta * (msg->Row2 + 1) - y;
 
-    if(xs > 0 && ys > 0)
+    if(xs < 1 || ys < 1)
     {
-        // We might be dealing with incomplete characters
-        xs = xs + x > _mwidth(obj) ? _mwidth(obj) - x : xs;
-        ys = ys + y > _mheight(obj) ? _mheight(obj) - y : ys;
-        FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
-        VimConDirty(cls, obj, x, y, x + xs, y + ys);
-        return TRUE;
+        WARN("Invalid block size");
+        return FALSE;
     }
 
-    WARN("Invalid block size");
-    return FALSE;
+    // We might be dealing with incomplete characters
+    xs = xs + x > _mwidth(obj) ? _mwidth(obj) - x : xs;
+    ys = ys + y > _mheight(obj) ? _mheight(obj) - y : ys;
+    FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
+    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -953,42 +924,41 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
     struct VimConData *my = INST_DATA(cls,obj);
     int n = (int) msg->Lines;
 
-    if(n)
+    if(!n)
     {
-        int yctop, ycsiz, ydst, ysrc;
-        int xsrcdst = my->xdelta * msg->RegLeft;
-        int xsize = my->xdelta * (msg->RegRight + 1) - xsrcdst;
-        int ysize = my->ydelta * (msg->RegBottom + 1) - msg->Row * my->ydelta;
-
-        if(n > 0)
-        {
-            // Deletion
-            ysize -= n * my->ydelta;
-            ydst = msg->Row * my->ydelta;
-            ysrc = ydst + n * my->ydelta;
-            yctop = ydst + ysize;
-            ycsiz = n * my->ydelta;
-            VimConDirty(cls, obj, xsrcdst, ydst,  xsrcdst + xsize, yctop + ycsiz);
-        }
-        else
-        {
-            // Insertion
-            ysize += n * my->ydelta;
-            ysrc = msg->Row * my->ydelta;
-            ydst = ysrc - n * my->ydelta;
-            yctop = ysrc;
-            ycsiz = - (n * my->ydelta);
-            VimConDirty(cls, obj, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
-        }
-
-        // Blit and fill the abandoned area with Color
-        MovePixelArray(xsrcdst, ysrc, &my->rp, xsrcdst, ydst , xsize, ysize);
-        FillPixelArray(&my->rp, xsrcdst, yctop, xsize, ycsiz, msg->Color);
-        return TRUE;
+        WARN("No lines to delete / insert");
+        return FALSE;
     }
 
-    WARN("No lines to delete / insert");
-    return FALSE;
+    int yctop, ycsiz, ydst, ysrc, xsrcdst = my->xdelta * msg->RegLeft,
+        xsize = my->xdelta * (msg->RegRight + 1) - xsrcdst,
+        ysize = my->ydelta * (msg->RegBottom + 1) - msg->Row * my->ydelta;
+
+    if(n > 0)
+    {
+        // Deletion
+        ysize -= n * my->ydelta;
+        ydst = msg->Row * my->ydelta;
+        ysrc = ydst + n * my->ydelta;
+        yctop = ydst + ysize;
+        ycsiz = n * my->ydelta;
+        VimConDirty(cls, obj, xsrcdst, ydst,  xsrcdst + xsize, yctop + ycsiz);
+    }
+    else
+    {
+        // Insertion
+        ysize += n * my->ydelta;
+        ysrc = msg->Row * my->ydelta;
+        ydst = ysrc - n * my->ydelta;
+        yctop = ysrc;
+        ycsiz = - (n * my->ydelta);
+        VimConDirty(cls, obj, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
+    }
+
+    // Blit and fill the abandoned area with Color
+    MovePixelArray(xsrcdst, ysrc, &my->rp, xsrcdst, ydst , xsize, ysize);
+    FillPixelArray(&my->rp, xsrcdst, yctop, xsize, ycsiz, msg->Color);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -1048,66 +1018,62 @@ MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
 MUIDSP IPTR VimConDrawString(Class *cls, Object *obj,
                              struct MUIP_VimCon_DrawString *msg)
 {
-    // AROS is lacking SoftStyle.
     #ifndef RPTAG_SoftStyle
     # define RPTAG_SoftStyle TAG_IGNORE
     #endif
 
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // Do we have anything to print?
-    if(msg->Len)
+    if(!msg->Len)
     {
-        static struct TagItem tags[] =
-        {
-            { .ti_Tag = RPTAG_DrMd,
-              .ti_Data = JAM2 },
-            { .ti_Tag = RPTAG_SoftStyle,
-              .ti_Data = FS_NORMAL },
-            { .ti_Tag = TAG_END }
-        };
-
-        int y = msg->Row * my->ydelta,
-            x = msg->Col * my->xdelta;
-
-        static ULONG flags;
-
-        // Tag area as dirty and move into position.
-        VimConDirty(cls, obj, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
-        Move(&my->rp, x, y + my->rp.TxBaseline);
-
-        if(flags != msg->Flags)
-        {
-            // Translate Vim flags to Amiga flags.
-            tags[0].ti_Data = (msg->Flags & DRAW_TRANSP) ? JAM1 : JAM2;
-            tags[1].ti_Data = (msg->Flags & (DRAW_UNDERL | DRAW_BOLD)) ?
-                              ((msg->Flags & DRAW_UNDERL ? FSF_UNDERLINED : 0) |
-                              (msg->Flags & DRAW_BOLD ? FSF_BOLD : 0)) : FS_NORMAL;
-
-            // Set rastport attributes.
-            SetRPAttrsA(&my->rp, tags);
-
-            // Render into off screen buffer.
-            Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
-
-            // Reset draw mode to JAM2.
-            if(tags[0].ti_Data != JAM2)
-            {
-                tags[0].ti_Data = JAM2;
-                SetRPAttrsA(&my->rp, tags);
-                msg->Flags ^= DRAW_TRANSP;
-            }
-
-            // Store until next invocation.
-            flags = msg->Flags;
-        }
-        else
-        {
-            // Render text
-            Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
-        }
+        // Nothing to do.
+        return TRUE;
     }
 
+    static struct TagItem tags[] =
+    {
+        { .ti_Tag = RPTAG_DrMd,
+          .ti_Data = JAM2 },
+        { .ti_Tag = RPTAG_SoftStyle,
+          .ti_Data = FS_NORMAL },
+        { .ti_Tag = TAG_END }
+    };
+
+    int y = msg->Row * my->ydelta, x = msg->Col * my->xdelta;
+    static ULONG flags;
+
+    // Tag area as dirty and move into position.
+    VimConDirty(cls, obj, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
+    Move(&my->rp, x, y + my->rp.TxBaseline);
+
+    if(flags == msg->Flags)
+    {
+        Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
+        return TRUE;
+    }
+
+    // Translate Vim flags to Amiga flags.
+    tags[0].ti_Data = (msg->Flags & DRAW_TRANSP) ? JAM1 : JAM2;
+    tags[1].ti_Data = (msg->Flags & (DRAW_UNDERL | DRAW_BOLD)) ?
+                      ((msg->Flags & DRAW_UNDERL ? FSF_UNDERLINED : 0) |
+                      (msg->Flags & DRAW_BOLD ? FSF_BOLD : 0)) : FS_NORMAL;
+
+    // Set rastport attributes.
+    SetRPAttrsA(&my->rp, tags);
+
+    // Render into off screen buffer.
+    Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
+
+    // Reset draw mode to JAM2.
+    if(tags[0].ti_Data != JAM2)
+    {
+        tags[0].ti_Data = JAM2;
+        SetRPAttrsA(&my->rp, tags);
+        msg->Flags ^= DRAW_TRANSP;
+    }
+
+    // Store until next invocation.
+    flags = msg->Flags;
     return TRUE;
 }
 
@@ -1206,7 +1172,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Setup parent class
-    if(!DoSuperMethodA (cls, obj, (Msg) msg) )
+    if(!DoSuperMethodA(cls, obj, (Msg) msg))
     {
         ERR("Setup failed");
         return FALSE;
@@ -1223,11 +1189,9 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // of spacing necessary to avoid overlap
     if(!(my->rp.Font->tf_Flags & FPF_DESIGNED))
     {
-        int xs;
         struct TextExtent te;
-
         TextExtent(&my->rp, (STRPTR) "VI", 2, &te);
-        xs = te.te_Extent.MaxX - te.te_Extent.MinX;
+        int xs = te.te_Extent.MaxX - te.te_Extent.MinX;
         xs -= my->rp.TxWidth * 2;
         my->rp.TxSpacing += xs;
     }
@@ -1272,7 +1236,6 @@ MUIDSP IPTR VimConDispose(Class *cls, Object *obj, Msg msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // Free bitmap when no one's using it
     if(my->bm)
     {
         WaitBlit();
@@ -1322,19 +1285,17 @@ static void VimConAddEvent(Class *cls, Object *obj, IPTR event)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // Don't add the event twice.
-    if(event != (my->event.ehn_Events & event))
-    {
-        // We can't modify event handlers on the fly,
-        // we need to remove them and add them again.
-        DoMethod(_win(obj), MUIM_Window_RemEventHandler, &my->event);
-        my->event.ehn_Events |= event;
-        DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
-    }
-    else
+    // Don't add events more than once.
+    if(event == (my->event.ehn_Events & event))
     {
         WARN("Event exists");
+        return;
     }
+
+    // Can't modify event handlers, we need to remove and add them again.
+    DoMethod(_win(obj), MUIM_Window_RemEventHandler, &my->event);
+    my->event.ehn_Events |= event;
+    DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
 }
 
 //------------------------------------------------------------------------------
@@ -1347,18 +1308,16 @@ static void VimConRemEvent(Class *cls, Object *obj, ULONG event)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Don't remove what's not there.
-    if(my->event.ehn_Events & event)
-    {
-        // We can't modify event handlers on the fly,
-        // we need to remove them and add them again.
-        DoMethod(_win(obj), MUIM_Window_RemEventHandler, &my->event);
-        my->event.ehn_Events &= ~event;
-        DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
-    }
-    else
+    if(!(my->event.ehn_Events & event))
     {
         WARN("No such event");
+        return;
     }
+
+    // Can't modify event handlers, we need to remove and add them again.
+    DoMethod(_win(obj), MUIM_Window_RemEventHandler, &my->event);
+    my->event.ehn_Events &= ~event;
+    DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
 }
 
 //------------------------------------------------------------------------------
@@ -1369,9 +1328,8 @@ static void VimConRemEvent(Class *cls, Object *obj, ULONG event)
 MUIDSP int VimConMouseScrollEvent(Class *cls, Object *obj,
                                   struct MUIP_HandleEvent *msg)
 {
-    int x = msg->imsg->MouseX;
-    int y = msg->imsg->MouseY;
-    int event = (y - _mtop(obj) < 0 ? MOUSE_4 : 0) |
+    int x = msg->imsg->MouseX, y = msg->imsg->MouseY,
+        event = (y - _mtop(obj) < 0 ? MOUSE_4 : 0) |
                 (y - _mtop(obj) >= _mheight(obj) ? MOUSE_5 : 0) |
                 (x - _mleft(obj) < 0 ? MOUSE_7 : 0) |
                 (x - _mleft(obj) >= _mwidth(obj) ? MOUSE_6 : 0);
@@ -1718,6 +1676,7 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
 {
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
+
     if(!my->bm)
     {
         ERR("No off screen buffer");
@@ -1729,7 +1688,6 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
     msg->MinMaxInfo->MaxHeight = GetBitMapAttr(my->bm, BMA_HEIGHT);
     msg->MinMaxInfo->MinWidth += msg->MinMaxInfo->MaxWidth >> 3L;
     msg->MinMaxInfo->MinHeight += msg->MinMaxInfo->MaxHeight >> 3L;
-
     msg->MinMaxInfo->DefWidth += (msg->MinMaxInfo->MaxWidth >> 1L) +
                                   msg->MinMaxInfo->MinWidth;
     msg->MinMaxInfo->DefHeight += (msg->MinMaxInfo->MaxHeight >> 1L) +
@@ -1746,15 +1704,13 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 {
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
-    LONG xs = 0, ys = 0, xd = 0,
-         yd = 0, w = 0, h = 0;
+    LONG xs = 0, ys = 0, xd = 0, yd = 0, w = 0, h = 0;
 
     if(msg->flags & MADF_DRAWUPDATE)
     {
         // Anything dirty?
         if(my->xd1 < INT_MAX)
         {
-            // Blit dirt
             xs = my->xd1;
             ys = my->yd1;
             xd = _mleft(obj) + my->xd1;
@@ -1779,8 +1735,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         w = _mwidth(obj);
         h = _mheight(obj);
 
-        // Clear sub character trash if we're
-        // growing.
+        // Clear sub character trash if we're growing.
         if(lw < w || lh < h)
         {
             if(lw < w)
@@ -1827,16 +1782,16 @@ MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
     struct VimConData *my = INST_DATA(cls,obj);
     vimmenu_T *mp = (vimmenu_T *) msg->VimMenuPtr;
 
-    if(mp && mp->cb)
+    if(!mp || !mp->cb)
     {
-        // Treat menu / buttons like keyboard input
-        my->state |= MUIV_VimCon_State_Yield;
-        mp->cb(mp);
-        return TRUE;
+        WARN("Invalid callback");
+        return FALSE;
     }
 
-    WARN("Invalid callback");
-    return FALSE;
+    // Treat menu / buttons like keyboard input
+    my->state |= MUIV_VimCon_State_Yield;
+    mp->cb(mp);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
