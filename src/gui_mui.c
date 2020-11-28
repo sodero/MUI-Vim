@@ -148,9 +148,9 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 #endif
 
 //------------------------------------------------------------------------------
-// Global variables - Console, menu and toolbar
+// Globals - Application, console, menu, toolbar, left and scrollbar.
 //------------------------------------------------------------------------------
-static Object *App, *Con, *Mnu, *Tlb;
+static Object *App, *Con, *Mnu, *Tlb, *Hsc, *Scb;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -1440,6 +1440,20 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
 
     if(w == 1)
     {
+
+        IPTR d = 0;
+
+        get(Scb, MUIA_Prop_First, &d);
+        KPrintF("%d\n", d);
+        get(Scb, MUIA_Prop_Visible, &d);
+        KPrintF("%d\n", d);
+        get(Scb, MUIA_Prop_Entries, &d);
+        KPrintF("%d\n", d);
+
+
+
+
+
         // If yes, we're done
         add_to_input_buf(b, w);
         return TRUE;
@@ -2847,6 +2861,17 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
     (void) val;
     (void) size;
     (void) max;
+    HERE;
+    KPrintF("val:%d size:%d max:%d\n", val, size, max);
+/*
+    DoMethod(Scb, MUIM_Prop_Increase, 2);
+ MUIA_Prop_Entries, 10,
+                    MUIA_Prop_Visible, 5,
+                    MUIA_Prop_First, 1,
+*/
+//    set(Scb, MUIA_Prop_First, val);
+    set(Scb, MUIA_Prop_Visible, size);
+    set(Scb, MUIA_Prop_Entries, max - size);
 
     INFO("Not supported");
 }
@@ -2862,6 +2887,9 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
     (void) w;
     (void) h;
 
+    HERE;
+    KPrintF("x:%d y:%d w:%d h:%d\n", x, y, w, h);
+
     INFO("Not supported");
 }
 
@@ -2871,6 +2899,7 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 int gui_mch_get_scrollbar_xpadding(void)
 {
     INFO("Not supported");
+    HERE;
     return 0;
 }
 
@@ -2880,6 +2909,7 @@ int gui_mch_get_scrollbar_xpadding(void)
 int gui_mch_get_scrollbar_ypadding(void)
 {
     INFO("Not supported");
+    HERE;
     return 0;
 }
 
@@ -3404,15 +3434,40 @@ int gui_mch_init(void)
             MUIA_Window_ScreenTitle, vs,
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
+            MUIA_Window_UseRightBorderScroller, TRUE,
+            MUIA_Window_UseBottomBorderScroller, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
             MUIA_Window_RootObject,
             MUI_NewObject(MUIC_Group,
+                MUIA_Group_Horiz, FALSE,
                 MUIA_Group_Child, Tlb =
                     NewObject(VimToolbarClass->mcc_Class, NULL,
                     TAG_END),
-                MUIA_Group_Child, Con =
-                    NewObject(VimConClass->mcc_Class, NULL,
+                MUIA_Group_Child, MUI_NewObject(MUIC_Group,
+                    MUIA_Group_Horiz, TRUE,
+                    MUIA_Group_Child, Con =
+                        NewObject(VimConClass->mcc_Class, NULL,
+                        TAG_END),
+                    MUIA_Group_Child, Scb =
+                        MUI_NewObject(MUIC_Prop,
+                        MUIA_Prop_UseWinBorder, MUIV_Prop_UseWinBorder_Right,
+                        MUIA_Prop_Entries, 10,
+                        MUIA_Prop_Visible, 5,
+                        MUIA_Prop_First, 1,
+                        TAG_END),
                     TAG_END),
+
+                    /*
+                MUIA_Group_Child, Scb =
+                    MUI_NewObject(MUIC_Prop,
+                    MUIA_Prop_UseWinBorder, MUIV_Prop_UseWinBorder_Right,
+                    MUIA_Prop_Entries, 10,
+                    MUIA_Prop_Visible, 5,
+                    MUIA_Prop_First, 1,
+               //     MUIA_Prop_Horiz, TRUE,
+               //     MUIA_ShowMe, FALSE,
+                    TAG_END),
+                    */
                 TAG_END),
             TAG_END),
         TAG_END);
@@ -3422,6 +3477,9 @@ int gui_mch_init(void)
         ERR("Failed creating MUI application");
         return FAIL;
     }
+
+    //.OS.TEST
+//    DoMethod(Scb, MUIM_Prop_Increase, 2);
 
     // Open the window to finish setup, cheat (see gui_mch_open).
     set(Win, MUIA_Window_Open, TRUE);
@@ -3436,6 +3494,12 @@ int gui_mch_init(void)
     // Set up drag and drop notifications
     DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, Con, 2,
              MUIM_VimCon_AppMessage, MUIV_TriggerValue);
+
+
+    //.OS.TEST
+    DoMethod(Scb, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR)App, 2,
+             MUIM_Application_ReturnID, MUIV_Application_ReturnID_Quit);
+//    set(Scb, MUIA_Prop_First, val);
 
     // MUI specific menu parts
     if(Abo && Set)
