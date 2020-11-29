@@ -200,6 +200,7 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
+#define MUIM_VimCon_Scroll           (TAGBASE_sTx + 128)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef FEAT_TIMEOUT
@@ -335,6 +336,12 @@ struct MUIP_VimCon_Paste
 {
     STACKED ULONG MethodID;
     STACKED ULONG Clipboard;
+};
+
+struct MUIP_VimCon_Scroll
+{
+    STACKED ULONG MethodID;
+    STACKED ULONG Value;
 };
 
 //------------------------------------------------------------------------------
@@ -572,6 +579,18 @@ MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
     my->cursor[0] = (int) msg->Wait;
     my->cursor[1] = (int) msg->Off;
     my->cursor[2] = (int) msg->On;
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
+// VimConScroll - Vertical scroll
+// Input:         Value - Top line
+// Return:        TRUE
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimConScroll(Class *cls, Object *obj,
+                         struct MUIP_VimCon_Scroll *msg)
+{
+    KPrintF("value:%d\n", msg->Value);
     return TRUE;
 }
 
@@ -2163,8 +2182,10 @@ DISPATCH(VimCon)
         return VimConBrowse(cls, obj, (struct MUIP_VimCon_Browse *) msg);
 
     case MUIM_VimCon_SetTitle:
-        return VimConSetTitle(cls, obj,
-               (struct MUIP_VimCon_SetTitle *) msg);
+        return VimConSetTitle(cls, obj, (struct MUIP_VimCon_SetTitle *) msg);
+
+    case MUIM_VimCon_Scroll:
+        return VimConScroll(cls, obj, (struct MUIP_VimCon_Scroll *) msg);
 
     case MUIM_VimCon_GetScreenDim:
         return VimConGetScreenDim(cls, obj,
@@ -3488,17 +3509,16 @@ int gui_mch_init(void)
     set(Win, MUIA_Window_DefaultObject, Con);
 
     // Exit application upon close request (trap this later on)
-    DoMethod(Win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, (IPTR)App, 2,
+    DoMethod(Win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE, (IPTR) App, 2,
              MUIM_Application_ReturnID, MUIV_Application_ReturnID_Quit);
 
     // Set up drag and drop notifications
-    DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, Con, 2,
+    DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, (IPTR) Con, 2,
              MUIM_VimCon_AppMessage, MUIV_TriggerValue);
 
-
     //.OS.TEST
-    DoMethod(Scb, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR)App, 2,
-             MUIM_Application_ReturnID, MUIV_Application_ReturnID_Quit);
+    DoMethod(Scb, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) Con, 2,
+             MUIM_VimCon_Scroll, MUIV_TriggerValue);
 //    set(Scb, MUIA_Prop_First, val);
 
     // MUI specific menu parts
