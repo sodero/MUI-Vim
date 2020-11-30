@@ -590,7 +590,7 @@ MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
 MUIDSP IPTR VimConScroll(Class *cls, Object *obj,
                          struct MUIP_VimCon_Scroll *msg)
 {
-    KPrintF("value:%d\n", msg->Value);
+//    KPrintF("value:%d\n", msg->Value);
     return TRUE;
 }
 
@@ -1461,7 +1461,7 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     {
 
         IPTR d = 0;
-
+/*
         get(Scb, MUIA_Prop_First, &d);
         KPrintF("%d\n", d);
         get(Scb, MUIA_Prop_Visible, &d);
@@ -1469,7 +1469,7 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
         get(Scb, MUIA_Prop_Entries, &d);
         KPrintF("%d\n", d);
 
-
+*/
 
 
 
@@ -2272,11 +2272,12 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
     while(b->img != (IPTR) MUIV_TheBar_End)
     {
         const char *n = (const char *) msg->Label, *h = b->help;
-                if(h && !strcmp(n, h))
+
+        if(h && !strcmp(n, h))
         {
             DoMethod(obj, MUIM_TheBar_Notify, (IPTR) b->ID,
-                      MUIA_Pressed, FALSE, Con, 2,
-                      MUIM_VimCon_Callback, (IPTR) msg->ID);
+                     MUIA_Pressed, FALSE, Con, 2,
+                     MUIM_VimCon_Callback, (IPTR) msg->ID);
 
             // This is a bit of a hack; save the Vim
             // menu item pointer as the parent class
@@ -2851,15 +2852,55 @@ void gui_mch_set_winpos(int x, int y)
     INFO("Not supported");
 }
 
+static void print_sb(const char *info, scrollbar_T *sb)
+{
+    if(!sb) return;
+
+    KPrintF("%s sb:%p value:%d size:%d max:%d top:%d height:%d width:%d"
+            " status_height:%d type:%s\n", info, sb, sb->value, sb->size, sb->max, sb->top,
+            sb->height, sb->width, sb->status_height, sb->type == SBAR_BOTTOM ? "bottom" : 
+            sb->type == SBAR_LEFT ? "left" : "right");
+
+}
+
 //------------------------------------------------------------------------------
 // gui_mch_enable_scrollbar - Not supported
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
-    (void) sb;
-    (void) flag;
+    if(sb->type == SBAR_BOTTOM || sb->wp != curwin)
+    {
+        print_sb("HELL NO:", sb);
+        KPrintF("wp:%p curwin:%p\n", sb->wp, curwin);
+        return;
+    }
 
-    INFO("Not supported");
+    if(flag)
+    {
+        //KPrintF("\nENABLE %p\n", sb);
+        print_sb("SET ACTIVE:", sb);
+        /*KPrintF("ENABLE sb:%p value:%d size:%d max:%d"
+                "top:%d height:%d width:%d type:%d\n", sb, sb->value, sb->size,
+                sb->max, sb->top, sb->height, sb->width, sb->type);
+                */
+
+    }
+    else
+    {
+        print_sb("DISABLE:", sb);
+    }
+
+    if(!sb->height)
+    {
+        return;
+    }
+
+    print_sb("SET SIZE:", sb);
+
+    set(Scb, MUIA_Prop_Entries, sb->max - sb->size);
+    set(Scb, MUIA_Prop_Visible, sb->size);
+    set(Scb, MUIA_Prop_First, sb->value);
+
 }
 
 //------------------------------------------------------------------------------
@@ -2869,6 +2910,8 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
     (void) sb;
     (void) orient;
+
+//    print_sb("CREATE:", sb);
 
     INFO("Not supported");
 }
@@ -2882,17 +2925,25 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
     (void) val;
     (void) size;
     (void) max;
-    HERE;
-    KPrintF("val:%d size:%d max:%d\n", val, size, max);
+//    if(sb->type == SBAR_RIGHT)
+     /*
+    print_sb("SCROLL:", sb);
+    */
+    KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
+             val, size, max);
+    if(size >= max) return;
+
+//    KPrintF("SCROLL %p -> val:%d\n", sb, val);
 /*
+ *
     DoMethod(Scb, MUIM_Prop_Increase, 2);
  MUIA_Prop_Entries, 10,
                     MUIA_Prop_Visible, 5,
                     MUIA_Prop_First, 1,
 */
-//    set(Scb, MUIA_Prop_First, val);
-    set(Scb, MUIA_Prop_Visible, size);
     set(Scb, MUIA_Prop_Entries, max - size);
+    set(Scb, MUIA_Prop_Visible, size);
+    set(Scb, MUIA_Prop_First, val);
 
     INFO("Not supported");
 }
@@ -2902,14 +2953,13 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
-    (void) sb;
-    (void) x;
-    (void) y;
-    (void) w;
-    (void) h;
+//    if(sb->type == SBAR_RIGHT)
+    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
 
-    HERE;
-    KPrintF("x:%d y:%d w:%d h:%d\n", x, y, w, h);
+//    KPrintF("POS sb:%p type:%d\n", sb, sb->type);
+//    set(Scb, MUIA_Prop_First, y);
+//    set(Scb, MUIA_Prop_Visible, sb->size);
+//    set(Scb, MUIA_Prop_Entries, sb->max - sb->height);
 
     INFO("Not supported");
 }
@@ -2920,7 +2970,6 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 int gui_mch_get_scrollbar_xpadding(void)
 {
     INFO("Not supported");
-    HERE;
     return 0;
 }
 
@@ -2930,7 +2979,6 @@ int gui_mch_get_scrollbar_xpadding(void)
 int gui_mch_get_scrollbar_ypadding(void)
 {
     INFO("Not supported");
-    HERE;
     return 0;
 }
 
