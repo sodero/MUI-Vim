@@ -2868,49 +2868,36 @@ static void print_sb(const char *info, scrollbar_T *sb)
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
+    IPTR enable = flag ? TRUE : FALSE;
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);
-
-    Object *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
+           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
 
     if(!scb)
         KPrintF("%p not found\n", sb);
 
-    KPrintF("%s %p\n", flag ? "ENABLE" : "DISABLE", sb);
+    set(scb, MUIA_ShowMe, enable);
 
-//    DoMethod(dst, MUIM_Group_InitChange);
-    set(scb, MUIA_ShowMe, flag ? TRUE : FALSE);
-//    DoMethod(dst, MUIM_Group_ExitChange);
-
-    /*
-    if(sb->type == SBAR_BOTTOM || sb->wp != curwin)
+    if(enable)
     {
-        print_sb("HELL NO:", sb);
-        KPrintF("wp:%p curwin:%p\n", sb->wp, curwin);
+        set(dst, MUIA_ShowMe, TRUE);
         return;
     }
 
-    if(flag)
-    {
-        //KPrintF("\nENABLE %p\n", sb);
-        print_sb("SET ACTIVE:", sb);
-    }
-    else
-    {
-        print_sb("DISABLE:", sb);
-    }
+    struct List *lst = NULL;
+    get(dst, MUIA_Group_ChildList, &lst);
+    struct Node *cur = lst->lh_Head;
 
-    if(!sb->height)
+    for(Object *chl = NextObject(&cur); chl && !enable;
+                chl = NextObject(&cur))
     {
-        return;
+        get(chl, MUIA_ShowMe, &enable);
     }
 
-    print_sb("SET SIZE:", sb);
-
-    set(Scb, MUIA_Prop_Entries, sb->max - sb->size);
-    set(Scb, MUIA_Prop_Visible, sb->size);
-    set(Scb, MUIA_Prop_First, sb->value);
-*/
+    if(!enable)
+    {
+        set(dst, MUIA_ShowMe, FALSE);
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -3538,7 +3525,7 @@ int gui_mch_init(void)
                     MUIA_Group_Horiz, TRUE,
                     MUIA_Group_Child, Lsg = MUI_NewObject(MUIC_Group,
                         MUIA_Group_Horiz, FALSE,
-                        MUIA_ShowMe, TRUE,
+                        MUIA_ShowMe, FALSE,
 //
                         //MUIA_HorizWeight, 0,
                         /*
@@ -3562,7 +3549,7 @@ int gui_mch_init(void)
                         TAG_END),
                     MUIA_Group_Child, Rsg = MUI_NewObject(MUIC_Group,
                         MUIA_Group_Horiz, FALSE,
-                        MUIA_ShowMe, TRUE,
+                        MUIA_ShowMe, FALSE,
                   //      MUIA_VertWeight, 0,
                       /*  MUIA_Group_Child, Scb = MUI_NewObject(MUIC_Scrollbar,
                             MUIA_ShowMe, TRUE,
