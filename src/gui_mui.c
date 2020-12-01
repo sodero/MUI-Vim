@@ -150,7 +150,8 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 //------------------------------------------------------------------------------
 // Globals - Application, console, menu, toolbar, left and scrollbar.
 //------------------------------------------------------------------------------
-static Object *App, *Con, *Mnu, *Tlb, *Hsc, *Scb;
+static Object *App, *Con, *Mnu, *Tlb,
+              *Lsg, *Bsg, *Rsg;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -2862,12 +2863,26 @@ static void print_sb(const char *info, scrollbar_T *sb)
             sb->type == SBAR_LEFT ? "left" : "right");
 
 }
-
 //------------------------------------------------------------------------------
 // gui_mch_enable_scrollbar - Not supported
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);
+
+    Object *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+
+    if(!scb)
+        KPrintF("%p not found\n", sb);
+
+    KPrintF("%s %p\n", flag ? "ENABLE" : "DISABLE", sb);
+
+//    DoMethod(dst, MUIM_Group_InitChange);
+    set(scb, MUIA_ShowMe, flag ? TRUE : FALSE);
+//    DoMethod(dst, MUIM_Group_ExitChange);
+
+    /*
     if(sb->type == SBAR_BOTTOM || sb->wp != curwin)
     {
         print_sb("HELL NO:", sb);
@@ -2879,11 +2894,6 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
     {
         //KPrintF("\nENABLE %p\n", sb);
         print_sb("SET ACTIVE:", sb);
-        /*KPrintF("ENABLE sb:%p value:%d size:%d max:%d"
-                "top:%d height:%d width:%d type:%d\n", sb, sb->value, sb->size,
-                sb->max, sb->top, sb->height, sb->width, sb->type);
-                */
-
     }
     else
     {
@@ -2900,7 +2910,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
     set(Scb, MUIA_Prop_Entries, sb->max - sb->size);
     set(Scb, MUIA_Prop_Visible, sb->size);
     set(Scb, MUIA_Prop_First, sb->value);
-
+*/
 }
 
 //------------------------------------------------------------------------------
@@ -2908,10 +2918,22 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 //------------------------------------------------------------------------------
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
-    (void) sb;
-    (void) orient;
+    if(!sb)
+        return;
 
-//    print_sb("CREATE:", sb);
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  sb->type == SBAR_RIGHT ? Rsg : Bsg;
+
+    print_sb("CREATE:", sb);
+
+    DoMethod(dst, MUIM_Group_InitChange);
+
+    Object *obj = MUI_NewObject(MUIC_Scrollbar, MUIA_UserData, (IPTR) sb,
+                                MUIA_ShowMe, FALSE, TAG_END);
+
+    DoMethod(dst, OM_ADDMEMBER, obj);
+    DoMethod(dst, MUIM_Group_ExitChange);
+
 
     INFO("Not supported");
 }
@@ -2929,9 +2951,11 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
      /*
     print_sb("SCROLL:", sb);
     */
+    /*
     KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
              val, size, max);
     if(size >= max) return;
+    */
 
 //    KPrintF("SCROLL %p -> val:%d\n", sb, val);
 /*
@@ -2940,11 +2964,11 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
  MUIA_Prop_Entries, 10,
                     MUIA_Prop_Visible, 5,
                     MUIA_Prop_First, 1,
-*/
     set(Scb, MUIA_Prop_Entries, max - size);
     set(Scb, MUIA_Prop_Visible, size);
     set(Scb, MUIA_Prop_First, val);
 
+*/
     INFO("Not supported");
 }
 
@@ -2954,7 +2978,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
 //    if(sb->type == SBAR_RIGHT)
-    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
+//    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
 
 //    KPrintF("POS sb:%p type:%d\n", sb, sb->type);
 //    set(Scb, MUIA_Prop_First, y);
@@ -3503,8 +3527,6 @@ int gui_mch_init(void)
             MUIA_Window_ScreenTitle, vs,
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
-            MUIA_Window_UseRightBorderScroller, TRUE,
-            MUIA_Window_UseBottomBorderScroller, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
             MUIA_Window_RootObject,
             MUI_NewObject(MUIC_Group,
@@ -3514,15 +3536,37 @@ int gui_mch_init(void)
                     TAG_END),
                 MUIA_Group_Child, MUI_NewObject(MUIC_Group,
                     MUIA_Group_Horiz, TRUE,
-                    MUIA_Group_Child, Con =
-                        NewObject(VimConClass->mcc_Class, NULL,
+                    MUIA_Group_Child, Lsg = MUI_NewObject(MUIC_Group,
+                        MUIA_Group_Horiz, FALSE,
+                        MUIA_ShowMe, TRUE,
+//
+                        //MUIA_HorizWeight, 0,
+                        /*
+                        MUIA_Group_Child, MUI_NewObject(MUIC_Scrollbar,
+                            MUIA_ShowMe, TRUE,
+                            TAG_END),*/
+//
                         TAG_END),
-                    MUIA_Group_Child, Scb =
-                        MUI_NewObject(MUIC_Prop,
-                        MUIA_Prop_UseWinBorder, MUIV_Prop_UseWinBorder_Right,
-                        MUIA_Prop_Entries, 10,
-                        MUIA_Prop_Visible, 5,
-                        MUIA_Prop_First, 1,
+                    MUIA_Group_Child, Bsg = MUI_NewObject(MUIC_Group,
+                        MUIA_Group_Horiz, FALSE,
+                        MUIA_ShowMe, TRUE,
+                        MUIA_Group_Child, Con =
+                            NewObject(VimConClass->mcc_Class, NULL,
+                            TAG_END),
+                            /*
+                        MUIA_Group_Child, MUI_NewObject(MUIC_Scrollbar,
+                            MUIA_Group_Horiz, TRUE,
+                            MUIA_ShowMe, TRUE,
+                            TAG_END),
+                            */
+                        TAG_END),
+                    MUIA_Group_Child, Rsg = MUI_NewObject(MUIC_Group,
+                        MUIA_Group_Horiz, FALSE,
+                        MUIA_ShowMe, TRUE,
+                  //      MUIA_VertWeight, 0,
+                      /*  MUIA_Group_Child, Scb = MUI_NewObject(MUIC_Scrollbar,
+                            MUIA_ShowMe, TRUE,
+                            TAG_END),*/
                         TAG_END),
                     TAG_END),
 
@@ -3563,10 +3607,11 @@ int gui_mch_init(void)
     // Set up drag and drop notifications
     DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, (IPTR) Con, 2,
              MUIM_VimCon_AppMessage, MUIV_TriggerValue);
-
+/*
     //.OS.TEST
     DoMethod(Scb, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) Con, 2,
              MUIM_VimCon_Scroll, MUIV_TriggerValue);
+             */
 //    set(Scb, MUIA_Prop_First, val);
 
     // MUI specific menu parts
@@ -3985,7 +4030,22 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
-    (void) sb;
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  sb->type == SBAR_RIGHT ? Rsg : Bsg;
+
+    Object *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+
+    if(!scb)
+        KPrintF("destroy %p not found\n", sb);
+
+
+
+    print_sb("destroy found:", sb);
+
+    DoMethod(dst, MUIM_Group_InitChange);
+    DoMethod(App, OM_REMMEMBER, scb);
+    DoMethod(dst, MUIM_Group_ExitChange);
+
 
     INFO("Not supported");
 }
