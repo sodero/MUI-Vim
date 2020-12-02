@@ -2924,14 +2924,15 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
         return;
 
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  sb->type == SBAR_RIGHT ? Rsg : Bsg;
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
     print_sb("CREATE:", sb);
 
     DoMethod(dst, MUIM_Group_InitChange);
 
     Object *obj = MUI_NewObject(MUIC_Scrollbar, MUIA_UserData, (IPTR) sb,
-                                MUIA_ShowMe, FALSE, TAG_END);
+                                MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
+                                dst == Bsg ? TRUE : FALSE, TAG_END);
 
     DoMethod(dst, OM_ADDMEMBER, obj);
     DoMethod(dst, MUIM_Group_ExitChange);
