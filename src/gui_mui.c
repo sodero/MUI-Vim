@@ -2874,11 +2874,11 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
     if(!scb)
         KPrintF("%p not found\n", sb);
 
-    get(scb, MUIA_ShowMe, &state);
+  /*  get(scb, MUIA_ShowMe, &state);
 
     if(enable == state)
         return;
-
+*/
     KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
     
     DoMethod(OLASR, MUIM_Group_InitChange);
@@ -2911,8 +2911,8 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 
     DoMethod(dst, MUIM_Group_ExitChange);
     DoMethod(OLASR, MUIM_Group_ExitChange);
-    MUI_Redraw(dst, MADF_DRAWOBJECT);
-    MUI_Redraw(OLASR, MADF_DRAWOBJECT);
+ //   MUI_Redraw(dst, MADF_DRAWOBJECT);
+ //   MUI_Redraw(OLASR, MADF_DRAWOBJECT);
 }
 
 //------------------------------------------------------------------------------
