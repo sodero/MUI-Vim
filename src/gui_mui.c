@@ -149,7 +149,7 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
+static Object *OLASR, *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -2866,7 +2866,7 @@ static void print_sb(const char *info, scrollbar_T *sb)
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
-    IPTR enable = flag ? TRUE : FALSE;
+    IPTR enable = flag ? TRUE : FALSE, state; 
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg),
            *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
@@ -2874,6 +2874,14 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
     if(!scb)
         KPrintF("%p not found\n", sb);
 
+    get(scb, MUIA_ShowMe, &state);
+
+    if(enable == state)
+        return;
+
+    KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
+    
+    DoMethod(OLASR, MUIM_Group_InitChange);
     DoMethod(dst, MUIM_Group_InitChange);
     set(scb, MUIA_ShowMe, enable);
 
@@ -2881,6 +2889,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
     {
         set(dst, MUIA_ShowMe, TRUE);
         DoMethod(dst, MUIM_Group_ExitChange);
+        DoMethod(OLASR, MUIM_Group_ExitChange);
         return;
     }
 
@@ -2896,10 +2905,14 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 
     if(!enable)
     {
+        KPrintF("Hiding group\n");
         set(dst, MUIA_ShowMe, FALSE);
     }
 
     DoMethod(dst, MUIM_Group_ExitChange);
+    DoMethod(OLASR, MUIM_Group_ExitChange);
+    MUI_Redraw(dst, MADF_DRAWOBJECT);
+    MUI_Redraw(OLASR, MADF_DRAWOBJECT);
 }
 
 //------------------------------------------------------------------------------
@@ -3517,7 +3530,7 @@ int gui_mch_init(void)
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
-            MUIA_Window_RootObject, MUI_NewObject(MUIC_Group,
+            MUIA_Window_RootObject, OLASR  =  MUI_NewObject(MUIC_Group,
                 MUIA_Group_Horiz, FALSE,
                 MUIA_Group_Child, Tlb =
                     NewObject(VimToolbarClass->mcc_Class, NULL,
@@ -4019,6 +4032,28 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
+           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+
+    if(!scb)
+        KPrintF("destroy %p not found\n", sb);
+
+   // DoMethod(dst, MUIM_Group_InitChange);
+
+    KPrintF("Destroy %p\n", sb);
+
+/*
+    gui_mch_enable_scrollbar(sb, FALSE);
+    set(scb, MUIA_UserData, 0);
+*/
+    gui_mch_enable_scrollbar(sb, FALSE);
+
+    DoMethod(dst, MUIM_Group_InitChange);
+    DoMethod(dst, OM_REMMEMBER, scb);
+    MUI_DisposeObject(scb);
+    DoMethod(dst, MUIM_Group_ExitChange);
+/*
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   sb->type == SBAR_RIGHT ? Rsg : Bsg;
 
     Object *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
@@ -4026,17 +4061,13 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
     if(!scb)
         KPrintF("destroy %p not found\n", sb);
 
+    KPrintF("Destroy %p", sb);
 
-    gui_mch_enable_scrollbar(sb, 0);
-
-    print_sb("destroy found:", sb);
-/*
     DoMethod(dst, MUIM_Group_InitChange);
-    DoMethod(App, OM_REMMEMBER, scb);
+    DoMethod(dst, OM_REMMEMBER, scb);
+    MUI_DisposeObject(scb);
     DoMethod(dst, MUIM_Group_ExitChange);
 */
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
