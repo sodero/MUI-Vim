@@ -2866,7 +2866,7 @@ static void print_sb(const char *info, scrollbar_T *sb)
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
-    IPTR enable = flag ? TRUE : FALSE, state; 
+    IPTR enable = flag ? TRUE : FALSE, state;
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg),
            *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
@@ -2921,24 +2921,76 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
     if(!sb)
+    {
         return;
+    }
 
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
     print_sb("CREATE:", sb);
+    Object *obj = MUI_NewObject(MUIC_Scrollbar,
+                                MUIA_UserData, (IPTR) sb,
+                                MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
+                                dst == Bsg ? TRUE : FALSE, TAG_END);
+    if(!obj)
+    {
+        return;
+    }
+
+    if(dst == Bsg)
+    {
+        DoMethod(dst, OM_ADDMEMBER, obj);
+        return;
+    }
+/*
+    DoMethod(dst, MUIM_Group_InitChange);
+    DoMethod(dst, OM_ADDMEMBER, obj);
+    DoMethod(dst, MUIM_Group_ExitChange);
+*/
+
+    struct List *lst = NULL;
+    get(dst, MUIA_Group_ChildList, &lst);
+
+    struct Node *cur = lst->lh_Head;
+    size_t ndx = 1;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    {
+        ndx++;
+    }
+
+    Object **chv = calloc(ndx + 1, sizeof(Object *));
+
+    if(!chv)
+    {
+        MUI_DisposeObject(obj);
+        return;
+    }
+
+    ndx = 0;
+    chv[ndx++] = obj;
+    cur = lst->lh_Head;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    {
+        chv[ndx++] = chl;
+    }
 
     DoMethod(dst, MUIM_Group_InitChange);
 
-    Object *obj = MUI_NewObject(MUIC_Scrollbar, MUIA_UserData, (IPTR) sb,
-                                MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
-                                dst == Bsg ? TRUE : FALSE, TAG_END);
+    for(ndx = 1; chv[ndx]; ndx++)
+    {
+        DoMethod(dst, OM_REMMEMBER, chv[ndx]);
+    }
 
-    DoMethod(dst, OM_ADDMEMBER, obj);
+    for(ndx = 0; chv[ndx]; ndx++)
+    {
+        DoMethod(dst, OM_ADDMEMBER, chv[ndx]);
+    }
+
     DoMethod(dst, MUIM_Group_ExitChange);
-
-
-    INFO("Not supported");
+    free(chv);
 }
 
 //------------------------------------------------------------------------------
@@ -3006,10 +3058,13 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 
     if(dst != Bsg)
     {
+        KPrintF("weight %p not found\n", sb);
         set(scb, MUIA_VertWeight, h);
     }
 
+
     DoMethod(dst, MUIM_Group_ExitChange);
+
 
 //    KPrintF("POS sb:%p type:%d\n", sb, sb->type);
 //    set(Scb, MUIA_Prop_First, y);
