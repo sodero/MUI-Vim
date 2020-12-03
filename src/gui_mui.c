@@ -2880,8 +2880,8 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
 */
     KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
-    
     DoMethod(OLASR, MUIM_Group_InitChange);
+
     DoMethod(dst, MUIM_Group_InitChange);
     set(scb, MUIA_ShowMe, enable);
 
@@ -2946,10 +2946,22 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
-    (void) sb;
-    (void) val;
-    (void) size;
-    (void) max;
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
+           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+
+    if(!scb)
+        KPrintF("scroll %p not found\n", sb);
+
+    print_sb("SCROLL:", sb);
+
+    KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
+             val, size, max);
+
+    set(scb, MUIA_Prop_Entries, max - size);
+    set(scb, MUIA_Prop_Visible, size);
+    set(scb, MUIA_Prop_First, val);
+
 //    if(sb->type == SBAR_RIGHT)
      /*
     print_sb("SCROLL:", sb);
@@ -2981,7 +2993,23 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
 //    if(sb->type == SBAR_RIGHT)
-//    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
+    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
+
+    Object *dst = sb->type == SBAR_LEFT ? Lsg :
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
+           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+
+    if(!scb)
+        KPrintF("weight %p not found\n", sb);
+
+    DoMethod(dst, MUIM_Group_InitChange);
+
+    if(dst != Bsg)
+    {
+        set(scb, MUIA_VertWeight, h);
+    }
+
+    DoMethod(dst, MUIM_Group_ExitChange);
 
 //    KPrintF("POS sb:%p type:%d\n", sb, sb->type);
 //    set(Scb, MUIA_Prop_First, y);
@@ -4053,22 +4081,6 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
     DoMethod(dst, OM_REMMEMBER, scb);
     MUI_DisposeObject(scb);
     DoMethod(dst, MUIM_Group_ExitChange);
-/*
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  sb->type == SBAR_RIGHT ? Rsg : Bsg;
-
-    Object *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
-
-    if(!scb)
-        KPrintF("destroy %p not found\n", sb);
-
-    KPrintF("Destroy %p", sb);
-
-    DoMethod(dst, MUIM_Group_InitChange);
-    DoMethod(dst, OM_REMMEMBER, scb);
-    MUI_DisposeObject(scb);
-    DoMethod(dst, MUIM_Group_ExitChange);
-*/
 }
 
 //------------------------------------------------------------------------------
