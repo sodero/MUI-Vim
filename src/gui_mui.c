@@ -712,17 +712,29 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     // Remove current timer
     DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
 
+    // Save current state.
+    int state = my->blink;
+
     // Hide or show cursor depending on index
     if(my->blink == 1)
     {
+        // Vim might invoke stop blink.
+        my->blink = 0;
+
         // Hide cursor
         gui_undraw_cursor();
     }
     else
     {
+        // Vim might invoke stop blink.
+        my->blink = 0;
+
         // Show cursor
         gui_update_cursor(TRUE, FALSE);
     }
+
+    // Restore state.
+    my->blink = state;
 
     // Install new timer. Disallow values lower than 100ms (perf. reasons)
     my->ticker.ihn_Millis = my->cursor[my->blink] >= 100 ?
@@ -2564,8 +2576,11 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     // enabled, therefore update when msg->Grey == currentSetting.
     if (currentSetting == msg->Grey)
     {
+        /*
         SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE,
 		         TAG_DONE);
+                 */
+        set(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE);
     }
     return TRUE;
 }
@@ -2868,7 +2883,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 
     if(!scb)
     {
-        ERR("No scrollbar");
+        INFO("No scrollbar");
         return;
     }
 
@@ -2878,16 +2893,16 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
 */
  //   KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
-    DoMethod(OLASR, MUIM_Group_InitChange);
+//    DoMethod(OLASR, MUIM_Group_InitChange);
 
-    DoMethod(dst, MUIM_Group_InitChange);
+//    DoMethod(dst, MUIM_Group_InitChange);
     set(scb, MUIA_ShowMe, enable);
 
     if(enable)
     {
         set(dst, MUIA_ShowMe, TRUE);
-        DoMethod(dst, MUIM_Group_ExitChange);
-        DoMethod(OLASR, MUIM_Group_ExitChange);
+  //      DoMethod(dst, MUIM_Group_ExitChange);
+   //     DoMethod(OLASR, MUIM_Group_ExitChange);
         return;
     }
 
@@ -2907,8 +2922,8 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         set(dst, MUIA_ShowMe, FALSE);
     }
 
-    DoMethod(dst, MUIM_Group_ExitChange);
-    DoMethod(OLASR, MUIM_Group_ExitChange);
+//    DoMethod(dst, MUIM_Group_ExitChange);
+//    DoMethod(OLASR, MUIM_Group_ExitChange);
  //   MUI_Redraw(dst, MADF_DRAWOBJECT);
  //   MUI_Redraw(OLASR, MADF_DRAWOBJECT);
 }
@@ -2920,6 +2935,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
     if(!sb)
     {
+        INFO("No scrollbar");
         return;
     }
 
@@ -2933,6 +2949,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
                                 dst == Bsg ? TRUE : FALSE, TAG_END);
     if(!obj)
     {
+        ERR("Out of memory");
         return;
     }
 
@@ -2965,6 +2982,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 
     if(!chv)
     {
+        ERR("Out of memory");
         MUI_DisposeObject(obj);
         return;
     }
@@ -3005,7 +3023,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 
     if(!scb)
     {
-        ERR("No scrollbar");
+        INFO("No scrollbar");
         return;
     }
 
@@ -3014,10 +3032,13 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
     if(dst == Bsg)
     KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
              val, size, max);
-*/
     set(scb, MUIA_Prop_Entries, max);
     set(scb, MUIA_Prop_Visible, size);
     set(scb, MUIA_Prop_First, val);
+*/
+
+    SetAttrs(scb, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
+             MUIA_Prop_First, val, TAG_DONE);
 
 //    if(sb->type == SBAR_RIGHT)
      /*
@@ -3058,7 +3079,7 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 
     if(!scb)
     {
-        ERR("No scrollbar");
+        INFO("No scrollbar");
         return;
     }
 
@@ -4126,7 +4147,6 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 
     if(!scb)
     {
-        ERR("No scrollbar");
         return;
     }
 
@@ -4138,12 +4158,16 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
     gui_mch_enable_scrollbar(sb, FALSE);
     set(scb, MUIA_UserData, 0);
 */
-    gui_mch_enable_scrollbar(sb, FALSE);
+//    gui_mch_enable_scrollbar(sb, FALSE);
 
+//    DoMethod(OLASR, MUIM_Group_InitChange);
     DoMethod(dst, MUIM_Group_InitChange);
+
     DoMethod(dst, OM_REMMEMBER, scb);
     MUI_DisposeObject(scb);
+
     DoMethod(dst, MUIM_Group_ExitChange);
+//    DoMethod(OLASR, MUIM_Group_ExitChange);
 }
 
 //------------------------------------------------------------------------------
