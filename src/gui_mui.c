@@ -594,7 +594,7 @@ MUIDSP IPTR VimConScroll(Class *cls, Object *obj,
     scrollbar_T *sb;
     get((Object *) msg->Instance, MUIA_UserData, &sb);
 
-//    KPrintF("sb:%p value:%d\n", sb, msg->Value);
+    KPrintF("sb:%p value:%d\n", sb, msg->Value);
 //	gui_drag_scrollbar(sb, (int) msg->Value, TRUE);
 	gui_drag_scrollbar(sb, (int) msg->Value, FALSE);
 
@@ -2219,10 +2219,11 @@ DISPATCH(VimCon)
 
     case MUIM_VimCon_MUISettings:
         return VimConMUISettings(cls, obj);
-    }
 
-    // Unknown method, promote to parent.
-    return DoSuperMethodA(cls, obj, msg);
+    default:
+        // Unknown method, promote to parent.
+        return DoSuperMethodA(cls, obj, msg);
+    }
 }
 DISPATCH_END
 
@@ -2452,10 +2453,11 @@ DISPATCH(VimToolbar)
     case MUIM_VimToolbar_DisableButton:
         return VimToolbarDisableButton(cls, obj,
             (struct MUIP_VimToolbar_DisableButton *) msg);
-    }
 
-    // Unknown method, the parent class might be able to care of it.
-    return DoSuperMethodA(cls, obj, msg);
+    default:
+        // Unknown method, promote to parent.
+        return DoSuperMethodA(cls, obj, msg);
+    }
 }
 DISPATCH_END
 
@@ -2773,10 +2775,11 @@ DISPATCH(VimMenu)
 
     case MUIM_VimMenu_Grey:
         return VimMenuGrey(cls, obj, (struct MUIP_VimMenu_Grey *) msg);
-    }
 
-    // Unknown method, the parent class might be able to care of it.
-    return DoSuperMethodA(cls, obj, msg);
+    default:
+        // Unknown method, promote to parent.
+        return DoSuperMethodA(cls, obj, msg);
+    }
 }
 DISPATCH_END
 
@@ -2790,6 +2793,58 @@ CLASS_DEF(VimScrollbar)
 };
 
 //------------------------------------------------------------------------------
+// VimScrollbar public methods and parameters
+//------------------------------------------------------------------------------
+#define MUIM_VimScrollbar_Drag  (TAGBASE_sTx + 401)
+
+struct MUIP_VimScrollbar_Drag
+{
+    STACKED ULONG MethodID;
+    STACKED ULONG Value;
+};
+
+//------------------------------------------------------------------------------
+// VimScrollbarDrag - Drag scrollbar
+// Input:             Value - Top line
+// Return:            TRUE
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
+                             struct MUIP_VimScrollbar_Drag *msg)
+{
+    scrollbar_T *sb;
+    get((Object *) obj, MUIA_UserData, &sb);
+HERE;
+    KPrintF("sb:%p value:%d\n", sb, msg->Value);
+//	gui_drag_scrollbar(sb, (int) msg->Value, TRUE);
+	gui_drag_scrollbar(sb, (int) msg->Value, FALSE);
+
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarNew - Overloading OM_NEW
+// Input:            See BOOPSI docs
+// Return:           See BOOPSI docs
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
+{
+    obj = (Object *) DoSuperNew(cls, obj, MUIA_Frame, MUIV_Frame_Text,
+                                MUIA_InputMode, MUIV_InputMode_None,
+                                MUIA_FillArea, FALSE, MUIA_Font,
+                                MUIV_Font_Fixed, TAG_MORE, msg->ops_AttrList);
+    if(!obj)
+    {
+        ERR("Unknown error");
+        return (IPTR) NULL;
+    }
+
+    DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
+             MUIM_VimScrollbar_Drag, MUIV_TriggerValue);
+
+    return (IPTR) obj;
+}
+
+//------------------------------------------------------------------------------
 // VimScrollbarDispatch - MUI custom class dispatcher
 // Input:                 See dispatched method
 // Return:                See dispatched method
@@ -2798,8 +2853,19 @@ DISPATCH(VimScrollbar)
 {
     DISPATCH_HEAD;
 
-    // Unknown method, the parent class might be able to care of it.
-    return DoSuperMethodA(cls, obj, msg);
+    // Dispatch according to MethodID
+    switch(msg->MethodID)
+    {
+    case OM_NEW:
+        return VimScrollbarNew(cls, obj, (struct opSet *) msg);
+
+    case MUIM_VimScrollbar_Drag:
+        return VimScrollbarDrag(cls, obj, (struct MUIP_VimScrollbar_Drag *) msg);
+
+    default:
+        // Unknown method, promote to parent.
+        return DoSuperMethodA(cls, obj, msg);
+    }
 }
 DISPATCH_END
 
@@ -2980,10 +3046,10 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
         ERR("Out of memory");
         return;
     }
-
+/*
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) Con, 3,
              MUIM_VimCon_Scroll, MUIV_TriggerValue, obj);
-
+*/
     if(dst == Bsg)
     {
         DoMethod(dst, OM_ADDMEMBER, obj);
