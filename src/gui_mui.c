@@ -2836,7 +2836,13 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 {
-    obj = (Object *) DoSuperMethodA(cls, obj, msg);
+    scrollbar_T *sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
+                      ((struct opSet *) msg)->ops_AttrList);
+
+    obj = (Object *) DoSuperNew(cls, obj, MUIA_UserData, (IPTR) sb,
+                                MUIA_ShowMe, FALSE, MUIA_Group_Horiz,
+                                sb->type == SBAR_BOTTOM ? TRUE : FALSE,
+                                TAG_MORE, msg->ops_AttrList);
 
     if(!obj)
     {
@@ -2845,8 +2851,8 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
     }
 
     struct VimScrollbarData *my = INST_DATA(cls,obj);
-    my->sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
-                                       ((struct opSet *) msg)->ops_AttrList);
+    sb->id = obj;
+    my->sb = sb;
 
     KPrintF("OM_NEW sb:%p\n", my->sb);
     //MUIA_VimScrollbar_Sb 
@@ -2995,16 +3001,15 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
 */
  //   KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
-//    DoMethod(OLASR, MUIM_Group_InitChange);
-
-//    DoMethod(dst, MUIM_Group_InitChange);
+    DoMethod(OLASR, MUIM_Group_InitChange);
+    DoMethod(dst, MUIM_Group_InitChange);
     set(scb, MUIA_ShowMe, enable);
 
     if(enable)
     {
         set(dst, MUIA_ShowMe, TRUE);
-  //      DoMethod(dst, MUIM_Group_ExitChange);
-   //     DoMethod(OLASR, MUIM_Group_ExitChange);
+        DoMethod(dst, MUIM_Group_ExitChange);
+        DoMethod(OLASR, MUIM_Group_ExitChange);
         return;
     }
 
@@ -3024,8 +3029,8 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         set(dst, MUIA_ShowMe, FALSE);
     }
 
-//    DoMethod(dst, MUIM_Group_ExitChange);
-//    DoMethod(OLASR, MUIM_Group_ExitChange);
+    DoMethod(dst, MUIM_Group_ExitChange);
+    DoMethod(OLASR, MUIM_Group_ExitChange);
  //   MUI_Redraw(dst, MADF_DRAWOBJECT);
  //   MUI_Redraw(OLASR, MADF_DRAWOBJECT);
 }
@@ -3044,29 +3049,20 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
- //   print_sb("CREATE:", sb);
-    /*Object *obj = MUI_NewObject(MUIC_Scrollbar,
-                                MUIA_UserData, (IPTR) sb,
-                                MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
-                                dst == Bsg ? TRUE : FALSE, TAG_END);
-*/
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
-                            MUIA_UserData, (IPTR) sb,
-                            MUIA_VimScrollbar_Sb, (IPTR) sb,
-                            MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
-                            dst == Bsg ? TRUE : FALSE, TAG_END);
+                            MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
+
     if(!obj)
     {
         ERR("Out of memory");
         return;
     }
-/*
-    DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) Con, 3,
-             MUIM_VimCon_Scroll, MUIV_TriggerValue, obj);
-*/
+
     if(dst == Bsg)
     {
+        DoMethod(dst, MUIM_Group_InitChange);
         DoMethod(dst, OM_ADDMEMBER, obj);
+        DoMethod(dst, MUIM_Group_ExitChange);
         return;
     }
 /*
@@ -3125,52 +3121,14 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
-           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
-
-    if(!scb)
+    if(!sb->id)
     {
         INFO("No scrollbar");
         return;
     }
 
-//    print_sb("SCROLL:", sb);
-/*
-    if(dst == Bsg)
-    KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
-             val, size, max);
-    set(scb, MUIA_Prop_Entries, max);
-    set(scb, MUIA_Prop_Visible, size);
-    set(scb, MUIA_Prop_First, val);
-*/
-
-    SetAttrs(scb, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
+    SetAttrs(sb->id, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
              MUIA_Prop_First, val, TAG_DONE);
-
-//    if(sb->type == SBAR_RIGHT)
-     /*
-    print_sb("SCROLL:", sb);
-    */
-    /*
-    KPrintF("SCROLL ARG: val:%d size:%d max:%d\n",
-             val, size, max);
-    if(size >= max) return;
-    */
-
-//    KPrintF("SCROLL %p -> val:%d\n", sb, val);
-/*
- *
-    DoMethod(Scb, MUIM_Prop_Increase, 2);
- MUIA_Prop_Entries, 10,
-                    MUIA_Prop_Visible, 5,
-                    MUIA_Prop_First, 1,
-    set(Scb, MUIA_Prop_Entries, max - size);
-    set(Scb, MUIA_Prop_Visible, size);
-    set(Scb, MUIA_Prop_First, val);
-
-*/
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------

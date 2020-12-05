@@ -193,6 +193,9 @@ typedef struct GuiScrollbar
 #ifdef FEAT_GUI_PHOTON
     PtWidget_t	*id;
 #endif
+#ifdef FEAT_GUI_MUI
+    Object *id;
+#endif
 } scrollbar_T;
 
 typedef long	    guicolor_T;	// handle for a GUI color; for X11 this should
