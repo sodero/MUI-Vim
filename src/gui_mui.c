@@ -163,7 +163,7 @@ CLASS_DEF(VimCon)
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
     struct MUI_InputHandlerNode ticker;
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     struct MUI_InputHandlerNode timeout;
 #endif
 };
@@ -180,7 +180,7 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_DeleteLines      (TAGBASE_sTx + 108)
 #define MUIM_VimCon_DrawPartCursor   (TAGBASE_sTx + 109)
 #define MUIM_VimCon_DrawHollowCursor (TAGBASE_sTx + 110)
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
 #define MUIM_VimCon_SetTimeout       (TAGBASE_sTx + 111)
 #define MUIM_VimCon_Timeout          (TAGBASE_sTx + 112)
 #endif
@@ -202,7 +202,7 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Scroll           (TAGBASE_sTx + 128)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
 #define MUIV_VimCon_State_Timeout    (1 << 2)
 #endif
 #define MUIV_VimCon_State_Unknown    (0)
@@ -239,7 +239,7 @@ struct MUIP_VimCon_GetScreenDim
     STACKED IPTR HeightPtr;
 };
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
 struct MUIP_VimCon_SetTimeout
 {
     STACKED ULONG MethodID;
@@ -750,7 +750,7 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     return TRUE;
 }
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
 //------------------------------------------------------------------------------
 // VimConTimeout - Timeout handler
 // Input:          -
@@ -1179,7 +1179,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->xdelta = my->ydelta = 1;
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
     my->timeout.ihn_Flags = MUIIHNF_TIMER;
@@ -1243,7 +1243,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // Install the main event handler
     DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     // Install timeout timer if previously present
     if(my->timeout.ihn_Millis)
     {
@@ -1293,7 +1293,7 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     // Remove timeout timer if present
     if(my->timeout.ihn_Millis)
     {
@@ -1855,7 +1855,7 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
         return MUIV_VimCon_State_Yield;
     }
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     // Timeout takes precedence over nothing
     if(my->state & MUIV_VimCon_State_Timeout)
     {
@@ -2170,7 +2170,7 @@ DISPATCH(VimCon)
         return VimConDrawHollowCursor(cls, obj,
                (struct MUIP_VimCon_DrawHollowCursor *) msg);
 
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     case MUIM_VimCon_SetTimeout:
         return VimConSetTimeout(cls, obj,
                (struct MUIP_VimCon_SetTimeout *) msg);
@@ -2474,12 +2474,12 @@ CLASS_DEF(VimMenu)
 //------------------------------------------------------------------------------
 // VimMenu public methods and parameters
 //------------------------------------------------------------------------------
-#define MUIM_VimMenu_AddSpacer          (TAGBASE_sTx + 201)
-#define MUIM_VimMenu_AddMenu            (TAGBASE_sTx + 202)
-#define MUIM_VimMenu_AddMenuItem        (TAGBASE_sTx + 203)
-#define MUIM_VimMenu_RemoveMenu         (TAGBASE_sTx + 204)
-#define MUIM_VimMenu_Grey               (TAGBASE_sTx + 205)
-#define MUIV_VimMenu_AddMenu_AlwaysLast (TAGBASE_sTx + 206)
+#define MUIM_VimMenu_AddSpacer          (TAGBASE_sTx + 301)
+#define MUIM_VimMenu_AddMenu            (TAGBASE_sTx + 302)
+#define MUIM_VimMenu_AddMenuItem        (TAGBASE_sTx + 303)
+#define MUIM_VimMenu_RemoveMenu         (TAGBASE_sTx + 304)
+#define MUIM_VimMenu_Grey               (TAGBASE_sTx + 305)
+#define MUIV_VimMenu_AddMenu_AlwaysLast (TAGBASE_sTx + 306)
 
 struct MUIP_VimMenu_AddSpacer
 {
@@ -2780,6 +2780,29 @@ DISPATCH(VimMenu)
 }
 DISPATCH_END
 
+
+//------------------------------------------------------------------------------
+// VimScrollbar - FIXME
+//------------------------------------------------------------------------------
+CLASS_DEF(VimScrollbar)
+{
+    scrollbar_T *sb;
+};
+
+//------------------------------------------------------------------------------
+// VimScrollbarDispatch - MUI custom class dispatcher
+// Input:                 See dispatched method
+// Return:                See dispatched method
+//------------------------------------------------------------------------------
+DISPATCH(VimScrollbar)
+{
+    DISPATCH_HEAD;
+
+    // Unknown method, the parent class might be able to care of it.
+    return DoSuperMethodA(cls, obj, msg);
+}
+DISPATCH_END
+
 //------------------------------------------------------------------------------
 // Vim interface - The functions below, all prefixed with (gui|clip)_mch, are
 //                 the interface to Vim. Most of them contain almost no code,
@@ -2943,10 +2966,15 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
  //   print_sb("CREATE:", sb);
-    Object *obj = MUI_NewObject(MUIC_Scrollbar,
+    /*Object *obj = MUI_NewObject(MUIC_Scrollbar,
                                 MUIA_UserData, (IPTR) sb,
                                 MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
                                 dst == Bsg ? TRUE : FALSE, TAG_END);
+*/
+    Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
+                            MUIA_UserData, (IPTR) sb,
+                            MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
+                            dst == Bsg ? TRUE : FALSE, TAG_END);
     if(!obj)
     {
         ERR("Out of memory");
@@ -3293,7 +3321,7 @@ int gui_mch_wait_for_chars(int wtime)
     // Don't enable timeouts for now, it might cause
     // problems in the MUI message loop. Passing the
     // control over to Vim at any time is not safe.
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
     #warning Timeout support will cause MUI message loop problems
     DoMethod(Con, MUIM_VimCon_SetTimeout, wtime > 0 ? wtime : 0);
 #else
@@ -3344,7 +3372,7 @@ int gui_mch_wait_for_chars(int wtime)
     // Something happened. Either input, a voluntary
     // yield or a timeout.
     if(state != MUIV_VimCon_State_Yield
-#ifdef FEAT_TIMEOUT
+#ifdef MUIVIM_FEAT_TIMEOUT
        && state != MUIV_VimCon_State_Timeout
 #endif
     )
@@ -3580,8 +3608,11 @@ int gui_mch_init(void)
     VimMenuClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Menustrip, NULL,
                                          sizeof(struct CLASS_DATA(VimMenu)),
                                          (APTR) DISPATCH_GATE(VimMenu));
+    VimScrollbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Scrollbar, NULL,
+                                         sizeof(struct CLASS_DATA(VimScrollbar)),
+                                         (APTR) DISPATCH_GATE(VimScrollbar));
 
-    if(!VimConClass || !VimMenuClass)
+    if(!VimConClass || !VimMenuClass || !VimScrollbarClass)
     {
         ERR("Failed creating MUI custom class");
         return FAIL;
