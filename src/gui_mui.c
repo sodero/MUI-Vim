@@ -36,6 +36,7 @@
 #include <devices/rawkeycodes.h>
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
+#include <clib/utility_protos.h>
 #include <libraries/gadtools.h>
 #include <proto/graphics.h>
 #include <proto/cybergraphics.h>
@@ -2796,6 +2797,7 @@ CLASS_DEF(VimScrollbar)
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
 #define MUIM_VimScrollbar_Drag  (TAGBASE_sTx + 401)
+#define MUIA_VimScrollbar_Sb    (TAGBASE_sTx + 411)
 
 struct MUIP_VimScrollbar_Drag
 {
@@ -2813,11 +2815,17 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
 {
     scrollbar_T *sb;
     get((Object *) obj, MUIA_UserData, &sb);
-HERE;
+
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+
     KPrintF("sb:%p value:%d\n", sb, msg->Value);
+    KPrintF("my->sb:%p value:%d\n", my->sb, msg->Value);
 //	gui_drag_scrollbar(sb, (int) msg->Value, TRUE);
 	gui_drag_scrollbar(sb, (int) msg->Value, FALSE);
-
+/*
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+    KPrintF("my->sb:%p value:%d\n", my->sb, msg->Value);
+*/
     return TRUE;
 }
 
@@ -2828,15 +2836,20 @@ HERE;
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 {
-    obj = (Object *) DoSuperNew(cls, obj, MUIA_Frame, MUIV_Frame_Text,
-                                MUIA_InputMode, MUIV_InputMode_None,
-                                MUIA_FillArea, FALSE, MUIA_Font,
-                                MUIV_Font_Fixed, TAG_MORE, msg->ops_AttrList);
+    obj = (Object *) DoSuperMethodA(cls, obj, msg);
+
     if(!obj)
     {
         ERR("Unknown error");
         return (IPTR) NULL;
     }
+
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+    my->sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
+                                       ((struct opSet *) msg)->ops_AttrList);
+
+    KPrintF("OM_NEW sb:%p\n", my->sb);
+    //MUIA_VimScrollbar_Sb 
 
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
              MUIM_VimScrollbar_Drag, MUIV_TriggerValue);
@@ -3039,6 +3052,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 */
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
                             MUIA_UserData, (IPTR) sb,
+                            MUIA_VimScrollbar_Sb, (IPTR) sb,
                             MUIA_ShowMe, FALSE,  MUIA_Group_Horiz,
                             dst == Bsg ? TRUE : FALSE, TAG_END);
     if(!obj)
