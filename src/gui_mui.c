@@ -2791,18 +2791,38 @@ DISPATCH_END
 CLASS_DEF(VimScrollbar)
 {
     scrollbar_T *sb;
+    Object *grp;
 };
 
 //------------------------------------------------------------------------------
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
-#define MUIM_VimScrollbar_Drag  (TAGBASE_sTx + 401)
-#define MUIA_VimScrollbar_Sb    (TAGBASE_sTx + 411)
+#define MUIM_VimScrollbar_Drag      (TAGBASE_sTx + 401)
+#define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
+#define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
+#define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
+#define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
 
 struct MUIP_VimScrollbar_Drag
 {
     STACKED ULONG MethodID;
     STACKED ULONG Value;
+};
+
+struct MUIP_VimScrollbar_Install
+{
+    STACKED ULONG MethodID;
+};
+
+struct MUIP_VimScrollbar_Uninstall
+{
+    STACKED ULONG MethodID;
+};
+
+struct MUIP_VimScrollbar_Show
+{
+    STACKED ULONG MethodID;
+    STACKED ULONG Show;
 };
 
 //------------------------------------------------------------------------------
@@ -2813,19 +2833,123 @@ struct MUIP_VimScrollbar_Drag
 MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
                              struct MUIP_VimScrollbar_Drag *msg)
 {
-    scrollbar_T *sb;
-    get((Object *) obj, MUIA_UserData, &sb);
-
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
-    KPrintF("sb:%p value:%d\n", sb, msg->Value);
-    KPrintF("my->sb:%p value:%d\n", my->sb, msg->Value);
-//	gui_drag_scrollbar(sb, (int) msg->Value, TRUE);
-	gui_drag_scrollbar(sb, (int) msg->Value, FALSE);
-/*
+    if(!my->sb)
+    {
+        return FALSE;
+    }
+
+	gui_drag_scrollbar(my->sb, (int) msg->Value, FALSE);
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarShow - Show / hide scrollbar
+// Input:             Show - FIXME
+// Return:            lsakjflsadj
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
+                             struct MUIP_VimScrollbar_Show *msg)
+{
     struct VimScrollbarData *my = INST_DATA(cls,obj);
-    KPrintF("my->sb:%p value:%d\n", my->sb, msg->Value);
-*/
+
+    if(!my->grp)
+    {
+        return FALSE;
+    }
+
+    if(msg->Show)
+    {
+        set(obj, MUIA_ShowMe, TRUE);
+        set(my->grp, MUIA_ShowMe, TRUE);
+        return TRUE;
+    }
+
+    struct List *lst = NULL;
+    get(my->grp, MUIA_Group_ChildList, &lst);
+
+    IPTR enable = FALSE;
+    struct Node *cur = lst->lh_Head;
+
+    for(Object *chl = NextObject(&cur); chl && !enable;
+        chl = NextObject(&cur))
+    {
+        if(chl != obj)
+        {
+            get(chl, MUIA_ShowMe, &enable);
+        }
+    }
+
+    if(!enable)
+    {
+        set(my->grp, MUIA_ShowMe, FALSE);
+        set(obj, MUIA_ShowMe, FALSE);
+    }
+    else
+    {
+        DoMethod(my->grp, MUIM_Group_InitChange);
+        set(obj, MUIA_ShowMe, FALSE);
+        DoMethod(my->grp, MUIM_Group_ExitChange);
+    }
+
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarInstall - Install scrollbar
+// Input:                -
+// Return:               lsakjflsadj
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
+                                struct MUIP_VimScrollbar_Install *msg)
+{
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+
+    if(!my->sb)
+    {
+        return FALSE;
+    }
+
+    my->grp = my->sb->type == SBAR_LEFT ? Lsg :
+             (my->sb->type == SBAR_RIGHT ? Rsg : Bsg);
+
+    KPrintF("INSTALL sb:%p top:%d\n", my->sb, my->sb->top);
+
+    DoMethod(my->grp, MUIM_Group_InitChange);
+    DoMethod(my->grp, OM_ADDMEMBER, obj);
+    DoMethod(my->grp, MUIM_Group_ExitChange);
+
+    return TRUE;
+}
+
+
+
+//------------------------------------------------------------------------------
+// VimScrollbarUninstall - Uninstall scrollbar
+// Input:                -
+// Return:               lsakjflsadj
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
+                                  struct MUIP_VimScrollbar_Uninstall *msg)
+{
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+
+    if(!my->sb || !my->grp)
+    {
+        return FALSE;
+    }
+
+    KPrintF("UNINSTALL sb:%p\n", my->sb);
+
+    DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
+
+    DoMethod(my->grp, MUIM_Group_InitChange);
+    DoMethod(my->grp, OM_REMMEMBER, obj);
+    DoMethod(my->grp, MUIM_Group_ExitChange);
+
+    my->grp  = NULL;
+
     return TRUE;
 }
 
@@ -2839,20 +2963,20 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
     scrollbar_T *sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
                       ((struct opSet *) msg)->ops_AttrList);
 
-    obj = (Object *) DoSuperNew(cls, obj, MUIA_UserData, (IPTR) sb,
+    obj = (Object *) DoSuperNew(cls, obj, /*MUIA_UserData, (IPTR) sb,*/
                                 MUIA_ShowMe, FALSE, MUIA_Group_Horiz,
                                 sb->type == SBAR_BOTTOM ? TRUE : FALSE,
                                 TAG_MORE, msg->ops_AttrList);
-
     if(!obj)
     {
-        ERR("Unknown error");
+        ERR("Out of memory");
         return (IPTR) NULL;
     }
 
     struct VimScrollbarData *my = INST_DATA(cls,obj);
-    sb->id = obj;
+
     my->sb = sb;
+    sb->id = obj;
 
     KPrintF("OM_NEW sb:%p\n", my->sb);
     //MUIA_VimScrollbar_Sb 
@@ -2880,6 +3004,15 @@ DISPATCH(VimScrollbar)
 
     case MUIM_VimScrollbar_Drag:
         return VimScrollbarDrag(cls, obj, (struct MUIP_VimScrollbar_Drag *) msg);
+
+    case MUIM_VimScrollbar_Install:
+        return VimScrollbarInstall(cls, obj, (struct MUIP_VimScrollbar_Install *) msg);
+
+    case MUIM_VimScrollbar_Uninstall:
+        return VimScrollbarUninstall(cls, obj, (struct MUIP_VimScrollbar_Uninstall *) msg);
+
+    case MUIM_VimScrollbar_Show:
+        return VimScrollbarShow(cls, obj, (struct MUIP_VimScrollbar_Show *) msg);
 
     default:
         // Unknown method, promote to parent.
@@ -2974,7 +3107,7 @@ static void print_sb(const char *info, scrollbar_T *sb)
 
     KPrintF("%s sb:%p value:%d size:%d max:%d top:%d height:%d width:%d"
             " status_height:%d type:%s\n", info, sb, sb->value, sb->size, sb->max, sb->top,
-            sb->height, sb->width, sb->status_height, sb->type == SBAR_BOTTOM ? "bottom" : 
+            sb->height, sb->width, sb->status_height, sb->type == SBAR_BOTTOM ? "bottom" :
             sb->type == SBAR_LEFT ? "left" : "right");
 
 }
@@ -2984,10 +3117,28 @@ static void print_sb(const char *info, scrollbar_T *sb)
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
+    if(!sb || !sb->id)
+    {
+        INFO("No scrollbar");
+        return;
+    }
+
+    DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
+    return;
+
+
+
+
+
+
+// <--
+
     IPTR enable = flag ? TRUE : FALSE, state;
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
-           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
+                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);/*,
+           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);*/
+
+    Object *scb = sb->id;
 
     if(!scb)
     {
@@ -3040,80 +3191,15 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 //------------------------------------------------------------------------------
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
-    if(!sb)
-    {
-        INFO("No scrollbar");
-        return;
-    }
-
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);
-
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
                             MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
-
     if(!obj)
     {
         ERR("Out of memory");
         return;
     }
 
-    if(dst == Bsg)
-    {
-        DoMethod(dst, MUIM_Group_InitChange);
-        DoMethod(dst, OM_ADDMEMBER, obj);
-        DoMethod(dst, MUIM_Group_ExitChange);
-        return;
-    }
-/*
-    DoMethod(dst, MUIM_Group_InitChange);
-    DoMethod(dst, OM_ADDMEMBER, obj);
-    DoMethod(dst, MUIM_Group_ExitChange);
-*/
-
-    struct List *lst = NULL;
-    get(dst, MUIA_Group_ChildList, &lst);
-
-    struct Node *cur = lst->lh_Head;
-    size_t ndx = 1;
-
-    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
-    {
-        ndx++;
-    }
-
-    Object **chv = calloc(ndx + 1, sizeof(Object *));
-
-    if(!chv)
-    {
-        ERR("Out of memory");
-        MUI_DisposeObject(obj);
-        return;
-    }
-
-    ndx = 0;
-    chv[ndx++] = obj;
-    cur = lst->lh_Head;
-
-    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
-    {
-        chv[ndx++] = chl;
-    }
-
-    DoMethod(dst, MUIM_Group_InitChange);
-
-    for(ndx = 1; chv[ndx]; ndx++)
-    {
-        DoMethod(dst, OM_REMMEMBER, chv[ndx]);
-    }
-
-    for(ndx = 0; chv[ndx]; ndx++)
-    {
-        DoMethod(dst, OM_ADDMEMBER, chv[ndx]);
-    }
-
-    DoMethod(dst, MUIM_Group_ExitChange);
-    free(chv);
+    DoMethod(obj, MUIM_VimScrollbar_Install);
 }
 
 //------------------------------------------------------------------------------
@@ -3123,7 +3209,6 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
     if(!sb->id)
     {
-        INFO("No scrollbar");
         return;
     }
 
@@ -3137,33 +3222,21 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
 //    if(sb->type == SBAR_RIGHT)
-//    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
-
+    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
+/*
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg),
            *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
-
-    if(!scb)
+*/
+    if(!sb->id || !h)
     {
-        INFO("No scrollbar");
         return;
     }
 
-    DoMethod(dst, MUIM_Group_InitChange);
 
-    if(dst != Bsg)
-    {
-        set(scb, MUIA_VertWeight, h);
-    }
-
-
-    DoMethod(dst, MUIM_Group_ExitChange);
-
-
-//    KPrintF("POS sb:%p type:%d\n", sb, sb->type);
-//    set(Scb, MUIA_Prop_First, y);
-//    set(Scb, MUIA_Prop_Visible, sb->size);
-//    set(Scb, MUIA_Prop_Entries, sb->max - sb->height);
+    DoMethod(OLASR, MUIM_Group_InitChange);
+    set(sb->id, MUIA_VertWeight, h);
+    DoMethod(OLASR, MUIM_Group_ExitChange);
 }
 
 //------------------------------------------------------------------------------
@@ -4210,33 +4283,13 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
-           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
-
-    if(!scb)
+    if(!sb || !sb->id || !DoMethod(sb->id, MUIM_VimScrollbar_Uninstall))
     {
         return;
     }
-
-   // DoMethod(dst, MUIM_Group_InitChange);
-
-    //KPrintF("Destroy %p\n", sb);
-
-/*
-    gui_mch_enable_scrollbar(sb, FALSE);
-    set(scb, MUIA_UserData, 0);
-*/
-//    gui_mch_enable_scrollbar(sb, FALSE);
-
-//    DoMethod(OLASR, MUIM_Group_InitChange);
-    DoMethod(dst, MUIM_Group_InitChange);
-
-    DoMethod(dst, OM_REMMEMBER, scb);
-    MUI_DisposeObject(scb);
-
-    DoMethod(dst, MUIM_Group_ExitChange);
-//    DoMethod(OLASR, MUIM_Group_ExitChange);
+    
+    MUI_DisposeObject(sb->id);
+    sb->id = NULL;
 }
 
 //------------------------------------------------------------------------------
