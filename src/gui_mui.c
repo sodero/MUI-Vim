@@ -2791,6 +2791,7 @@ DISPATCH_END
 CLASS_DEF(VimScrollbar)
 {
     scrollbar_T *sb;
+    IPTR top;
     Object *grp;
 };
 
@@ -2801,6 +2802,7 @@ CLASS_DEF(VimScrollbar)
 #define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
 #define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
 #define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
+#define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
 
 struct MUIP_VimScrollbar_Drag
@@ -2823,6 +2825,13 @@ struct MUIP_VimScrollbar_Show
 {
     STACKED ULONG MethodID;
     STACKED ULONG Show;
+};
+
+struct MUIP_VimScrollbar_Pos
+{
+    STACKED ULONG MethodID;
+    STACKED ULONG Top;
+    STACKED ULONG Height;
 };
 
 //------------------------------------------------------------------------------
@@ -2892,6 +2901,159 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
         set(obj, MUIA_ShowMe, FALSE);
         DoMethod(my->grp, MUIM_Group_ExitChange);
     }
+
+    return TRUE;
+}
+
+MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
+{
+    struct List *lst = NULL;
+    get(grp, MUIA_Group_ChildList, &lst);
+    struct Node *cur = lst->lh_Head;
+    IPTR top = 0;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    {
+        struct VimScrollbarData *scb = INST_DATA(cls,chl);
+
+        if(top > scb->top)
+        {
+            return TRUE;
+        }
+
+        top = scb->top;
+    }
+
+    return FALSE;
+}
+
+MUIDSP size_t VimScrollbarCount(Object *grp)
+{
+    struct List *lst = NULL;
+    get(grp, MUIA_Group_ChildList, &lst);
+
+    struct Node *cur = lst->lh_Head;
+    size_t cnt = 0;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    {
+        cnt++;
+    }
+
+    return cnt;
+}
+
+MUIDSP void VimScrollbarOrderAll(Object **obj, Object *grp)
+{
+//    DoMethod(grp, MUIM_Group_InitChange);
+
+    for(size_t cur = 0; obj[cur]; cur++)
+    {
+        DoMethod(grp, OM_REMMEMBER, obj[cur]);
+        DoMethod(grp, OM_ADDMEMBER, obj[cur]);
+    }
+
+//    DoMethod(grp, MUIM_Group_ExitChange);
+}
+
+MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
+{
+    size_t cnt = VimScrollbarCount(grp);
+
+    if(cnt < 2)
+    {
+        return;
+    }
+
+    Object **scs = calloc(cnt + 1, sizeof(scrollbar_T *));
+
+    if(!scs)
+    {
+        return;
+    }
+
+    struct List *lst = NULL;
+    get(grp, MUIA_Group_ChildList, &lst);
+    struct Node *cur = lst->lh_Head;
+    size_t ndx = 0;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    {
+        scs[ndx++] = chl;
+    }
+
+    BOOL flip = TRUE;
+
+    while(flip)
+    {
+        flip = FALSE;
+
+        for(size_t end = ndx - 1; end-- && !flip;)
+        {
+            struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
+                                    *beta = INST_DATA(cls,scs[end + 1]);
+
+            if(beta->top < alfa->top)
+            {
+                Object *tmp = scs[end];
+                scs[end] = scs[end + 1];
+                scs[end + 1] = tmp;
+                flip = TRUE;
+            }
+        }
+    }
+
+    VimScrollbarOrderAll(scs, grp);
+/*
+    DoMethod(grp, MUIM_Group_InitChange);
+
+    for(size_t i = 0; scs[i]; i++)
+    {
+        DoMethod(grp, OM_REMMEMBER, scs[i]);
+    }
+
+    for(size_t i = 0; scs[i]; i++)
+    {
+        DoMethod(grp, OM_ADDMEMBER, scs[i]);
+    }
+
+    DoMethod(grp, MUIM_Group_ExitChange);
+    */
+    free(scs);
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarPos - Pos scrollbar
+// Input:            -
+// Return:           TRUE
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
+                            struct MUIP_VimScrollbar_Pos *msg)
+{
+    struct VimScrollbarData *my = INST_DATA(cls,obj);
+
+    if(!my->grp || !my->sb)
+    {
+        return FALSE;
+    }
+
+    if(my->sb->type == SBAR_BOTTOM)
+    {
+        return TRUE;
+    }
+
+    my->top = msg->Top;
+   
+    DoMethod(my->grp, MUIM_Group_InitChange);
+
+    if(VimScrollbarSortNeeded(cls, my->grp))
+    {
+        VimScrollbarSort(cls, my->grp);
+    }
+
+    set(obj, MUIA_VertWeight, msg->Height);
+
+    DoMethod(my->grp, MUIM_Group_ExitChange);
 
     return TRUE;
 }
@@ -2976,9 +3138,10 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
     my->sb = sb;
+    my->top = 0;
     sb->id = obj;
 
-    KPrintF("OM_NEW sb:%p\n", my->sb);
+    KPrintF("OM_NEW sb:%p top:%d\n", my->sb, my->sb->top);
     //MUIA_VimScrollbar_Sb 
 
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
@@ -3013,6 +3176,9 @@ DISPATCH(VimScrollbar)
 
     case MUIM_VimScrollbar_Show:
         return VimScrollbarShow(cls, obj, (struct MUIP_VimScrollbar_Show *) msg);
+
+    case MUIM_VimScrollbar_Pos:
+        return VimScrollbarPos(cls, obj, (struct MUIP_VimScrollbar_Pos *) msg);
 
     default:
         // Unknown method, promote to parent.
@@ -3222,7 +3388,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
 //    if(sb->type == SBAR_RIGHT)
-    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d\n", sb, x, y, w, h);
+    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d type:%d\n", sb, x, y, w, h, sb->type);
 /*
     Object *dst = sb->type == SBAR_LEFT ? Lsg :
                   (sb->type == SBAR_RIGHT ? Rsg : Bsg),
@@ -3233,10 +3399,12 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
         return;
     }
 
-
+    DoMethod(sb->id, MUIM_VimScrollbar_Pos, (IPTR) y, (IPTR) h);
+/*
     DoMethod(OLASR, MUIM_Group_InitChange);
     set(sb->id, MUIA_VertWeight, h);
     DoMethod(OLASR, MUIM_Group_ExitChange);
+*/
 }
 
 //------------------------------------------------------------------------------
