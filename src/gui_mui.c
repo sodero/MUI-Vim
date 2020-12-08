@@ -209,32 +209,32 @@ CLASS_DEF(VimCon)
 
 struct MUIP_VimCon_SetFgColor
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_SetBgColor
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_Browse
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Title;
-    STACKED ULONG Drawer;
+    STACKED IPTR MethodID;
+    STACKED IPTR Title;
+    STACKED IPTR Drawer;
 };
 
 struct MUIP_VimCon_SetTitle
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Title;
+    STACKED IPTR MethodID;
+    STACKED IPTR Title;
 };
 
 struct MUIP_VimCon_GetScreenDim
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
     STACKED IPTR WidthPtr;
     STACKED IPTR HeightPtr;
 };
@@ -242,99 +242,99 @@ struct MUIP_VimCon_GetScreenDim
 #ifdef MUIVIM_FEAT_TIMEOUT
 struct MUIP_VimCon_SetTimeout
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Timeout;
+    STACKED IPTR MethodID;
+    STACKED IPTR Timeout;
 };
 #endif
 
 struct MUIP_VimCon_Callback
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
     STACKED IPTR VimMenuPtr;
 };
 
 struct MUIP_VimCon_SetBlinking
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Wait;
-    STACKED ULONG On;
-    STACKED ULONG Off;
+    STACKED IPTR MethodID;
+    STACKED IPTR Wait;
+    STACKED IPTR On;
+    STACKED IPTR Off;
 };
 
 struct MUIP_VimCon_DrawHollowCursor
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row;
-    STACKED ULONG Col;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row;
+    STACKED IPTR Col;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_DrawString
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row;
-    STACKED ULONG Col;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row;
+    STACKED IPTR Col;
     STACKED IPTR  Str;
-    STACKED ULONG Len;
-    STACKED ULONG Flags;
+    STACKED IPTR Len;
+    STACKED IPTR Flags;
 };
 
 struct MUIP_VimCon_FillBlock
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row1;
-    STACKED ULONG Col1;
-    STACKED ULONG Row2;
-    STACKED ULONG Col2;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row1;
+    STACKED IPTR Col1;
+    STACKED IPTR Row2;
+    STACKED IPTR Col2;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_InvertRect
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row;
-    STACKED ULONG Col;
-    STACKED ULONG Rows;
-    STACKED ULONG Cols;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row;
+    STACKED IPTR Col;
+    STACKED IPTR Rows;
+    STACKED IPTR Cols;
 };
 
 struct MUIP_VimCon_DrawPartCursor
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row;
-    STACKED ULONG Col;
-    STACKED ULONG Width;
-    STACKED ULONG Height;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row;
+    STACKED IPTR Col;
+    STACKED IPTR Width;
+    STACKED IPTR Height;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_DeleteLines
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Row;
-    STACKED ULONG Lines;
-    STACKED ULONG RegLeft;
-    STACKED ULONG RegRight;
-    STACKED ULONG RegBottom;
-    STACKED ULONG Color;
+    STACKED IPTR MethodID;
+    STACKED IPTR Row;
+    STACKED IPTR Lines;
+    STACKED IPTR RegLeft;
+    STACKED IPTR RegRight;
+    STACKED IPTR RegBottom;
+    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_AppMessage
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
     STACKED IPTR Message;
 };
 
 struct MUIP_VimCon_Copy
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Clipboard;
+    STACKED IPTR MethodID;
+    STACKED IPTR Clipboard;
 };
 
 struct MUIP_VimCon_Paste
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Clipboard;
+    STACKED IPTR MethodID;
+    STACKED IPTR Clipboard;
 };
 
 //------------------------------------------------------------------------------
@@ -342,8 +342,8 @@ struct MUIP_VimCon_Paste
 // Input:             Message
 // Return:            0
 //------------------------------------------------------------------------------
-MUIDSP ULONG VimConAppMessage(Class *cls, Object *obj,
-                              struct MUIP_VimCon_AppMessage *msg)
+MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
+                             struct MUIP_VimCon_AppMessage *msg)
 {
     // We assume that all arguments are valid files that we have the permission
     // to read from, the number of files equals the number of arguments.
@@ -1040,7 +1040,7 @@ MUIDSP IPTR VimConDrawString(Class *cls, Object *obj,
     VimConDirty(cls, obj, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
 
-    static ULONG flags;
+    static IPTR flags;
 
     if(flags == msg->Flags)
     {
@@ -1859,7 +1859,7 @@ MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
 // Input:       Clipboard
 // Return:      0
 //------------------------------------------------------------------------------
-MUIDSP ULONG VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
+MUIDSP IPTR VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 {
     Clipboard_T *cbd = (Clipboard_T *) msg;
 
@@ -1928,7 +1928,7 @@ MUIDSP ULONG VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 // Input:        Clipboard
 // Return:       0
 //------------------------------------------------------------------------------
-MUIDSP ULONG VimConPaste(Class *cls, Object *obj,
+MUIDSP IPTR VimConPaste(Class *cls, Object *obj,
                          struct MUIP_VimCon_Paste *msg)
 {
     Clipboard_T *cbd = (Clipboard_T *) msg;
@@ -2185,7 +2185,7 @@ CLASS_DEF(VimToolbar)
 
 struct MUIP_VimToolbar_AddButton
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
     STACKED IPTR ID;
     STACKED IPTR Label;
     STACKED IPTR Help;
@@ -2193,9 +2193,9 @@ struct MUIP_VimToolbar_AddButton
 
 struct MUIP_VimToolbar_DisableButton
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG ID;
-    STACKED ULONG Grey;
+    STACKED IPTR MethodID;
+    STACKED IPTR ID;
+    STACKED IPTR Grey;
 };
 
 //------------------------------------------------------------------------------
@@ -2402,37 +2402,37 @@ CLASS_DEF(VimMenu)
 
 struct MUIP_VimMenu_AddSpacer
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG ParentID;
+    STACKED IPTR MethodID;
+    STACKED IPTR ParentID;
 };
 
 struct MUIP_VimMenu_AddMenu
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG ParentID;
-    STACKED ULONG ID;
+    STACKED IPTR MethodID;
+    STACKED IPTR ParentID;
+    STACKED IPTR ID;
     STACKED IPTR Label;
 };
 
 struct MUIP_VimMenu_AddMenuItem
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG ParentID;
-    STACKED ULONG ID;
+    STACKED IPTR MethodID;
+    STACKED IPTR ParentID;
+    STACKED IPTR ID;
     STACKED IPTR Label;
 };
 
 struct MUIP_VimMenu_RemoveMenu
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG ID;
+    STACKED IPTR MethodID;
+    STACKED IPTR ID;
 };
 
 struct MUIP_VimMenu_Grey
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
     STACKED IPTR ID;
-    STACKED ULONG Grey;
+    STACKED IPTR Grey;
 };
 
 
@@ -2475,7 +2475,7 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
         return FALSE;
     }
 
-    ULONG currentSetting;
+    IPTR currentSetting;
     GetAttr(MUIA_Menuitem_Enabled, m, &currentSetting);
 
     // Zune handles menu item updates very inefficiently, so only update if
@@ -2685,31 +2685,31 @@ CLASS_DEF(VimScrollbar)
 
 struct MUIP_VimScrollbar_Drag
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Value;
+    STACKED IPTR MethodID;
+    STACKED IPTR Value;
 };
 
 struct MUIP_VimScrollbar_Install
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
 };
 
 struct MUIP_VimScrollbar_Uninstall
 {
-    STACKED ULONG MethodID;
+    STACKED IPTR MethodID;
 };
 
 struct MUIP_VimScrollbar_Show
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Show;
+    STACKED IPTR MethodID;
+    STACKED IPTR Show;
 };
 
 struct MUIP_VimScrollbar_Pos
 {
-    STACKED ULONG MethodID;
-    STACKED ULONG Top;
-    STACKED ULONG Height;
+    STACKED IPTR MethodID;
+    STACKED IPTR Top;
+    STACKED IPTR Height;
 };
 
 //------------------------------------------------------------------------------
