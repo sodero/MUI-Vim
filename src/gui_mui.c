@@ -159,7 +159,7 @@ static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 CLASS_DEF(VimCon)
 {
     int cursor[3];
-    int state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2;
+    int block, state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2;
     struct BitMap *bm;
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
@@ -200,6 +200,7 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
+#define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
@@ -335,6 +336,12 @@ struct MUIP_VimCon_Paste
 {
     STACKED IPTR MethodID;
     STACKED IPTR Clipboard;
+};
+
+struct MUIP_VimCon_IconState
+{
+    STACKED IPTR MethodID;
+    STACKED IPTR Iconified;
 };
 
 //------------------------------------------------------------------------------
@@ -479,7 +486,7 @@ MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    if(!my->blink)
+    if(!my->blink || my->block)
     {
         return FALSE;
     }
@@ -544,14 +551,15 @@ MUIDSP IPTR VimConStartBlink(Class *cls, Object *obj)
 
     // If not enabled and none of the delays (wait, on, off) are 0 add input
     // handler and increase status / delay index.
-    if(!my->blink && my->cursor[0] && my->cursor[1] && my->cursor[2])
+    if(!my->block && !my->blink && my->cursor[0] && my->cursor[1] &&
+        my->cursor[2])
     {
         my->ticker.ihn_Millis = my->cursor[my->blink++];
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
         return TRUE;
     }
 
-    // Nothing to do
+    // Nothing to do.
     return FALSE;
 }
 
@@ -1206,6 +1214,9 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
     }
 #endif
+
+    // Disable blocker.
+    my->block = FALSE;
 
     // Install blink handler if previously present
     if(my->blink)
@@ -1924,6 +1935,19 @@ MUIDSP IPTR VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 }
 
 //------------------------------------------------------------------------------
+// VimConIconState - Listener for iconification events
+// Input:            Iconified - Application state
+// Return:           Input pass through
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimConIconState(Class *cls, Object *obj,
+                            struct MUIP_VimCon_IconState *msg)
+{
+    struct VimConData *my = INST_DATA(cls,obj);
+    my->block = msg->Iconified;
+    return msg->Iconified;
+} 
+
+//------------------------------------------------------------------------------
 // VimConPaste - Paste data from clipboard.device
 // Input:        Clipboard
 // Return:       0
@@ -2043,6 +2067,10 @@ DISPATCH(VimCon)
     case MUIM_VimCon_AppMessage:
         return VimConAppMessage(cls, obj,
                (struct MUIP_VimCon_AppMessage *) msg);
+
+    case MUIM_VimCon_IconState:
+        return VimConIconState(cls, obj,
+               (struct MUIP_VimCon_IconState *) msg);
 
     case MUIM_Setup:
         return VimConSetup(cls, obj,
@@ -3805,6 +3833,10 @@ int gui_mch_init(void)
     // Set up drag and drop notifications
     DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, (IPTR) Con, 2,
              MUIM_VimCon_AppMessage, MUIV_TriggerValue);
+
+    // Let us know if the application gets iconified.
+    DoMethod(App, MUIM_Notify, MUIA_Application_Iconified, MUIV_EveryTime,
+            (IPTR) Con, 2, MUIM_VimCon_IconState, MUIV_TriggerValue);
 
     // MUI specific menu parts
     if(Abo && Set)
