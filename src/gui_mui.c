@@ -150,7 +150,7 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-static Object *OLASR, *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
+static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -200,7 +200,6 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
-#define MUIM_VimCon_Scroll           (TAGBASE_sTx + 128)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
@@ -336,13 +335,6 @@ struct MUIP_VimCon_Paste
 {
     STACKED ULONG MethodID;
     STACKED ULONG Clipboard;
-};
-
-struct MUIP_VimCon_Scroll
-{
-    STACKED ULONG MethodID;
-    STACKED ULONG Value;
-    STACKED ULONG Instance;
 };
 
 //------------------------------------------------------------------------------
@@ -489,7 +481,6 @@ MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
 
     if(!my->blink)
     {
-        // Nothing to do
         return FALSE;
     }
 
@@ -551,8 +542,8 @@ MUIDSP IPTR VimConStartBlink(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // If not enabled and none of the delays (wait, on, off) are 0
-    // add input handler and increase status / delay index
+    // If not enabled and none of the delays (wait, on, off) are 0 add input
+    // handler and increase status / delay index.
     if(!my->blink && my->cursor[0] && my->cursor[1] && my->cursor[2])
     {
         my->ticker.ihn_Millis = my->cursor[my->blink++];
@@ -580,25 +571,6 @@ MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
     my->cursor[0] = (int) msg->Wait;
     my->cursor[1] = (int) msg->Off;
     my->cursor[2] = (int) msg->On;
-    return TRUE;
-}
-
-//------------------------------------------------------------------------------
-// VimConScroll - Vertical / horizontal scroll
-// Input:         Value - Top line
-//                Instance - Scrollbar instance
-// Return:        TRUE
-//------------------------------------------------------------------------------
-MUIDSP IPTR VimConScroll(Class *cls, Object *obj,
-                         struct MUIP_VimCon_Scroll *msg)
-{
-    scrollbar_T *sb;
-    get((Object *) msg->Instance, MUIA_UserData, &sb);
-
-    KPrintF("sb:%p value:%d\n", sb, msg->Value);
-//	gui_drag_scrollbar(sb, (int) msg->Value, TRUE);
-	gui_drag_scrollbar(sb, (int) msg->Value, FALSE);
-
     return TRUE;
 }
 
@@ -671,7 +643,6 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 
     *w = GetBitMapAttr(my->bm, BMA_WIDTH);
     *h = GetBitMapAttr(my->bm, BMA_HEIGHT);
-
     return (*w) * (*h);
 }
 
@@ -685,7 +656,6 @@ MUIDSP IPTR VimConSetTitle(Class *cls, Object *obj,
 {
     if(!msg->Title)
     {
-        WARN("No title");
         return FALSE;
     }
 
@@ -965,7 +935,6 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
 
     if(!n)
     {
-        WARN("No lines to delete / insert");
         return FALSE;
     }
 
@@ -1008,12 +977,8 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
 MUIDSP IPTR VimConSetFgColor(Class *cls, Object *obj,
                              struct MUIP_VimCon_SetFgColor *msg)
 {
-    static struct TagItem tags[] =
-    {
-        { .ti_Tag = RPTAG_FgColor  },
-        { .ti_Tag = TAG_END        }
-    };
-
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor  },
+                                    { .ti_Tag = TAG_END        }};
     tags[0].ti_Data = msg->Color|0xFF000000;
 
     struct VimConData *my = INST_DATA(cls,obj);
@@ -1029,11 +994,8 @@ MUIDSP IPTR VimConSetFgColor(Class *cls, Object *obj,
 MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
                              struct MUIP_VimCon_SetBgColor *msg)
 {
-    static struct TagItem tags[] =
-    {
-        { .ti_Tag = RPTAG_BgColor  },
-        { .ti_Tag = TAG_END        }
-    };
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor  },
+                                    { .ti_Tag = TAG_END        }};
 
     struct VimConData *my = INST_DATA(cls,obj);
     #ifdef __amigaos4__
@@ -1061,29 +1023,25 @@ MUIDSP IPTR VimConDrawString(Class *cls, Object *obj,
     # define RPTAG_SoftStyle TAG_IGNORE
     #endif
 
-    struct VimConData *my = INST_DATA(cls,obj);
-
     if(!msg->Len)
     {
         // Nothing to do.
         return TRUE;
     }
 
-    static struct TagItem tags[] =
-    {
-        { .ti_Tag = RPTAG_DrMd,
-          .ti_Data = JAM2 },
-        { .ti_Tag = RPTAG_SoftStyle,
-          .ti_Data = FS_NORMAL },
-        { .ti_Tag = TAG_END }
-    };
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_DrMd, .ti_Data = JAM2 },
+                                    { .ti_Tag = RPTAG_SoftStyle,
+                                      .ti_Data = FS_NORMAL },
+                                    { .ti_Tag = TAG_END }};
 
+    struct VimConData *my = INST_DATA(cls,obj);
     int y = msg->Row * my->ydelta, x = msg->Col * my->xdelta;
-    static ULONG flags;
 
     // Tag area as dirty and move into position.
     VimConDirty(cls, obj, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
+
+    static ULONG flags;
 
     if(flags == msg->Flags)
     {
@@ -1127,7 +1085,6 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
                                 MUIA_InputMode, MUIV_InputMode_None,
                                 MUIA_FillArea, FALSE, MUIA_Font,
                                 MUIV_Font_Fixed, TAG_MORE, msg->ops_AttrList);
-
     if(!obj)
     {
         ERR("Unknown error");
@@ -1223,9 +1180,8 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // Make room for smearing, no overlap allowed
     my->rp.TxSpacing = my->rp.Font->tf_BoldSmear;
 
-    // If we aren't using a bitmap font we need to
-    // do more work to determine the right amount
-    // of spacing necessary to avoid overlap
+    // If we aren't using a bitmap font we need to do more work to determine the
+    // right amount of spacing necessary to avoid overlap
     if(!(my->rp.Font->tf_Flags & FPF_DESIGNED))
     {
         struct TextExtent te;
@@ -1327,7 +1283,6 @@ static void VimConAddEvent(Class *cls, Object *obj, IPTR event)
     // Don't add events more than once.
     if(event == (my->event.ehn_Events & event))
     {
-        WARN("Event exists");
         return;
     }
 
@@ -1349,7 +1304,6 @@ static void VimConRemEvent(Class *cls, Object *obj, ULONG event)
     // Don't remove what's not there.
     if(!(my->event.ehn_Events & event))
     {
-        WARN("No such event");
         return;
     }
 
@@ -1484,9 +1438,9 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
         return TRUE;
     }
 
-    // No, something else....
     int c;
 
+    // No, something else....
     switch(msg->imsg->Code)
     {
     case RAWKEY_UP:
@@ -1601,41 +1555,43 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
         return TRUE;
     }
 
-    if(c)
+    if(!c)
     {
-        int l = 0, m = (msg->imsg->Qualifier & IEQUALIFIER_CONTROL) ?
-                        MOD_MASK_CTRL : 0;
-
-        m |= (msg->imsg->Qualifier &
-             (IEQUALIFIER_LALT|IEQUALIFIER_RALT)) ? MOD_MASK_ALT : 0;
-        m |= (msg->imsg->Qualifier &
-             (IEQUALIFIER_LSHIFT|IEQUALIFIER_RSHIFT)) ? MOD_MASK_SHIFT : 0;
-        m |= (msg->imsg->Qualifier &
-             (IEQUALIFIER_LCOMMAND|IEQUALIFIER_RCOMMAND)) ? MOD_MASK_META : 0;
-
-        c = simplify_key(c, &m);
-
-        if(m)
-        {
-            s[l++] = CSI;
-            s[l++] = KS_MODIFIER;
-            s[l++] = (char_u) m;
-        }
-
-        if(IS_SPECIAL(c) )
-        {
-            s[l++] = CSI;
-            s[l++] = K_SECOND(c);
-            s[l++] = K_THIRD(c);
-        }
-        else
-        {
-            s[l++] = (char_u) c;
-        }
-
-        add_to_input_buf(s, l);
+        return TRUE;
     }
 
+    int m = (msg->imsg->Qualifier & IEQUALIFIER_CONTROL) ? MOD_MASK_CTRL : 0;
+
+    m |= (msg->imsg->Qualifier &
+         (IEQUALIFIER_LALT|IEQUALIFIER_RALT)) ? MOD_MASK_ALT : 0;
+    m |= (msg->imsg->Qualifier &
+         (IEQUALIFIER_LSHIFT|IEQUALIFIER_RSHIFT)) ? MOD_MASK_SHIFT : 0;
+    m |= (msg->imsg->Qualifier &
+         (IEQUALIFIER_LCOMMAND|IEQUALIFIER_RCOMMAND)) ? MOD_MASK_META : 0;
+
+    c = simplify_key(c, &m);
+
+    int l = 0;
+
+    if(m)
+    {
+        s[l++] = CSI;
+        s[l++] = KS_MODIFIER;
+        s[l++] = (char_u) m;
+    }
+
+    if(IS_SPECIAL(c) )
+    {
+        s[l++] = CSI;
+        s[l++] = K_SECOND(c);
+        s[l++] = K_THIRD(c);
+    }
+    else
+    {
+        s[l++] = (char_u) c;
+    }
+
+    add_to_input_buf(s, l);
     return TRUE;
 }
 
@@ -1823,7 +1779,6 @@ MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
 
     if(!mp || !mp->cb)
     {
-        WARN("Invalid callback");
         return FALSE;
     }
 
@@ -1914,7 +1869,6 @@ MUIDSP ULONG VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 
     if(!cbd->owned)
     {
-        WARN("Clipboard not 'owned'");
         return 0;
     }
 
@@ -2190,9 +2144,6 @@ DISPATCH(VimCon)
     case MUIM_VimCon_SetTitle:
         return VimConSetTitle(cls, obj, (struct MUIP_VimCon_SetTitle *) msg);
 
-    case MUIM_VimCon_Scroll:
-        return VimConScroll(cls, obj, (struct MUIP_VimCon_Scroll *) msg);
-
     case MUIM_VimCon_GetScreenDim:
         return VimConGetScreenDim(cls, obj,
                (struct MUIP_VimCon_GetScreenDim *) msg);
@@ -2274,8 +2225,7 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
     struct VimToolbarData *my = INST_DATA(cls,obj);
     struct MUIS_TheBar_Button *b = my->btn;
 
-    // Traverse our static toolbar and set up
-    // a notification if we find a match.
+    // Traverse our static toolbar and set up a notification if we find a match.
     while(b->img != (IPTR) MUIV_TheBar_End)
     {
         const char *n = (const char *) msg->Label, *h = b->help;
@@ -2286,10 +2236,8 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
                      MUIA_Pressed, FALSE, Con, 2,
                      MUIM_VimCon_Callback, (IPTR) msg->ID);
 
-            // This is a bit of a hack; save the Vim
-            // menu item pointer as the parent class
-            // of the button. Used to translate from
-            // menu item to MUI button ID.
+            // Save the Vim menu item pointer as the parent class of the button.
+            // Used to translate from menu item to MUI button ID.
             b->_class = (struct IClass *) msg->ID;
 
             return TRUE;
@@ -2300,9 +2248,8 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
         }
     }
 
-    // We should consider not finding
-    // a match an error. Otherwise we
-    // will end up with dead buttons.
+    // We should consider not finding a match an error. Otherwise we will end up
+    // with dead buttons.
     ERR("Could not create button");
     return FALSE;
 }
@@ -2319,17 +2266,14 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
     struct VimToolbarData *my = INST_DATA(cls,obj);
     struct MUIS_TheBar_Button *b = my->btn;
 
-    // Traverse our static toolbar and look
-    // for a Vim menu item match. If we find
-    // one, we can translate this into a MUI
-    // ID and use the proper TheBar method.
-
+    // Traverse our static toolbar and look for a Vim menu item match. If we
+    // find one, we can translate this into a MUI ID and use the TheBar method.
     while(b->img != MUIV_TheBar_End)
     {
         if(msg->ID == (IPTR) b->_class)
         {
-            // We found the MUI ID. Use the proper TheBar
-            // method to disable / enable the button.
+            // We found the MUI ID. Use the proper TheBar method to disable /
+            // enable the button.
             DoMethod(obj, MUIM_TheBar_SetAttr, b->ID, MUIV_TheBar_Attr_Disabled,
                      msg->Grey);
             return TRUE;
@@ -2340,11 +2284,7 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
         }
     }
 
-    // This is expected since we ignore
-    // some of the menu items that Vim
-    // is throwing at us. We might want
-    // to know anyway.
-    WARN("Button not found");
+    // This is expected since we ignore some of the menu items.
     return FALSE;
 }
 
@@ -2534,30 +2474,23 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     // ID:s must be valid vim menu pointers
     if(!msg || !msg->ID)
     {
-        WARN("Invalid menu");
         return FALSE;
     }
-    else
-    {
-        menu = (vimmenu_T *) msg->ID;
-    }
+
+    menu = (vimmenu_T *) msg->ID;
 
     // Ignore popup menus and separators
     if(menu_is_popup(menu->name) || menu_is_separator(menu->name) ||
-       (menu->parent && menu_is_popup(menu->parent->name) ) )
+      (menu->parent && menu_is_popup(menu->parent->name)))
     {
         return FALSE;
     }
 
     // Some of our menu items are in fact toolbar buttons
     if(menu_is_toolbar(menu->name) ||
-       (menu->parent && menu_is_toolbar(menu->parent->name) ) )
+      (menu->parent && menu_is_toolbar(menu->parent->name)))
     {
-        if(Tlb)
-        {
-            DoMethod(Tlb, MUIM_VimToolbar_DisableButton, menu, msg->Grey);
-        }
-
+        DoMethod(Tlb, MUIM_VimToolbar_DisableButton, menu, msg->Grey);
         return TRUE;
     }
 
@@ -2566,7 +2499,6 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
 
     if(!m)
     {
-        WARN("Menu not found");
         return FALSE;
     }
 
@@ -2579,12 +2511,9 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     // enabled, therefore update when msg->Grey == currentSetting.
     if (currentSetting == msg->Grey)
     {
-        /*
-        SetAttrs(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE,
-		         TAG_DONE);
-                 */
         set(m, MUIA_Menuitem_Enabled, (BOOL) msg->Grey ? FALSE : TRUE);
     }
+
     return TRUE;
 }
 
@@ -2601,7 +2530,6 @@ MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
     // ID:s must be valid vim menu pointers
     if(!msg || !msg->ID)
     {
-        WARN("Invalid menu");
         return FALSE;
     }
 
@@ -2610,7 +2538,6 @@ MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
 
     if(!m)
     {
-        WARN("Menu not found");
         return FALSE;
     }
 
@@ -2634,7 +2561,6 @@ MUIDSP IPTR VimMenuAddSpacer(Class *cls, Object *obj,
 
     if(!m)
     {
-        WARN("Parent not found");
         return (IPTR) NULL;
     }
 
@@ -2678,7 +2604,6 @@ MUIDSP IPTR VimMenuAddMenu(Class *cls, Object *obj,
     // We should be able to find the parent
     if(!m)
     {
-        WARN("Parent not found");
         return (IPTR) NULL;
     }
 
@@ -2725,7 +2650,6 @@ MUIDSP IPTR VimMenuAddMenuItem(Class *cls, Object *obj,
 
     if(!m)
     {
-        WARN("Parent not found");
         return (IPTR) NULL;
     }
 
@@ -2855,8 +2779,8 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
 
 //------------------------------------------------------------------------------
 // VimScrollbarShow - Show / hide scrollbar
-// Input:             Show - FIXME
-// Return:            lsakjflsadj
+// Input:             Show - Show or hide scrollbar
+// Return:            TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
                              struct MUIP_VimScrollbar_Show *msg)
@@ -2905,6 +2829,12 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     return TRUE;
 }
 
+//------------------------------------------------------------------------------
+// VimScrollbarSortNeeded - Check if scrollbar group needs sorting
+// Input:                   Class *cls - Scrollbar class
+//                          Object *grp - Scrollbar group
+// Return:                  TRUE if group needs to be sorted, FALSE otherwise
+//------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
 {
     struct List *lst = NULL;
@@ -2927,6 +2857,11 @@ MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
     return FALSE;
 }
 
+//------------------------------------------------------------------------------
+// VimScrollbarSortNeeded - Get number of objects in group
+// Input:                   Object *grp - Group of objects
+// Return:                  Number of objects in group
+//------------------------------------------------------------------------------
 MUIDSP size_t VimScrollbarCount(Object *grp)
 {
     struct List *lst = NULL;
@@ -2943,89 +2878,121 @@ MUIDSP size_t VimScrollbarCount(Object *grp)
     return cnt;
 }
 
+//------------------------------------------------------------------------------
+// VimScrollbarOrderAll - Add objects to group in order and remove duplicates
+// Input:                 Object **obj - Array of ordered objects
+//                        Object *grp - Group of objects
+// Return:                -
+//------------------------------------------------------------------------------
 MUIDSP void VimScrollbarOrderAll(Object **obj, Object *grp)
 {
-//    DoMethod(grp, MUIM_Group_InitChange);
-
+    // Make sure that array and group order are the same.
     for(size_t cur = 0; obj[cur]; cur++)
     {
         DoMethod(grp, OM_REMMEMBER, obj[cur]);
         DoMethod(grp, OM_ADDMEMBER, obj[cur]);
     }
-
-//    DoMethod(grp, MUIM_Group_ExitChange);
 }
 
-MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
+//------------------------------------------------------------------------------
+// VimScrollbarGroupCopy - Create a shallow copy of objects in a group
+// Input:                  Object *grp - Group of objects
+//                         size_t cnt - Number of objects to copy 
+// Return:                 Object * array if success full, NULL otherwisee
+//------------------------------------------------------------------------------
+MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 {
-    size_t cnt = VimScrollbarCount(grp);
-
-    if(cnt < 2)
-    {
-        return;
-    }
-
+    // The array must be NULL terminated.
     Object **scs = calloc(cnt + 1, sizeof(scrollbar_T *));
 
     if(!scs)
     {
-        return;
+        ERR("Out of memory");
+        return NULL;
     }
 
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
+
     struct Node *cur = lst->lh_Head;
     size_t ndx = 0;
 
-    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    for(Object *chl = NextObject(&cur); chl && ndx < cnt;
+        chl = NextObject(&cur))
     {
         scs[ndx++] = chl;
     }
 
+    return scs;
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarSort - Sort scrollbars in group in ascending order depending on
+//                    the top attribute
+// Input:             Class *cls - Scrollbar class
+//                    Object *grp - Group of scrollbars
+// Return:            - 
+//------------------------------------------------------------------------------
+MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
+{
+    // Get number of objects in group.
+    size_t cnt = VimScrollbarCount(grp);
+
+    if(cnt < 2)
+    {
+        // Already sorted.
+        return;
+    }
+
+    // Create an array of object pointers.
+    Object **scs = VimScrollbarGroupCopy(grp, cnt);
+
+    if(!scs)
+    {
+        ERR("Out of memory");
+        return;
+    }
+
+    // Assume that the array needs sorting.
     BOOL flip = TRUE;
 
     while(flip)
     {
+        // Assume that the array is sorted.
         flip = FALSE;
 
-        for(size_t end = ndx - 1; end-- && !flip;)
+        // Iterate over all object pairs.
+        for(size_t end = cnt - 1; end-- && !flip;)
         {
+            // Peek into member variables.
             struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
                                     *beta = INST_DATA(cls,scs[end + 1]);
 
             if(beta->top < alfa->top)
             {
+                // Flip non sorted pairs.
                 Object *tmp = scs[end];
                 scs[end] = scs[end + 1];
                 scs[end + 1] = tmp;
+
+                // We changed something. 
                 flip = TRUE;
             }
         }
     }
 
+    // Descending to ascending order.
     VimScrollbarOrderAll(scs, grp);
-/*
-    DoMethod(grp, MUIM_Group_InitChange);
 
-    for(size_t i = 0; scs[i]; i++)
-    {
-        DoMethod(grp, OM_REMMEMBER, scs[i]);
-    }
-
-    for(size_t i = 0; scs[i]; i++)
-    {
-        DoMethod(grp, OM_ADDMEMBER, scs[i]);
-    }
-
-    DoMethod(grp, MUIM_Group_ExitChange);
-    */
+    // Free temporary array of object pointers.
     free(scs);
 }
 
 //------------------------------------------------------------------------------
-// VimScrollbarPos - Pos scrollbar
-// Input:            -
-// Return:           TRUE
+// VimScrollbarPos - Update weight, position and order of scrollbars in group
+// Input:            Top - Top of scrollbar
+//                   Height - Height of scrollbar
+// Return:           TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
                             struct MUIP_VimScrollbar_Pos *msg)
@@ -3043,7 +3010,6 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     }
 
     my->top = msg->Top;
-   
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     if(VimScrollbarSortNeeded(cls, my->grp))
@@ -3052,16 +3018,15 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     }
 
     set(obj, MUIA_VertWeight, msg->Height);
-
     DoMethod(my->grp, MUIM_Group_ExitChange);
-
     return TRUE;
 }
 
 //------------------------------------------------------------------------------
-// VimScrollbarInstall - Install scrollbar
+// VimScrollbarInstall - Insert scrollbar in the appropriate group depending
+//                       on type
 // Input:                -
-// Return:               lsakjflsadj
+// Return:               TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
                                 struct MUIP_VimScrollbar_Install *msg)
@@ -3076,21 +3041,16 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
     my->grp = my->sb->type == SBAR_LEFT ? Lsg :
              (my->sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
-    KPrintF("INSTALL sb:%p top:%d\n", my->sb, my->sb->top);
-
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_ADDMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-
     return TRUE;
 }
 
-
-
 //------------------------------------------------------------------------------
-// VimScrollbarUninstall - Uninstall scrollbar
-// Input:                -
-// Return:               lsakjflsadj
+// VimScrollbarUninstall - Remove scrollbar from parent group
+// Input:                  -
+// Return:                 TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
                                   struct MUIP_VimScrollbar_Uninstall *msg)
@@ -3102,16 +3062,14 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
         return FALSE;
     }
 
-    KPrintF("UNINSTALL sb:%p\n", my->sb);
-
+    // Hide scrollbar before removing it.
     DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
-
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_REMMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
 
+    // Safety measure.
     my->grp  = NULL;
-
     return TRUE;
 }
 
@@ -3122,11 +3080,11 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 {
+    // Get Vim scrollbar reference.
     scrollbar_T *sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
                       ((struct opSet *) msg)->ops_AttrList);
 
-    obj = (Object *) DoSuperNew(cls, obj, /*MUIA_UserData, (IPTR) sb,*/
-                                MUIA_ShowMe, FALSE, MUIA_Group_Horiz,
+    obj = (Object *) DoSuperNew(cls, obj, MUIA_ShowMe, FALSE, MUIA_Group_Horiz,
                                 sb->type == SBAR_BOTTOM ? TRUE : FALSE,
                                 TAG_MORE, msg->ops_AttrList);
     if(!obj)
@@ -3137,16 +3095,18 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
+    // Vim scrollbar.
     my->sb = sb;
+
+    // Vertical position.
     my->top = 0;
+
+    // We need to reach ourselves from Vim.
     sb->id = obj;
 
-    KPrintF("OM_NEW sb:%p top:%d\n", my->sb, my->sb->top);
-    //MUIA_VimScrollbar_Sb 
-
+    // We notify ourselves when a dragging event occurs.
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
              MUIM_VimScrollbar_Drag, MUIV_TriggerValue);
-
     return (IPTR) obj;
 }
 
@@ -3172,7 +3132,8 @@ DISPATCH(VimScrollbar)
         return VimScrollbarInstall(cls, obj, (struct MUIP_VimScrollbar_Install *) msg);
 
     case MUIM_VimScrollbar_Uninstall:
-        return VimScrollbarUninstall(cls, obj, (struct MUIP_VimScrollbar_Uninstall *) msg);
+        return VimScrollbarUninstall(cls, obj,
+            (struct MUIP_VimScrollbar_Uninstall *) msg);
 
     case MUIM_VimScrollbar_Show:
         return VimScrollbarShow(cls, obj, (struct MUIP_VimScrollbar_Show *) msg);
@@ -3215,8 +3176,6 @@ GuiFont gui_mch_get_font(char_u *vim_font_name, int report_error)
 {
     (void) vim_font_name;
     (void) report_error;
-
-    INFO("Not supported");
     return (GuiFont) NULL;
 }
 
@@ -3227,8 +3186,6 @@ char_u *gui_mch_get_fontname(GuiFont font, char_u *name)
 {
     (void) font;
     (void) name;
-
-    INFO("Not supported");
     return NULL;
 }
 
@@ -3238,8 +3195,6 @@ char_u *gui_mch_get_fontname(GuiFont font, char_u *name)
 void gui_mch_free_font(GuiFont font)
 {
     (void) font;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3263,21 +3218,8 @@ void gui_mch_set_winpos(int x, int y)
 {
     (void) x;
     (void) y;
-
-    INFO("Not supported");
 }
-/*
-static void print_sb(const char *info, scrollbar_T *sb)
-{
-    if(!sb) return;
 
-    KPrintF("%s sb:%p value:%d size:%d max:%d top:%d height:%d width:%d"
-            " status_height:%d type:%s\n", info, sb, sb->value, sb->size, sb->max, sb->top,
-            sb->height, sb->width, sb->status_height, sb->type == SBAR_BOTTOM ? "bottom" :
-            sb->type == SBAR_LEFT ? "left" : "right");
-
-}
-*/
 //------------------------------------------------------------------------------
 // gui_mch_enable_scrollbar - Not supported
 //------------------------------------------------------------------------------
@@ -3285,71 +3227,10 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
     if(!sb || !sb->id)
     {
-        INFO("No scrollbar");
         return;
     }
 
     DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
-    return;
-
-
-
-
-
-
-// <--
-
-    IPTR enable = flag ? TRUE : FALSE, state;
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg);/*,
-           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);*/
-
-    Object *scb = sb->id;
-
-    if(!scb)
-    {
-        INFO("No scrollbar");
-        return;
-    }
-
-  /*  get(scb, MUIA_ShowMe, &state);
-
-    if(enable == state)
-        return;
-*/
- //   KPrintF("%s %p\n", enable ? "Enable" : "Disable", sb);
-    DoMethod(OLASR, MUIM_Group_InitChange);
-    DoMethod(dst, MUIM_Group_InitChange);
-    set(scb, MUIA_ShowMe, enable);
-
-    if(enable)
-    {
-        set(dst, MUIA_ShowMe, TRUE);
-        DoMethod(dst, MUIM_Group_ExitChange);
-        DoMethod(OLASR, MUIM_Group_ExitChange);
-        return;
-    }
-
-    struct List *lst = NULL;
-    get(dst, MUIA_Group_ChildList, &lst);
-    struct Node *cur = lst->lh_Head;
-
-    for(Object *chl = NextObject(&cur); chl && !enable;
-                chl = NextObject(&cur))
-    {
-        get(chl, MUIA_ShowMe, &enable);
-    }
-
-    if(!enable)
-    {
-//        KPrintF("Hiding group\n");
-        set(dst, MUIA_ShowMe, FALSE);
-    }
-
-    DoMethod(dst, MUIM_Group_ExitChange);
-    DoMethod(OLASR, MUIM_Group_ExitChange);
- //   MUI_Redraw(dst, MADF_DRAWOBJECT);
- //   MUI_Redraw(OLASR, MADF_DRAWOBJECT);
 }
 
 //------------------------------------------------------------------------------
@@ -3387,24 +3268,12 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
-//    if(sb->type == SBAR_RIGHT)
-    KPrintF("POS sb:%p x:%d y:%d w:%d h:%d type:%d\n", sb, x, y, w, h, sb->type);
-/*
-    Object *dst = sb->type == SBAR_LEFT ? Lsg :
-                  (sb->type == SBAR_RIGHT ? Rsg : Bsg),
-           *scb = (Object *) DoMethod(dst, MUIM_FindUData, (IPTR) sb);
-*/
     if(!sb->id || !h)
     {
         return;
     }
 
     DoMethod(sb->id, MUIM_VimScrollbar_Pos, (IPTR) y, (IPTR) h);
-/*
-    DoMethod(OLASR, MUIM_Group_InitChange);
-    set(sb->id, MUIA_VertWeight, h);
-    DoMethod(OLASR, MUIM_Group_ExitChange);
-*/
 }
 
 //------------------------------------------------------------------------------
@@ -3412,7 +3281,6 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 //------------------------------------------------------------------------------
 int gui_mch_get_scrollbar_xpadding(void)
 {
-    INFO("Not supported");
     return 0;
 }
 
@@ -3421,7 +3289,6 @@ int gui_mch_get_scrollbar_xpadding(void)
 //------------------------------------------------------------------------------
 int gui_mch_get_scrollbar_ypadding(void)
 {
-    INFO("Not supported");
     return 0;
 }
 
@@ -3530,26 +3397,21 @@ guicolor_T gui_mch_get_color(char_u *name)
         {"RoyalBlue",         0x004169e1},
         {"CornflowerBlue",    0x006495ED},
     };
-    guicolor_T r = INVALCOLOR;
-    size_t i = sizeof(t) / sizeof(t[0]);
 
     if(name[0] == '#' && strlen((char *) name) == 7)
     {
-        r = strtol((char *) name + 1, NULL, 16);
+        return strtol((char *) name + 1, NULL, 16);
     }
-    else
+
+    for(size_t i = sizeof(t) / sizeof(t[0]); i--;)
     {
-        while(i--)
+        if(STRICMP(name, t[i].n) == 0)
         {
-            if(STRICMP(name, t[i].n) == 0)
-            {
-                r = t[i].c;
-                break;
-            }
+            return t[i].c;
         }
     }
 
-    return r;
+    return INVALCOLOR;
 }
 
 //------------------------------------------------------------------------------
@@ -3557,7 +3419,6 @@ guicolor_T gui_mch_get_color(char_u *name)
 //------------------------------------------------------------------------------
 void gui_mch_getmouse(int *x, int *y)
 {
-    INFO("Not supported");
     *x = 0;
     *y = 0;
 }
@@ -3569,8 +3430,6 @@ void gui_mch_setmouse(int x, int y)
 {
     (void) x;
     (void) y;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3578,7 +3437,6 @@ void gui_mch_setmouse(int x, int y)
 //------------------------------------------------------------------------------
 void gui_mch_update(void)
 {
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3597,9 +3455,8 @@ void gui_mch_update(void)
 //------------------------------------------------------------------------------
 int gui_mch_wait_for_chars(int wtime)
 {
-    // Don't enable timeouts for now, it might cause
-    // problems in the MUI message loop. Passing the
-    // control over to Vim at any time is not safe.
+    // Don't enable timeouts for now, it might cause problems in the MUI message
+    // loop. Passing the control over to Vim at any time is not safe.
 #ifdef MUIVIM_FEAT_TIMEOUT
     #warning Timeout support will cause MUI message loop problems
     DoMethod(Con, MUIM_VimCon_SetTimeout, wtime > 0 ? wtime : 0);
@@ -3631,9 +3488,8 @@ int gui_mch_wait_for_chars(int wtime)
     // Wait for something to happen if we're idle.
     if(state == MUIV_VimCon_State_Idle)
     {
-        // For some reason MUI returns 0 when jumping
-        // to the same screen that we're currently on.
-        // If so, just pass control over to Vim.
+        // For some reason MUI returns 0 when jumping to the same screen that
+        // we're currently on. If so, just pass control over to Vim.
         if(sig)
         {
             sig = Wait(sig | SIGBREAKF_CTRL_C);
@@ -3648,8 +3504,7 @@ int gui_mch_wait_for_chars(int wtime)
         return OK;
     }
 
-    // Something happened. Either input, a voluntary
-    // yield or a timeout.
+    // Something happened. Either input, a voluntary yield or a timeout.
     if(state != MUIV_VimCon_State_Yield
 #ifdef MUIVIM_FEAT_TIMEOUT
        && state != MUIV_VimCon_State_Timeout
@@ -3702,8 +3557,6 @@ void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 void gui_mch_enable_menu(int flag)
 {
     (void) flag;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3712,8 +3565,6 @@ void gui_mch_enable_menu(int flag)
 void gui_mch_toggle_tearoffs(int enable)
 {
     (void) enable;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3744,8 +3595,6 @@ void gui_mch_set_shellsize(int width, int height, int min_width, int min_height,
     (void) base_width;
     (void) base_height;
     (void) direction;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3800,7 +3649,6 @@ void gui_mch_clear_all()
 void gui_mch_flash(int msec)
 {
     (void) msec;
-
     DoMethod(Con, MUIM_VimCon_Beep);
 }
 
@@ -3813,8 +3661,6 @@ void gui_mch_set_menu_pos(int x, int y, int w, int h)
     (void) y;
     (void) w;
     (void) h;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -3851,7 +3697,7 @@ int gui_mch_init(void)
     IKeymap = (struct KeymapIFace*) GetInterface(KeymapBase, "main", 1, NULL);
 #endif
 
-    static const CONST_STRPTR classes[] = { "TheBar.mcc", NULL};
+    static const CONST_STRPTR classes[] = {"TheBar.mcc", NULL};
     VimToolbarClass = VimConClass = VimMenuClass = NULL;
 
     // Create custom classes
@@ -3950,7 +3796,7 @@ int gui_mch_init(void)
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
-            MUIA_Window_RootObject, OLASR  =  MUI_NewObject(MUIC_Group,
+            MUIA_Window_RootObject, MUI_NewObject(MUIC_Group,
                 MUIA_Group_Horiz, FALSE,
                 MUIA_Group_Child, Tlb =
                     NewObject(VimToolbarClass->mcc_Class, NULL,
@@ -3960,13 +3806,6 @@ int gui_mch_init(void)
                     MUIA_Group_Child, Lsg = MUI_NewObject(MUIC_Group,
                         MUIA_Group_Horiz, FALSE,
                         MUIA_ShowMe, FALSE,
-//
-                        //MUIA_HorizWeight, 0,
-                        /*
-                        MUIA_Group_Child, MUI_NewObject(MUIC_Scrollbar,
-                            MUIA_ShowMe, TRUE,
-                            TAG_END),*/
-//
                         TAG_END),
                     MUIA_Group_Child, Bsg = MUI_NewObject(MUIC_Group,
                         MUIA_Group_Horiz, FALSE,
@@ -3974,34 +3813,12 @@ int gui_mch_init(void)
                         MUIA_Group_Child, Con =
                             NewObject(VimConClass->mcc_Class, NULL,
                             TAG_END),
-                            /*
-                        MUIA_Group_Child, MUI_NewObject(MUIC_Scrollbar,
-                            MUIA_Group_Horiz, TRUE,
-                            MUIA_ShowMe, TRUE,
-                            TAG_END),
-                            */
                         TAG_END),
                     MUIA_Group_Child, Rsg = MUI_NewObject(MUIC_Group,
                         MUIA_Group_Horiz, FALSE,
                         MUIA_ShowMe, FALSE,
-                  //      MUIA_VertWeight, 0,
-                      /*  MUIA_Group_Child, Scb = MUI_NewObject(MUIC_Scrollbar,
-                            MUIA_ShowMe, TRUE,
-                            TAG_END),*/
                         TAG_END),
                     TAG_END),
-
-                    /*
-                MUIA_Group_Child, Scb =
-                    MUI_NewObject(MUIC_Prop,
-                    MUIA_Prop_UseWinBorder, MUIV_Prop_UseWinBorder_Right,
-                    MUIA_Prop_Entries, 10,
-                    MUIA_Prop_Visible, 5,
-                    MUIA_Prop_First, 1,
-               //     MUIA_Prop_Horiz, TRUE,
-               //     MUIA_ShowMe, FALSE,
-                    TAG_END),
-                    */
                 TAG_END),
             TAG_END),
         TAG_END);
@@ -4011,9 +3828,6 @@ int gui_mch_init(void)
         ERR("Failed creating MUI application");
         return FAIL;
     }
-
-    //.OS.TEST
-//    DoMethod(Scb, MUIM_Prop_Increase, 2);
 
     // Open the window to finish setup, cheat (see gui_mch_open).
     set(Win, MUIA_Window_Open, TRUE);
@@ -4028,12 +3842,6 @@ int gui_mch_init(void)
     // Set up drag and drop notifications
     DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime, (IPTR) Con, 2,
              MUIM_VimCon_AppMessage, MUIV_TriggerValue);
-/*
-    //.OS.TEST
-    DoMethod(Scb, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) Con, 2,
-             MUIM_VimCon_Scroll, MUIV_TriggerValue);
-             */
-//    set(Scb, MUIA_Prop_First, val);
 
     // MUI specific menu parts
     if(Abo && Set)
@@ -4065,8 +3873,7 @@ void gui_mch_prepare(int *argc, char **argv)
     // Invoked from WB?
     if(!*argc)
     {
-        // Count number arguments, argv is
-        // populated in get_cmd_argsA(..).
+        // Count number arguments, argv is populated in get_cmd_argsA(..).
         while(*argv)
         {
             argv++;
@@ -4185,7 +3992,6 @@ void gui_mch_exit(int rc)
 void gui_mch_draw_hollow_cursor(guicolor_T color)
 {
     (void) color;
-
     DoMethod(Con, MUIM_VimCon_DrawHollowCursor, gui.row, gui.col,
              gui.norm_pixel);
 }
@@ -4196,7 +4002,6 @@ void gui_mch_draw_hollow_cursor(guicolor_T color)
 void gui_mch_draw_part_cursor(int w, int h, guicolor_T color)
 {
     (void) color;
-
     DoMethod(Con, MUIM_VimCon_DrawPartCursor, gui.row, gui.col, w, h,
              gui.norm_pixel);
 }
@@ -4210,8 +4015,6 @@ void gui_mch_set_text_area_pos(int x, int y, int w, int h)
     (void) y;
     (void) w;
     (void) h;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4228,11 +4031,12 @@ void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 void gui_mch_add_menu(vimmenu_T *menu, int index)
 {
     (void) index;
-
-    if(Mnu && !menu_is_popup(menu->name) && !menu_is_toolbar(menu->name))
+    if(menu_is_popup(menu->name) || menu_is_toolbar(menu->name))
     {
-        DoMethod(Mnu, MUIM_VimMenu_AddMenu, menu->parent, menu, menu->dname);
+        return;
     }
+
+    DoMethod(Mnu, MUIM_VimMenu_AddMenu, menu->parent, menu, menu->dname);
 }
 
 //------------------------------------------------------------------------------
@@ -4253,40 +4057,28 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     }
 
     // Ignore popups for now
-    if(menu_is_popup(p->name) )
+    if(menu_is_popup(p->name))
     {
-        INFO("Ignoring pop-up");
         return;
     }
 
     // Menu items can be proper menu items or toolbar buttons
-    if(Tlb && menu_is_toolbar(p->name) && !menu_is_separator(menu->name))
+    if(menu_is_toolbar(p->name) && !menu_is_separator(menu->name))
     {
         DoMethod(Tlb, MUIM_VimToolbar_AddButton, menu, menu->dname,
                  menu->dname);
+        return;
     }
-    else
+
+    // A menu spacer?
+    if(menu_is_separator(menu->name) )
     {
-        if(Mnu)
-        {
-            // Spacer or menu item?
-            if(menu_is_separator(menu->name) )
-            {
-                DoMethod(Mnu, MUIM_VimMenu_AddSpacer, menu->parent);
-            }
-            else
-            {
-//------------------------------------------------------------------------------
-#warning ! after scrollbar functionality is implemented, remove that hack !
-//------------------------------------------------------------------------------
-                if(!strstr(menu->dname, "Scrollbar"))
-                {
-                    DoMethod(Mnu, MUIM_VimMenu_AddMenuItem, menu->parent, menu,
-                             menu->dname);
-                }
-            }
-        }
+        DoMethod(Mnu, MUIM_VimMenu_AddSpacer, menu->parent);
+        return;
     }
+
+    // A normal menu item.
+    DoMethod(Mnu, MUIM_VimMenu_AddMenuItem, menu->parent, menu, menu->dname);
 }
 
 //------------------------------------------------------------------------------
@@ -4294,10 +4086,7 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
 //------------------------------------------------------------------------------
 void gui_mch_show_toolbar(int showit)
 {
-    if(Tlb)
-    {
-        DoMethod(Tlb, MUIM_Set, MUIA_ShowMe, showit);
-    }
+    DoMethod(Tlb, MUIM_Set, MUIA_ShowMe, showit);
 }
 
 //------------------------------------------------------------------------------
@@ -4305,10 +4094,7 @@ void gui_mch_show_toolbar(int showit)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_menu(vimmenu_T *menu)
 {
-    if(Mnu)
-    {
-        DoMethod(Mnu, MUIM_VimMenu_RemoveMenu, menu);
-    }
+    DoMethod(Mnu, MUIM_VimMenu_RemoveMenu, menu);
 }
 
 //------------------------------------------------------------------------------
@@ -4316,10 +4102,7 @@ void gui_mch_destroy_menu(vimmenu_T *menu)
 //------------------------------------------------------------------------------
 void gui_mch_menu_grey(vimmenu_T *menu, int grey)
 {
-    if(Mnu)
-    {
-        DoMethod(Mnu, MUIM_VimMenu_Grey, menu, grey);
-    }
+    DoMethod(Mnu, MUIM_VimMenu_Grey, menu, grey);
 }
 
 //------------------------------------------------------------------------------
@@ -4329,8 +4112,6 @@ void gui_mch_menu_hidden(vimmenu_T *menu, int hidden)
 {
     (void) menu;
     (void) hidden;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4338,7 +4119,6 @@ void gui_mch_menu_hidden(vimmenu_T *menu, int hidden)
 //------------------------------------------------------------------------------
 void gui_mch_draw_menubar(void)
 {
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4347,8 +4127,6 @@ void gui_mch_draw_menubar(void)
 void gui_mch_show_popupmenu(vimmenu_T *menu)
 {
     (void) menu;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4357,8 +4135,6 @@ void gui_mch_show_popupmenu(vimmenu_T *menu)
 void gui_mch_mousehide(int hide)
 {
     (void) hide;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4366,7 +4142,6 @@ void gui_mch_mousehide(int hide)
 //------------------------------------------------------------------------------
 int gui_mch_adjust_charheight(void)
 {
-    INFO("Not supported");
     return OK;
 }
 
@@ -4375,7 +4150,6 @@ int gui_mch_adjust_charheight(void)
 //------------------------------------------------------------------------------
 void gui_mch_new_colors(void)
 {
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4384,8 +4158,6 @@ void gui_mch_new_colors(void)
 int gui_mch_haskey(char_u *name)
 {
     (void) name;
-
-    INFO("Not supported");
     return OK;
 }
 
@@ -4394,7 +4166,7 @@ int gui_mch_haskey(char_u *name)
 //------------------------------------------------------------------------------
 void gui_mch_iconify(void)
 {
-    INFO("Not supported");
+    set(App, MUIA_Application_Iconified, TRUE);
 }
 
 //------------------------------------------------------------------------------
@@ -4411,8 +4183,6 @@ void gui_mch_invert_rectangle(int row, int col, int nr, int nc)
 int clip_mch_own_selection(Clipboard_T *cbd)
 {
     (void) cbd;
-
-    INFO("Not supported");
     return OK;
 }
 
@@ -4422,8 +4192,6 @@ int clip_mch_own_selection(Clipboard_T *cbd)
 void clip_mch_lose_selection(Clipboard_T *cbd)
 {
     (void) cbd;
-
-    INFO("Not supported");
 }
 
 //------------------------------------------------------------------------------
@@ -4432,7 +4200,6 @@ void clip_mch_lose_selection(Clipboard_T *cbd)
 void clip_mch_request_selection(Clipboard_T *cbd)
 {
     (void) cbd;
-
     DoMethod(Con, MUIM_VimCon_Paste, cbd);
 }
 
@@ -4442,7 +4209,6 @@ void clip_mch_request_selection(Clipboard_T *cbd)
 void clip_mch_set_selection(Clipboard_T *cbd)
 {
     (void) cbd;
-
     DoMethod(Con, MUIM_VimCon_Copy, cbd);
 }
 
@@ -4456,7 +4222,10 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
         return;
     }
     
+    // Free uninstalled object.
     MUI_DisposeObject(sb->id);
+
+    // Safety measure.
     sb->id = NULL;
 }
 
@@ -4477,7 +4246,6 @@ char_u *gui_mch_browse(int saving, char_u *title, char_u *dflt, char_u *ext,
     (void) filter;
     (void) dflt;
     (void) ext;
-
     return (char_u *) DoMethod(Con, MUIM_VimCon_Browse, title, initdir);
 }
 
@@ -4502,9 +4270,7 @@ void gui_mch_start_blink(void)
 //------------------------------------------------------------------------------
 void gui_mch_stop_blink(int FIXME)
 {
-    //.See gui_w32.c
     (void) FIXME;
-
     DoMethod(Con, MUIM_VimCon_StopBlink);
 }
 
@@ -4530,7 +4296,6 @@ int gui_mch_is_blink_off(void)
 void gui_mch_settitle(char_u *title, char_u *icon)
 {
     (void) icon;
-
     DoMethod(Con, MUIM_VimCon_SetTitle, title);
 }
 
