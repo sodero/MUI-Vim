@@ -28,15 +28,15 @@
 #include <proto/muimaster.h>
 #include <proto/icon.h>
 #include <proto/iffparse.h>
-
 #ifndef __amigaos4__
 #include <cybergraphx/cybergraphics.h>
+#include <clib/utility_protos.h>
+#else
+#include <proto/utility.h>
 #endif
-
 #include <devices/rawkeycodes.h>
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
-#include <clib/utility_protos.h>
 #include <libraries/gadtools.h>
 #include <proto/graphics.h>
 #include <proto/cybergraphics.h>
@@ -1005,11 +1005,11 @@ MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
                                     { .ti_Tag = TAG_END        }};
 
     struct VimConData *my = INST_DATA(cls,obj);
-    #ifdef __amigaos4__
+#ifdef __amigaos4__
     tags[0].ti_Data = msg->Color|0xFF000000;
-    #else
+#else
     tags[0].ti_Data = msg->Color;
-    #endif
+#endif
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
 }
@@ -1158,9 +1158,9 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->event.ehn_Object = obj;
     my->event.ehn_Class = NULL;
     my->event.ehn_Events = IDCMP_RAWKEY |
-                           #ifdef __amigaos4__
+#ifdef __amigaos4__
                            IDCMP_EXTENDEDMOUSE |
-                           #endif
+#endif
                            IDCMP_MOUSEBUTTONS;
     return (IPTR) obj;
 }
@@ -1945,7 +1945,7 @@ MUIDSP IPTR VimConIconState(Class *cls, Object *obj,
     struct VimConData *my = INST_DATA(cls,obj);
     my->block = msg->Iconified;
     return msg->Iconified;
-} 
+}
 
 //------------------------------------------------------------------------------
 // VimConPaste - Paste data from clipboard.device
@@ -2787,9 +2787,10 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 
     IPTR enable = FALSE;
     struct Node *cur = lst->lh_Head;
+    Object *chl;
 
     // The group shall be hidden if all scrollbars are hidden.
-    for(Object *chl = NextObject(&cur); chl && !enable;
+    for(chl = NextObject(&cur); chl && !enable;
         chl = NextObject(&cur))
     {
         if(chl != obj)
@@ -2827,8 +2828,9 @@ MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
     get(grp, MUIA_Group_ChildList, &lst);
     struct Node *cur = lst->lh_Head;
     IPTR top = 0;
+    Object *chl;
 
-    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
         struct VimScrollbarData *scb = INST_DATA(cls,chl);
 
@@ -2856,8 +2858,9 @@ MUIDSP size_t VimScrollbarCount(Object *grp)
 
     struct Node *cur = lst->lh_Head;
     size_t cnt = 0;
+    Object *chl;
 
-    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
         cnt++;
     }
@@ -2874,7 +2877,9 @@ MUIDSP size_t VimScrollbarCount(Object *grp)
 MUIDSP void VimScrollbarOrderAll(Object **obj, Object *grp)
 {
     // Make sure that array and group order are the same.
-    for(size_t cur = 0; obj[cur]; cur++)
+    size_t cur;
+
+    for(cur = 0; obj[cur]; cur++)
     {
         DoMethod(grp, OM_REMMEMBER, obj[cur]);
         DoMethod(grp, OM_ADDMEMBER, obj[cur]);
@@ -2903,8 +2908,9 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 
     struct Node *cur = lst->lh_Head;
     size_t ndx = 0;
+    Object *chl;
 
-    for(Object *chl = NextObject(&cur); chl && ndx < cnt;
+    for(chl = NextObject(&cur); chl && ndx < cnt;
         chl = NextObject(&cur))
     {
         scs[ndx++] = chl;
@@ -2946,9 +2952,10 @@ MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
     {
         // Assume that the array is sorted.
         flip = FALSE;
+        size_t end;
 
         // Iterate over all object pairs.
-        for(size_t end = cnt - 1; end-- && !flip;)
+        for(end = cnt - 1; end-- && !flip;)
         {
             // Peek into member variables.
             struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
@@ -3394,7 +3401,9 @@ guicolor_T gui_mch_get_color(char_u *name)
         return strtol((char *) name + 1, NULL, 16);
     }
 
-    for(size_t i = sizeof(t) / sizeof(t[0]); i--;)
+    size_t i;
+
+    for(i = sizeof(t) / sizeof(t[0]); i--;)
     {
         if(STRICMP(name, t[i].n) == 0)
         {
@@ -4161,7 +4170,10 @@ int gui_mch_haskey(char_u *name)
 //------------------------------------------------------------------------------
 void gui_mch_iconify(void)
 {
+    // For some reason this causes a crash on OS4. Disable for now.
+#ifndef __amigaos4__
     set(App, MUIA_Application_Iconified, TRUE);
+#endif
 }
 
 //------------------------------------------------------------------------------
