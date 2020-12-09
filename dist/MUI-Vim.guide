@@ -69,7 +69,7 @@ Hollywood syntax highlighting.
 @{B}-----------------------------------------------------------------------------@{UB}
 @{B}2021-12-09@{UB}
 - Update to VIM 8.2.2121
-- Scrollbar support.
+- OS4 and MorphOS scrollbar support.
 - MorphOS TCAP.
 
 @{B}2020-11-17@{UB}

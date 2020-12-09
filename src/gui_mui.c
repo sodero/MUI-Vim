@@ -49,6 +49,11 @@
     #endif
 #endif
 
+// Disable scrollbars on AROS. Zune problems.
+#ifndef __AROS__
+# define MUIVIM_FEAT_SCROLLBAR
+#endif
+
 #ifdef __amigaos4__
 
 #include <dos/obsolete.h>
@@ -3223,12 +3228,17 @@ void gui_mch_set_winpos(int x, int y)
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
+#ifdef MUIVIM_FEAT_SCROLLBAR
     if(!sb || !sb->id)
     {
         return;
     }
 
     DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
+#else
+    (void) sb;
+    (void) flag;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -3236,6 +3246,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 //------------------------------------------------------------------------------
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
+#ifdef MUIVIM_FEAT_SCROLLBAR
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
                             MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
     if(!obj)
@@ -3245,6 +3256,10 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
     }
 
     DoMethod(obj, MUIM_VimScrollbar_Install);
+#else
+    (void) sb;
+    (void) orient;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -3252,6 +3267,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
+#ifdef MUIVIM_FEAT_SCROLLBAR
     if(!sb->id)
     {
         return;
@@ -3259,6 +3275,12 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 
     SetAttrs(sb->id, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
              MUIA_Prop_First, val, TAG_DONE);
+#else
+    (void) sb;
+    (void) val;
+    (void) size;
+    (void) max;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -3266,12 +3288,20 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
+#ifdef MUIVIM_FEAT_SCROLLBAR
     if(!sb->id || !h)
     {
         return;
     }
 
     DoMethod(sb->id, MUIM_VimScrollbar_Pos, (IPTR) y, (IPTR) h);
+#else
+    (void) sb;
+    (void) x;
+    (void) y;
+    (void) w;
+    (void) h;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -4224,6 +4254,7 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
+#ifdef MUIVIM_FEAT_SCROLLBAR
     if(!sb || !sb->id || !DoMethod(sb->id, MUIM_VimScrollbar_Uninstall))
     {
         return;
@@ -4234,6 +4265,9 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 
     // Safety measure.
     sb->id = NULL;
+#else
+    (void) sb;
+#endif
 }
 
 //------------------------------------------------------------------------------
