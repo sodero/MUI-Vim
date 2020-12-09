@@ -2099,6 +2099,7 @@ func Test_call()
   let mydict = {'data': [0, 1, 2, 3], 'len': function("Mylen")}
   eval mydict.len->call([], mydict)->assert_equal(4)
   call assert_fails("call call('Mylen', [], 0)", 'E715:')
+  call assert_fails('call foo', 'E107:')
 endfunc
 
 func Test_char2nr()
@@ -2302,6 +2303,7 @@ func Test_range()
 
   " filter()
   call assert_equal([1, 3], filter(range(5), 'v:val % 2'))
+  call assert_equal([1, 5, 7, 11, 13], filter(filter(range(15), 'v:val % 2'), 'v:val % 3'))
 
   " funcref()
   call assert_equal([0, 1], funcref('TwoArgs', range(2))())
@@ -2358,6 +2360,9 @@ func Test_range()
 
   " map()
   call assert_equal([0, 2, 4, 6, 8], map(range(5), 'v:val * 2'))
+  call assert_equal([3, 5, 7, 9, 11], map(map(range(5), 'v:val * 2'), 'v:val + 3'))
+  call assert_equal([2, 6], map(filter(range(5), 'v:val % 2'), 'v:val * 2'))
+  call assert_equal([2, 4, 8], filter(map(range(5), 'v:val * 2'), 'v:val % 3'))
 
   " match()
   call assert_equal(3, match(range(5), 3))

@@ -67,10 +67,10 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2021-NOT-YET@{UB}
-- Update to VIM 8.WHAT.EVER
+@{B}2021-12-09@{UB}
+- Update to VIM 8.2.2121
+- Scrollbar support.
 - MorphOS TCAP.
-- ?
 
 @{B}2020-11-17@{UB}
 - Update to VIM 8.2.2000

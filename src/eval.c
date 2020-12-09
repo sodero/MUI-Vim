@@ -2156,7 +2156,10 @@ eval0(
 		&& called_emsg == called_emsg_before
 		&& (flags & EVAL_CONSTANT) == 0)
 	    semsg(_(e_invexpr2), arg);
-	ret = FAIL;
+
+	// Some of the expression may not have been consumed.  Do not check for
+	// a next command to avoid more errors.
+	return FAIL;
     }
 
     if (eap != NULL)
@@ -2769,10 +2772,11 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	int	    vim9script = in_vim9script();
 
 	// "." is only string concatenation when scriptversion is 1
+	// "+=" and "-=" are assignment
 	p = eval_next_non_blank(*arg, evalarg, &getnext);
 	op = *p;
 	concat = op == '.' && (*(p + 1) == '.' || current_sctx.sc_version < 2);
-	if (op != '+' && op != '-' && !concat)
+	if ((op != '+' && op != '-' && !concat) || p[1] == '=')
 	    break;
 
 	evaluate = evalarg == NULL ? 0 : (evalarg->eval_flags & EVAL_EVALUATE);
@@ -3253,7 +3257,7 @@ eval7(
     /*
      * Dictionary: #{key: val, key: val}
      */
-    case '#':	if ((*arg)[1] == '{')
+    case '#':	if (!in_vim9script() && (*arg)[1] == '{')
 		{
 		    ++*arg;
 		    ret = eval_dict(arg, rettv, evalarg, TRUE);

@@ -1325,6 +1325,26 @@ check_visual_highlight(void)
     }
 }
 
+#if defined(FEAT_CLIPBOARD) && defined(FEAT_EVAL)
+/*
+ * Call yank_do_autocmd() for "regname".
+ */
+    static void
+call_yank_do_autocmd(int regname)
+{
+    oparg_T	oa;
+    yankreg_T	*reg;
+
+    clear_oparg(&oa);
+    oa.regname = regname;
+    oa.op_type = OP_YANK;
+    oa.is_VIsual = TRUE;
+    reg = get_register(regname, TRUE);
+    yank_do_autocmd(&oa, reg);
+    free_register(reg);
+}
+#endif
+
 /*
  * End Visual mode.
  * This function should ALWAYS be called to end Visual mode, except from
@@ -1342,6 +1362,18 @@ end_visual_mode(void)
      */
     if (clip_star.available && clip_star.owned)
 	clip_auto_select();
+
+# if defined(FEAT_EVAL)
+    // Emit a TextYankPost for the automatic copy of the selection into the
+    // star and/or plus register.
+    if (has_textyankpost())
+    {
+	if (clip_isautosel_star())
+	    call_yank_do_autocmd('*');
+	if (clip_isautosel_plus())
+	    call_yank_do_autocmd('+');
+    }
+# endif
 #endif
 
     VIsual_active = FALSE;
@@ -4904,7 +4936,7 @@ nv_replace(cmdarg_T *cap)
     if (cap->nchar == Ctrl_V)
     {
 	had_ctrl_v = Ctrl_V;
-	cap->nchar = get_literal();
+	cap->nchar = get_literal(FALSE);
 	// Don't redo a multibyte character with CTRL-V.
 	if (cap->nchar > DEL)
 	    had_ctrl_v = NUL;
@@ -5185,7 +5217,7 @@ nv_vreplace(cmdarg_T *cap)
 	else
 	{
 	    if (cap->extra_char == Ctrl_V)	// get another character
-		cap->extra_char = get_literal();
+		cap->extra_char = get_literal(FALSE);
 	    stuffcharReadbuff(cap->extra_char);
 	    stuffcharReadbuff(ESC);
 	    if (virtual_active())

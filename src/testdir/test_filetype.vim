@@ -479,6 +479,7 @@ let s:filename_checks = {
     \ 'tilde': ['file.t.html'],
     \ 'tli': ['file.tli'],
     \ 'tmux': ['tmuxfile.conf', '.tmuxfile.conf', '.tmux-file.conf', '.tmux.conf', 'tmux-file.conf', 'tmux.conf'],
+    \ 'toml': ['file.toml'],
     \ 'tpp': ['file.tpp'],
     \ 'treetop': ['file.treetop'],
     \ 'trustees': ['trustees.conf'],
@@ -487,7 +488,6 @@ let s:filename_checks = {
     \ 'tssgm': ['file.tssgm'],
     \ 'tssop': ['file.tssop'],
     \ 'twig': ['file.twig'],
-    \ 'typescript': ['file.ts'],
     \ 'typescriptreact': ['file.tsx'],
     \ 'uc': ['file.uc'],
     \ 'udevconf': ['/etc/udev/udev.conf', 'any/etc/udev/udev.conf'],
@@ -706,6 +706,23 @@ func Test_hook_file()
   bwipe!
 
   call delete('Xfile.hook')
+  filetype off
+endfunc
+
+func Test_ts_file()
+  filetype on
+
+  call writefile(['<?xml version="1.0" encoding="utf-8"?>'], 'Xfile.ts')
+  split Xfile.ts
+  call assert_equal('xml', &filetype)
+  bwipe!
+
+  call writefile(['// looks like Typescript'], 'Xfile.ts')
+  split Xfile.ts
+  call assert_equal('typescript', &filetype)
+  bwipe!
+
+  call delete('Xfile.ts')
   filetype off
 endfunc
 

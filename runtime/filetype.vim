@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2020 Oct 24
+" Last Change:	2020 Nov 22
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -1748,6 +1748,9 @@ au BufNewFile,BufRead *.tf,.tfrc,tfrc		setf tf
 " tmux configuration
 au BufNewFile,BufRead {.,}tmux*.conf		setf tmux
 
+" TOML
+au BufNewFile,BufRead *.toml			setf toml
+
 " TPP - Text Presentation Program
 au BufNewFile,BufReadPost *.tpp			setf tpp
 
@@ -1769,8 +1772,13 @@ au BufNewFile,BufReadPost *.tsscl		setf tsscl
 " TWIG files
 au BufNewFile,BufReadPost *.twig		setf twig
 
-" Typescript
-au BufNewFile,BufReadPost *.ts			setf typescript
+" Typescript or Qt translation file (which is XML)
+au BufNewFile,BufReadPost *.ts
+	\ if getline(1) =~ '<?xml' |
+	\   setf xml |
+	\ else |
+	\   setf typescript |
+	\ endif
 
 " TypeScript with React
 au BufNewFile,BufRead *.tsx			setf typescriptreact

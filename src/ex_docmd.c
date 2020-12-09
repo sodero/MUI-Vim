@@ -3332,9 +3332,13 @@ find_ex_command(
 
 		// When followed by "=" or "+=" then it is an assignment.
 		++emsg_silent;
-		if (skip_expr(&after, NULL) == OK
-				  && (*after == '='
-				      || (*after != NUL && after[1] == '=')))
+		if (skip_expr(&after, NULL) == OK)
+		    after = skipwhite(after);
+		else
+		    after = (char_u *)"";
+		if (*after == '=' || (*after != NUL && after[1] == '=')
+					 || (after[0] == '.' && after[1] == '.'
+							   && after[2] == '='))
 		    eap->cmdidx = CMD_var;
 		else
 		    eap->cmdidx = CMD_eval;
@@ -3352,7 +3356,14 @@ find_ex_command(
 	    if (*eap->cmd == '[')
 	    {
 		p = to_name_const_end(eap->cmd);
-		if (p == eap->cmd || *skipwhite(p) != '=')
+		if (p == eap->cmd && *p == '[')
+		{
+		    int count = 0;
+		    int	semicolon = FALSE;
+
+		    p = skip_var_list(eap->cmd, TRUE, &count, &semicolon, TRUE);
+		}
+		if (p == NULL || p == eap->cmd || *skipwhite(p) != '=')
 		{
 		    eap->cmdidx = CMD_eval;
 		    return eap->cmd;
@@ -6638,7 +6649,8 @@ do_exedit(
 	else if (eap->cmdidx == CMD_enew)
 	    readonlymode = FALSE;   // 'readonly' doesn't make sense in an
 				    // empty buffer
-	setpcmark();
+	if (eap->cmdidx != CMD_balt && eap->cmdidx != CMD_badd)
+	    setpcmark();
 	if (do_ecmd(0, (eap->cmdidx == CMD_enew ? NULL : eap->arg),
 		    NULL, eap,
 		    // ":edit" goes to first line if Vi compatible
@@ -7983,9 +7995,13 @@ save_current_state(save_state_T *sst)
     sst->save_opcount = opcount;
     sst->save_reg_executing = reg_executing;
 
-    msg_scroll = FALSE;	    // no msg scrolling in Normal mode
-    restart_edit = 0;	    // don't go to Insert mode
-    p_im = FALSE;	    // don't use 'insertmode'
+    msg_scroll = FALSE;		    // no msg scrolling in Normal mode
+    restart_edit = 0;		    // don't go to Insert mode
+    p_im = FALSE;		    // don't use 'insertmode'
+#ifdef FEAT_EVAL
+    sst->save_script_version = current_sctx.sc_version;
+    current_sctx.sc_version = 1;    // not in Vim9 script
+#endif
 
     /*
      * Save the current typeahead.  This is required to allow using ":normal"
@@ -8009,6 +8025,9 @@ restore_current_state(save_state_T *sst)
     opcount = sst->save_opcount;
     reg_executing = sst->save_reg_executing;
     msg_didout |= sst->save_msg_didout;	// don't reset msg_didout now
+#ifdef FEAT_EVAL
+    current_sctx.sc_version = sst->save_script_version;
+#endif
 
     // Restore the state (needed when called from a function executed for
     // 'indentexpr'). Update the mouse and cursor, they may have changed.
