@@ -2714,6 +2714,7 @@ CLASS_DEF(VimScrollbar)
 #define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
 #define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
 #define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
+#define MUIM_VimScrollbar_HideAll   (TAGBASE_sTx + 406)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
 
 struct MUIP_VimScrollbar_Drag
@@ -2736,6 +2737,11 @@ struct MUIP_VimScrollbar_Show
 {
     STACKED IPTR MethodID;
     STACKED IPTR Show;
+};
+
+struct MUIP_VimScrollbar_HideAll
+{
+    STACKED IPTR MethodID;
 };
 
 struct MUIP_VimScrollbar_Pos
@@ -3050,6 +3056,18 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
 }
 
 //------------------------------------------------------------------------------
+// VimScrollbarHideAll - Static method hiding all scrollbars
+// Input:                -
+// Return:               TRUE on success, FALSE otherwise
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimScrollbarHideAll(Class *cls, Object *obj,
+                                struct MUIP_VimScrollbar_HideAll *msg)
+{
+    HERE;
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
 // VimScrollbarUninstall - Remove scrollbar from parent group
 // Input:                  -
 // Return:                 TRUE on success, FALSE otherwise
@@ -3141,6 +3159,10 @@ DISPATCH(VimScrollbar)
         return VimScrollbarShow(cls, obj,
             (struct MUIP_VimScrollbar_Show *) msg);
 
+    case MUIM_VimScrollbar_HideAll:
+        return VimScrollbarHideAll(cls, obj,
+            (struct MUIP_VimScrollbar_HideAll *) msg);
+
     case MUIM_VimScrollbar_Pos:
         return VimScrollbarPos(cls, obj,
             (struct MUIP_VimScrollbar_Pos *) msg);
@@ -3224,7 +3246,7 @@ void gui_mch_set_winpos(int x, int y)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_enable_scrollbar - Not supported
+// gui_mch_enable_scrollbar
 //------------------------------------------------------------------------------
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
@@ -3234,7 +3256,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
     }
 
-    DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
+    (void) DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
 #else
     (void) sb;
     (void) flag;
@@ -3242,7 +3264,17 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_create_scrollbar - Not supported
+// gui_mch_hide_scrollbars
+//------------------------------------------------------------------------------
+void gui_mch_hide_scrollbars(void)
+{
+#ifdef MUIVIM_FEAT_SCROLLBAR
+    (void) DoMethod(sb->id, MUIM_VimScrollbar_HideAll);
+#endif
+}
+
+//------------------------------------------------------------------------------
+// gui_mch_create_scrollbar
 //------------------------------------------------------------------------------
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 {
@@ -3255,7 +3287,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
         return;
     }
 
-    DoMethod(obj, MUIM_VimScrollbar_Install);
+    (void) DoMethod(obj, MUIM_VimScrollbar_Install);
 #else
     (void) sb;
     (void) orient;
@@ -3263,7 +3295,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_set_scrollbar_thumb - Not supported
+// gui_mch_set_scrollbar_thumb
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
@@ -3284,7 +3316,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_set_scrollbar_pos - Not supported
+// gui_mch_set_scrollbar_pos
 //------------------------------------------------------------------------------
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
@@ -3305,7 +3337,7 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_get_scrollbar_xpadding - Not supported
+// gui_mch_get_scrollbar_xpadding
 //------------------------------------------------------------------------------
 int gui_mch_get_scrollbar_xpadding(void)
 {
@@ -3313,7 +3345,7 @@ int gui_mch_get_scrollbar_xpadding(void)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_get_scrollbar_ypadding - Not supported
+// gui_mch_get_scrollbar_ypadding
 //------------------------------------------------------------------------------
 int gui_mch_get_scrollbar_ypadding(void)
 {
