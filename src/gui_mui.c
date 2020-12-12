@@ -2759,7 +2759,7 @@ DISPATCH_END
 CLASS_DEF(VimScrollbar)
 {
     scrollbar_T *sb;
-    IPTR top;
+    IPTR top, visible;
     Object *grp;
 };
 
@@ -2822,21 +2822,21 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
 }
 
 //------------------------------------------------------------------------------
-// VimScrollbarShow - Show / hide scrollbar
-// Input:             Show - Show or hide scrollbar
-// Return:            TRUE on success, FALSE otherwise
+// VimScrollbarShow - Show / hide scrollbar.
+// Input:             Show - Show or hide scrollbar.
+// Return:            TRUE on state change, FALSE otherwise.
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
                              struct MUIP_VimScrollbar_Show *msg)
 {
     struct VimScrollbarData *my = INST_DATA(cls,obj);
-    KPrintF("%s %p -> %d\n", msg->Show ? "Enable" : "Disable", my->sb, my->sb->type);
 
-    if(!my->grp)
+    if(my->visible == msg->Show || !my->grp)
     {
         return FALSE;
     }
 
+    my->visible = msg->Show;
     (void) DoMethod(Con, MUIM_VimCon_Block);
 
     if(msg->Show)
@@ -2859,26 +2859,18 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     for(chl = NextObject(&cur); chl && !enable;
         chl = NextObject(&cur))
     {
-        if(chl != obj)
-        {
-            get(chl, MUIA_ShowMe, &enable);
-        }
+        struct VimScrollbarData *diz = INST_DATA(cls,chl);
+        enable = diz->visible;
     }
 
     if(!enable)
     {
-        // Hide group and scrollbar.
+        // Hide group.
         set(my->grp, MUIA_ShowMe, FALSE);
-        set(obj, MUIA_ShowMe, FALSE);
-    }
-    else
-    {
-        // Hide scrollbar only.
-//        DoMethod(my->grp, MUIM_Group_InitChange);
-        set(obj, MUIA_ShowMe, FALSE);
-//        DoMethod(my->grp, MUIM_Group_ExitChange);
     }
 
+    // Hide scrollbar.
+    set(obj, MUIA_ShowMe, FALSE);
     DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
@@ -3180,6 +3172,9 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     // We need to reach ourselves from Vim.
     sb->id = obj;
+
+    // Not shown yet.
+    my->visible = FALSE;
 
     // We notify ourselves when a dragging event occurs.
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
