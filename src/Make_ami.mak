@@ -7,7 +7,7 @@ LD = $(CC)
 UNM ?= $(shell uname)
 DEBUG ?= no
 BUILD ?= mui
-CFLAGS = -c -O3
+CFLAGS = -c -O0
 
 # Common compiler flags
 CFLAGS += \

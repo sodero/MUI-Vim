@@ -2759,7 +2759,7 @@ DISPATCH_END
 CLASS_DEF(VimScrollbar)
 {
     scrollbar_T *sb;
-    IPTR top, visible;
+    IPTR top, visible, weight;
     Object *grp;
 };
 
@@ -3055,7 +3055,8 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
 {
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
-    if(!my->grp || !my->sb)
+    if((my->top == msg->Top && my->weight == msg->Height) ||
+       !my->grp || !my->sb)
     {
         return FALSE;
     }
@@ -3068,6 +3069,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     DoMethod(Con, MUIM_VimCon_Block);
 
     my->top = msg->Top;
+    my->weight = msg->Height;
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
@@ -3167,8 +3169,8 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
     // Vim scrollbar.
     my->sb = sb;
 
-    // Vertical position.
-    my->top = 0;
+    // Vertical position and size.
+    my->weight = my->top = 0;
 
     // We need to reach ourselves from Vim.
     sb->id = obj;
