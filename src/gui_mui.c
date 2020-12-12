@@ -212,6 +212,7 @@ CLASS_DEF(VimCon)
 #ifdef MUIVIM_FEAT_TIMEOUT
 #define MUIV_VimCon_State_Timeout    (1 << 2)
 #endif
+#define MUIV_VimCon_State_Reset       (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
 
 struct MUIP_VimCon_SetFgColor
@@ -1268,11 +1269,9 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
     }
 
-    // Yield CPU when init is done.
-    my->state |= MUIV_VimCon_State_Yield;
+    // Yield CPU and let Vim know the console size when init is done.
+    my->state |= (MUIV_VimCon_State_Yield | MUIV_VimCon_State_Reset);
 
-    // Let Vim know about changes in size (if any)
-    gui_resize_shell(_mwidth(obj), _mheight(obj));
     return TRUE;
 }
 
@@ -1760,23 +1759,19 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         {
             LONG xd = _mleft(obj) + my->xd1, yd = _mtop(obj) + my->yd1,
                  w = my->xd2 - my->xd1, h = my->yd2 - my->yd1;
-
             w = (w + xd > _mwidth(obj) + _mleft(obj)) ?
                 _mwidth(obj) + _mleft(obj) - xd : w;
-
             h = (h + yd > _mheight(obj) + _mtop(obj)) ? 
                 _mheight(obj) + _mtop(obj) - yd : h;
 
-    KPrintF("upd w:%d h:%d\n", w, h);
-
-            if(w && h)
+            if(w > 0 && h > 0)
             {
-                ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), xd, yd, w, h, 0xc0);
+                ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), xd, yd, w, h,
+                         0xc0);
             }
 
             // We're clean.
             VimConClean(cls, obj);
-
         }
 
         return r;
@@ -1787,8 +1782,8 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         // Blit everything
         static LONG lw, lh;
         LONG w = _mwidth(obj), h = _mheight(obj);
-
-        if(lw >= w && lh >= h)
+HERE;
+        if(lw > w && lh > h)
         {
             // We're shrinking. Nothing to do.
             lw = w;
@@ -1817,6 +1812,9 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         {
             ClipBlit(&my->rp, 0, 0, _rp(obj), _mleft(obj), _mtop(obj), w, h, 0xc0);
         }
+
+        // We're clean.
+        VimConClean(cls, obj);
     }
     
     return r;
@@ -1852,6 +1850,14 @@ MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
 MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
+
+    if(my->state & MUIV_VimCon_State_Reset)
+    {
+        HERE;
+        my->state ^= MUIV_VimCon_State_Reset;
+        gui_resize_shell(_mwidth(obj), _mheight(obj));
+        add_to_input_buf("\f", 1);
+    }
 
     // Can't idle and X at the same time
     if(my->state == MUIV_VimCon_State_Idle)
@@ -1892,14 +1898,8 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 
     struct VimConData *my = INST_DATA(cls,obj);
 
-    if(!my->block)
-    {
-        // It's necessary to block this to avoid layout operations caused by
-        // adding, removing and hiding scrollbars. If not, Vim will update the
-        // scrollbars while doing so.
-        gui_resize_shell(_mwidth(obj), _mheight(obj));
-    }
-
+    // Let Vim know the console size.
+    my->state |= MUIV_VimCon_State_Reset;
     return r;
 }
 
@@ -1916,8 +1916,8 @@ MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
     MUI_Redraw(obj, MADF_DRAWOBJECT);
     Delay(8);
 
-    // Add FF to clear terminal.
-    add_to_input_buf("\f", 1);
+    // Reset terminal later.
+    my->state |= MUIV_VimCon_State_Reset;
     return TRUE;
 }
 
