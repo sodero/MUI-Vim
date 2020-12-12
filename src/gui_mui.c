@@ -1753,70 +1753,72 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 {
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
-    LONG xs = 0, ys = 0, xd = 0, yd = 0, w = 0, h = 0;
 
     if(msg->flags & MADF_DRAWUPDATE)
     {
-        // Anything dirty?
         if(my->xd1 < INT_MAX)
         {
-            xs = my->xd1;
-            ys = my->yd1;
-            xd = _mleft(obj) + my->xd1;
-            yd = _mtop(obj) + my->yd1;
-            w = my->xd2 - my->xd1;
-            h = my->yd2 - my->yd1;
-            w = w + xd > _mwidth(obj) + _mleft(obj) ?
-                _mwidth(obj) + _mleft(obj) - xd : w;
-            h = h + yd > _mheight(obj) + _mtop(obj) ? 
-                _mheight(obj) + _mtop(obj) - yd : h;
-            VimConClean(cls, obj);
-        }
-    }
-    else if(msg->flags & MADF_DRAWOBJECT)
-    {
-        static int lw, lh;
+            LONG xd = _mleft(obj) + my->xd1, yd = _mtop(obj) + my->yd1,
+                 w = my->xd2 - my->xd1, h = my->yd2 - my->yd1;
 
+            w = (w + xd > _mwidth(obj) + _mleft(obj)) ?
+                _mwidth(obj) + _mleft(obj) - xd : w;
+
+            h = (h + yd > _mheight(obj) + _mtop(obj)) ? 
+                _mheight(obj) + _mtop(obj) - yd : h;
+
+    KPrintF("upd w:%d h:%d\n", w, h);
+
+            if(w && h)
+            {
+                ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), xd, yd, w, h, 0xc0);
+            }
+
+            // We're clean.
+            VimConClean(cls, obj);
+
+        }
+
+        return r;
+    }
+    
+    if(msg->flags & MADF_DRAWOBJECT)
+    {
         // Blit everything
-        xs = ys = 0;
-        xd = _mleft(obj);
-        yd = _mtop(obj);
-        w = _mwidth(obj);
-        h = _mheight(obj);
+        static LONG lw, lh;
+        LONG w = _mwidth(obj), h = _mheight(obj);
+
+        if(lw >= w && lh >= h)
+        {
+            // We're shrinking. Nothing to do.
+            lw = w;
+            lh = h;
+            return r;
+        }
 
         // Clear sub character trash if we're growing.
-        if(lw < w || lh < h)
+        if(lw < w)
         {
-            if(lw < w)
-            {
-                lw = w % my->xdelta;
-                FillPixelArray(&my->rp, w - lw, 0, lw, h, gui.back_pixel);
-            }
-
-            lw = w;
-
-            if(lh < h)
-            {
-                lh = h % my->ydelta;
-                FillPixelArray(&my->rp, 0, h - lh, w, lh, gui.back_pixel);
-            }
-
-            lh = h;
+            lw = w % my->xdelta;
+            FillPixelArray(&my->rp, w - lw, 0, lw, h, gui.back_pixel);
         }
-        else if(lw != w || lh != h)
+
+        lw = w;
+
+        if(lh < h)
         {
-            lw = w;
-            lh = h;
-            w = h = 0;
+            lh = h % my->ydelta;
+            FillPixelArray(&my->rp, 0, h - lh, w, lh, gui.back_pixel);
+        }
+
+        lh = h;
+
+        if(w > 0 && h > 0)
+        {
+            ClipBlit(&my->rp, 0, 0, _rp(obj), _mleft(obj), _mtop(obj), w, h, 0xc0);
         }
     }
-
-    // Something to do?
-    if(w > 0 && h > 0)
-    {
-        ClipBlit(&my->rp, xs, ys, _rp(obj), xd, yd, w, h, 0xc0);
-    }
-
+    
     return r;
 }
 
@@ -2817,6 +2819,8 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
         return FALSE;
     }
 
+    KPrintF("val:%d\n", msg->Value);
+
 	gui_drag_scrollbar(my->sb, (int) msg->Value, FALSE);
     return TRUE;
 }
@@ -3055,6 +3059,8 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
 {
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
+    // Vim likes to update scrollbars even though nothing changed. Bail out if
+    // nothing changed since the last invocation.
     if((my->top == msg->Top && my->weight == msg->Height) ||
        !my->grp || !my->sb)
     {
@@ -3066,10 +3072,10 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
         return TRUE;
     }
 
-    DoMethod(Con, MUIM_VimCon_Block);
-
+    // Prepare to update weight and position.
     my->top = msg->Top;
     my->weight = msg->Height;
+    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
@@ -3082,7 +3088,6 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     // Give scrollbar the right proportions.
     set(obj, MUIA_VertWeight, msg->Height);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-
     DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
@@ -3112,7 +3117,6 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
     DoMethod(my->grp, OM_ADDMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
     DoMethod(Con, MUIM_VimCon_Unblock);
-
     return TRUE;
 }
 
@@ -3131,16 +3135,14 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
         return FALSE;
     }
 
-    DoMethod(Con, MUIM_VimCon_Block);
     // Hide scrollbar before removing it.
+    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_REMMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-
     DoMethod(Con, MUIM_VimCon_Unblock);
     my->grp  = NULL;
-
     return TRUE;
 }
 
@@ -3606,8 +3608,7 @@ int gui_mch_wait_for_chars(int wtime)
             }
         }
 
-    //    KPrintF("OK:ing\n");
-        // input maasybe
+        // Input (maybe).
         return OK;
     }
 
