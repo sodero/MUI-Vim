@@ -1782,7 +1782,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         // Blit everything
         static LONG lw, lh;
         LONG w = _mwidth(obj), h = _mheight(obj);
-HERE;
+
         if(lw > w && lh > h)
         {
             // We're shrinking. Nothing to do.
@@ -1897,7 +1897,7 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, msg);
 
     struct VimConData *my = INST_DATA(cls,obj);
-
+HERE;
     // Let Vim know the console size.
     my->state |= MUIV_VimCon_State_Reset;
     return r;
@@ -2841,14 +2841,22 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     }
 
     my->visible = msg->Show;
-    (void) DoMethod(Con, MUIM_VimCon_Block);
+//    (void) DoMethod(Con, MUIM_VimCon_Block);
 
     if(msg->Show)
     {
-        // Show group and scrollbar.
+        // Show scrollbar.
         set(obj, MUIA_ShowMe, TRUE);
-        set(my->grp, MUIA_ShowMe, TRUE);
-        (void) DoMethod(Con, MUIM_VimCon_Unblock);
+
+        // Show group unless it's already shown.
+        IPTR shown;
+        get(my->grp, MUIA_ShowMe, &shown);
+
+        if(!shown)
+        {
+            set(my->grp, MUIA_ShowMe, TRUE);
+        }
+//        (void) DoMethod(Con, MUIM_VimCon_Unblock);
         return TRUE;
     }
 
@@ -2875,7 +2883,7 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 
     // Hide scrollbar.
     set(obj, MUIA_ShowMe, FALSE);
-    DoMethod(Con, MUIM_VimCon_Unblock);
+//    DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3075,7 +3083,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     // Prepare to update weight and position.
     my->top = msg->Top;
     my->weight = msg->Height;
-    DoMethod(Con, MUIM_VimCon_Block);
+//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
@@ -3088,7 +3096,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     // Give scrollbar the right proportions.
     set(obj, MUIA_VertWeight, msg->Height);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-    DoMethod(Con, MUIM_VimCon_Unblock);
+ //   DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3112,11 +3120,11 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
     my->grp = my->sb->type == SBAR_LEFT ? Lsg :
              (my->sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
-    DoMethod(Con, MUIM_VimCon_Block);
+//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_ADDMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-    DoMethod(Con, MUIM_VimCon_Unblock);
+//    DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3136,12 +3144,12 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
     }
 
     // Hide scrollbar before removing it.
-    DoMethod(Con, MUIM_VimCon_Block);
+//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_REMMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-    DoMethod(Con, MUIM_VimCon_Unblock);
+//    DoMethod(Con, MUIM_VimCon_Unblock);
     my->grp  = NULL;
     return TRUE;
 }
