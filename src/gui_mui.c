@@ -207,12 +207,14 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
 #define MUIM_VimCon_Block            (TAGBASE_sTx + 129)
 #define MUIM_VimCon_Unblock          (TAGBASE_sTx + 130)
+#define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
 #define MUIV_VimCon_State_Timeout    (1 << 2)
 #endif
-#define MUIV_VimCon_State_Reset       (1 << 3)
+#define MUIV_VimCon_State_Reset      (1 << 3)
+#define MUIV_VimCon_State_Startup    (1 << 4)
 #define MUIV_VimCon_State_Unknown    (0)
 
 struct MUIP_VimCon_SetFgColor
@@ -357,6 +359,11 @@ struct MUIP_VimCon_Block
 };
 
 struct MUIP_VimCon_Unblock
+{
+    STACKED IPTR MethodID;
+};
+
+struct MUIP_VimCon_Clear
 {
     STACKED IPTR MethodID;
 };
@@ -568,6 +575,20 @@ MUIDSP IPTR VimConUnblock(Class *cls, Object *obj,
     BOOL block = my->block;
     my->block = FALSE;
     return block;
+}
+
+//------------------------------------------------------------------------------
+// VimConClear - Clear console 
+// Input:        -
+// Return:       TRUE
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimConClear(Class *cls, Object *obj,
+                                struct MUIP_VimCon_Clear *msg)
+{
+    struct VimConData *my = INST_DATA(cls,obj);
+    FillPixelArray(&my->rp, 0, 0, _mwidth(obj), _mheight(obj), gui.back_pixel);
+    MUI_Redraw(obj, MADF_DRAWOBJECT);
+    return TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -1207,6 +1228,8 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
                            IDCMP_EXTENDEDMOUSE |
 #endif
                            IDCMP_MOUSEBUTTONS;
+
+
     return (IPTR) obj;
 }
 
@@ -1271,7 +1294,6 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 
     // Yield CPU and let Vim know the console size when init is done.
     my->state |= (MUIV_VimCon_State_Yield | MUIV_VimCon_State_Reset);
-
     return TRUE;
 }
 
@@ -1816,7 +1838,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         // We're clean.
         VimConClean(cls, obj);
     }
-    
+
     return r;
 }
 
@@ -1851,19 +1873,18 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    if(my->state & MUIV_VimCon_State_Reset)
-    {
-        HERE;
-        my->state ^= MUIV_VimCon_State_Reset;
-        gui_resize_shell(_mwidth(obj), _mheight(obj));
-        add_to_input_buf("\f", 1);
-    }
-
     // Can't idle and X at the same time
     if(my->state == MUIV_VimCon_State_Idle)
     {
-        // A signal of some sort?
         return MUIV_VimCon_State_Idle;
+    }
+
+    if(my->state & MUIV_VimCon_State_Reset)
+    {
+        my->state = MUIV_VimCon_State_Idle;
+        gui_resize_shell(_mwidth(obj), _mheight(obj));
+        add_to_input_buf("\f", 1);
+        return MUIV_VimCon_State_Yield;
     }
 
     // Yields take precendence over timeouts
@@ -1897,7 +1918,7 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, msg);
 
     struct VimConData *my = INST_DATA(cls,obj);
-HERE;
+
     // Let Vim know the console size.
     my->state |= MUIV_VimCon_State_Reset;
     return r;
@@ -2250,6 +2271,10 @@ DISPATCH(VimCon)
     case MUIM_VimCon_Unblock:
         return VimConUnblock(cls, obj,
             (struct MUIP_VimCon_Unblock *) msg);
+
+    case MUIM_VimCon_Clear:
+        return VimConClear(cls, obj,
+            (struct MUIP_VimCon_Clear *) msg);
 
     default:
         return DoSuperMethodA(cls, obj, msg);
@@ -2818,8 +2843,6 @@ MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
     {
         return FALSE;
     }
-
-    KPrintF("val:%d\n", msg->Value);
 
 	gui_drag_scrollbar(my->sb, (int) msg->Value, FALSE);
     return TRUE;
@@ -3585,8 +3608,6 @@ int gui_mch_wait_for_chars(int wtime)
     // Flush dirt if there is any.
     MUI_Redraw(Con, MADF_DRAWUPDATE);
 
-//    MUI_Redraw(OLASR, MADF_DRAWUPDATE);
-
     static IPTR sig;
 
     // Pass control over to MUI.
@@ -3613,6 +3634,7 @@ int gui_mch_wait_for_chars(int wtime)
             if(sig & SIGBREAKF_CTRL_C)
             {
                 getout_preserve_modified(0);
+                return FAIL;
             }
         }
 
@@ -3620,18 +3642,7 @@ int gui_mch_wait_for_chars(int wtime)
         return OK;
     }
 
-    // Something happened. Either input, a voluntary yield or a timeout.
-    if(state != MUIV_VimCon_State_Yield
-#ifdef MUIVIM_FEAT_TIMEOUT
-       && state != MUIV_VimCon_State_Timeout
-#endif
-    )
-    {
-        ERR("Unknown state");
-        getout_preserve_modified(0);
-    }
-
-    // No input == a timeout has occurred
+    // Timeout or yield.
     return state == MUIV_VimCon_State_Yield ? OK : FAIL;
 }
 
@@ -3972,16 +3983,6 @@ int gui_mch_init(void)
                  1, MUIM_VimCon_MUISettings);
     }
 
-    // From where do we get these defaults?
-    gui.def_norm_pixel = gui.norm_pixel = gui_mch_get_color((char_u *) "Grey");
-    gui.def_back_pixel = gui.back_pixel = gui_mch_get_color((char_u *) "Black");
-
-    // MUI takes care of this
-    gui.menu_height = 0;
-    gui.scrollbar_height = 0;
-    gui.scrollbar_width = 0;
-    gui.border_offset = 0;
-    gui.border_width = 0;
     return OK;
 }
 
@@ -4018,7 +4019,6 @@ int gui_mch_init_check(void)
 //------------------------------------------------------------------------------
 int gui_mch_open(void)
 {
-    // The window is already open (see gui_mch_init)
     DoMethod(Con, MUIM_Show);
     return OK;
 }
@@ -4112,8 +4112,8 @@ void gui_mch_exit(int rc)
 void gui_mch_draw_hollow_cursor(guicolor_T color)
 {
     (void) color;
-    DoMethod(Con, MUIM_VimCon_DrawHollowCursor, gui.row, gui.col,
-             gui.norm_pixel);
+    (void) DoMethod(Con, MUIM_VimCon_DrawHollowCursor, gui.row, gui.col,
+                    gui.norm_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -4122,8 +4122,8 @@ void gui_mch_draw_hollow_cursor(guicolor_T color)
 void gui_mch_draw_part_cursor(int w, int h, guicolor_T color)
 {
     (void) color;
-    DoMethod(Con, MUIM_VimCon_DrawPartCursor, gui.row, gui.col, w, h,
-             gui.norm_pixel);
+    (void) DoMethod(Con, MUIM_VimCon_DrawPartCursor, gui.row, gui.col, w, h,
+                    gui.norm_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -4270,6 +4270,7 @@ int gui_mch_adjust_charheight(void)
 //------------------------------------------------------------------------------
 void gui_mch_new_colors(void)
 {
+    DoMethod(Con, MUIM_VimCon_Clear);
 }
 
 //------------------------------------------------------------------------------
