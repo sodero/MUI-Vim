@@ -826,10 +826,25 @@ MUIDSP void VimConDirty(Class *cls, Object *obj, int x1, int y1, int x2, int y2)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Grow dirty region if it doesn't cover the new one.
-    my->xd1 = x1 < my->xd1 ? x1 : my->xd1;
-    my->xd2 = x2 > my->xd2 ? x2 : my->xd2;
-    my->yd1 = y1 < my->yd1 ? y1 : my->yd1;
-    my->yd2 = y2 > my->yd2 ? y2 : my->yd2;
+    if(x1 < my->xd1)
+    {
+        my->xd1 = (x1 >= 0 && x1 < my->width) ? x1 : 0;
+    }
+
+    if(x2 > my->xd2)
+    {
+        my->xd2 = (x2 >= x1 && x2 < my->width) ? x2 : my->width - 1;
+    }
+
+    if(y1 < my->yd1)
+    {
+        my->yd1 = (y1 >= 0 && y1 < my->height) ? y1 : 0;
+    }
+
+    if(y2 > my->yd2)
+    {
+        my->yd2 = (y2 >= y1 && y2 < my->height) ? y2 : my->height - 1;
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -1754,32 +1769,13 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
 
-    my->width = _mwidth(obj);
-    my->height = _mheight(obj);
-    my->left = _mleft(obj);
-    my->right = _mright(obj);
-    my->top = _mtop(obj);
-    my->bottom = _mbottom(obj);
-
     if(msg->flags & MADF_DRAWUPDATE)
     {
         if(my->xd1 < INT_MAX)
         {
-//            HERE;
-            LONG xd = my->left + my->xd1, yd = my->top + my->yd1,
-                 w = my->xd2 - my->xd1, h = my->yd2 - my->yd1;
-            w = (w + xd > my->right/*my->width + my->left*/) ?
-                my->right/*my->width + my->left*/ - xd + 1: w;
-            h = (h + yd > my->bottom/* my->height + my->top*/) ? 
-                my->bottom/*my->height + my->top*/ - yd + 1: h;
-
-            if(w > 0 && h > 0)
-            {
-                ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), xd, yd, w, h,
-                         0xc0);
-            }
-
-            // We're clean.
+            ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), my->left + my->xd1,
+                     my->top + my->yd1, my->xd2 - my->xd1 + 1, my->yd2 -
+                     my->yd1 + 1, 0xc0);
             VimConClean(cls, obj);
         }
 
@@ -1788,46 +1784,27 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 
     if(msg->flags & MADF_DRAWOBJECT)
     {
-        KPrintF("\nwidth:%d height:%d\n", _mwidth(obj), _mheight(obj));
-        KPrintF("left:%d top:%d\n", _mleft(obj), _mtop(obj));
-        KPrintF("right:%d bottom:%d\n", _mright(obj), _mbottom(obj));
-
-        // Blit everything
-        static LONG lw, lh;
-        LONG w = my->width, h = my->height;
-
-     /*   if(lw > w && lh > h)
+        if(my->width < _mwidth(obj))
         {
-            // We're shrinking. Nothing to do.
-            lw = w;
-            lh = h;
-            return r;
-        }
-        */
-
-        // Clear sub character trash if we're growing.
-        if(lw < w)
-        {
-            lw = w % my->xdelta;
-            FillPixelArray(&my->rp, w - lw, 0, lw, h, gui.back_pixel);
+            FillPixelArray(&my->rp, my->width, 0,  _mwidth(obj) - my->width,
+                           _mheight(obj), gui.back_pixel);
         }
 
-        lw = w;
-
-        if(lh < h)
+        if(my->height < _mheight(obj))
         {
-            lh = h % my->ydelta;
-            FillPixelArray(&my->rp, 0, h - lh, w, lh, gui.back_pixel);
+            FillPixelArray(&my->rp, 0, my->height, _mwidth(obj), _mheight(obj) -
+                           my->height, gui.back_pixel);
         }
 
-        lh = h;
+        my->top = _mtop(obj);
+        my->left = _mleft(obj);
+        my->right = _mright(obj);
+        my->width = _mwidth(obj);
+        my->bottom = _mbottom(obj);
+        my->height = _mheight(obj);
 
-        if(w > 0 && h > 0)
-        {
-            ClipBlit(&my->rp, 0, 0, _rp(obj), my->left, my->top, w, h, 0xc0);
-        }
-
-        // We're clean.
+        ClipBlit(&my->rp, 0, 0, _rp(obj),  my->left, my->top, my->width,
+                 my->height, 0xc0);
         VimConClean(cls, obj);
     }
 
@@ -1874,16 +1851,7 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     if(my->state & MUIV_VimCon_State_Reset)
     {
         my->state = MUIV_VimCon_State_Idle;
-
-		KPrintF("offset:%d\n", gui.border_offset);
-
-    KPrintF("%d\n", gui.left_sbar_x);
-    KPrintF("%d\n", gui.right_sbar_x);
-    KPrintF("%d\n", gui.scrollbar_width);
-    KPrintF("%d\n", gui.scrollbar_height);
-KPrintF("_w:%d _h:%d\n", my->width, my->height);
-KPrintF("m_w:%d m_h:%d\n", my->width, my->height);
-
+		KPrintF("New size\n");
         gui_resize_shell(my->width, my->height);
         add_to_input_buf("\f", 1);
         return MUIV_VimCon_State_Yield;
