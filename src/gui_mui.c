@@ -205,8 +205,6 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 #define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
 #define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
-#define MUIM_VimCon_Block            (TAGBASE_sTx + 129)
-#define MUIM_VimCon_Unblock          (TAGBASE_sTx + 130)
 #define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
@@ -351,16 +349,6 @@ struct MUIP_VimCon_IconState
 {
     STACKED IPTR MethodID;
     STACKED IPTR Iconified;
-};
-
-struct MUIP_VimCon_Block
-{
-    STACKED IPTR MethodID;
-};
-
-struct MUIP_VimCon_Unblock
-{
-    STACKED IPTR MethodID;
 };
 
 struct MUIP_VimCon_Clear
@@ -547,34 +535,6 @@ MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
     my->state |= MUIV_VimCon_State_Yield;
     DoMethod(_app(obj), MUIM_Application_AboutMUI, _win(obj));
     return 0;
-}
-
-//------------------------------------------------------------------------------
-// VimConBlock - Block communication with Vim
-// Input:              -
-// Return:             Previous value
-//------------------------------------------------------------------------------
-MUIDSP IPTR VimConBlock(Class *cls, Object *obj,
-                              struct MUIP_VimCon_Block *msg)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-    BOOL block = my->block;
-    my->block = TRUE;
-    return block;
-}
-
-//------------------------------------------------------------------------------
-// VimConUnblock - Unblock communication with Vim
-// Input:                -
-// Return:               Previous value
-//------------------------------------------------------------------------------
-MUIDSP IPTR VimConUnblock(Class *cls, Object *obj,
-                                struct MUIP_VimCon_Unblock *msg)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-    BOOL block = my->block;
-    my->block = FALSE;
-    return block;
 }
 
 //------------------------------------------------------------------------------
@@ -2264,14 +2224,6 @@ DISPATCH(VimCon)
     case MUIM_VimCon_MUISettings:
         return VimConMUISettings(cls, obj);
 
-    case MUIM_VimCon_Block:
-        return VimConBlock(cls, obj,
-            (struct MUIP_VimCon_Block *) msg);
-
-    case MUIM_VimCon_Unblock:
-        return VimConUnblock(cls, obj,
-            (struct MUIP_VimCon_Unblock *) msg);
-
     case MUIM_VimCon_Clear:
         return VimConClear(cls, obj,
             (struct MUIP_VimCon_Clear *) msg);
@@ -2864,7 +2816,6 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     }
 
     my->visible = msg->Show;
-//    (void) DoMethod(Con, MUIM_VimCon_Block);
 
     if(msg->Show)
     {
@@ -2879,7 +2830,6 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
         {
             set(my->grp, MUIA_ShowMe, TRUE);
         }
-//        (void) DoMethod(Con, MUIM_VimCon_Unblock);
         return TRUE;
     }
 
@@ -2906,7 +2856,6 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 
     // Hide scrollbar.
     set(obj, MUIA_ShowMe, FALSE);
-//    DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3106,7 +3055,6 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     // Prepare to update weight and position.
     my->top = msg->Top;
     my->weight = msg->Height;
-//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
@@ -3119,7 +3067,6 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     // Give scrollbar the right proportions.
     set(obj, MUIA_VertWeight, msg->Height);
     DoMethod(my->grp, MUIM_Group_ExitChange);
- //   DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3143,11 +3090,9 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
     my->grp = my->sb->type == SBAR_LEFT ? Lsg :
              (my->sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
-//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_ADDMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-//    DoMethod(Con, MUIM_VimCon_Unblock);
     return TRUE;
 }
 
@@ -3167,12 +3112,10 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
     }
 
     // Hide scrollbar before removing it.
-//    DoMethod(Con, MUIM_VimCon_Block);
     DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_REMMEMBER, obj);
     DoMethod(my->grp, MUIM_Group_ExitChange);
-//    DoMethod(Con, MUIM_VimCon_Unblock);
     my->grp  = NULL;
     return TRUE;
 }
