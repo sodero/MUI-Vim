@@ -163,7 +163,8 @@ static Object *OLASR, *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 CLASS_DEF(VimCon)
 {
     int cursor[3];
-    int block, state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2;
+    int block, state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2,
+        width, height, left, right, top, bottom;
     struct BitMap *bm;
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
@@ -434,13 +435,14 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
     if(nfiles > 0)
     {
         // Transpose and cap mouse coordinates.
-        int x = m->am_MouseX - _mleft(obj);
-        int y = m->am_MouseY - _mtop(obj);
+        struct VimConData *my = INST_DATA(cls,obj);
+        int x = m->am_MouseX - my->left;
+        int y = m->am_MouseY - my->top;
 
         x = x > 0 ? x : 0;
         y = y > 0 ? y : 0;
-        x = x >= _mwidth(obj) ? _mwidth(obj) - 1 : x;
-        y = y >= _mheight(obj) ? _mheight(obj) - 1 : y;
+        x = x >= my->width ? my->width - 1 : x;
+        y = y >= my->height ? my->height - 1 : y;
 
         // There was something among the arguments that we could not acquire a
         // read lock for. Shrink list of files before handing it over to Vim.
@@ -546,7 +548,13 @@ MUIDSP IPTR VimConClear(Class *cls, Object *obj,
                                 struct MUIP_VimCon_Clear *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    FillPixelArray(&my->rp, 0, 0, _mwidth(obj), _mheight(obj), gui.back_pixel);
+
+    if(!my->width || !my->height)
+    {
+        return FALSE;
+    }
+
+    FillPixelArray(&my->rp, 0, 0, my->width, my->height, gui.back_pixel);
     MUI_Redraw(obj, MADF_DRAWOBJECT);
     return TRUE;
 }
@@ -942,8 +950,8 @@ MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
     }
 
     // We might be dealing with incomplete characters
-    xs = xs + x > _mwidth(obj) ? _mwidth(obj) - x : xs;
-    ys = ys + y > _mheight(obj) ? _mheight(obj) - y : ys;
+    xs = xs + x > my->width ? my->width - x : xs;
+    ys = ys + y > my->height ? my->height - y : ys;
     FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
     VimConDirty(cls, obj, x, y, x + xs, y + ys);
     return TRUE;
@@ -1170,6 +1178,11 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->xdelta = my->ydelta = 1;
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
+    my->state = MUIV_VimCon_State_Yield;
+    my->block = FALSE;
+    my->space = 0;
+    my->width = my->height = my->left = my->right = my->top = my->bottom = 0;
+
 #ifdef MUIVIM_FEAT_TIMEOUT
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
@@ -1356,11 +1369,12 @@ static void VimConRemEvent(Class *cls, Object *obj, ULONG event)
 MUIDSP int VimConMouseScrollEvent(Class *cls, Object *obj,
                                   struct MUIP_HandleEvent *msg)
 {
+    struct VimConData *my = INST_DATA(cls,obj);
     int x = msg->imsg->MouseX, y = msg->imsg->MouseY,
-        event = (y - _mtop(obj) < 0 ? MOUSE_4 : 0) |
-                (y - _mtop(obj) >= _mheight(obj) ? MOUSE_5 : 0) |
-                (x - _mleft(obj) < 0 ? MOUSE_7 : 0) |
-                (x - _mleft(obj) >= _mwidth(obj) ? MOUSE_6 : 0);
+        event = (y - my->top < 0 ? MOUSE_4 : 0) |
+                (y - my->top >= my->height ? MOUSE_5 : 0) |
+                (x - my->left < 0 ? MOUSE_7 : 0) |
+                (x - my->left >= my->width ? MOUSE_6 : 0);
     return event;
 }
 
@@ -1372,11 +1386,12 @@ MUIDSP int VimConMouseScrollEvent(Class *cls, Object *obj,
 MUIDSP int VimConMouseMove(Class *cls, Object *obj,
                            struct MUIP_HandleEvent *msg)
 {
+    struct VimConData *my = INST_DATA(cls,obj);
     static int x = 0, y = 0, tick = FALSE;
-    int out = msg->imsg->MouseX <= _mleft(obj) ||
-              msg->imsg->MouseX >= _mright(obj) ||
-              msg->imsg->MouseY <= _mtop(obj) ||
-              msg->imsg->MouseY >= _mbottom(obj);
+    int out = msg->imsg->MouseX <= my->left ||
+              msg->imsg->MouseX >= my->right ||
+              msg->imsg->MouseY <= my->top ||
+              msg->imsg->MouseY >= my->bottom;
 
     // Replace MOUSEMOVE with INTUITICKS when we're outside
     if(out)
@@ -1395,8 +1410,8 @@ MUIDSP int VimConMouseMove(Class *cls, Object *obj,
     // Replace INTUITICKS with MOUSEMOVE when we're inside
     else
     {
-        x = msg->imsg->MouseX - _mleft(obj);
-        y = msg->imsg->MouseY - _mtop(obj);
+        x = msg->imsg->MouseX - my->left;
+        y = msg->imsg->MouseY - my->top;
 
         // But only do it once
         if(tick)
@@ -1419,19 +1434,20 @@ MUIDSP int VimConMouseMove(Class *cls, Object *obj,
 MUIDSP int VimConMouseHandleButton(Class *cls, Object *obj,
                                    struct MUIP_HandleEvent *msg)
 {
+    struct VimConData *my = INST_DATA(cls,obj);
     static int drag;
-    int out = msg->imsg->MouseX <= _mleft(obj) ||
-              msg->imsg->MouseX >= _mright(obj) ||
-              msg->imsg->MouseY <= _mtop(obj) ||
-              msg->imsg->MouseY >= _mbottom(obj);
+    int out = msg->imsg->MouseX <= my->left ||
+              msg->imsg->MouseX >= my->right ||
+              msg->imsg->MouseY <= my->top ||
+              msg->imsg->MouseY >= my->bottom;
 
     // Left button within region -> start dragging
     if(msg->imsg->Code == SELECTDOWN && !out)
     {
         drag = TRUE;
         VimConAddEvent(cls, obj, IDCMP_MOUSEMOVE);
-        gui_send_mouse_event(MOUSE_LEFT, msg->imsg->MouseX - _mleft(obj),
-                             msg->imsg->MouseY - _mtop(obj), FALSE, 0);
+        gui_send_mouse_event(MOUSE_LEFT, msg->imsg->MouseX - my->left,
+                             msg->imsg->MouseY - my->top, FALSE, 0);
         return TRUE;
     }
 
@@ -1440,8 +1456,8 @@ MUIDSP int VimConMouseHandleButton(Class *cls, Object *obj,
     {
         drag = FALSE;
         VimConRemEvent(cls, obj, IDCMP_MOUSEMOVE|IDCMP_INTUITICKS);
-        gui_send_mouse_event(MOUSE_RELEASE, msg->imsg->MouseX - _mleft(obj),
-                             msg->imsg->MouseY - _mtop(obj), FALSE, 0);
+        gui_send_mouse_event(MOUSE_RELEASE, msg->imsg->MouseX - my->left,
+                             msg->imsg->MouseY - my->top, FALSE, 0);
         return TRUE;
     }
 
@@ -1735,16 +1751,24 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
 
+    my->width = _mwidth(obj);
+    my->height = _mheight(obj);
+    my->left = _mleft(obj);
+    my->right = _mright(obj);
+    my->top = _mtop(obj);
+    my->bottom = _mbottom(obj);
+
     if(msg->flags & MADF_DRAWUPDATE)
     {
         if(my->xd1 < INT_MAX)
         {
-            LONG xd = _mleft(obj) + my->xd1, yd = _mtop(obj) + my->yd1,
+//            HERE;
+            LONG xd = my->left + my->xd1, yd = my->top + my->yd1,
                  w = my->xd2 - my->xd1, h = my->yd2 - my->yd1;
-            w = (w + xd > _mwidth(obj) + _mleft(obj)) ?
-                _mwidth(obj) + _mleft(obj) - xd : w;
-            h = (h + yd > _mheight(obj) + _mtop(obj)) ? 
-                _mheight(obj) + _mtop(obj) - yd : h;
+            w = (w + xd > my->right/*my->width + my->left*/) ?
+                my->right/*my->width + my->left*/ - xd + 1: w;
+            h = (h + yd > my->bottom/* my->height + my->top*/) ? 
+                my->bottom/*my->height + my->top*/ - yd + 1: h;
 
             if(w > 0 && h > 0)
             {
@@ -1758,20 +1782,25 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 
         return r;
     }
-    
+
     if(msg->flags & MADF_DRAWOBJECT)
     {
+        KPrintF("\nwidth:%d height:%d\n", _mwidth(obj), _mheight(obj));
+        KPrintF("left:%d top:%d\n", _mleft(obj), _mtop(obj));
+        KPrintF("right:%d bottom:%d\n", _mright(obj), _mbottom(obj));
+
         // Blit everything
         static LONG lw, lh;
-        LONG w = _mwidth(obj), h = _mheight(obj);
+        LONG w = my->width, h = my->height;
 
-        if(lw > w && lh > h)
+     /*   if(lw > w && lh > h)
         {
             // We're shrinking. Nothing to do.
             lw = w;
             lh = h;
             return r;
         }
+        */
 
         // Clear sub character trash if we're growing.
         if(lw < w)
@@ -1792,7 +1821,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 
         if(w > 0 && h > 0)
         {
-            ClipBlit(&my->rp, 0, 0, _rp(obj), _mleft(obj), _mtop(obj), w, h, 0xc0);
+            ClipBlit(&my->rp, 0, 0, _rp(obj), my->left, my->top, w, h, 0xc0);
         }
 
         // We're clean.
@@ -1842,7 +1871,9 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     if(my->state & MUIV_VimCon_State_Reset)
     {
         my->state = MUIV_VimCon_State_Idle;
-        gui_resize_shell(_mwidth(obj), _mheight(obj));
+KPrintF("_w:%d _h:%d\n", my->width, my->height);
+KPrintF("m_w:%d m_h:%d\n", my->width, my->height);
+        gui_resize_shell(my->width, my->height);
         add_to_input_buf("\f", 1);
         return MUIV_VimCon_State_Yield;
     }
@@ -1893,7 +1924,7 @@ MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    InvertPixelArray(&my->rp, 0, 0, _mwidth(obj), _mheight(obj));
+    InvertPixelArray(&my->rp, 0, 0, my->width, my->height);
     MUI_Redraw(obj, MADF_DRAWOBJECT);
     Delay(8);
 
