@@ -1244,6 +1244,9 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     my->space = my->rp.TxSpacing;
     gui.char_width = my->xdelta;
     gui.char_height = my->ydelta;
+    gui.scrollbar_width = gui.scrollbar_height = 0;
+    gui.toolbar_height = 0;
+    gui.menu_height = 0;
 
     // Install the main event handler
     DoMethod(_win(obj), MUIM_Window_AddEventHandler, &my->event);
@@ -1871,8 +1874,16 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     if(my->state & MUIV_VimCon_State_Reset)
     {
         my->state = MUIV_VimCon_State_Idle;
+
+		KPrintF("offset:%d\n", gui.border_offset);
+
+    KPrintF("%d\n", gui.left_sbar_x);
+    KPrintF("%d\n", gui.right_sbar_x);
+    KPrintF("%d\n", gui.scrollbar_width);
+    KPrintF("%d\n", gui.scrollbar_height);
 KPrintF("_w:%d _h:%d\n", my->width, my->height);
 KPrintF("m_w:%d m_h:%d\n", my->width, my->height);
+
         gui_resize_shell(my->width, my->height);
         add_to_input_buf("\f", 1);
         return MUIV_VimCon_State_Yield;
