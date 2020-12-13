@@ -1769,42 +1769,53 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
 
+    // Update dirty parts.
     if(msg->flags & MADF_DRAWUPDATE)
     {
-        if(my->xd1 < INT_MAX)
+        if(my->xd1 == INT_MAX)
         {
-            ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), my->left + my->xd1,
-                     my->top + my->yd1, my->xd2 - my->xd1 + 1, my->yd2 -
-                     my->yd1 + 1, 0xc0);
-            VimConClean(cls, obj);
+            // No dirt.
+            return r;
         }
 
-        return r;
-    }
+        // We have atleast one pixel of dirt.
+        ClipBlit(&my->rp, my->xd1, my->yd1, _rp(obj), my->left + my->xd1,
+                 my->top + my->yd1, my->xd2 - my->xd1 + 1, my->yd2 -
+                 my->yd1 + 1, 0xc0);
 
-    if(msg->flags & MADF_DRAWOBJECT)
+        // We're clean.
+        VimConClean(cls, obj);
+    }
+    // Update everything.
+    else if(msg->flags & MADF_DRAWOBJECT)
     {
         if(my->width < _mwidth(obj))
         {
+            // We're wider. Clear new bitmap area before showing it.
             FillPixelArray(&my->rp, my->width, 0,  _mwidth(obj) - my->width,
                            _mheight(obj), gui.back_pixel);
         }
 
         if(my->height < _mheight(obj))
         {
+            // We're taller. Clear new bitmap area before showing it.
             FillPixelArray(&my->rp, 0, my->height, _mwidth(obj), _mheight(obj) -
                            my->height, gui.back_pixel);
         }
 
-        my->top = _mtop(obj);
-        my->left = _mleft(obj);
-        my->right = _mright(obj);
-        my->width = _mwidth(obj);
+        // Save sizes for use elsewhere.
         my->bottom = _mbottom(obj);
         my->height = _mheight(obj);
+        my->width = _mwidth(obj);
+        my->right = _mright(obj);
+        my->left = _mleft(obj);
+        my->top = _mtop(obj);
 
+        // Blit off screen bitmap to window rastport.
         ClipBlit(&my->rp, 0, 0, _rp(obj),  my->left, my->top, my->width,
                  my->height, 0xc0);
+
+        // We're clean.
         VimConClean(cls, obj);
     }
 
@@ -1851,7 +1862,6 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     if(my->state & MUIV_VimCon_State_Reset)
     {
         my->state = MUIV_VimCon_State_Idle;
-		KPrintF("New size\n");
         gui_resize_shell(my->width, my->height);
         add_to_input_buf("\f", 1);
         return MUIV_VimCon_State_Yield;
@@ -1873,7 +1883,6 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     }
 #endif
 
-    // Real trouble
     ERR("Unknown state");
     return MUIV_VimCon_State_Unknown;
 }
@@ -1886,7 +1895,6 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
 MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 {
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, msg);
-
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Let Vim know the console size.
@@ -1907,7 +1915,7 @@ MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
     MUI_Redraw(obj, MADF_DRAWOBJECT);
     Delay(8);
 
-    // Reset terminal later.
+    // Postpone terminal reset.
     my->state |= MUIV_VimCon_State_Reset;
     return TRUE;
 }
