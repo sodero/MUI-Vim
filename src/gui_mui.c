@@ -486,7 +486,6 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
 
     // Go back to where we started and show whatever was read.
     CurrentDir(owd);
-    MUI_Redraw(obj, MADF_DRAWUPDATE);
     return 0;
 }
 
