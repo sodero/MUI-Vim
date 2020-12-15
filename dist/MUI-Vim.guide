@@ -68,7 +68,7 @@ Hollywood syntax highlighting.
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{B}2021-12-15@{UB}
-- Update to VIM 8.2.2144
+- Update to VIM 8.2.2146
 - Fixed broken scrollbars in tabs.
 
 @{B}2021-12-09@{UB}
