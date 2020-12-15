@@ -154,7 +154,7 @@ do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-static Object *OLASR, *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
+static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 
 //------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
@@ -3558,14 +3558,6 @@ int gui_mch_wait_for_chars(int wtime)
 #ifdef MUIVIM_FEAT_TIMEOUT
     #warning Timeout support will cause MUI message loop problems
     DoMethod(Con, MUIM_VimCon_SetTimeout, wtime > 0 ? wtime : 0);
-#else
-    // Timeout immediately.
-/*    if(wtime > 0)
-    {
-        KPrintF("Delay\n");
-        Delay(10);
-        return FAIL;
-    }*/
 #endif
 
     static IPTR sig;
@@ -3884,7 +3876,7 @@ int gui_mch_init(void)
             MUIA_Window_ID, MAKE_ID('W','D','L','A'),
             MUIA_Window_AppWindow, TRUE,
             MUIA_Window_DisableKeys, 0xffffffff,
-            MUIA_Window_RootObject, OLASR = MUI_NewObject(MUIC_Group,
+            MUIA_Window_RootObject, MUI_NewObject(MUIC_Group,
                 MUIA_Group_Horiz, FALSE,
                 MUIA_Group_Child, Tlb =
                     NewObject(VimToolbarClass->mcc_Class, NULL,

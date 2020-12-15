@@ -344,9 +344,18 @@ update_screen(int type_arg)
 	--no_win_do_lines_ins;
 
     // May put up an introductory message when not editing a file
+#ifndef FEAT_GUI_MUI
     if (!did_intro)
 	maybe_intro_message();
     did_intro = TRUE;
+#else
+    // FIXME: For some strange reason Vim clears the intro screen
+    // directly after showing the intro message in the MUI build.
+    // This hack needs to be removed as soon as you know why.
+    if (did_intro < 2)
+	maybe_intro_message();
+    did_intro++;
+#endif
 
 #ifdef FEAT_GUI
     // Redraw the cursor and update the scrollbars when all screen updating is
