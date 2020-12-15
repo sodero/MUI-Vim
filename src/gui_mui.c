@@ -725,13 +725,13 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
 
     // Save current state.
-    int state = my->blink;
+//   int state = my->blink;
 
     // Hide or show cursor depending on index
     if(my->blink == 1)
     {
         // Vim might invoke stop blink.
-        my->blink = 0;
+//        my->blink = 0;
 
         // Hide cursor
         gui_undraw_cursor();
@@ -739,14 +739,14 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     else
     {
         // Vim might invoke stop blink.
-        my->blink = 0;
+ //       my->blink = 0;
 
         // Show cursor
         gui_update_cursor(TRUE, FALSE);
     }
 
     // Restore state.
-    my->blink = state;
+//    my->blink = state;
 
     // Install new timer. Disallow values lower than 100ms (perf. reasons)
     my->ticker.ihn_Millis = my->cursor[my->blink] >= 100 ?
@@ -758,7 +758,7 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     my->blink = ~my->blink & 3;
 
     // Make the results visible
-    MUI_Redraw(obj, MADF_DRAWUPDATE);
+//    MUI_Redraw(obj, MADF_DRAWUPDATE);
     return TRUE;
 }
 
@@ -1282,7 +1282,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     {
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
     }
-HERE;
+
     // Yield CPU when init is done.
 //    my->state = MUIV_VimCon_State_Yield;
     return TRUE;
@@ -1502,7 +1502,6 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
 
     if(w == 1)
     {
-        HERE;
         // If yes, we're done
         add_to_input_buf(b, w);
         return TRUE;
@@ -1661,7 +1660,6 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
         s[l++] = (char_u) c;
     }
 
-    HERE;
     add_to_input_buf(s, l);
     return TRUE;
 }
@@ -1770,7 +1768,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 {
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
-HERE;
+
     // Update dirty parts.
     if(msg->flags & MADF_DRAWUPDATE)
     {
@@ -1863,7 +1861,6 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
 
     if(my->state & MUIV_VimCon_State_Reset)
     {
-        KPrintF("Reset\n");
         my->state = MUIV_VimCon_State_Idle;
         gui_resize_shell(my->width, my->height);
         add_to_input_buf("\f", 1);
@@ -1900,7 +1897,6 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, msg);
     struct VimConData *my = INST_DATA(cls,obj);
 
-HERE;
     // Let Vim know the console size.
     my->state |= MUIV_VimCon_State_Reset;
     return r;
@@ -3572,12 +3568,6 @@ int gui_mch_wait_for_chars(int wtime)
     }*/
 #endif
 
-     //   KPrintF("No delay\n");
-//Delay(20);
-    // Flush dirt if there is any.
-//    MUI_Redraw(Con, MADF_DRAWUPDATE);
-
-//Delay(20);
     static IPTR sig;
 
     // Pass control over to MUI.
@@ -3645,7 +3635,6 @@ void gui_mch_set_sp_color(guicolor_T sp)
 //------------------------------------------------------------------------------
 void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 {
-//    KPrintF("str:%s\n", s);
     DoMethod(Con, MUIM_VimCon_DrawString, row, col, s, len, flags);
 }
 
@@ -3670,9 +3659,7 @@ void gui_mch_toggle_tearoffs(int enable)
 //------------------------------------------------------------------------------
 void gui_mch_flush(void)
 {
-//    HERE;
     MUI_Redraw(Con, MADF_DRAWUPDATE);
-//    Delay(20);
 }
 
 //------------------------------------------------------------------------------
@@ -3680,7 +3667,6 @@ void gui_mch_flush(void)
 //------------------------------------------------------------------------------
 void gui_mch_beep(void)
 {
-    HERE;
     DoMethod(Con, MUIM_VimCon_Beep);
 }
 
@@ -3934,7 +3920,6 @@ int gui_mch_init(void)
     // Open the window to finish setup, cheat (see gui_mch_open).
     set(Win, MUIA_Window_Open, TRUE);
 
-    HERE;
     // We want keyboard input by default
     set(Win, MUIA_Window_DefaultObject, Con);
 
@@ -3995,8 +3980,6 @@ int gui_mch_init_check(void)
 //------------------------------------------------------------------------------
 int gui_mch_open(void)
 {
-    HERE;
-    //DoMethod(Con, MUIM_Show);
     return OK;
 }
 
