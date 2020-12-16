@@ -163,8 +163,8 @@ static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 CLASS_DEF(VimCon)
 {
     int cursor[3];
-    int block, state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2,
-        width, height, left, right, top, bottom;
+    int block, state, blink, xdelta, ydelta, space, xd1, yd1, xd2, yd2, width,
+        height, left, right, top, bottom;
     struct BitMap *bm;
     struct RastPort rp;
     struct MUI_EventHandlerNode event;
@@ -538,12 +538,12 @@ MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
 }
 
 //------------------------------------------------------------------------------
-// VimConClear - Clear console 
+// VimConClear - Clear console
 // Input:        -
 // Return:       TRUE
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimConClear(Class *cls, Object *obj,
-                                struct MUIP_VimCon_Clear *msg)
+                        struct MUIP_VimCon_Clear *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
@@ -680,7 +680,6 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
     }
 
     IPTR *w = (IPTR*) msg->WidthPtr, *h = (IPTR*) msg->HeightPtr;
-
     *w = GetBitMapAttr(my->bm, BMA_WIDTH);
     *h = GetBitMapAttr(my->bm, BMA_HEIGHT);
     return (*w) * (*h);
@@ -2732,6 +2731,7 @@ DISPATCH(VimMenu)
 }
 DISPATCH_END
 
+#ifdef MUIVIM_FEAT_SCROLLBAR
 //------------------------------------------------------------------------------
 // VimScrollbar - MUI custom class handling Vim scrollbars.
 //------------------------------------------------------------------------------
@@ -3196,6 +3196,7 @@ DISPATCH(VimScrollbar)
     }
 }
 DISPATCH_END
+#endif // MUIVIM_FEAT_SCROLLBAR
 
 //------------------------------------------------------------------------------
 // Vim interface - The functions below, all prefixed with (gui|clip)_mch, are
@@ -3789,11 +3790,16 @@ int gui_mch_init(void)
     VimMenuClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Menustrip, NULL,
                                          sizeof(struct CLASS_DATA(VimMenu)),
                                          (APTR) DISPATCH_GATE(VimMenu));
+
+#ifdef MUIVIM_FEAT_SCROLLBAR
     VimScrollbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Scrollbar, NULL,
                                          sizeof(struct CLASS_DATA(VimScrollbar)),
                                          (APTR) DISPATCH_GATE(VimScrollbar));
 
     if(!VimConClass || !VimMenuClass || !VimScrollbarClass)
+#else
+    if(!VimConClass || !VimMenuClass)
+#endif
     {
         ERR("Failed creating MUI custom class");
         return FAIL;
@@ -4002,6 +4008,14 @@ void gui_mch_exit(int rc)
     {
         MUI_DeleteCustomClass(VimToolbarClass);
     }
+
+#ifdef MUIVIM_FEAT_SCROLLBAR
+    if(VimScrollbarClass)
+    {
+        MUI_DeleteCustomClass(VimScrollbarClass);
+    }
+#endif
+
 #ifdef __amigaos4__
     if(IMUIMaster)
     {
