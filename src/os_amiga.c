@@ -320,73 +320,81 @@ mch_init(void)
 
 static char **cmd_args;
 
+/*
+ * Check if we're started from Workbench.
+ */
 static BOOL is_wb_args(char **argv)
 {
     return argv == cmd_args;
 }
 
+/*
+ * Free Workbench argument list.
+ */
 static void free_cmd_args(void)
 {
-    if(cmd_args)
+    if(!cmd_args)
     {
-	char **arg = cmd_args;
-
-	while(*arg)
-	{
-	    free(*arg);
-	    arg++;
-	}
-
-	free(cmd_args);
-	cmd_args = NULL;
+	return;
     }
+
+    char **arg = cmd_args;
+
+    while(*arg)
+    {
+	free(*arg);
+	arg++;
+    }
+
+    free(cmd_args);
+    cmd_args = NULL;
 }
 
+/*
+ * Replace argv with the corresponding list of Workbench arguments
+ */
 int get_cmd_argsA(int argc, char ***argvp)
 {
-    if(!argc)
+    struct WBStartup *wb = (struct WBStartup *) *argvp;
+    if(argc || !wb->sm_NumArgs)
     {
-        struct WBStartup *wb = (struct WBStartup *) *argvp;
-
-	free_cmd_args();
-
-        if(wb->sm_NumArgs)
-        {
-	    cmd_args = calloc(wb->sm_NumArgs + 1, sizeof(char *));
-
-	    if(cmd_args)
-	    {
-		struct WBArg *arg = wb->sm_ArgList;
-
-		LONG i = 0;
-		cmd_args[i++] = strdup(arg->wa_Name);
-		CurrentDir(arg->wa_Lock);
-
-		while(i < wb->sm_NumArgs && cmd_args[i - 1])
-		{
-                    static char path[PATH_MAX + 1];
-
-		    if( arg[i].wa_Name[0] != '-' &&
-		        lock2name(arg[i].wa_Lock, path, PATH_MAX))
-                    {
-		        AddPart(path, arg[i].wa_Name, PATH_MAX);
-		        cmd_args[i] = strdup(path);
-                    }
-                    else
-                    {
-		        cmd_args[i] = strdup(arg[i].wa_Name);
-                    }
-
-		    i++;
-		}
-
-		*argvp = cmd_args;
-		return i;
-	    }
-        }
+	return argc;
     }
 
-    return argc;
+    free_cmd_args();
+    cmd_args = calloc(wb->sm_NumArgs + 1, sizeof(char *));
+    if(!cmd_args)
+    {
+	return 0;
+    }
+
+    int i = 0;
+    struct WBArg *arg = wb->sm_ArgList;
+    BPTR old = CurrentDir(arg->wa_Lock);
+    cmd_args[i++] = strdup(arg->wa_Name);
+
+    while(i < wb->sm_NumArgs && cmd_args[i - 1])
+    {
+	static char path[PATH_MAX + 1];
+
+	// If the argument starts with a '-' and there's no such file, just
+	// copy it verbatim. If it's file, copy the absolute path.
+	if(arg[i].wa_Name[0] != '-' &&
+	   lock2name(arg[i].wa_Lock, path, PATH_MAX))
+	{
+	    AddPart(path, arg[i].wa_Name, PATH_MAX);
+	    cmd_args[i] = strdup(path);
+	}
+	else
+	{
+	    cmd_args[i] = strdup(arg[i].wa_Name);
+	}
+	i++;
+    }
+
+    *argvp = cmd_args;
+    (void) CurrentDir(old);
+    return i;
 }
 
 /*
