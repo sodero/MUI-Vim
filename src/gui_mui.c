@@ -90,23 +90,11 @@ Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...)
 #endif
 
 //------------------------------------------------------------------------------
-// Macros - Debug and log
+// Debug
 //------------------------------------------------------------------------------
-#define PUT(E,S) KPrintF((CONST_STRPTR)"%s:\t%s\t(%s)\n",E,S,__func__)
-#define ERR(S) PUT("ERR",S)
-#if LLVL == 2 || LLVL == 1
-# define WARN(S) PUT("WARN",S)
-# if LLVL == 2
-#  define INFO(S) PUT("INFO",S)
-# else
-#  define INFO(S)
-# endif
-#else
-# define WARN(S)
-# define INFO(S)
-#endif
+#define kmsg(E) KPrintF((CONST_STRPTR) "%s (%s:%d)\n", E, __func__, __LINE__);
 #define HERE \
-do {static int c;KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c);}while(0)
+do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 
 //------------------------------------------------------------------------------
 // Macros - MUI
@@ -371,7 +359,7 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
 
     if(!fnames)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return 0;
     }
 
@@ -388,8 +376,6 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
 
         if(!f)
         {
-            // Pretend this didn't happen.
-            WARN("Could not acquire lock");
             continue;
         }
 
@@ -406,7 +392,7 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
                 free(fnames[nfiles]);
             }
 
-            ERR("Out of memory");
+            kmsg(_(e_outofmem));
             break;
         }
 
@@ -475,7 +461,7 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
         else
         {
             // Shrinkage failed.
-            ERR("Out of memory");
+            kmsg(_(e_outofmem));
         }
     }
     else
@@ -630,7 +616,7 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
                                   ASLFR_InitialDrawer, msg->Drawer, TAG_DONE);
     if(!req)
     {
-        ERR("Failed creating file requester");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -675,7 +661,7 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 
     if(!my->bm)
     {
-        ERR("No screen");
+        kmsg(_(e_null));
         return 0;
     }
 
@@ -715,7 +701,7 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     // Only on (2) or off (1) here.
     if(my->blink < 1 || my->blink > 2)
     {
-        ERR("Invalid state");
+        kmsg(_(e_internal));
         return FALSE;
     }
 
@@ -1135,7 +1121,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
                                 MUIV_Font_Fixed, TAG_MORE, msg->ops_AttrList);
     if(!obj)
     {
-        ERR("Unknown error");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -1143,7 +1129,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(!s)
     {
-        ERR("Could not lock public screen");
+        kmsg(_(e_null));
         CoerceMethod(cls, obj, OM_DISPOSE);
         return (IPTR) NULL;
     }
@@ -1167,7 +1153,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(!my->bm)
     {
-        ERR("Failed allocating bitmap memory");
+        kmsg(_(e_outofmem));
         CoerceMethod(cls, obj, OM_DISPOSE);
         return (IPTR) NULL;
     }
@@ -1224,7 +1210,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // Setup parent class
     if(!DoSuperMethodA(cls, obj, (Msg) msg))
     {
-        ERR("Setup failed");
+        kmsg(_(e_internal));
         return FALSE;
     }
 
@@ -1731,7 +1717,7 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
 
     if(!my->bm)
     {
-        ERR("No off screen buffer");
+        kmsg(_(e_null));
         return 0;
     }
 
@@ -1872,7 +1858,7 @@ MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
     }
 #endif
 
-    ERR("Unknown state");
+    kmsg(_(e_internal));
     return MUIV_VimCon_State_Unknown;
 }
 
@@ -1941,7 +1927,7 @@ MUIDSP IPTR VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 
     if(!iffh)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         vim_free(data);
         return 0;
     }
@@ -2004,7 +1990,7 @@ MUIDSP IPTR VimConPaste(Class *cls, Object *obj,
 
     if(!iffh)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return 0;
     }
 
@@ -2045,7 +2031,7 @@ MUIDSP IPTR VimConPaste(Class *cls, Object *obj,
 
                 if(!data)
                 {
-                    ERR("Out of memory");
+                    kmsg(_(e_outofmem));
                     break;
                 }
 
@@ -2058,7 +2044,7 @@ MUIDSP IPTR VimConPaste(Class *cls, Object *obj,
 
                     if(!next)
                     {
-                        ERR("Out of memory");
+                        kmsg(_(e_outofmem));
                         stat = IFFERR_NOMEM;
                         break;
                     }
@@ -2302,7 +2288,7 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
     }
 
     // Could not find a match.
-    ERR("Could not create button");
+    kmsg(_(e_internal));
     return FALSE;
 }
 
@@ -2397,7 +2383,6 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
         };
 
         EasyRequest(NULL, &req, NULL, NULL);
-        ERR("Invalid VIM: assign");
     }
 
     UnLock(icons);
@@ -2607,7 +2592,7 @@ MUIDSP IPTR VimMenuAddSpacer(Class *cls, Object *obj,
                               TAG_END);
     if(!i)
     {
-        ERR("Could not create spacer");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -2640,7 +2625,7 @@ MUIDSP IPTR VimMenuAddMenu(Class *cls, Object *obj,
                               MUIA_UserData, msg->ID, TAG_END);
     if(!i)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -2683,7 +2668,7 @@ MUIDSP IPTR VimMenuAddMenuItem(Class *cls, Object *obj,
                               MUIA_UserData, msg->ID, TAG_END);
     if(!i)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -2943,7 +2928,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 
     if(!scs)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return NULL;
     }
 
@@ -2985,7 +2970,7 @@ MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
 
     if(!scs)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return;
     }
 
@@ -3133,7 +3118,7 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
                                 TAG_MORE, msg->ops_AttrList);
     if(!obj)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return (IPTR) NULL;
     }
 
@@ -3298,7 +3283,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
                             MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
     if(!obj)
     {
-        ERR("Out of memory");
+        kmsg(_(e_outofmem));
         return;
     }
 
@@ -3780,7 +3765,6 @@ int gui_mch_init(void)
         };
 
         EasyRequest(NULL, &req, NULL, NULL);
-        ERR("MCC_TheBar required");
         return FAIL;
     }
 
@@ -3801,7 +3785,7 @@ int gui_mch_init(void)
     if(!VimConClass || !VimMenuClass)
 #endif
     {
-        ERR("Failed creating MUI custom class");
+        kmsg(_(e_outofmem));
         return FAIL;
     }
 
@@ -3887,7 +3871,7 @@ int gui_mch_init(void)
 
     if(!App)
     {
-        ERR("Failed creating MUI application");
+        kmsg(_(e_outofmem));
         return FAIL;
     }
 
@@ -4115,7 +4099,7 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     // Menu items must have parents
     if(!p)
     {
-        WARN("No parent");
+        kmsg(_(e_null));
         return;
     }
 
