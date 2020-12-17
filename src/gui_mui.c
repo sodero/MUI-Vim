@@ -2325,6 +2325,34 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
 }
 
 //------------------------------------------------------------------------------
+// VimError - Show message
+// Input:     char *title - Window title
+//            char *msg   - Message to be shown
+//            char *fmt   - Gadget format
+// Return:    -
+//------------------------------------------------------------------------------
+static void VimMessage(const char *title, const char *msg, const char *fmt)
+{
+#ifdef __amigaos4__
+    struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
+#endif
+    struct EasyStruct req =
+    {
+        .es_StructSize   = sizeof(struct EasyStruct),
+        .es_Flags        = 0,
+        .es_Title        = (UBYTE *) title,
+        .es_TextFormat   = (UBYTE *) msg,
+        .es_GadgetFormat = (UBYTE *) fmt,
+#ifdef __amigaos4__
+        .es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen,
+        .es_TagList      = tags
+#endif
+    };
+
+    EasyRequest(NULL, &req, NULL, NULL);
+}
+
+//------------------------------------------------------------------------------
 // VimToolbarNew - Overloading OM_NEW
 // Input:          See BOOPSI docs
 // Return:         See BOOPSI docs
@@ -2366,23 +2394,7 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(!icons)
     {
-#ifdef __amigaos4__
-        struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
-#endif
-        struct EasyStruct req =
-        {
-            .es_StructSize   = sizeof(struct EasyStruct),
-            .es_Flags        = 0, // ESF_SCREEN | ESF_TAGGED | ESF_EVENSIZE;
-            .es_Title        = (UBYTE *)"Error",
-            .es_TextFormat   = (UBYTE *)"Invalid VIM assign",
-            .es_GadgetFormat = (UBYTE *)"OK",
-#ifdef __amigaos4__
-            .es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen,
-            .es_TagList      = tags
-#endif
-        };
-
-        EasyRequest(NULL, &req, NULL, NULL);
+        VimMessage("Error", "Invalid VIM assign", "OK");
     }
 
     UnLock(icons);
@@ -3746,25 +3758,10 @@ int gui_mch_init(void)
     VimToolbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_TheBar, NULL,
                                             sizeof(struct CLASS_DATA(VimToolbar)),
                                             (APTR) DISPATCH_GATE(VimToolbar));
+
     if(!VimToolbarClass)
     {
-#ifdef __amigaos4__
-        struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
-#endif
-        struct EasyStruct req =
-        {
-            .es_StructSize   = sizeof(struct EasyStruct),
-            .es_Flags        = 0, // ESF_SCREEN | ESF_TAGGED | ESF_EVENSIZE;
-            .es_Title        = (UBYTE *)"Error",
-            .es_TextFormat   = (UBYTE *)"MCC_TheBar required",
-            .es_GadgetFormat = (UBYTE *)"OK",
-#ifdef __amigaos4__
-            .es_Screen       = ((struct IntuitionBase *)IntuitionBase)->ActiveScreen,
-            .es_TagList      = tags
-#endif
-        };
-
-        EasyRequest(NULL, &req, NULL, NULL);
+        VimMessage("Error", "MCC_TheBar required", "OK");
         return FAIL;
     }
 
