@@ -192,7 +192,7 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_Copy             (TAGBASE_sTx + 124)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
 #define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
-#define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
+//#define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
 #define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
 #define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
 #define MUIV_VimCon_State_Idle       (1 << 0)
@@ -348,16 +348,18 @@ struct MUIP_VimCon_Clear
 // MUI Class method definition
 //------------------------------------------------------------------------------
 #define METHOD(C, F, ...) struct MUIP_ ## C ## _ ## F { STACKED IPTR MethodID, \
-__VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; MUIDSP \
-IPTR C ## F(struct MUIP_ ## C ## _ ## F *msg, struct C ## Data *my)
+__VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; \
+MUIDSP IPTR C ## F(Object *me, struct MUIP_ ## C ## _ ## F *msg, \
+struct C ## Data *my)
 #define METHOD0(C, F, ...) enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ };\
-MUIDSP IPTR C ## F(struct C ## Data *my)
+MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
+
 //------------------------------------------------------------------------------
 // MUI Class method call
 //------------------------------------------------------------------------------
-#define M_FN(C, F) C ## F((struct MUIP_ ## C ## _ ## F *) msg, (struct C ## \
-Data *) INST_DATA(cls,obj))
-#define M_FN0(C, F) C ## F((struct C ## Data *) INST_DATA(cls,obj))
+#define M_FN(C, F) C ## F(obj, (struct MUIP_ ## C ## _ ## F *) msg, \
+(struct C ## Data *) INST_DATA(cls,obj))
+#define M_FN0(C, F) C ## F(obj, (struct C ## Data *) INST_DATA(cls,obj))
 //------------------------------------------------------------------------------
 // MUI Class method ID
 //------------------------------------------------------------------------------
@@ -579,13 +581,21 @@ MUIDSP IPTR VimConClear(Class *cls, Object *obj,
 // Input:            -
 // Return:           0
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConMUISettings(Class *cls, Object *obj)
+/*MUIDSP IPTR VimConMUISettings(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Needed to not mess up the message loop.
     my->state |= MUIV_VimCon_State_Yield;
     DoMethod(_app(obj), MUIM_Application_OpenConfigWindow, _win(obj));
+    return 0;
+}*/
+
+METHOD0(VimCon, MUISettings)
+{
+    // Needed to not mess up the message loop.
+    my->state |= MUIV_VimCon_State_Yield;
+    DoMethod(_app(me), MUIM_Application_OpenConfigWindow, _win(me));
     return 0;
 }
 
@@ -2244,9 +2254,13 @@ DISPATCH(VimCon)
 
     case MUIM_VimCon_AboutMUI:
         return VimConAboutMUI(cls, obj);
-
+/*
     case MUIM_VimCon_MUISettings:
         return VimConMUISettings(cls, obj);
+*/
+
+    case M_ID(VimCon, MUISettings):
+        return M_FN0(VimCon, MUISettings);
 
     case MUIM_VimCon_Clear:
         return VimConClear(cls, obj,
