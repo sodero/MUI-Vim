@@ -345,6 +345,28 @@ struct MUIP_VimCon_Clear
 };
 
 //------------------------------------------------------------------------------
+// MUI Class method definition
+//------------------------------------------------------------------------------
+#define METHOD(C, F, ...) struct MUIP_ ## C ## _ ## F { STACKED IPTR MethodID, \
+__VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; MUIDSP \
+IPTR C ## F(struct MUIP_ ## C ## _ ## F *msg, struct C ## Data *my)
+//------------------------------------------------------------------------------
+// MUI Class method call
+//------------------------------------------------------------------------------
+#define M_FN(C, F) C ## F((struct MUIP_ ## C ## _ ## F *) msg, (struct C ## \
+Data *) INST_DATA(cls,obj))
+//------------------------------------------------------------------------------
+// MUI Class method ID
+//------------------------------------------------------------------------------
+#define M_ID(C, F) MUIM_ ## C ## _ ## F
+
+METHOD(VimCon, Test, Num)
+{
+    KPrintF("Num:%d blink:%d\n", msg->Num, my->width);
+    return 0;
+}
+
+//------------------------------------------------------------------------------
 // VimConAppMessage - AppMessage notification handler
 // Input:             Message
 // Return:            0
@@ -2086,6 +2108,8 @@ DISPATCH(VimCon)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
+    case M_ID(VimCon, Test): return M_FN(VimCon, Test);
+
     case OM_NEW:
         return VimConNew(cls, obj,
             (struct opSet *) msg);
@@ -3602,6 +3626,7 @@ void gui_mch_set_sp_color(guicolor_T sp)
 //------------------------------------------------------------------------------
 void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 {
+    (void) DoMethod(Con, MUIM_VimCon_Test, 303);
     (void) DoMethod(Con, MUIM_VimCon_DrawString, row, col, s, len, flags);
 }
 
