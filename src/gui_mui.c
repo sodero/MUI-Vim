@@ -184,7 +184,7 @@ CLASS_DEF(VimCon)
 //#define MUIM_VimCon_StartBlink       (TAGBASE_sTx + 116)
 //#define MUIM_VimCon_StopBlink        (TAGBASE_sTx + 117)
 #define MUIM_VimCon_Browse           (TAGBASE_sTx + 118)
-#define MUIM_VimCon_SetTitle         (TAGBASE_sTx + 119)
+//#define MUIM_VimCon_SetTitle         (TAGBASE_sTx + 119)
 //#define MUIM_VimCon_IsBlinking       (TAGBASE_sTx + 120)
 #define MUIM_VimCon_GetScreenDim     (TAGBASE_sTx + 121)
 #define MUIM_VimCon_InvertRect       (TAGBASE_sTx + 122)
@@ -220,12 +220,6 @@ struct MUIP_VimCon_Browse
     STACKED IPTR MethodID;
     STACKED IPTR Title;
     STACKED IPTR Drawer;
-};
-
-struct MUIP_VimCon_SetTitle
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Title;
 };
 
 struct MUIP_VimCon_GetScreenDim
@@ -338,12 +332,7 @@ struct MUIP_VimCon_IconState
     STACKED IPTR MethodID;
     STACKED IPTR Iconified;
 };
-/*
-struct MUIP_VimCon_Clear
-{
-    STACKED IPTR MethodID;
-};
-*/
+
 //------------------------------------------------------------------------------
 // MUI Class method definition
 //------------------------------------------------------------------------------
@@ -501,21 +490,6 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
 // Input:            -
 // Return:           TRUE on state change, FALSE otherwise
 //------------------------------------------------------------------------------
-/*MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-
-    if(!my->blink || my->block)
-    {
-        return FALSE;
-    }
-
-    // Remove input handler and reset status.
-    DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
-    my->blink = 0;
-    return TRUE;
-}
-*/
 METHOD0(VimCon, StopBlink)
 {
     if(!my->blink || my->block)
@@ -545,18 +519,6 @@ METHOD0(VimCon, IsBlinking)
 // Input:         -
 // Return:        0
 //------------------------------------------------------------------------------
-/*
-MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-
-    // Needed to not mess up the message loop.
-    my->state |= MUIV_VimCon_State_Yield;
-    DoMethod(_app(obj), MUIM_Application_AboutMUI, _win(obj));
-    return 0;
-}
-*/
-
 METHOD0(VimCon, AboutMUI)
 {
     // Needed to not mess up the message loop.
@@ -570,21 +532,6 @@ METHOD0(VimCon, AboutMUI)
 // Input:        -
 // Return:       TRUE
 //------------------------------------------------------------------------------
-/*MUIDSP IPTR VimConClear(Class *cls, Object *obj,
-                        struct MUIP_VimCon_Clear *msg)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-
-    if(!my->width || !my->height)
-    {
-        return FALSE;
-    }
-
-    FillPixelArray(&my->rp, 0, 0, my->width, my->height, gui.back_pixel);
-    MUI_Redraw(obj, MADF_DRAWOBJECT);
-    return TRUE;
-}
-*/
 METHOD0(VimCon, Clear)
 {
     if(!my->width || !my->height)
@@ -602,16 +549,6 @@ METHOD0(VimCon, Clear)
 // Input:            -
 // Return:           0
 //------------------------------------------------------------------------------
-/*MUIDSP IPTR VimConMUISettings(Class *cls, Object *obj)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-
-    // Needed to not mess up the message loop.
-    my->state |= MUIV_VimCon_State_Yield;
-    DoMethod(_app(obj), MUIM_Application_OpenConfigWindow, _win(obj));
-    return 0;
-}*/
-
 METHOD0(VimCon, MUISettings)
 {
     // Needed to not mess up the message loop.
@@ -736,18 +673,16 @@ MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
 // Input:           Title - Window title
 // Return:          TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetTitle(Class *cls, Object *obj,
-                           struct MUIP_VimCon_SetTitle *msg)
+METHOD(VimCon, SetTitle, Title)
 {
     if(!msg->Title)
     {
         return FALSE;
     }
 
-    set(_win(obj), MUIA_Window_Title, msg->Title);
+    set(_win(me), MUIA_Window_Title, msg->Title);
     return TRUE;
 }
-
 
 //------------------------------------------------------------------------------
 // VimConTicker - Event handler managing cursor state
@@ -2139,136 +2074,45 @@ DISPATCH(VimCon)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
-    case OM_NEW:
-        return VimConNew(cls, obj,
-            (struct opSet *) msg);
-
-    case OM_DISPOSE:
-        return VimConDispose(cls, obj, msg);
-
-    case MUIM_VimCon_AppMessage:
-        return VimConAppMessage(cls, obj,
-               (struct MUIP_VimCon_AppMessage *) msg);
-
-    case MUIM_VimCon_IconState:
-        return VimConIconState(cls, obj,
-               (struct MUIP_VimCon_IconState *) msg);
-
-    case MUIM_Setup:
-        return VimConSetup(cls, obj,
-            (struct MUI_RenderInfo *) msg);
-
-    case MUIM_Cleanup:
-        return VimConCleanup(cls, obj, msg);
-
-    case MUIM_HandleEvent:
-        return VimConHandleEvent(cls, obj,
-            (struct MUIP_HandleEvent *) msg);
-
-    case MUIM_AskMinMax:
-        return VimConMinMax(cls, obj,
-            (struct MUIP_AskMinMax *) msg);
-
-    case MUIM_Draw:
-        return VimConDraw(cls, obj,
-            (struct MUIP_Draw *) msg);
-
-    case MUIM_Show:
-        return VimConShow(cls, obj, msg);
-
-    case MUIM_VimCon_Copy:
-        return VimConCopy(cls, obj,
-            (struct MUIP_VimCon_Copy *) msg);
-
-    case MUIM_VimCon_Paste:
-        return VimConPaste(cls, obj,
-            (struct MUIP_VimCon_Paste *) msg);
-
-    case MUIM_VimCon_Callback:
-        return VimConCallback(cls, obj,
-            (struct MUIP_VimCon_Callback *) msg);
-
-    case MUIM_VimCon_DrawString:
-        return VimConDrawString(cls, obj,
-            (struct MUIP_VimCon_DrawString *) msg);
-
-    case MUIM_VimCon_SetFgColor:
-        return VimConSetFgColor(cls, obj,
-            (struct MUIP_VimCon_SetFgColor *) msg);
-
-    case MUIM_VimCon_SetBgColor:
-        return VimConSetBgColor(cls, obj,
-            (struct MUIP_VimCon_SetBgColor *) msg);
-
-    case MUIM_VimCon_FillBlock:
-        return VimConFillBlock(cls, obj,
-            (struct MUIP_VimCon_FillBlock *) msg);
-
-    case MUIM_VimCon_InvertRect:
-        return VimConInvertRect(cls, obj,
-            (struct MUIP_VimCon_InvertRect *) msg);
-
-    case MUIM_VimCon_DeleteLines:
-        return VimConDeleteLines(cls, obj,
-            (struct MUIP_VimCon_DeleteLines *) msg);
-
-    case MUIM_VimCon_DrawPartCursor:
-        return VimConDrawPartCursor(cls, obj,
-            (struct MUIP_VimCon_DrawPartCursor *) msg);
-
-    case MUIM_VimCon_DrawHollowCursor:
-        return VimConDrawHollowCursor(cls, obj,
-            (struct MUIP_VimCon_DrawHollowCursor *) msg);
+    case OM_NEW: return VimConNew(cls, obj, (struct opSet *) msg);
+    case OM_DISPOSE: return VimConDispose(cls, obj, msg);
+    case MUIM_VimCon_AppMessage: return VimConAppMessage(cls, obj, (struct MUIP_VimCon_AppMessage *) msg);
+    case MUIM_VimCon_IconState: return VimConIconState(cls, obj, (struct MUIP_VimCon_IconState *) msg);
+    case MUIM_Setup: return VimConSetup(cls, obj, (struct MUI_RenderInfo *) msg);
+    case MUIM_Cleanup: return VimConCleanup(cls, obj, msg);
+    case MUIM_HandleEvent: return VimConHandleEvent(cls, obj, (struct MUIP_HandleEvent *) msg);
+    case MUIM_AskMinMax: return VimConMinMax(cls, obj, (struct MUIP_AskMinMax *) msg);
+    case MUIM_Draw: return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
+    case MUIM_Show: return VimConShow(cls, obj, msg);
+    case MUIM_VimCon_Copy: return VimConCopy(cls, obj, (struct MUIP_VimCon_Copy *) msg);
+    case MUIM_VimCon_Paste: return VimConPaste(cls, obj, (struct MUIP_VimCon_Paste *) msg);
+    case MUIM_VimCon_Callback: return VimConCallback(cls, obj, (struct MUIP_VimCon_Callback *) msg);
+    case MUIM_VimCon_DrawString: return VimConDrawString(cls, obj, (struct MUIP_VimCon_DrawString *) msg);
+    case MUIM_VimCon_SetFgColor: return VimConSetFgColor(cls, obj, (struct MUIP_VimCon_SetFgColor *) msg);
+    case MUIM_VimCon_SetBgColor: return VimConSetBgColor(cls, obj, (struct MUIP_VimCon_SetBgColor *) msg);
+    case MUIM_VimCon_FillBlock: return VimConFillBlock(cls, obj, (struct MUIP_VimCon_FillBlock *) msg);
+    case MUIM_VimCon_InvertRect: return VimConInvertRect(cls, obj, (struct MUIP_VimCon_InvertRect *) msg);
+    case MUIM_VimCon_DeleteLines: return VimConDeleteLines(cls, obj, (struct MUIP_VimCon_DeleteLines *) msg);
+    case MUIM_VimCon_DrawPartCursor: return VimConDrawPartCursor(cls, obj, (struct MUIP_VimCon_DrawPartCursor *) msg);
+    case MUIM_VimCon_DrawHollowCursor: return VimConDrawHollowCursor(cls, obj, (struct MUIP_VimCon_DrawHollowCursor *) msg);
 #ifdef MUIVIM_FEAT_TIMEOUT
-    case MUIM_VimCon_SetTimeout:
-        return VimConSetTimeout(cls, obj,
-            (struct MUIP_VimCon_SetTimeout *) msg);
-
-    case MUIM_VimCon_Timeout:
-        return VimConTimeout(cls, obj);
+    case MUIM_VimCon_SetTimeout: return VimConSetTimeout(cls, obj, (struct MUIP_VimCon_SetTimeout *) msg);
+    case MUIM_VimCon_Timeout: return VimConTimeout(cls, obj);
 #endif
-    case MUIM_VimCon_SetBlinking:
-        return VimConSetBlinking(cls, obj,
-            (struct MUIP_VimCon_SetBlinking *) msg);
+    case MUIM_VimCon_SetBlinking: return VimConSetBlinking(cls, obj, (struct MUIP_VimCon_SetBlinking *) msg);
+    case MUIM_VimCon_Browse: return VimConBrowse(cls, obj, (struct MUIP_VimCon_Browse *) msg);
+    case MUIM_VimCon_GetScreenDim: return VimConGetScreenDim(cls, obj, (struct MUIP_VimCon_GetScreenDim *) msg);
 
-    case MUIM_VimCon_Browse:
-        return VimConBrowse(cls, obj,
-            (struct MUIP_VimCon_Browse *) msg);
-
-    case MUIM_VimCon_SetTitle:
-        return VimConSetTitle(cls, obj,
-            (struct MUIP_VimCon_SetTitle *) msg);
-
-    case MUIM_VimCon_GetScreenDim:
-        return VimConGetScreenDim(cls, obj,
-            (struct MUIP_VimCon_GetScreenDim *) msg);
-
-    case M_ID(VimCon, GetState):
-        return M_FN0(VimCon, GetState);
-
-    case M_ID(VimCon, Ticker):
-        return M_FN0(VimCon, Ticker);
-
-    case M_ID(VimCon, Beep):
-        return M_FN0(VimCon, Beep);
-
-    case M_ID(VimCon, StartBlink):
-        return M_FN0(VimCon, StartBlink);
-
-    case M_ID(VimCon, StopBlink):
-        return M_FN0(VimCon, StopBlink);
-
-    case M_ID(VimCon, IsBlinking):
-        return M_FN0(VimCon, IsBlinking);
-
-    case M_ID(VimCon, AboutMUI):
-        return M_FN0(VimCon, AboutMUI);
-
-    case M_ID(VimCon, MUISettings):
-        return M_FN0(VimCon, MUISettings);
-
-    case M_ID(VimCon, Clear):
-        return M_FN0(VimCon, Clear);
+        case M_ID(VimCon, SetTitle): return M_FN(VimCon, SetTitle);
+        case M_ID(VimCon, GetState): return M_FN0(VimCon, GetState);
+        case M_ID(VimCon, Ticker): return M_FN0(VimCon, Ticker);
+        case M_ID(VimCon, Beep): return M_FN0(VimCon, Beep);
+        case M_ID(VimCon, StartBlink): return M_FN0(VimCon, StartBlink);
+        case M_ID(VimCon, StopBlink): return M_FN0(VimCon, StopBlink);
+        case M_ID(VimCon, IsBlinking): return M_FN0(VimCon, IsBlinking);
+        case M_ID(VimCon, AboutMUI): return M_FN0(VimCon, AboutMUI);
+        case M_ID(VimCon, MUISettings): return M_FN0(VimCon, MUISettings);
+        case M_ID(VimCon, Clear): return M_FN0(VimCon, Clear);
 
     default:
         return DoSuperMethodA(cls, obj, msg);
