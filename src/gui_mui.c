@@ -166,7 +166,7 @@ CLASS_DEF(VimCon)
 // VimCon public methods, parameters and constants
 //------------------------------------------------------------------------------
 #define MUIM_VimCon_Callback         (TAGBASE_sTx + 101)
-#define MUIM_VimCon_GetState         (TAGBASE_sTx + 102)
+//#define MUIM_VimCon_GetState         (TAGBASE_sTx + 102)
 #define MUIM_VimCon_DrawString       (TAGBASE_sTx + 104)
 #define MUIM_VimCon_SetFgColor       (TAGBASE_sTx + 105)
 #define MUIM_VimCon_SetBgColor       (TAGBASE_sTx + 106)
@@ -178,23 +178,23 @@ CLASS_DEF(VimCon)
 #define MUIM_VimCon_SetTimeout       (TAGBASE_sTx + 111)
 #define MUIM_VimCon_Timeout          (TAGBASE_sTx + 112)
 #endif
-#define MUIM_VimCon_Beep             (TAGBASE_sTx + 113)
-#define MUIM_VimCon_Ticker           (TAGBASE_sTx + 114)
+//#define MUIM_VimCon_Beep             (TAGBASE_sTx + 113)
+//#define MUIM_VimCon_Ticker           (TAGBASE_sTx + 114)
 #define MUIM_VimCon_SetBlinking      (TAGBASE_sTx + 115)
-#define MUIM_VimCon_StartBlink       (TAGBASE_sTx + 116)
-#define MUIM_VimCon_StopBlink        (TAGBASE_sTx + 117)
+//#define MUIM_VimCon_StartBlink       (TAGBASE_sTx + 116)
+//#define MUIM_VimCon_StopBlink        (TAGBASE_sTx + 117)
 #define MUIM_VimCon_Browse           (TAGBASE_sTx + 118)
 #define MUIM_VimCon_SetTitle         (TAGBASE_sTx + 119)
-#define MUIM_VimCon_IsBlinking       (TAGBASE_sTx + 120)
+//#define MUIM_VimCon_IsBlinking       (TAGBASE_sTx + 120)
 #define MUIM_VimCon_GetScreenDim     (TAGBASE_sTx + 121)
 #define MUIM_VimCon_InvertRect       (TAGBASE_sTx + 122)
 #define MUIM_VimCon_AppMessage       (TAGBASE_sTx + 123)
 #define MUIM_VimCon_Copy             (TAGBASE_sTx + 124)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
-#define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
+//#define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
 //#define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
 #define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
-#define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
+//#define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
@@ -338,12 +338,12 @@ struct MUIP_VimCon_IconState
     STACKED IPTR MethodID;
     STACKED IPTR Iconified;
 };
-
+/*
 struct MUIP_VimCon_Clear
 {
     STACKED IPTR MethodID;
 };
-
+*/
 //------------------------------------------------------------------------------
 // MUI Class method definition
 //------------------------------------------------------------------------------
@@ -364,18 +364,6 @@ MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
 // MUI Class method ID
 //------------------------------------------------------------------------------
 #define M_ID(C, F) MUIM_ ## C ## _ ## F
-
-METHOD(VimCon, Test_1, Num)
-{
-    KPrintF("Num:%d blink:%d\n", msg->Num, my->width);
-    return 0;
-}
-
-METHOD0(VimCon, Test_0)
-{
-    KPrintF("fink:%d\n", my->width);
-    return 0;
-}
 
 //------------------------------------------------------------------------------
 // VimConAppMessage - AppMessage notification handler
@@ -513,7 +501,7 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
 // Input:            -
 // Return:           TRUE on state change, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
+/*MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
@@ -527,16 +515,27 @@ MUIDSP IPTR VimConStopBlink(Class *cls, Object *obj)
     my->blink = 0;
     return TRUE;
 }
+*/
+METHOD0(VimCon, StopBlink)
+{
+    if(!my->blink || my->block)
+    {
+        return FALSE;
+    }
+
+    // Remove input handler and reset status.
+    DoMethod(_app(me), MUIM_Application_RemInputHandler, &my->ticker);
+    my->blink = 0;
+    return TRUE;
+}
 
 //------------------------------------------------------------------------------
 // VimConIsBlinking - Get cursor state
 // Input:             -
 // Return:            TRUE if cursor is blinking, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConIsBlinking(Class *cls, Object *obj)
+METHOD0(VimCon, IsBlinking)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Indexing any of the delays?
     return my->blink ? TRUE : FALSE;
 }
@@ -546,6 +545,7 @@ MUIDSP IPTR VimConIsBlinking(Class *cls, Object *obj)
 // Input:         -
 // Return:        0
 //------------------------------------------------------------------------------
+/*
 MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
 {
     struct VimConData *my = INST_DATA(cls,obj);
@@ -555,13 +555,22 @@ MUIDSP IPTR VimConAboutMUI(Class *cls, Object *obj)
     DoMethod(_app(obj), MUIM_Application_AboutMUI, _win(obj));
     return 0;
 }
+*/
+
+METHOD0(VimCon, AboutMUI)
+{
+    // Needed to not mess up the message loop.
+    my->state |= MUIV_VimCon_State_Yield;
+    DoMethod(_app(me), MUIM_Application_AboutMUI, _win(me));
+    return 0;
+}
 
 //------------------------------------------------------------------------------
 // VimConClear - Clear console
 // Input:        -
 // Return:       TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConClear(Class *cls, Object *obj,
+/*MUIDSP IPTR VimConClear(Class *cls, Object *obj,
                         struct MUIP_VimCon_Clear *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
@@ -573,6 +582,18 @@ MUIDSP IPTR VimConClear(Class *cls, Object *obj,
 
     FillPixelArray(&my->rp, 0, 0, my->width, my->height, gui.back_pixel);
     MUI_Redraw(obj, MADF_DRAWOBJECT);
+    return TRUE;
+}
+*/
+METHOD0(VimCon, Clear)
+{
+    if(!my->width || !my->height)
+    {
+        return FALSE;
+    }
+
+    FillPixelArray(&my->rp, 0, 0, my->width, my->height, gui.back_pixel);
+    MUI_Redraw(me, MADF_DRAWOBJECT);
     return TRUE;
 }
 
@@ -604,17 +625,15 @@ METHOD0(VimCon, MUISettings)
 // Input:             -
 // Return:            TRUE on state change, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConStartBlink(Class *cls, Object *obj)
+METHOD0(VimCon, StartBlink)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // If not enabled and none of the delays (wait, on, off) are 0 add input
     // handler and increase status / delay index.
     if(!my->block && !my->blink && my->cursor[0] && my->cursor[1] &&
         my->cursor[2])
     {
         my->ticker.ihn_Millis = my->cursor[my->blink++];
-        DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
+        DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->ticker);
         return TRUE;
     }
 
@@ -735,10 +754,8 @@ MUIDSP IPTR VimConSetTitle(Class *cls, Object *obj,
 // Input:         -
 // Return:        TRUE if state changed, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
+METHOD0(VimCon, Ticker)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Only on (2) or off (1) here.
     if(my->blink < 1 || my->blink > 2)
     {
@@ -747,7 +764,7 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     }
 
     // Remove current timer
-    DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
+    DoMethod(_app(me), MUIM_Application_RemInputHandler, &my->ticker);
 
     // Save current state.
     int state = my->blink;
@@ -777,13 +794,13 @@ MUIDSP IPTR VimConTicker(Class *cls, Object *obj)
     my->ticker.ihn_Millis = my->cursor[my->blink] >= 100 ?
                             my->cursor[my->blink] : 100;
 
-    DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
+    DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->ticker);
 
     // Next index 1,2,1,2,1,2,1..
     my->blink = ~my->blink & 3;
 
     // Make the results visible
-    MUI_Redraw(obj, MADF_DRAWUPDATE);
+    MUI_Redraw(me, MADF_DRAWUPDATE);
     return TRUE;
 }
 
@@ -1226,7 +1243,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 #endif
     my->ticker.ihn_Object = obj;
     my->ticker.ihn_Flags = MUIIHNF_TIMER;
-    my->ticker.ihn_Method = MUIM_VimCon_Ticker;
+    my->ticker.ihn_Method = M_ID(VimCon, Ticker);
     my->event.ehn_Priority = 1;
     my->event.ehn_Flags = 0;
     my->event.ehn_Object = obj;
@@ -1864,10 +1881,8 @@ MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
 // Input:           -
 // Return:          MUIV_VimCon_GetState_(Idle|Input|Timeout|Unknown)
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConGetState(Class *cls, Object *obj)
+METHOD0(VimCon, GetState)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Can't idle and X at the same time
     if(my->state == MUIV_VimCon_State_Idle)
     {
@@ -1923,19 +1938,16 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 // Input:       -
 // Return:      TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConBeep(Class *cls, Object *obj)
+METHOD0(VimCon, Beep)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     InvertPixelArray(&my->rp, 0, 0, my->width, my->height);
-    MUI_Redraw(obj, MADF_DRAWOBJECT);
+    MUI_Redraw(me, MADF_DRAWOBJECT);
     Delay(8);
 
     // Postpone terminal reset.
     my->state |= MUIV_VimCon_State_Reset;
     return TRUE;
 }
-
 //------------------------------------------------------------------------------
 // VimConCopy - Copy data from Vim clipboard to clipboard.device
 // Input:       Clipboard
@@ -2127,9 +2139,6 @@ DISPATCH(VimCon)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
-    case M_ID(VimCon, Test_1): return M_FN(VimCon, Test_1);
-    case M_ID(VimCon, Test_0): return M_FN0(VimCon, Test_0);
-
     case OM_NEW:
         return VimConNew(cls, obj,
             (struct opSet *) msg);
@@ -2234,37 +2243,32 @@ DISPATCH(VimCon)
         return VimConGetScreenDim(cls, obj,
             (struct MUIP_VimCon_GetScreenDim *) msg);
 
-    case MUIM_VimCon_GetState:
-        return VimConGetState(cls, obj);
+    case M_ID(VimCon, GetState):
+        return M_FN0(VimCon, GetState);
 
-    case MUIM_VimCon_Ticker:
-        return VimConTicker(cls, obj);
+    case M_ID(VimCon, Ticker):
+        return M_FN0(VimCon, Ticker);
 
-    case MUIM_VimCon_Beep:
-        return VimConBeep(cls, obj);
+    case M_ID(VimCon, Beep):
+        return M_FN0(VimCon, Beep);
 
-    case MUIM_VimCon_StartBlink:
-        return VimConStartBlink(cls, obj);
+    case M_ID(VimCon, StartBlink):
+        return M_FN0(VimCon, StartBlink);
 
-    case MUIM_VimCon_StopBlink:
-        return VimConStopBlink(cls, obj);
+    case M_ID(VimCon, StopBlink):
+        return M_FN0(VimCon, StopBlink);
 
-    case MUIM_VimCon_IsBlinking:
-        return VimConIsBlinking(cls, obj);
+    case M_ID(VimCon, IsBlinking):
+        return M_FN0(VimCon, IsBlinking);
 
-    case MUIM_VimCon_AboutMUI:
-        return VimConAboutMUI(cls, obj);
-/*
-    case MUIM_VimCon_MUISettings:
-        return VimConMUISettings(cls, obj);
-*/
+    case M_ID(VimCon, AboutMUI):
+        return M_FN0(VimCon, AboutMUI);
 
     case M_ID(VimCon, MUISettings):
         return M_FN0(VimCon, MUISettings);
 
-    case MUIM_VimCon_Clear:
-        return VimConClear(cls, obj,
-            (struct MUIP_VimCon_Clear *) msg);
+    case M_ID(VimCon, Clear):
+        return M_FN0(VimCon, Clear);
 
     default:
         return DoSuperMethodA(cls, obj, msg);
@@ -3650,8 +3654,6 @@ void gui_mch_set_sp_color(guicolor_T sp)
 //------------------------------------------------------------------------------
 void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 {
-    (void) DoMethod(Con, MUIM_VimCon_Test_1, 303);
-    (void) DoMethod(Con, MUIM_VimCon_Test_0);
     (void) DoMethod(Con, MUIM_VimCon_DrawString, row, col, s, len, flags);
 }
 
