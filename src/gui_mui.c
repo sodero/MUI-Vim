@@ -141,6 +141,27 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 #endif
 
 //------------------------------------------------------------------------------
+// MUI Class method definition
+//------------------------------------------------------------------------------
+#define METHOD(C, F, ...) struct MUIP_ ## C ## _ ## F { STACKED IPTR MethodID, \
+__VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; \
+MUIDSP IPTR C ## F(Object *me, struct MUIP_ ## C ## _ ## F *msg, \
+struct C ## Data *my)
+#define METHOD0(C, F, ...) enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ };\
+MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
+
+//------------------------------------------------------------------------------
+// MUI Class method call
+//------------------------------------------------------------------------------
+#define M_FN(C, F) C ## F(obj, (struct MUIP_ ## C ## _ ## F *) msg, \
+(struct C ## Data *) INST_DATA(cls,obj))
+#define M_FN0(C, F) C ## F(obj, (struct C ## Data *) INST_DATA(cls,obj))
+//------------------------------------------------------------------------------
+// MUI Class method ID
+//------------------------------------------------------------------------------
+#define M_ID(C, F) MUIM_ ## C ## _ ## F
+
+//------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 
@@ -163,18 +184,8 @@ CLASS_DEF(VimCon)
 };
 
 //------------------------------------------------------------------------------
-// VimCon public methods, parameters and constants
+// VimCon constants.
 //------------------------------------------------------------------------------
-#define MUIM_VimCon_Callback         (TAGBASE_sTx + 101)
-#define MUIM_VimCon_DrawString       (TAGBASE_sTx + 104)
-#define MUIM_VimCon_SetFgColor       (TAGBASE_sTx + 105)
-#define MUIM_VimCon_SetBgColor       (TAGBASE_sTx + 106)
-#define MUIM_VimCon_FillBlock        (TAGBASE_sTx + 107)
-#define MUIM_VimCon_AppMessage       (TAGBASE_sTx + 123)
-#define MUIM_VimCon_Copy             (TAGBASE_sTx + 124)
-#define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
-#define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
-
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
@@ -183,96 +194,12 @@ CLASS_DEF(VimCon)
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
 
-struct MUIP_VimCon_SetFgColor
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Color;
-};
-
-struct MUIP_VimCon_SetBgColor
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Color;
-};
-
-struct MUIP_VimCon_Callback
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR VimMenuPtr;
-};
-
-struct MUIP_VimCon_DrawString
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row;
-    STACKED IPTR Col;
-    STACKED IPTR Str;
-    STACKED IPTR Len;
-    STACKED IPTR Flags;
-};
-
-struct MUIP_VimCon_FillBlock
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row1;
-    STACKED IPTR Col1;
-    STACKED IPTR Row2;
-    STACKED IPTR Col2;
-    STACKED IPTR Color;
-};
-
-struct MUIP_VimCon_AppMessage
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Message;
-};
-
-struct MUIP_VimCon_Copy
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Clipboard;
-};
-
-struct MUIP_VimCon_Paste
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Clipboard;
-};
-
-struct MUIP_VimCon_IconState
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Iconified;
-};
-
-//------------------------------------------------------------------------------
-// MUI Class method definition
-//------------------------------------------------------------------------------
-#define METHOD(C, F, ...) struct MUIP_ ## C ## _ ## F { STACKED IPTR MethodID, \
-__VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; \
-MUIDSP IPTR C ## F(Object *me, struct MUIP_ ## C ## _ ## F *msg, \
-struct C ## Data *my)
-#define METHOD0(C, F, ...) enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ };\
-MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
-
-//------------------------------------------------------------------------------
-// MUI Class method call
-//------------------------------------------------------------------------------
-#define M_FN(C, F) C ## F(obj, (struct MUIP_ ## C ## _ ## F *) msg, \
-(struct C ## Data *) INST_DATA(cls,obj))
-#define M_FN0(C, F) C ## F(obj, (struct C ## Data *) INST_DATA(cls,obj))
-//------------------------------------------------------------------------------
-// MUI Class method ID
-//------------------------------------------------------------------------------
-#define M_ID(C, F) MUIM_ ## C ## _ ## F
-
 //------------------------------------------------------------------------------
 // VimConAppMessage - AppMessage notification handler
 // Input:             Message
 // Return:            0
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
-                             struct MUIP_VimCon_AppMessage *msg)
+METHOD(VimCon, AppMessage, Message)
 {
     // We assume that all arguments are valid files that we have the permission
     // to read from, the number of files equals the number of arguments.
@@ -342,7 +269,6 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
     if(nfiles > 0)
     {
         // Transpose and cap mouse coordinates.
-        struct VimConData *my = INST_DATA(cls,obj);
         int x = m->am_MouseX - my->left;
         int y = m->am_MouseY - my->top;
 
@@ -377,7 +303,7 @@ MUIDSP IPTR VimConAppMessage(Class *cls, Object *obj,
             // Vim will sometimes try to interact with the user when handling
             // the file drop. Activate the window to save one annoying mouse
             // click if that's the case.
-            set(_win(obj), MUIA_Window_Activate, TRUE);
+            set(_win(me), MUIA_Window_Activate, TRUE);
             gui_handle_drop(x, y, 0, fnames, nfiles);
         }
         else
@@ -816,10 +742,8 @@ METHOD(VimCon, InvertRect, Row, Col, Rows, Cols)
 //                   Color - RGB color
 // Return:           TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
-                            struct MUIP_VimCon_FillBlock *msg)
+METHOD(VimCon, FillBlock, Row1, Col1, Row2, Col2, Color)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     int x = msg->Col1 * my->xdelta, xs = my->xdelta * (msg->Col2 + 1) - x,
         y = msg->Row1 * my->ydelta, ys = my->ydelta * (msg->Row2 + 1) - y;
 
@@ -892,14 +816,24 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
 // Input:             Color - RGB color
 // Return:            TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetFgColor(Class *cls, Object *obj,
-                             struct MUIP_VimCon_SetFgColor *msg)
+METHOD(VimCon, SetFgColor, Color)
 {
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor  },
-                                    { .ti_Tag = TAG_END        }};
-    tags[0].ti_Data = msg->Color|0xFF000000;
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
+                                    { .ti_Tag = TAG_END, .ti_Data = 0      }};
+#ifdef __amigaos4__
+    if(msg->Color|0xFF000000 == tags[0].ti_Data)
+#else
+    if(msg->Color == tags[0].ti_Data)
+#endif
+    {
+        return FALSE;
+    }
 
-    struct VimConData *my = INST_DATA(cls,obj);
+#ifdef __amigaos4__
+    tags[0].ti_Data = msg->Color|0xFF000000;
+#else
+    tags[0].ti_Data = msg->Color;
+#endif
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
 }
@@ -909,13 +843,19 @@ MUIDSP IPTR VimConSetFgColor(Class *cls, Object *obj,
 // Input:             Color - RGB color
 // Return:            TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
-                             struct MUIP_VimCon_SetBgColor *msg)
+METHOD(VimCon, SetBgColor, Color)
 {
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor  },
-                                    { .ti_Tag = TAG_END        }};
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
+                                    { .ti_Tag = TAG_END, .ti_Data = 0      }};
+#ifdef __amigaos4__
+    if(msg->Color|0xFF000000 == tags[0].ti_Data)
+#else
+    if(msg->Color == tags[0].ti_Data)
+#endif
+    {
+        return FALSE;
+    }
 
-    struct VimConData *my = INST_DATA(cls,obj);
 #ifdef __amigaos4__
     tags[0].ti_Data = msg->Color|0xFF000000;
 #else
@@ -937,33 +877,25 @@ MUIDSP IPTR VimConSetBgColor(Class *cls, Object *obj,
 //                    Flags - DRAW_UNDERL | DRAW_BOLD | DRAW_TRANSP
 // Return:            TRUE if anything was rendered, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConDrawString(Class *cls, Object *obj,
-                             struct MUIP_VimCon_DrawString *msg)
+METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
 {
-    if(!msg->Len)
-    {
-        return TRUE;
-    }
-
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_DrMd, .ti_Data = JAM2 },
-                                    { .ti_Tag = RPTAG_SoftStyle,
-                                      .ti_Data = FS_NORMAL },
-                                    { .ti_Tag = TAG_END }};
-
-    struct VimConData *my = INST_DATA(cls,obj);
+    static IPTR flags;
     int y = msg->Row * my->ydelta, x = msg->Col * my->xdelta;
 
     // Tag area as dirty and move into position.
     VimConDirty(my, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
 
-    static IPTR flags;
-
     if(flags == msg->Flags)
     {
         Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
         return TRUE;
     }
+
+    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_DrMd, .ti_Data = JAM2 },
+                                    { .ti_Tag = RPTAG_SoftStyle,
+                                      .ti_Data = FS_NORMAL },
+                                    { .ti_Tag = TAG_END, .ti_Data = 0 }};
 
     // Translate Vim flags to Amiga flags.
     tags[0].ti_Data = (msg->Flags & DRAW_TRANSP) ? JAM1 : JAM2;
@@ -1683,10 +1615,8 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
 // Input:           VimMenuPtr - Vim menuitem pointer
 // Return:          TRUE on successful invocation of callback, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConCallback(Class *cls, Object *obj,
-                           struct MUIP_VimCon_Callback *msg)
+METHOD(VimCon, Callback, VimMenuPtr)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     vimmenu_T *mp = (vimmenu_T *) msg->VimMenuPtr;
 
     if(!mp || !mp->cb)
@@ -1777,9 +1707,9 @@ METHOD0(VimCon, Beep)
 // Input:       Clipboard
 // Return:      0
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
+METHOD(VimCon, Copy, Clipboard)
 {
-    Clipboard_T *cbd = (Clipboard_T *) msg;
+    Clipboard_T *cbd = (Clipboard_T *) msg->Clipboard;
 
     if(!cbd->owned)
     {
@@ -1846,10 +1776,8 @@ MUIDSP IPTR VimConCopy(Class *cls, Object *obj, struct MUIP_VimCon_Copy *msg)
 // Input:            Iconified - Application state
 // Return:           Input pass through
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConIconState(Class *cls, Object *obj,
-                            struct MUIP_VimCon_IconState *msg)
+METHOD(VimCon, IconState, Iconified)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     my->block = msg->Iconified;
     return msg->Iconified;
 }
@@ -1859,10 +1787,9 @@ MUIDSP IPTR VimConIconState(Class *cls, Object *obj,
 // Input:        Clipboard
 // Return:       0
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConPaste(Class *cls, Object *obj,
-                         struct MUIP_VimCon_Paste *msg)
+METHOD(VimCon, Paste, Clipboard)
 {
-    Clipboard_T *cbd = (Clipboard_T *) msg;
+    Clipboard_T *cbd = (Clipboard_T *) msg->Clipboard;
     struct IFFHandle *iffh = AllocIFF();
 
     if(!iffh)
@@ -1972,24 +1899,19 @@ DISPATCH(VimCon)
     case MUIM_Draw: return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
     case MUIM_Show: return VimConShow(cls, obj, msg);
 
-    case MUIM_VimCon_AppMessage: return VimConAppMessage(cls, obj, (struct MUIP_VimCon_AppMessage *) msg);
-    case MUIM_VimCon_IconState: return VimConIconState(cls, obj, (struct MUIP_VimCon_IconState *) msg);
-    case MUIM_VimCon_Copy: return VimConCopy(cls, obj, (struct MUIP_VimCon_Copy *) msg);
-    case MUIM_VimCon_Paste: return VimConPaste(cls, obj, (struct MUIP_VimCon_Paste *) msg);
-    case MUIM_VimCon_Callback: return VimConCallback(cls, obj, (struct MUIP_VimCon_Callback *) msg);
-    case MUIM_VimCon_DrawString: return VimConDrawString(cls, obj, (struct MUIP_VimCon_DrawString *) msg);
-    case MUIM_VimCon_SetFgColor: return VimConSetFgColor(cls, obj, (struct MUIP_VimCon_SetFgColor *) msg);
-    case MUIM_VimCon_SetBgColor: return VimConSetBgColor(cls, obj, (struct MUIP_VimCon_SetBgColor *) msg);
-    case MUIM_VimCon_FillBlock: return VimConFillBlock(cls, obj, (struct MUIP_VimCon_FillBlock *) msg);
-
+        case M_ID(VimCon, AppMessage): return M_FN(VimCon, AppMessage);
+        case M_ID(VimCon, IconState): return M_FN(VimCon, IconState);
+        case M_ID(VimCon, Copy): return M_FN(VimCon, Copy);
+        case M_ID(VimCon, Paste): return M_FN(VimCon, Paste);
+        case M_ID(VimCon, Callback): return M_FN(VimCon, Callback);
+        case M_ID(VimCon, DrawString): return M_FN(VimCon, DrawString);
+        case M_ID(VimCon, SetFgColor): return M_FN(VimCon, SetFgColor);
+        case M_ID(VimCon, SetBgColor): return M_FN(VimCon, SetBgColor);
+        case M_ID(VimCon, FillBlock): return M_FN(VimCon, FillBlock);
         case M_ID(VimCon, InvertRect): return M_FN(VimCon, InvertRect);
         case M_ID(VimCon, DeleteLines): return M_FN(VimCon, DeleteLines);
         case M_ID(VimCon, DrawPartCursor): return M_FN(VimCon, DrawPartCursor);
         case M_ID(VimCon, DrawHollowCursor): return M_FN(VimCon, DrawHollowCursor);
-#ifdef MUIVIM_FEAT_TIMEOUT
-        case M_ID(VimCon, SetTimeout): return M_FN(VimCon, SetTimeout);
-        case M_ID(VimCon, Timeout): return M_FN0(VimCon, Timeout);
-#endif
         case M_ID(VimCon, SetBlinking): return M_FN(VimCon, SetBlinking);
         case M_ID(VimCon, Browse): return M_FN(VimCon, Browse);
         case M_ID(VimCon, GetScreenDim): return M_FN(VimCon, GetScreenDim);
@@ -2003,7 +1925,10 @@ DISPATCH(VimCon)
         case M_ID(VimCon, AboutMUI): return M_FN0(VimCon, AboutMUI);
         case M_ID(VimCon, MUISettings): return M_FN0(VimCon, MUISettings);
         case M_ID(VimCon, Clear): return M_FN0(VimCon, Clear);
-
+#ifdef MUIVIM_FEAT_TIMEOUT
+        case M_ID(VimCon, SetTimeout): return M_FN(VimCon, SetTimeout);
+        case M_ID(VimCon, Timeout): return M_FN0(VimCon, Timeout);
+#endif
     default:
         return DoSuperMethodA(cls, obj, msg);
     }
