@@ -28,12 +28,6 @@
 #include <proto/muimaster.h>
 #include <proto/icon.h>
 #include <proto/iffparse.h>
-#ifndef __amigaos4__
-#include <cybergraphx/cybergraphics.h>
-#include <clib/utility_protos.h>
-#else
-#include <proto/utility.h>
-#endif
 #include <devices/rawkeycodes.h>
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
@@ -41,57 +35,38 @@
 #include <proto/graphics.h>
 #include <proto/cybergraphics.h>
 #include <proto/keymap.h>
-
-#ifdef __AROS__
-    #include <proto/arossupport.h>
-    #ifndef KPrintF
-        #define KPrintF kprintf
-    #endif
+#ifdef __amigaos4__
+# include <proto/utility.h>
+# include <dos/obsolete.h>
+#else
+# include <cybergraphx/cybergraphics.h>
+# include <clib/utility_protos.h>
 #endif
-
-// Disable scrollbars on AROS. Zune problems.
-#ifndef __AROS__
-# define MUIVIM_FEAT_SCROLLBAR
+#ifdef __AROS__
+# include <proto/arossupport.h>
 #endif
 
 #ifdef __amigaos4__
-#include <dos/obsolete.h>
-
 typedef unsigned long IPTR;
-
 struct Library *MUIMasterBase = NULL;
 struct MUIMasterIFace *IMUIMaster = NULL;
-
 struct Library *CyberGfxBase = NULL;
 struct CyberGfxIFace *ICyberGfx = NULL;
-
 struct Library *KeymapBase = NULL;
 struct KeymapIFace *IKeymap = NULL;
-
-#define RPTAG_FgColor RPTAG_APenColor
-#define RPTAG_BgColor RPTAG_BPenColor
-#define RPTAG_PenMode TAG_IGNORE
-#define KPrintF DebugPrintF
-
-Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...);
-Object * VARARGS68K DoSuperNew(struct IClass *cl, Object *obj, ...)
-{
-    Object *rc;
-    va_list args;
-
-    va_startlinear(args, obj);
-    rc = (Object *) DoSuperMethod(cl, obj, OM_NEW, va_getlinearva(args, ULONG),
-                                  NULL);
-    va_end(args);
-
-    return rc;
-}
-
 #endif
 
 //------------------------------------------------------------------------------
 // Debug
 //------------------------------------------------------------------------------
+#ifdef __amigaos4__
+# define KPrintF DebugPrintF
+#endif
+#ifdef __AROS__
+# ifndef KPrintF
+#  define KPrintF kprintf
+# endif
+#endif
 #define kmsg(E) KPrintF((CONST_STRPTR) "%s (%s:%d)\n", E, __func__, __LINE__);
 #define HERE \
 do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
@@ -113,9 +88,6 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
   { TRAP_LIB, 0, (void (*) (void)) C ## Dispatch }; \
   struct C ## Data
 #else
-    #ifndef __amigaos4__
-    # define DoSuperNew(C,O,...) DoSuperNewTags(C,O,NULL,__VA_ARGS__)
-    #endif
 # define DISPATCH_HEAD
 # define DISPATCH_ARGS Class *cls, Object *obj, Msg msg
 # define DISPATCH_GATE(C) C ## Dispatch
@@ -151,7 +123,7 @@ struct C ## Data *my)
 MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
 
 //------------------------------------------------------------------------------
-// MUI Class method call
+// MUI Class method dispatch
 //------------------------------------------------------------------------------
 #define M_FN(C, F) C ## F(obj, (struct MUIP_ ## C ## _ ## F *) msg, \
 (struct C ## Data *) INST_DATA(cls,obj))
@@ -188,9 +160,7 @@ CLASS_DEF(VimCon)
 //------------------------------------------------------------------------------
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
-#ifdef MUIVIM_FEAT_TIMEOUT
 #define MUIV_VimCon_State_Timeout    (1 << 2)
-#endif
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
 
@@ -811,6 +781,13 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
     return TRUE;
 }
 
+#ifdef __amigaos4__
+# define RPTAG_FgColor RPTAG_APenColor
+# define RPTAG_BgColor RPTAG_BPenColor
+# define ALPHA_MASK 0xFF000000
+#else
+# define ALPHA_MASK 0x00000000
+#endif
 //------------------------------------------------------------------------------
 // VimConSetFgColor - Set foreground color
 // Input:             Color - RGB color
@@ -820,20 +797,12 @@ METHOD(VimCon, SetFgColor, Color)
 {
     static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
                                     { .ti_Tag = TAG_END, .ti_Data = 0      }};
-#ifdef __amigaos4__
-    if(msg->Color|0xFF000000 == tags[0].ti_Data)
-#else
-    if(msg->Color == tags[0].ti_Data)
-#endif
+    if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
         return FALSE;
     }
 
-#ifdef __amigaos4__
-    tags[0].ti_Data = msg->Color|0xFF000000;
-#else
-    tags[0].ti_Data = msg->Color;
-#endif
+    tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
 }
@@ -847,27 +816,16 @@ METHOD(VimCon, SetBgColor, Color)
 {
     static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
                                     { .ti_Tag = TAG_END, .ti_Data = 0      }};
-#ifdef __amigaos4__
-    if(msg->Color|0xFF000000 == tags[0].ti_Data)
-#else
-    if(msg->Color == tags[0].ti_Data)
-#endif
+    if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
         return FALSE;
     }
 
-#ifdef __amigaos4__
-    tags[0].ti_Data = msg->Color|0xFF000000;
-#else
-    tags[0].ti_Data = msg->Color;
-#endif
+    tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
 }
 
-#ifndef RPTAG_SoftStyle
-# define RPTAG_SoftStyle TAG_IGNORE
-#endif
 //------------------------------------------------------------------------------
 // VimConDrawString - Render string of text
 // Input:             Row - Character row
@@ -892,10 +850,14 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
         return TRUE;
     }
 
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_DrMd, .ti_Data = JAM2 },
-                                    { .ti_Tag = RPTAG_SoftStyle,
-                                      .ti_Data = FS_NORMAL },
-                                    { .ti_Tag = TAG_END, .ti_Data = 0 }};
+    static struct TagItem tags[] =
+    {
+        { .ti_Tag = RPTAG_DrMd, .ti_Data = JAM2 },
+#ifdef RPTAG_SoftStyle
+        { .ti_Tag = RPTAG_SoftStyle, .ti_Data = FS_NORMAL },
+#endif
+        { .ti_Tag = TAG_END, .ti_Data = 0 }
+    };
 
     // Translate Vim flags to Amiga flags.
     tags[0].ti_Data = (msg->Flags & DRAW_TRANSP) ? JAM1 : JAM2;
@@ -929,10 +891,17 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 {
-    obj = (Object *) DoSuperNew(cls, obj, MUIA_Frame, MUIV_Frame_Text,
-                                MUIA_InputMode, MUIV_InputMode_None,
-                                MUIA_FillArea, FALSE, MUIA_Font,
-                                MUIV_Font_Fixed, TAG_MORE, msg->ops_AttrList);
+    struct TagItem tags[] =
+    {
+        { .ti_Tag = MUIA_Frame, .ti_Data = MUIV_Frame_Text },
+        { .ti_Tag = MUIA_InputMode, .ti_Data = MUIV_InputMode_None },
+        { .ti_Tag = MUIA_FillArea, .ti_Data = TRUE },
+        { .ti_Tag = MUIA_Font, .ti_Data =  MUIV_Font_Fixed },
+        { .ti_Tag = TAG_MORE, .ti_Data = (IPTR) msg->ops_AttrList }
+    };
+
+    obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
+
     if(!obj)
     {
         kmsg(_(e_outofmem));
@@ -975,7 +944,13 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     // Initial RP settings
     InitRastPort(&my->rp);
     my->rp.BitMap = my->bm;
-    SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2, RPTAG_PenMode, FALSE, TAG_DONE);
+    SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2,
+#ifndef __amigaos4__
+               RPTAG_PenMode, FALSE, 
+#endif
+               RPTAG_FgColor, 0,
+               RPTAG_BgColor, 0,
+               TAG_DONE);
 
     // Static settings
     my->blink = 0;
@@ -1019,14 +994,14 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Setup parent class
     if(!DoSuperMethodA(cls, obj, (Msg) msg))
     {
         kmsg(_(e_internal));
         return FALSE;
     }
+
+    struct VimConData *my = INST_DATA(cls,obj);
 
     // Font might have changed
     SetFont(&my->rp, _font(obj));
@@ -2146,7 +2121,6 @@ static void VimMessage(const char *title, const char *msg, const char *fmt)
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
 {
-    struct VimToolbarData *my;
     static struct MUIS_TheBar_Button b[] =
     {
         { .ID = 1, .img = 0, .help = "Open"        },
@@ -2177,30 +2151,32 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
         { .img = MUIV_TheBar_End                   },
     };
 
-    BPTR icons = Lock("VIM:icons", ACCESS_READ);
-
-    if(!icons)
+    struct TagItem tags[] =
     {
-        VimMessage("Error", "Invalid VIM assign", "OK");
+        { .ti_Tag = MUIA_Group_Horiz, .ti_Data = TRUE },
+        { .ti_Tag = MUIA_TheBar_Buttons, .ti_Data = (IPTR) b },
+        { .ti_Tag = MUIA_TheBar_IgnoreAppearance, .ti_Data = TRUE },
+        { .ti_Tag = MUIA_TheBar_Borderless, .ti_Data = TRUE },
+        { .ti_Tag = MUIA_TheBar_ViewMode, .ti_Data = MUIV_TheBar_ViewMode_Gfx },
+        { .ti_Tag = MUIA_TheBar_PicsDrawer, .ti_Data = (IPTR) "VIM:icons" },
+        { .ti_Tag = MUIA_TheBar_Strip, .ti_Data = (IPTR) "tb_strip.png" },
+        { .ti_Tag = MUIA_TheBar_DisStrip, .ti_Data = (IPTR)"tb_dis_strip.png" },
+        { .ti_Tag = MUIA_TheBar_SelStrip, .ti_Data = (IPTR)"tb_sel_strip.png" },
+        { .ti_Tag = MUIA_TheBar_StripCols, .ti_Data = 19 },
+        { .ti_Tag = MUIA_TheBar_StripRows, .ti_Data = 1 },
+        { .ti_Tag = MUIA_TheBar_StripHSpace, .ti_Data = 0 },
+        { .ti_Tag = MUIA_TheBar_StripVSpace, .ti_Data = 0 },
+        { .ti_Tag = TAG_MORE, .ti_Data = (IPTR) msg->ops_AttrList}
+    };
+
+    obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
+
+    if(obj)
+    {
+        struct VimToolbarData *my = INST_DATA(cls,obj);
+        my->btn = b;
     }
 
-    UnLock(icons);
-    obj = (Object *) DoSuperNew(cls, obj, MUIA_Group_Horiz, TRUE,
-                                MUIA_TheBar_Buttons, b,
-                                MUIA_TheBar_IgnoreAppearance, TRUE,
-                                MUIA_TheBar_Borderless, TRUE,
-                                MUIA_TheBar_ViewMode, MUIV_TheBar_ViewMode_Gfx,
-                                MUIA_TheBar_PicsDrawer, "VIM:icons",
-                                MUIA_TheBar_Strip, "tb_strip.png",
-                                MUIA_TheBar_DisStrip, "tb_dis_strip.png",
-                                MUIA_TheBar_SelStrip, "tb_sel_strip.png",
-                                MUIA_TheBar_StripCols, 19,
-                                MUIA_TheBar_StripRows, 1,
-                                MUIA_TheBar_StripHSpace, 0,
-                                MUIA_TheBar_StripVSpace, 0,
-                                TAG_MORE, msg->ops_AttrList);
-    my = INST_DATA(cls,obj);
-    my->btn = b;
     return (IPTR) obj;
 }
 
@@ -2514,6 +2490,13 @@ DISPATCH(VimMenu)
     }
 }
 DISPATCH_END
+
+//------------------------------------------------------------------------------
+// Disable scrollbars on AROS. Zune problems.
+//------------------------------------------------------------------------------
+#ifndef __AROS__
+# define MUIVIM_FEAT_SCROLLBAR
+#endif
 
 #ifdef MUIVIM_FEAT_SCROLLBAR
 //------------------------------------------------------------------------------
@@ -2907,14 +2890,21 @@ MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
 // Return:           See BOOPSI docs
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
-{
+{    
     // Get Vim scrollbar reference.
     scrollbar_T *sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
                       ((struct opSet *) msg)->ops_AttrList);
 
-    obj = (Object *) DoSuperNew(cls, obj, MUIA_ShowMe, FALSE, MUIA_Group_Horiz,
-                                sb->type == SBAR_BOTTOM ? TRUE : FALSE,
-                                TAG_MORE, msg->ops_AttrList);
+    struct TagItem tags[] =
+    {
+        { .ti_Tag = MUIA_ShowMe, .ti_Data = FALSE },
+        { .ti_Tag = MUIA_Group_Horiz,
+          .ti_Data = sb->type == SBAR_BOTTOM ? TRUE : FALSE },
+        { .ti_Tag = TAG_MORE, .ti_Data = (IPTR) msg->ops_AttrList }
+    };
+
+    obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
+
     if(!obj)
     {
         kmsg(_(e_outofmem));
@@ -2923,17 +2913,10 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     struct VimScrollbarData *my = INST_DATA(cls,obj);
 
-    // Vim scrollbar.
     my->sb = sb;
-
-    // Vertical position and size.
-    my->weight = my->top = 0;
-
-    // We need to reach ourselves from Vim.
     sb->id = obj;
-
-    // Not shown yet.
     my->visible = FALSE;
+    my->weight = my->top = 0;
 
     // We notify ourselves when a dragging event occurs.
     DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
@@ -3545,7 +3528,6 @@ int gui_mch_init(void)
     VimToolbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_TheBar, NULL,
                                             sizeof(struct CLASS_DATA(VimToolbar)),
                                             (APTR) DISPATCH_GATE(VimToolbar));
-
     if(!VimToolbarClass)
     {
         VimMessage("Error", "MCC_TheBar required", "OK");
@@ -3712,10 +3694,18 @@ void gui_mch_prepare(int *argc, char **argv)
 }
 
 //------------------------------------------------------------------------------
-//gui_mch_init_check - Not used (not needed)
+//gui_mch_init_check
 //------------------------------------------------------------------------------
 int gui_mch_init_check(void)
 {
+    BPTR icons = Lock("VIM:icons", ACCESS_READ);
+
+    if(!icons)
+    {
+        VimMessage("Warning", "Invalid VIM assign", "OK");
+    }
+
+    UnLock(icons);
     return OK;
 }
 
