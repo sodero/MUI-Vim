@@ -166,35 +166,15 @@ CLASS_DEF(VimCon)
 // VimCon public methods, parameters and constants
 //------------------------------------------------------------------------------
 #define MUIM_VimCon_Callback         (TAGBASE_sTx + 101)
-//#define MUIM_VimCon_GetState         (TAGBASE_sTx + 102)
 #define MUIM_VimCon_DrawString       (TAGBASE_sTx + 104)
 #define MUIM_VimCon_SetFgColor       (TAGBASE_sTx + 105)
 #define MUIM_VimCon_SetBgColor       (TAGBASE_sTx + 106)
 #define MUIM_VimCon_FillBlock        (TAGBASE_sTx + 107)
-#define MUIM_VimCon_DeleteLines      (TAGBASE_sTx + 108)
-#define MUIM_VimCon_DrawPartCursor   (TAGBASE_sTx + 109)
-#define MUIM_VimCon_DrawHollowCursor (TAGBASE_sTx + 110)
-#ifdef MUIVIM_FEAT_TIMEOUT
-#define MUIM_VimCon_SetTimeout       (TAGBASE_sTx + 111)
-#define MUIM_VimCon_Timeout          (TAGBASE_sTx + 112)
-#endif
-//#define MUIM_VimCon_Beep             (TAGBASE_sTx + 113)
-//#define MUIM_VimCon_Ticker           (TAGBASE_sTx + 114)
-#define MUIM_VimCon_SetBlinking      (TAGBASE_sTx + 115)
-//#define MUIM_VimCon_StartBlink       (TAGBASE_sTx + 116)
-//#define MUIM_VimCon_StopBlink        (TAGBASE_sTx + 117)
-#define MUIM_VimCon_Browse           (TAGBASE_sTx + 118)
-//#define MUIM_VimCon_SetTitle         (TAGBASE_sTx + 119)
-//#define MUIM_VimCon_IsBlinking       (TAGBASE_sTx + 120)
-#define MUIM_VimCon_GetScreenDim     (TAGBASE_sTx + 121)
-#define MUIM_VimCon_InvertRect       (TAGBASE_sTx + 122)
 #define MUIM_VimCon_AppMessage       (TAGBASE_sTx + 123)
 #define MUIM_VimCon_Copy             (TAGBASE_sTx + 124)
 #define MUIM_VimCon_Paste            (TAGBASE_sTx + 125)
-//#define MUIM_VimCon_AboutMUI         (TAGBASE_sTx + 126)
-//#define MUIM_VimCon_MUISettings      (TAGBASE_sTx + 127)
 #define MUIM_VimCon_IconState        (TAGBASE_sTx + 128)
-//#define MUIM_VimCon_Clear            (TAGBASE_sTx + 131)
+
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
@@ -215,48 +195,10 @@ struct MUIP_VimCon_SetBgColor
     STACKED IPTR Color;
 };
 
-struct MUIP_VimCon_Browse
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Title;
-    STACKED IPTR Drawer;
-};
-
-struct MUIP_VimCon_GetScreenDim
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR WidthPtr;
-    STACKED IPTR HeightPtr;
-};
-
-#ifdef MUIVIM_FEAT_TIMEOUT
-struct MUIP_VimCon_SetTimeout
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Timeout;
-};
-#endif
-
 struct MUIP_VimCon_Callback
 {
     STACKED IPTR MethodID;
     STACKED IPTR VimMenuPtr;
-};
-
-struct MUIP_VimCon_SetBlinking
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Wait;
-    STACKED IPTR On;
-    STACKED IPTR Off;
-};
-
-struct MUIP_VimCon_DrawHollowCursor
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row;
-    STACKED IPTR Col;
-    STACKED IPTR Color;
 };
 
 struct MUIP_VimCon_DrawString
@@ -276,36 +218,6 @@ struct MUIP_VimCon_FillBlock
     STACKED IPTR Col1;
     STACKED IPTR Row2;
     STACKED IPTR Col2;
-    STACKED IPTR Color;
-};
-
-struct MUIP_VimCon_InvertRect
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row;
-    STACKED IPTR Col;
-    STACKED IPTR Rows;
-    STACKED IPTR Cols;
-};
-
-struct MUIP_VimCon_DrawPartCursor
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row;
-    STACKED IPTR Col;
-    STACKED IPTR Width;
-    STACKED IPTR Height;
-    STACKED IPTR Color;
-};
-
-struct MUIP_VimCon_DeleteLines
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Row;
-    STACKED IPTR Lines;
-    STACKED IPTR RegLeft;
-    STACKED IPTR RegRight;
-    STACKED IPTR RegBottom;
     STACKED IPTR Color;
 };
 
@@ -585,11 +497,8 @@ METHOD0(VimCon, StartBlink)
 //                     Off - number of ms when the cursor is hidden
 // Return:             TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
-                              struct MUIP_VimCon_SetBlinking *msg)
+METHOD(VimCon, SetBlinking, Wait, On, Off)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Accept anything. Filter later.
     my->cursor[0] = (int) msg->Wait;
     my->cursor[1] = (int) msg->Off;
@@ -600,10 +509,10 @@ MUIDSP IPTR VimConSetBlinking(Class *cls, Object *obj,
 //------------------------------------------------------------------------------
 // VimConBrowse - Open file requester
 // Input:         Title - Title of the file requester to be created
+//                Drawer - FIXME
 // Return:        Absolute path of selected file / NULL if cancelled
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
-                         struct MUIP_VimCon_Browse *msg)
+METHOD(VimCon, Browse, Title, Drawer)
 {
     STRPTR res = NULL;
     struct FileRequester *req;
@@ -618,7 +527,7 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
     }
 
     // Go to sleep and show requester.
-    set(_app(obj), MUIA_Application_Sleep, TRUE);
+    set(_app(me), MUIA_Application_Sleep, TRUE);
 
     if(MUI_AslRequestTags(req,TAG_DONE) && req->fr_File)
     {
@@ -637,7 +546,7 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
     }
 
     // Free memory and wake up.
-    set(_app(obj), MUIA_Application_Sleep, FALSE);
+    set(_app(me), MUIA_Application_Sleep, FALSE);
     MUI_FreeAslRequest(req);
     return (IPTR) res;
 }
@@ -651,11 +560,8 @@ MUIDSP IPTR VimConBrowse(Class *cls, Object *obj,
 //                      HeightPtr - IPTR * to contain (output) height
 // Return:              Buffer area
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConGetScreenDim(Class  *cls, Object *obj,
-                               struct MUIP_VimCon_GetScreenDim *msg)
+METHOD(VimCon, GetScreenDim, WidthPtr, HeightPtr)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     if(!my->bm)
     {
         kmsg(_(e_null));
@@ -745,10 +651,8 @@ METHOD0(VimCon, Ticker)
 // Input:          -
 // Return:         TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConTimeout(Class *cls, Object *obj)
+METHOD0(VimCon, Timeout)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Take note and keep on going
     my->state |= MUIV_VimCon_State_Timeout;
     return TRUE;
@@ -760,11 +664,8 @@ MUIDSP IPTR VimConTimeout(Class *cls, Object *obj)
 //                              A value of 0 will disable timeouts.
 // Return:            TRUE if state changed, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
-                             struct MUIP_VimCon_SetTimeout *msg)
+METHOD(VimCon, SetTimeout, Timeout)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Only act if old timeout != new timout
     if(my->timeout.ihn_Millis == msg->Timeout)
     {
@@ -774,7 +675,7 @@ MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
     // If old timeout exists, remove it
     if(my->timeout.ihn_Millis)
     {
-        DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->timeout);
+        DoMethod(_app(me), MUIM_Application_RemInputHandler, &my->timeout);
         my->timeout.ihn_Millis = 0;
     }
 
@@ -782,7 +683,7 @@ MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
     if(msg->Timeout)
     {
         my->timeout.ihn_Millis = (UWORD) msg->Timeout;
-        DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
+        DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->timeout);
     }
 
     return TRUE;
@@ -797,10 +698,8 @@ MUIDSP IPTR VimConSetTimeout(Class *cls, Object *obj,
 //               y2 - Bottom
 // Return:       -
 //------------------------------------------------------------------------------
-MUIDSP void VimConDirty(Class *cls, Object *obj, int x1, int y1, int x2, int y2)
+MUIDSP void VimConDirty(struct VimConData *my, int x1, int y1, int x2, int y2)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Grow dirty region if it doesn't cover the new one.
     if(x1 < my->xd1)
     {
@@ -828,10 +727,8 @@ MUIDSP void VimConDirty(Class *cls, Object *obj, int x1, int y1, int x2, int y2)
 // Input:        -
 // Return:       -
 //------------------------------------------------------------------------------
-MUIDSP void VimConClean(Class *cls, Object *obj)
+MUIDSP void VimConClean(struct VimConData *my)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Start with a 'negative' size
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
@@ -840,14 +737,12 @@ MUIDSP void VimConClean(Class *cls, Object *obj)
 //------------------------------------------------------------------------------
 // VimConDrawHollowCursor - Draw outline cursor
 // Input:                   Row - Y
-//                          Column - X
+//                          Col - X
 //                          Color - RGB color of cursor
 // Return:                  TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConDrawHollowCursor(Class *cls, Object *obj,
-                                   struct MUIP_VimCon_DrawHollowCursor *msg)
+METHOD(VimCon, DrawHollowCursor, Row, Col, Color)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     int x1 = msg->Col * my->xdelta, y1 = msg->Row * my->ydelta,
         x2 = x1 + my->xdelta - my->space, y2 = y1 + my->ydelta;
 
@@ -860,23 +755,21 @@ MUIDSP IPTR VimConDrawHollowCursor(Class *cls, Object *obj,
     FillPixelArray(&my->rp, x1, y1, 1, my->ydelta, msg->Color);
     FillPixelArray(&my->rp, x1, y2, my->xdelta, 1, msg->Color);
     FillPixelArray(&my->rp, x2, y1, 1, my->ydelta, msg->Color);
-    VimConDirty(cls, obj, x1, y1, x2, y2);
+    VimConDirty(my, x1, y1, x2, y2);
     return TRUE;
 }
 
 //------------------------------------------------------------------------------
 // VimConDrawPartCursor - Draw part of cursor
 // Input:                 Row - Y
-//                        Column - X
+//                        Col - X
 //                        Width - Width in pixels
 //                        Height - Height in pixels
 //                        Color - RGB color
 // Return:                TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConDrawPartCursor(Class *cls, Object *obj,
-                                 struct MUIP_VimCon_DrawPartCursor *msg)
+METHOD(VimCon, DrawPartCursor, Row, Col, Width, Height, Color)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     int x = msg->Col * my->xdelta, xs = msg->Width,
         y = msg->Row * my->ydelta + my->ydelta - msg->Height,
         ys = msg->Height - my->space;
@@ -887,7 +780,7 @@ MUIDSP IPTR VimConDrawPartCursor(Class *cls, Object *obj,
     }
 
     FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
-    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
 
@@ -899,10 +792,8 @@ MUIDSP IPTR VimConDrawPartCursor(Class *cls, Object *obj,
 //                    Cols - Number of columns
 // Return:            TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConInvertRect(Class *cls, Object *obj,
-                             struct MUIP_VimCon_InvertRect *msg)
+METHOD(VimCon, InvertRect, Row, Col, Rows, Cols)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     int x = msg->Col * my->xdelta, xs = my->xdelta * msg->Cols,
         y = msg->Row * my->ydelta, ys = my->ydelta * msg->Rows;
 
@@ -912,7 +803,7 @@ MUIDSP IPTR VimConInvertRect(Class *cls, Object *obj,
     }
 
     InvertPixelArray(&my->rp, x, y, xs, ys);
-    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
 
@@ -941,7 +832,7 @@ MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
     xs = xs + x > my->width ? my->width - x : xs;
     ys = ys + y > my->height ? my->height - y : ys;
     FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
-    VimConDirty(cls, obj, x, y, x + xs, y + ys);
+    VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
 
@@ -956,10 +847,8 @@ MUIDSP IPTR VimConFillBlock(Class *cls, Object *obj,
 //                     Color - RGB color used to fill empty lines
 // Return:             TRUE if state changed, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
-                              struct MUIP_VimCon_DeleteLines *msg)
+METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
 {
-    struct VimConData *my = INST_DATA(cls,obj);
     int n = (int) msg->Lines;
 
     if(!n)
@@ -979,7 +868,7 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
         ysrc = ydst + n * my->ydelta;
         yctop = ydst + ysize;
         ycsiz = n * my->ydelta;
-        VimConDirty(cls, obj, xsrcdst, ydst,  xsrcdst + xsize, yctop + ycsiz);
+        VimConDirty(my, xsrcdst, ydst,  xsrcdst + xsize, yctop + ycsiz);
     }
     else
     {
@@ -989,7 +878,7 @@ MUIDSP IPTR VimConDeleteLines(Class *cls, Object *obj,
         ydst = ysrc - n * my->ydelta;
         yctop = ysrc;
         ycsiz = - (n * my->ydelta);
-        VimConDirty(cls, obj, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
+        VimConDirty(my, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
     }
 
     // Blit and fill the abandoned area with Color
@@ -1065,7 +954,7 @@ MUIDSP IPTR VimConDrawString(Class *cls, Object *obj,
     int y = msg->Row * my->ydelta, x = msg->Col * my->xdelta;
 
     // Tag area as dirty and move into position.
-    VimConDirty(cls, obj, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
+    VimConDirty(my, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
 
     static IPTR flags;
@@ -1174,7 +1063,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
     my->timeout.ihn_Flags = MUIIHNF_TIMER;
-    my->timeout.ihn_Method = MUIM_VimCon_Timeout;
+    my->timeout.ihn_Method = M_ID(VimCon, Timeout);
 #endif
     my->ticker.ihn_Object = obj;
     my->ticker.ihn_Flags = MUIIHNF_TIMER;
@@ -1751,7 +1640,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
                  my->yd1 + 1, 0xc0);
 
         // We're clean.
-        VimConClean(cls, obj);
+        VimConClean(my);
     }
     // Update everything.
     else if(msg->flags & MADF_DRAWOBJECT)
@@ -1783,7 +1672,7 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
                  my->height, 0xc0);
 
         // We're clean.
-        VimConClean(cls, obj);
+        VimConClean(my);
     }
 
     return r;
@@ -2076,14 +1965,15 @@ DISPATCH(VimCon)
     {
     case OM_NEW: return VimConNew(cls, obj, (struct opSet *) msg);
     case OM_DISPOSE: return VimConDispose(cls, obj, msg);
-    case MUIM_VimCon_AppMessage: return VimConAppMessage(cls, obj, (struct MUIP_VimCon_AppMessage *) msg);
-    case MUIM_VimCon_IconState: return VimConIconState(cls, obj, (struct MUIP_VimCon_IconState *) msg);
     case MUIM_Setup: return VimConSetup(cls, obj, (struct MUI_RenderInfo *) msg);
     case MUIM_Cleanup: return VimConCleanup(cls, obj, msg);
     case MUIM_HandleEvent: return VimConHandleEvent(cls, obj, (struct MUIP_HandleEvent *) msg);
     case MUIM_AskMinMax: return VimConMinMax(cls, obj, (struct MUIP_AskMinMax *) msg);
     case MUIM_Draw: return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
     case MUIM_Show: return VimConShow(cls, obj, msg);
+
+    case MUIM_VimCon_AppMessage: return VimConAppMessage(cls, obj, (struct MUIP_VimCon_AppMessage *) msg);
+    case MUIM_VimCon_IconState: return VimConIconState(cls, obj, (struct MUIP_VimCon_IconState *) msg);
     case MUIM_VimCon_Copy: return VimConCopy(cls, obj, (struct MUIP_VimCon_Copy *) msg);
     case MUIM_VimCon_Paste: return VimConPaste(cls, obj, (struct MUIP_VimCon_Paste *) msg);
     case MUIM_VimCon_Callback: return VimConCallback(cls, obj, (struct MUIP_VimCon_Callback *) msg);
@@ -2091,18 +1981,18 @@ DISPATCH(VimCon)
     case MUIM_VimCon_SetFgColor: return VimConSetFgColor(cls, obj, (struct MUIP_VimCon_SetFgColor *) msg);
     case MUIM_VimCon_SetBgColor: return VimConSetBgColor(cls, obj, (struct MUIP_VimCon_SetBgColor *) msg);
     case MUIM_VimCon_FillBlock: return VimConFillBlock(cls, obj, (struct MUIP_VimCon_FillBlock *) msg);
-    case MUIM_VimCon_InvertRect: return VimConInvertRect(cls, obj, (struct MUIP_VimCon_InvertRect *) msg);
-    case MUIM_VimCon_DeleteLines: return VimConDeleteLines(cls, obj, (struct MUIP_VimCon_DeleteLines *) msg);
-    case MUIM_VimCon_DrawPartCursor: return VimConDrawPartCursor(cls, obj, (struct MUIP_VimCon_DrawPartCursor *) msg);
-    case MUIM_VimCon_DrawHollowCursor: return VimConDrawHollowCursor(cls, obj, (struct MUIP_VimCon_DrawHollowCursor *) msg);
-#ifdef MUIVIM_FEAT_TIMEOUT
-    case MUIM_VimCon_SetTimeout: return VimConSetTimeout(cls, obj, (struct MUIP_VimCon_SetTimeout *) msg);
-    case MUIM_VimCon_Timeout: return VimConTimeout(cls, obj);
-#endif
-    case MUIM_VimCon_SetBlinking: return VimConSetBlinking(cls, obj, (struct MUIP_VimCon_SetBlinking *) msg);
-    case MUIM_VimCon_Browse: return VimConBrowse(cls, obj, (struct MUIP_VimCon_Browse *) msg);
-    case MUIM_VimCon_GetScreenDim: return VimConGetScreenDim(cls, obj, (struct MUIP_VimCon_GetScreenDim *) msg);
 
+        case M_ID(VimCon, InvertRect): return M_FN(VimCon, InvertRect);
+        case M_ID(VimCon, DeleteLines): return M_FN(VimCon, DeleteLines);
+        case M_ID(VimCon, DrawPartCursor): return M_FN(VimCon, DrawPartCursor);
+        case M_ID(VimCon, DrawHollowCursor): return M_FN(VimCon, DrawHollowCursor);
+#ifdef MUIVIM_FEAT_TIMEOUT
+        case M_ID(VimCon, SetTimeout): return M_FN(VimCon, SetTimeout);
+        case M_ID(VimCon, Timeout): return M_FN0(VimCon, Timeout);
+#endif
+        case M_ID(VimCon, SetBlinking): return M_FN(VimCon, SetBlinking);
+        case M_ID(VimCon, Browse): return M_FN(VimCon, Browse);
+        case M_ID(VimCon, GetScreenDim): return M_FN(VimCon, GetScreenDim);
         case M_ID(VimCon, SetTitle): return M_FN(VimCon, SetTitle);
         case M_ID(VimCon, GetState): return M_FN0(VimCon, GetState);
         case M_ID(VimCon, Ticker): return M_FN0(VimCon, Ticker);
