@@ -2589,7 +2589,7 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 // Input:                   Object *grp - Scrollbar group
 // Return:                  TRUE if group needs to be sorted, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarSortNeeded(/*Class *cls,*/ Object *grp)
+MUIDSP IPTR VimScrollbarSortNeeded(Object *grp)
 {
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
@@ -2599,18 +2599,15 @@ MUIDSP IPTR VimScrollbarSortNeeded(/*Class *cls,*/ Object *grp)
 
     for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
-//        struct VimScrollbarData *scb = INST_DATA(cls,chl);
-
         IPTR stop = DoMethod(chl, M_ID(VimScrollbar, Top));
-        //KPrintF("%d == %d\n", scb->top, stop);
 
         // Ascending order.
-        if(top > stop /*scb->top*/)
+        if(top > stop)
         {
             return TRUE;
         }
 
-        top = stop;//scb->top;
+        top = stop;
     }
 
     return FALSE;
@@ -2693,11 +2690,10 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 //------------------------------------------------------------------------------
 // VimScrollbarSort - Sort scrollbars in group in ascending order depending on
 //                    the top attribute
-// Input:             Class *cls - Scrollbar class
-//                    Object *grp - Group of scrollbars
+// Input:             Object *grp - Group of scrollbars
 // Return:            - 
 //------------------------------------------------------------------------------
-MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
+MUIDSP void VimScrollbarSort(/*Class *cls,*/ Object *grp)
 {
     // Get number of objects in group.
     size_t cnt = VimScrollbarCount(grp);
@@ -2729,10 +2725,17 @@ MUIDSP void VimScrollbarSort(Class *cls, Object *grp)
         for(end = cnt - 1; end-- && !flip;)
         {
             // Peek into member variables.
-            struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
-                                    *beta = INST_DATA(cls,scs[end + 1]);
+      //      struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
+      //                              *beta = INST_DATA(cls,scs[end + 1]);
 
-            if(beta->top < alfa->top)
+            IPTR alfa = DoMethod(scs[end], M_ID(VimScrollbar, Top)),
+                 beta = DoMethod(scs[end + 1], M_ID(VimScrollbar, Top));
+
+      //      KPrintF("%d == %d\n", alfa->top, alfa_t);
+      //      KPrintF("%d == %d\n", beta->top, beta_t);
+
+            //if(beta->top < alfa->top)
+            if(beta < alfa)
             {
                 // Flip non sorted pairs.
                 Object *tmp = scs[end];
@@ -2782,10 +2785,10 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
-    if(VimScrollbarSortNeeded(/*cls,*/ my->grp))
+    if(VimScrollbarSortNeeded(my->grp))
     {
         // It's not, sort parent group.
-        VimScrollbarSort(cls, my->grp);
+        VimScrollbarSort(/*cls,*/ my->grp);
     }
 
     // Give scrollbar the right proportions.
