@@ -2877,10 +2877,6 @@ DISPATCH(VimScrollbar)
 
         case M_ID(VimScrollbar, Pos):
             return M_FN(VimScrollbar, Pos);
-/*    case MUIM_VimScrollbar_Pos:
-        return VimScrollbarPos(cls, obj,
-            (struct MUIP_VimScrollbar_Pos *) msg);
-            */
         //----------------------------------------------------------------------
         // Fallthrough 
         //----------------------------------------------------------------------
