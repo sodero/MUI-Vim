@@ -2447,25 +2447,7 @@ CLASS_DEF(VimScrollbar)
     Object *grp;
 };
 
-//------------------------------------------------------------------------------
-// VimScrollbar public methods and parameters
-//------------------------------------------------------------------------------
-//#define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
-#define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
-/*
-struct MUIP_VimScrollbar_Show
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Show;
-};
-*/
-struct MUIP_VimScrollbar_Pos
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Top;
-    STACKED IPTR Height;
-};
 
 //------------------------------------------------------------------------------
 // VimScrollbarTop - Get top of scrollbar
@@ -2510,11 +2492,14 @@ METHOD(VimScrollbar, Drag, Value)
 //------------------------------------------------------------------------------
 METHOD(VimScrollbar, Show, Show)
 {
+    // Vim likes to update scrollbars even though nothing changed. Bail out if
+    // nothing changed since the last invocation.
     if(my->visible == msg->Show || !my->grp)
     {
         return FALSE;
     }
 
+    // Save new state.
     my->visible = msg->Show;
 
     // The bottom scrollbar belongs to the same group as the console. Don't
@@ -2538,6 +2523,7 @@ METHOD(VimScrollbar, Show, Show)
         {
             set(my->grp, MUIA_ShowMe, TRUE);
         }
+
         return TRUE;
     }
 
@@ -2605,7 +2591,7 @@ MUIDSP size_t VimScrollbarCount(Object *grp)
     get(grp, MUIA_Group_ChildList, &lst);
 
     struct Node *cur = lst->lh_Head;
-    size_t cnt = 0;
+    IPTR cnt = 0;
     Object *chl;
 
     for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
@@ -2735,11 +2721,8 @@ MUIDSP void VimScrollbarSort(Object *grp)
 //                   Height - Height of scrollbar
 // Return:           TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
-                            struct MUIP_VimScrollbar_Pos *msg)
+METHOD(VimScrollbar, Pos, Top, Height)
 {
-    struct VimScrollbarData *my = INST_DATA(cls,obj);
-
     // Vim likes to update scrollbars even though nothing changed. Bail out if
     // nothing changed since the last invocation.
     if((my->top == msg->Top && my->weight == msg->Height) ||
@@ -2748,6 +2731,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
         return FALSE;
     }
 
+    // The bottom scrollbar needs no weight and no position.
     if(my->sb->type == SBAR_BOTTOM)
     {
         return TRUE;
@@ -2766,7 +2750,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     }
 
     // Give scrollbar the right proportions.
-    set(obj, MUIA_VertWeight, msg->Height);
+    set(me, MUIA_VertWeight, msg->Height);
     DoMethod(my->grp, MUIM_Group_ExitChange);
     return TRUE;
 }
@@ -2891,9 +2875,12 @@ DISPATCH(VimScrollbar)
         case M_ID(VimScrollbar, Show):
             return M_FN(VimScrollbar, Show);
 
-    case MUIM_VimScrollbar_Pos:
+        case M_ID(VimScrollbar, Pos):
+            return M_FN(VimScrollbar, Pos);
+/*    case MUIM_VimScrollbar_Pos:
         return VimScrollbarPos(cls, obj,
             (struct MUIP_VimScrollbar_Pos *) msg);
+            */
         //----------------------------------------------------------------------
         // Fallthrough 
         //----------------------------------------------------------------------
