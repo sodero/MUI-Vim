@@ -693,7 +693,7 @@ METHOD(VimCon, InvertRect, Row, Col, Rows, Cols)
     int x = msg->Col * my->xdelta, xs = my->xdelta * msg->Cols,
         y = msg->Row * my->ydelta, ys = my->ydelta * msg->Rows;
 
-    if(ys < 1)
+    if(xs < 1 || ys < 1)
     {
         return FALSE;
     }
@@ -775,7 +775,7 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
         VimConDirty(my, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
     }
 
-    // Blit and fill the abandoned area with Color
+    // Blit and fill the abandoned area with color
     MovePixelArray(xsrcdst, ysrc, &my->rp, xsrcdst, ydst , xsize, ysize);
     FillPixelArray(&my->rp, xsrcdst, yctop, xsize, ycsiz, msg->Color);
     return TRUE;
@@ -797,6 +797,7 @@ METHOD(VimCon, SetFgColor, Color)
 {
     static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
                                     { .ti_Tag = TAG_END, .ti_Data = 0      }};
+
     if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
         return FALSE;
@@ -816,6 +817,7 @@ METHOD(VimCon, SetBgColor, Color)
 {
     static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
                                     { .ti_Tag = TAG_END, .ti_Data = 0      }};
+
     if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
         return FALSE;
@@ -953,19 +955,17 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
                TAG_DONE);
 
     // Static settings
-    my->blink = 0;
     my->cursor[0] = 700;
     my->cursor[1] = 250;
     my->cursor[2] = 400;
     my->xdelta = my->ydelta = 1;
     my->xd1 = my->yd1 = INT_MAX;
     my->xd2 = my->yd2 = INT_MIN;
-    //my->state = MUIV_VimCon_State_Yield;
     my->state = MUIV_VimCon_State_Idle;
     my->block = FALSE;
-    my->space = 0;
-    my->width = my->height = my->left = my->right = my->top = my->bottom = 0;
-
+    my->blink = my->space = my->width =
+    my->height = my->left = my->right =
+    my->top = my->bottom = 0;
 #ifdef MUIVIM_FEAT_TIMEOUT
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
@@ -1980,8 +1980,11 @@ DISPATCH(VimCon)
         case M_ID(VimCon, Timeout):
             return M_FN0(VimCon, Timeout);
 #endif
-    default:
-        return DoSuperMethodA(cls, obj, msg);
+        //----------------------------------------------------------------------
+        // Fallthrough 
+        //----------------------------------------------------------------------
+        default:
+            return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -1989,34 +1992,11 @@ DISPATCH_END
 //------------------------------------------------------------------------------
 // VimToolbar - MUI custom class handling the toolbar. Currently this class is
 //              rather primitve, pretty much everything is hardcoded and slow,
-//              but it does the job for now. We currently ignore the user
-//              settings to achieve something which looks like the toolbar on
-//              other platforms, refer to gui_mch_init() for details.
+//              but it does the job for now.
 //------------------------------------------------------------------------------
 CLASS_DEF(VimToolbar)
 {
     struct MUIS_TheBar_Button *btn;
-};
-
-//------------------------------------------------------------------------------
-// VimToolbar public methods and parameters
-//------------------------------------------------------------------------------
-#define MUIM_VimToolbar_AddButton     (TAGBASE_sTx + 202)
-#define MUIM_VimToolbar_DisableButton (TAGBASE_sTx + 203)
-
-struct MUIP_VimToolbar_AddButton
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ID;
-    STACKED IPTR Label;
-    STACKED IPTR Help;
-};
-
-struct MUIP_VimToolbar_DisableButton
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ID;
-    STACKED IPTR Grey;
 };
 
 //------------------------------------------------------------------------------
@@ -2026,10 +2006,8 @@ struct MUIP_VimToolbar_DisableButton
 //                       Help - Help text shown when hovering over button
 // Return:               TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
-                                struct MUIP_VimToolbar_AddButton *msg)
+METHOD(VimToolbar, AddButton, ID, Label, Help)
 {
-    struct VimToolbarData *my = INST_DATA(cls,obj);
     struct MUIS_TheBar_Button *b = my->btn;
 
     // Traverse our static toolbar and set up a notification if we find a match.
@@ -2037,7 +2015,7 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
     {
         if(b->help && !strcmp((const char *) msg->Label, b->help))
         {
-            DoMethod(obj, MUIM_TheBar_Notify, (IPTR) b->ID, MUIA_Pressed, FALSE,
+            DoMethod(me, MUIM_TheBar_Notify, (IPTR) b->ID, MUIA_Pressed, FALSE,
                      Con, 2, M_ID(VimCon, Callback), (IPTR) msg->ID);
 
             // Save the Vim menu item pointer as the parent class of the button.
@@ -2060,10 +2038,8 @@ MUIDSP IPTR VimToolbarAddButton(Class *cls, Object *obj,
 //                           Grey - TRUE to disable item, FALSE to enable
 // Return:                   TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
-                                    struct MUIP_VimToolbar_DisableButton *msg)
+METHOD(VimToolbar, DisableButton, ID, Grey)
 {
-    struct VimToolbarData *my = INST_DATA(cls,obj);
     struct MUIS_TheBar_Button *b = my->btn;
 
     // Traverse our static toolbar and look for a Vim menu item match. If we
@@ -2074,7 +2050,7 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
         {
             // We found the MUI ID. Use the proper TheBar method to disable /
             // enable the button.
-            DoMethod(obj, MUIM_TheBar_SetAttr, b->ID, MUIV_TheBar_Attr_Disabled,
+            DoMethod(me, MUIM_TheBar_SetAttr, b->ID, MUIV_TheBar_Attr_Disabled,
                      msg->Grey);
             return TRUE;
         }
@@ -2087,11 +2063,11 @@ MUIDSP IPTR VimToolbarDisableButton(Class *cls, Object *obj,
 }
 
 //------------------------------------------------------------------------------
-// VimError - Show message
-// Input:     char *title - Window title
-//            char *msg   - Message to be shown
-//            char *fmt   - Gadget format
-// Return:    -
+// VimMessage - Show message
+// Input:       char *title - Window title
+//              char *msg   - Message
+//              char *fmt   - Gadget format
+// Return:      -
 //------------------------------------------------------------------------------
 static void VimMessage(const char *title, const char *msg, const char *fmt)
 {
@@ -2151,6 +2127,8 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
         { .img = MUIV_TheBar_End                   },
     };
 
+    // User settings are ignored to achieve something which looks like the
+    // toolbar on other platforms, refer to gui_mch_init() for details.
     struct TagItem tags[] =
     {
         { .ti_Tag = MUIA_Group_Horiz, .ti_Data = TRUE },
@@ -2190,20 +2168,24 @@ DISPATCH(VimToolbar)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
-    case OM_NEW:
-        return VimToolbarNew(cls, obj,
-            (struct opSet *) msg);
+        //----------------------------------------------------------------------
+        // BOOPSI
+        //----------------------------------------------------------------------
+        case OM_NEW:
+            return VimToolbarNew(cls, obj, (struct opSet *) msg);
+        //----------------------------------------------------------------------
+        // Custom
+        //----------------------------------------------------------------------
+        case M_ID(VimToolbar, AddButton):
+            return M_FN(VimToolbar, AddButton);
 
-    case MUIM_VimToolbar_AddButton:
-        return VimToolbarAddButton(cls, obj,
-            (struct MUIP_VimToolbar_AddButton *) msg);
-
-    case MUIM_VimToolbar_DisableButton:
-        return VimToolbarDisableButton(cls, obj,
-            (struct MUIP_VimToolbar_DisableButton *) msg);
-
-    default:
-        return DoSuperMethodA(cls, obj, msg);
+        case M_ID(VimToolbar, DisableButton):
+            return M_FN(VimToolbar, DisableButton);
+        //----------------------------------------------------------------------
+        // Fallthrough 
+        //----------------------------------------------------------------------
+        default:
+            return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -2221,49 +2203,9 @@ CLASS_DEF(VimMenu)
 };
 
 //------------------------------------------------------------------------------
-// VimMenu public methods and parameters
+// VimMenu constants
 //------------------------------------------------------------------------------
-#define MUIM_VimMenu_AddSpacer          (TAGBASE_sTx + 301)
-#define MUIM_VimMenu_AddMenu            (TAGBASE_sTx + 302)
-#define MUIM_VimMenu_AddMenuItem        (TAGBASE_sTx + 303)
-#define MUIM_VimMenu_RemoveMenu         (TAGBASE_sTx + 304)
-#define MUIM_VimMenu_Grey               (TAGBASE_sTx + 305)
 #define MUIV_VimMenu_AddMenu_AlwaysLast (TAGBASE_sTx + 306)
-
-struct MUIP_VimMenu_AddSpacer
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ParentID;
-};
-
-struct MUIP_VimMenu_AddMenu
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ParentID;
-    STACKED IPTR ID;
-    STACKED IPTR Label;
-};
-
-struct MUIP_VimMenu_AddMenuItem
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ParentID;
-    STACKED IPTR ID;
-    STACKED IPTR Label;
-};
-
-struct MUIP_VimMenu_RemoveMenu
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ID;
-};
-
-struct MUIP_VimMenu_Grey
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR ID;
-    STACKED IPTR Grey;
-};
 
 //------------------------------------------------------------------------------
 // VimMenuGrey - Enable/disable menu item
@@ -2271,7 +2213,7 @@ struct MUIP_VimMenu_Grey
 //               Grey - TRUE to disable item, FALSE to enable
 // Return:       TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
+METHOD(VimMenu, Grey, ID, Grey)
 {
     // ID:s must be valid vim menu pointers
     if(!msg || !msg->ID)
@@ -2297,7 +2239,7 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
     }
 
     // Vim menu pointers are used as MUI user data / ID:s
-    Object *m = (Object *) DoMethod(obj, MUIM_FindUData, msg->ID);
+    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
 
     if(!m)
     {
@@ -2324,8 +2266,7 @@ MUIDSP IPTR VimMenuGrey(Class *cls, Object *obj, struct MUIP_VimMenu_Grey *msg)
 // Input:              ID - Menu item ID
 // Return:             TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
-                              struct MUIP_VimMenu_RemoveMenu *msg)
+METHOD(VimMenu, RemoveMenu, ID)
 {
     // ID:s must be valid vim menu pointers
     if(!msg || !msg->ID)
@@ -2334,7 +2275,7 @@ MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
     }
 
     // Vim menu pointers are used as MUI user data / ID:s
-    Object *m = (Object *) DoMethod(obj, MUIM_FindUData, msg->ID);
+    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
 
     if(!m)
     {
@@ -2342,7 +2283,7 @@ MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
     }
 
     // FIXME: Are we leaking m?
-    DoMethod(obj, MUIM_Family_Remove, m);
+    DoMethod(me, MUIM_Family_Remove, m);
     return TRUE;
 }
 
@@ -2351,11 +2292,10 @@ MUIDSP IPTR VimMenuRemoveMenu(Class *cls, Object *obj,
 // Input:             ParentID - ID of parent menu
 // Return:            The created spacer on success, NULL otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimMenuAddSpacer(Class *cls, Object *obj,
-                             struct MUIP_VimMenu_AddSpacer *msg)
+METHOD(VimMenu, AddSpacer, ParentID)
 {
     // All spacers have parents (they can't be top level menus)
-    Object *m = (Object *) DoMethod(obj, MUIM_FindUData, msg->ParentID);
+    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
 
     if(!m)
     {
@@ -2383,12 +2323,11 @@ MUIDSP IPTR VimMenuAddSpacer(Class *cls, Object *obj,
 //                  Label - Text label of menu
 // Return:          The created menu on success, NULL otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimMenuAddMenu(Class *cls, Object *obj,
-                           struct MUIP_VimMenu_AddMenu *msg)
+METHOD(VimMenu, AddMenu, ParentID, ID, Label)
 {
     // Sub menus have their own parents. Top level menus belong to us.
-    Object *m = msg->ParentID ? (Object *) DoMethod(obj, MUIM_FindUData,
-                                                    msg->ParentID) : obj;
+    Object *m = msg->ParentID ? (Object *) DoMethod(me, MUIM_FindUData,
+                                                    msg->ParentID) : me;
     if(!m)
     {
         // Parent not found.
@@ -2408,12 +2347,12 @@ MUIDSP IPTR VimMenuAddMenu(Class *cls, Object *obj,
     DoMethod(m, MUIM_Family_AddTail, i);
 
     // Make sure that the AlwaysLast menu really is last.
-    Object *l = (Object *) DoMethod(obj, MUIM_FindUData,
+    Object *l = (Object *) DoMethod(me, MUIM_FindUData,
                                     MUIV_VimMenu_AddMenu_AlwaysLast);
     if(l)
     {
-        DoMethod(obj, MUIM_Family_Remove, l);
-        DoMethod(obj, MUIM_Family_AddTail, l);
+        DoMethod(me, MUIM_Family_Remove, l);
+        DoMethod(me, MUIM_Family_AddTail, l);
     }
 
     return (IPTR) i;
@@ -2426,11 +2365,10 @@ MUIDSP IPTR VimMenuAddMenu(Class *cls, Object *obj,
 //                      Label - Text label of item
 // Return:              The created item on success, NULL otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimMenuAddMenuItem(Class *cls, Object *obj,
-                               struct MUIP_VimMenu_AddMenuItem *msg)
+METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
 {
     // Menu items must have a parent menu
-    Object *m = (Object *) DoMethod(obj, MUIM_FindUData, msg->ParentID);
+    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
 
     if(!m)
     {
@@ -2465,28 +2403,28 @@ DISPATCH(VimMenu)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
-    case MUIM_VimMenu_AddSpacer:
-        return VimMenuAddSpacer(cls, obj,
-            (struct MUIP_VimMenu_AddSpacer *) msg);
+        //----------------------------------------------------------------------
+        // Custom
+        //----------------------------------------------------------------------
+        case M_ID(VimMenu, AddSpacer):
+            return M_FN(VimMenu, AddSpacer);
 
-    case MUIM_VimMenu_AddMenu:
-        return VimMenuAddMenu(cls, obj,
-            (struct MUIP_VimMenu_AddMenu *) msg);
+        case M_ID(VimMenu, AddMenu):
+            return M_FN(VimMenu, AddMenu);
 
-    case MUIM_VimMenu_AddMenuItem:
-        return VimMenuAddMenuItem(cls, obj,
-            (struct MUIP_VimMenu_AddMenuItem *) msg);
+        case M_ID(VimMenu, AddMenuItem):
+            return M_FN(VimMenu, AddMenuItem);
 
-    case MUIM_VimMenu_RemoveMenu:
-        return VimMenuRemoveMenu(cls, obj,
-            (struct MUIP_VimMenu_RemoveMenu *) msg);
+        case M_ID(VimMenu, RemoveMenu):
+            return M_FN(VimMenu, RemoveMenu);
 
-    case MUIM_VimMenu_Grey:
-        return VimMenuGrey(cls, obj,
-            (struct MUIP_VimMenu_Grey *) msg);
-
-    default:
-        return DoSuperMethodA(cls, obj, msg);
+        case M_ID(VimMenu, Grey):
+            return M_FN(VimMenu, Grey);
+        //----------------------------------------------------------------------
+        // Fallthrough 
+        //----------------------------------------------------------------------
+        default:
+            return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -2547,6 +2485,26 @@ struct MUIP_VimScrollbar_Pos
     STACKED IPTR Top;
     STACKED IPTR Height;
 };
+
+//------------------------------------------------------------------------------
+// VimScrollbarTop - Get top of scrollbar
+// Input:            -
+// Return:           -
+//------------------------------------------------------------------------------
+METHOD0(VimScrollbar, Top)
+{
+    return my->top;
+}
+
+//------------------------------------------------------------------------------
+// VimScrollbarTop - Get scrollbar visibility
+// Input:            -
+// Return:           -
+//------------------------------------------------------------------------------
+METHOD0(VimScrollbar, Visible)
+{
+    return my->visible;
+}
 
 //------------------------------------------------------------------------------
 // VimScrollbarDrag - Drag scrollbar
@@ -2628,11 +2586,10 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 
 //------------------------------------------------------------------------------
 // VimScrollbarSortNeeded - Check if scrollbar group needs sorting
-// Input:                   Class *cls - Scrollbar class
-//                          Object *grp - Scrollbar group
+// Input:                   Object *grp - Scrollbar group
 // Return:                  TRUE if group needs to be sorted, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
+MUIDSP IPTR VimScrollbarSortNeeded(/*Class *cls,*/ Object *grp)
 {
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
@@ -2642,24 +2599,27 @@ MUIDSP IPTR VimScrollbarSortNeeded(Class *cls, Object *grp)
 
     for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
-        struct VimScrollbarData *scb = INST_DATA(cls,chl);
+//        struct VimScrollbarData *scb = INST_DATA(cls,chl);
+
+        IPTR stop = DoMethod(chl, M_ID(VimScrollbar, Top));
+        //KPrintF("%d == %d\n", scb->top, stop);
 
         // Ascending order.
-        if(top > scb->top)
+        if(top > stop /*scb->top*/)
         {
             return TRUE;
         }
 
-        top = scb->top;
+        top = stop;//scb->top;
     }
 
     return FALSE;
 }
 
 //------------------------------------------------------------------------------
-// VimScrollbarSortNeeded - Get number of objects in group
-// Input:                   Object *grp - Group of objects
-// Return:                  Number of objects in group
+// VimScrollbarCount - Get number of objects in group
+// Input:              Object *grp - Group of objects
+// Return:             Number of objects in group
 //------------------------------------------------------------------------------
 MUIDSP size_t VimScrollbarCount(Object *grp)
 {
@@ -2822,7 +2782,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
-    if(VimScrollbarSortNeeded(cls, my->grp))
+    if(VimScrollbarSortNeeded(/*cls,*/ my->grp))
     {
         // It's not, sort parent group.
         VimScrollbarSort(cls, my->grp);
@@ -2934,10 +2894,20 @@ DISPATCH(VimScrollbar)
     DISPATCH_HEAD;
     switch(msg->MethodID)
     {
-    case OM_NEW:
-        return VimScrollbarNew(cls, obj,
-            (struct opSet *) msg);
+        //----------------------------------------------------------------------
+        // BOOPSI
+        //----------------------------------------------------------------------
+        case OM_NEW:
+            return VimScrollbarNew(cls, obj, (struct opSet *) msg);
 
+        case M_ID(VimScrollbar, Top):
+            return M_FN0(VimScrollbar, Top);
+
+        case M_ID(VimScrollbar, Visible):
+            return M_FN0(VimScrollbar, Visible);
+        //----------------------------------------------------------------------
+        // Custom
+        //----------------------------------------------------------------------
     case MUIM_VimScrollbar_Drag:
         return VimScrollbarDrag(cls, obj,
             (struct MUIP_VimScrollbar_Drag *) msg);
@@ -2957,9 +2927,11 @@ DISPATCH(VimScrollbar)
     case MUIM_VimScrollbar_Pos:
         return VimScrollbarPos(cls, obj,
             (struct MUIP_VimScrollbar_Pos *) msg);
-
-    default:
-        return DoSuperMethodA(cls, obj, msg);
+        //----------------------------------------------------------------------
+        // Fallthrough 
+        //----------------------------------------------------------------------
+        default:
+            return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
