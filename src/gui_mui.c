@@ -2450,22 +2450,9 @@ CLASS_DEF(VimScrollbar)
 //------------------------------------------------------------------------------
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
-//#define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
-#define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
 #define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
 #define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
-/*
-struct MUIP_VimScrollbar_Install
-{
-    STACKED IPTR MethodID;
-};
-*/
-
-struct MUIP_VimScrollbar_Uninstall
-{
-    STACKED IPTR MethodID;
-};
 
 struct MUIP_VimScrollbar_Show
 {
@@ -2787,11 +2774,8 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
 // Input:                -
 // Return:               TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-//MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
-//                                struct MUIP_VimScrollbar_Install *msg)
 METHOD0(VimScrollbar, Install)
 {
- //   struct VimScrollbarData *my = INST_DATA(cls,obj);
     if(!my->sb)
     {
         return FALSE;
@@ -2812,20 +2796,17 @@ METHOD0(VimScrollbar, Install)
 // Input:                  -
 // Return:                 TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarUninstall(Class *cls, Object *obj,
-                                  struct MUIP_VimScrollbar_Uninstall *msg)
+METHOD0(VimScrollbar, Uninstall)
 {
-    struct VimScrollbarData *my = INST_DATA(cls,obj);
-
     if(!my->sb || !my->grp)
     {
         return FALSE;
     }
 
     // Hide scrollbar before removing it.
-    DoMethod(obj, MUIM_VimScrollbar_Show, FALSE);
+    DoMethod(me, MUIM_VimScrollbar_Show, FALSE);
     DoMethod(my->grp, MUIM_Group_InitChange);
-    DoMethod(my->grp, OM_REMMEMBER, obj);
+    DoMethod(my->grp, OM_REMMEMBER, me);
     DoMethod(my->grp, MUIM_Group_ExitChange);
     my->grp  = NULL;
     return TRUE;
@@ -2910,9 +2891,13 @@ DISPATCH(VimScrollbar)
         case M_ID(VimScrollbar, Install):
             return M_FN0(VimScrollbar, Install);
 
+        case M_ID(VimScrollbar, Uninstall):
+            return M_FN0(VimScrollbar, Uninstall);
+/*
     case MUIM_VimScrollbar_Uninstall:
         return VimScrollbarUninstall(cls, obj,
             (struct MUIP_VimScrollbar_Uninstall *) msg);
+*/
 
     case MUIM_VimScrollbar_Show:
         return VimScrollbarShow(cls, obj,
