@@ -2450,19 +2450,19 @@ CLASS_DEF(VimScrollbar)
 //------------------------------------------------------------------------------
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
-#define MUIM_VimScrollbar_Drag      (TAGBASE_sTx + 401)
+//#define MUIM_VimScrollbar_Drag      (TAGBASE_sTx + 401)
 #define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
 #define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
 #define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
 #define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
-
+/*
 struct MUIP_VimScrollbar_Drag
 {
     STACKED IPTR MethodID;
     STACKED IPTR Value;
 };
-
+*/
 struct MUIP_VimScrollbar_Install
 {
     STACKED IPTR MethodID;
@@ -2511,11 +2511,11 @@ METHOD0(VimScrollbar, Visible)
 // Input:             Value - Top line
 // Return:            TRUE
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
-                             struct MUIP_VimScrollbar_Drag *msg)
+//MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
+//                             struct MUIP_VimScrollbar_Drag *msg)
+METHOD(VimScrollbar, Drag, Value)
 {
-    struct VimScrollbarData *my = INST_DATA(cls,obj);
-
+//    struct VimScrollbarData *my = INST_DATA(cls,obj);
     if(!my->sb)
     {
         return FALSE;
@@ -2693,7 +2693,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 // Input:             Object *grp - Group of scrollbars
 // Return:            - 
 //------------------------------------------------------------------------------
-MUIDSP void VimScrollbarSort(/*Class *cls,*/ Object *grp)
+MUIDSP void VimScrollbarSort(Object *grp)
 {
     // Get number of objects in group.
     size_t cnt = VimScrollbarCount(grp);
@@ -2724,17 +2724,10 @@ MUIDSP void VimScrollbarSort(/*Class *cls,*/ Object *grp)
         // Iterate over all object pairs.
         for(end = cnt - 1; end-- && !flip;)
         {
-            // Peek into member variables.
-      //      struct VimScrollbarData *alfa = INST_DATA(cls,scs[end]),
-      //                              *beta = INST_DATA(cls,scs[end + 1]);
-
+            // Get top value of scrollbars.
             IPTR alfa = DoMethod(scs[end], M_ID(VimScrollbar, Top)),
                  beta = DoMethod(scs[end + 1], M_ID(VimScrollbar, Top));
 
-      //      KPrintF("%d == %d\n", alfa->top, alfa_t);
-      //      KPrintF("%d == %d\n", beta->top, beta_t);
-
-            //if(beta->top < alfa->top)
             if(beta < alfa)
             {
                 // Flip non sorted pairs.
@@ -2788,7 +2781,7 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
     if(VimScrollbarSortNeeded(my->grp))
     {
         // It's not, sort parent group.
-        VimScrollbarSort(/*cls,*/ my->grp);
+        VimScrollbarSort(my->grp);
     }
 
     // Give scrollbar the right proportions.
@@ -2911,9 +2904,13 @@ DISPATCH(VimScrollbar)
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
-    case MUIM_VimScrollbar_Drag:
+ /*   case MUIM_VimScrollbar_Drag:
         return VimScrollbarDrag(cls, obj,
             (struct MUIP_VimScrollbar_Drag *) msg);
+            */
+
+        case M_ID(VimScrollbar, Drag):
+            return M_FN(VimScrollbar, Drag);
 
     case MUIM_VimScrollbar_Install:
         return VimScrollbarInstall(cls, obj,
