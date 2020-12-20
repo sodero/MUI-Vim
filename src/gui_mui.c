@@ -2450,16 +2450,16 @@ CLASS_DEF(VimScrollbar)
 //------------------------------------------------------------------------------
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
-#define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
+//#define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
 #define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
-
+/*
 struct MUIP_VimScrollbar_Show
 {
     STACKED IPTR MethodID;
     STACKED IPTR Show;
 };
-
+*/
 struct MUIP_VimScrollbar_Pos
 {
     STACKED IPTR MethodID;
@@ -2508,11 +2508,8 @@ METHOD(VimScrollbar, Drag, Value)
 // Input:             Show - Show or hide scrollbar.
 // Return:            TRUE on state change, FALSE otherwise.
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
-                             struct MUIP_VimScrollbar_Show *msg)
+METHOD(VimScrollbar, Show, Show)
 {
-    struct VimScrollbarData *my = INST_DATA(cls,obj);
-
     if(my->visible == msg->Show || !my->grp)
     {
         return FALSE;
@@ -2520,10 +2517,18 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
 
     my->visible = msg->Show;
 
+    // The bottom scrollbar belongs to the same group as the console. Don't
+    // do anything about that one. Just enable / disable the scrollbar.
+    if(my->sb->type == SBAR_BOTTOM)
+    {
+        set(me, MUIA_ShowMe, msg->Show);
+        return TRUE;
+    }
+
     if(msg->Show)
     {
         // Show scrollbar.
-        set(obj, MUIA_ShowMe, TRUE);
+        set(me, MUIA_ShowMe, TRUE);
 
         // Show group unless it's already shown.
         IPTR shown;
@@ -2544,11 +2549,9 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     Object *chl;
 
     // The group shall be hidden if all scrollbars are hidden.
-    for(chl = NextObject(&cur); chl && !enable;
-        chl = NextObject(&cur))
+    for(chl = NextObject(&cur); chl && !enable; chl = NextObject(&cur))
     {
-        struct VimScrollbarData *diz = INST_DATA(cls,chl);
-        enable = diz->visible;
+        enable = DoMethod(chl, M_ID(VimScrollbar, Visible));
     }
 
     if(!enable)
@@ -2558,7 +2561,7 @@ MUIDSP IPTR VimScrollbarShow(Class *cls, Object *obj,
     }
 
     // Hide scrollbar.
-    set(obj, MUIA_ShowMe, FALSE);
+    set(me, MUIA_ShowMe, FALSE);
     return TRUE;
 }
 
@@ -2876,32 +2879,17 @@ DISPATCH(VimScrollbar)
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
- /*   case MUIM_VimScrollbar_Drag:
-        return VimScrollbarDrag(cls, obj,
-            (struct MUIP_VimScrollbar_Drag *) msg);
-            */
-
         case M_ID(VimScrollbar, Drag):
             return M_FN(VimScrollbar, Drag);
-/*
-    case MUIM_VimScrollbar_Install:
-        return VimScrollbarInstall(cls, obj,
-            (struct MUIP_VimScrollbar_Install *) msg);
-*/
+
         case M_ID(VimScrollbar, Install):
             return M_FN0(VimScrollbar, Install);
 
         case M_ID(VimScrollbar, Uninstall):
             return M_FN0(VimScrollbar, Uninstall);
-/*
-    case MUIM_VimScrollbar_Uninstall:
-        return VimScrollbarUninstall(cls, obj,
-            (struct MUIP_VimScrollbar_Uninstall *) msg);
-*/
 
-    case MUIM_VimScrollbar_Show:
-        return VimScrollbarShow(cls, obj,
-            (struct MUIP_VimScrollbar_Show *) msg);
+        case M_ID(VimScrollbar, Show):
+            return M_FN(VimScrollbar, Show);
 
     case MUIM_VimScrollbar_Pos:
         return VimScrollbarPos(cls, obj,
