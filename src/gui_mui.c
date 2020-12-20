@@ -2450,23 +2450,17 @@ CLASS_DEF(VimScrollbar)
 //------------------------------------------------------------------------------
 // VimScrollbar public methods and parameters
 //------------------------------------------------------------------------------
-//#define MUIM_VimScrollbar_Drag      (TAGBASE_sTx + 401)
-#define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
+//#define MUIM_VimScrollbar_Install   (TAGBASE_sTx + 402)
 #define MUIM_VimScrollbar_Uninstall (TAGBASE_sTx + 403)
 #define MUIM_VimScrollbar_Show      (TAGBASE_sTx + 404)
 #define MUIM_VimScrollbar_Pos       (TAGBASE_sTx + 405)
 #define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
 /*
-struct MUIP_VimScrollbar_Drag
-{
-    STACKED IPTR MethodID;
-    STACKED IPTR Value;
-};
-*/
 struct MUIP_VimScrollbar_Install
 {
     STACKED IPTR MethodID;
 };
+*/
 
 struct MUIP_VimScrollbar_Uninstall
 {
@@ -2511,11 +2505,8 @@ METHOD0(VimScrollbar, Visible)
 // Input:             Value - Top line
 // Return:            TRUE
 //------------------------------------------------------------------------------
-//MUIDSP IPTR VimScrollbarDrag(Class *cls, Object *obj,
-//                             struct MUIP_VimScrollbar_Drag *msg)
 METHOD(VimScrollbar, Drag, Value)
 {
-//    struct VimScrollbarData *my = INST_DATA(cls,obj);
     if(!my->sb)
     {
         return FALSE;
@@ -2796,11 +2787,11 @@ MUIDSP IPTR VimScrollbarPos(Class *cls, Object *obj,
 // Input:                -
 // Return:               TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
-                                struct MUIP_VimScrollbar_Install *msg)
+//MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
+//                                struct MUIP_VimScrollbar_Install *msg)
+METHOD0(VimScrollbar, Install)
 {
-    struct VimScrollbarData *my = INST_DATA(cls,obj);
-
+ //   struct VimScrollbarData *my = INST_DATA(cls,obj);
     if(!my->sb)
     {
         return FALSE;
@@ -2811,7 +2802,7 @@ MUIDSP IPTR VimScrollbarInstall(Class *cls, Object *obj,
              (my->sb->type == SBAR_RIGHT ? Rsg : Bsg);
 
     DoMethod(my->grp, MUIM_Group_InitChange);
-    DoMethod(my->grp, OM_ADDMEMBER, obj);
+    DoMethod(my->grp, OM_ADDMEMBER, me);
     DoMethod(my->grp, MUIM_Group_ExitChange);
     return TRUE;
 }
@@ -2911,10 +2902,13 @@ DISPATCH(VimScrollbar)
 
         case M_ID(VimScrollbar, Drag):
             return M_FN(VimScrollbar, Drag);
-
+/*
     case MUIM_VimScrollbar_Install:
         return VimScrollbarInstall(cls, obj,
             (struct MUIP_VimScrollbar_Install *) msg);
+*/
+        case M_ID(VimScrollbar, Install):
+            return M_FN0(VimScrollbar, Install);
 
     case MUIM_VimScrollbar_Uninstall:
         return VimScrollbarUninstall(cls, obj,
