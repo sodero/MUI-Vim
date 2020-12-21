@@ -3410,14 +3410,9 @@ void gui_mch_set_menu_pos(int x, int y, int w, int h)
     (void) h;
 }
 
-//------------------------------------------------------------------------------
-// gui_mch_init - Initialise the GUI
-//------------------------------------------------------------------------------
-int gui_mch_init(void)
-{
-    Object *Win, *Set = NULL, *Abo = NULL;
-
 #ifdef __amigaos4__
+static int gui_os4_init(void)
+{
     if(!(MUIMasterBase = OpenLibrary("muimaster.library", 19)))
     {
         fprintf(stderr, "Failed to open muimaster.library.\n");
@@ -3442,6 +3437,22 @@ int gui_mch_init(void)
     }
 
     IKeymap = (struct KeymapIFace*) GetInterface(KeymapBase, "main", 1, NULL);
+    return (IMUIMaster && ICyberGfx && IKeymap) ? OK : FAIL;
+}
+#endif
+
+//------------------------------------------------------------------------------
+// gui_mch_init - Initialise the GUI
+//------------------------------------------------------------------------------
+int gui_mch_init(void)
+{
+    Object *Win, *Set = NULL, *Abo = NULL;
+
+#ifdef __amigaos4__
+    if(gui_os4_init() == FAIL)
+    {
+        return FAIL;
+    }
 #endif
     static const CONST_STRPTR classes[] = {"TheBar.mcc", NULL};
     VimToolbarClass = VimConClass = VimMenuClass = NULL;
@@ -3600,19 +3611,7 @@ int gui_mch_init(void)
 //------------------------------------------------------------------------------
 void gui_mch_prepare(int *argc, char **argv)
 {
-    // Invoked from WB?
-    if(!*argc)
-    {
-        // Count number arguments, argv is populated in get_cmd_argsA(..).
-        while(*argv)
-        {
-            argv++;
-            (*argc)++;
-        }
-
-        // Always start GUI from WB.
-        gui.starting = TRUE;
-    }
+    gui.starting = TRUE;
 }
 
 //------------------------------------------------------------------------------
