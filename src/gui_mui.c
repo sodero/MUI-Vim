@@ -3605,16 +3605,14 @@ int gui_mch_init(void)
 }
 
 //------------------------------------------------------------------------------
-// gui_mch_prepare - Handle WB invocation.
+// gui_mch_prepare
 //------------------------------------------------------------------------------
 void gui_mch_prepare(int *argc, char **argv)
 {
-HERE;
-//    gui.starting = TRUE;
 }
 
 //------------------------------------------------------------------------------
-//gui_mch_init_check
+// gui_mch_init_check
 //------------------------------------------------------------------------------
 int gui_mch_init_check(void)
 {
@@ -3654,7 +3652,6 @@ void gui_mch_exit(int rc)
 {
     (void) rc;
 
-HERE;
     if(App)
     {
         // Save icon pointer
