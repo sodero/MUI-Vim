@@ -1981,7 +1981,7 @@ DISPATCH(VimCon)
             return M_FN0(VimCon, Timeout);
 #endif
         //----------------------------------------------------------------------
-        // Fallthrough 
+        // Fallthrough
         //----------------------------------------------------------------------
         default:
             return DoSuperMethodA(cls, obj, msg);
@@ -2421,7 +2421,7 @@ DISPATCH(VimMenu)
         case M_ID(VimMenu, Grey):
             return M_FN(VimMenu, Grey);
         //----------------------------------------------------------------------
-        // Fallthrough 
+        // Fallthrough
         //----------------------------------------------------------------------
         default:
             return DoSuperMethodA(cls, obj, msg);
@@ -2624,7 +2624,7 @@ MUIDSP void VimScrollbarOrderAll(Object **obj, Object *grp)
 //------------------------------------------------------------------------------
 // VimScrollbarGroupCopy - Create a shallow copy of objects in a group
 // Input:                  Object *grp - Group of objects
-//                         size_t cnt - Number of objects to copy 
+//                         size_t cnt - Number of objects to copy
 // Return:                 Object * array if success full, NULL otherwisee
 //------------------------------------------------------------------------------
 MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
@@ -2658,7 +2658,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 // VimScrollbarSort - Sort scrollbars in group in ascending order depending on
 //                    the top attribute
 // Input:             Object *grp - Group of scrollbars
-// Return:            - 
+// Return:            -
 //------------------------------------------------------------------------------
 MUIDSP void VimScrollbarSort(Object *grp)
 {
@@ -2805,7 +2805,7 @@ METHOD0(VimScrollbar, Uninstall)
 // Return:           See BOOPSI docs
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
-{    
+{
     // Get Vim scrollbar reference.
     scrollbar_T *sb = (scrollbar_T *) GetTagData(MUIA_VimScrollbar_Sb, 0,
                       ((struct opSet *) msg)->ops_AttrList);
@@ -2878,7 +2878,7 @@ DISPATCH(VimScrollbar)
         case M_ID(VimScrollbar, Pos):
             return M_FN(VimScrollbar, Pos);
         //----------------------------------------------------------------------
-        // Fallthrough 
+        // Fallthrough
         //----------------------------------------------------------------------
         default:
             return DoSuperMethodA(cls, obj, msg);
@@ -2970,7 +2970,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
     }
 
-    (void) DoMethod(sb->id, MUIM_VimScrollbar_Show, flag ? TRUE : FALSE);
+    (void) DoMethod(sb->id, M_ID(VimScrollbar, Show), flag ? TRUE : FALSE);
 #else
     (void) sb;
     (void) flag;
@@ -2991,7 +2991,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
         return;
     }
 
-    (void) DoMethod(obj, MUIM_VimScrollbar_Install);
+    (void) DoMethod(obj, M_ID(VimScrollbar, Install));
 #else
     (void) sb;
     (void) orient;
@@ -3030,7 +3030,7 @@ void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
         return;
     }
 
-    (void) DoMethod(sb->id, MUIM_VimScrollbar_Pos, (IPTR) y, (IPTR) h);
+    (void) DoMethod(sb->id, M_ID(VimScrollbar, Pos), (IPTR) y, (IPTR) h);
 #else
     (void) sb;
     (void) x;
@@ -3386,8 +3386,8 @@ void gui_mch_set_font(GuiFont font)
 //------------------------------------------------------------------------------
 void gui_mch_clear_all()
 {
-    (void) DoMethod(Con, M_ID(VimCon, FillBlock), 0, 0, gui.num_rows, gui.num_cols,
-                    gui.back_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, FillBlock), 0, 0, gui.num_rows,
+                    gui.num_cols, gui.back_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3699,32 +3699,20 @@ void gui_mch_exit(int rc)
 #ifdef __amigaos4__
     if(IMUIMaster)
     {
-        DropInterface((struct Interface *)IMUIMaster);
-    }
-
-    if(MUIMasterBase)
-    {
-        CloseLibrary((struct Library *)MUIMasterBase);
+        DropInterface((struct Interface *) IMUIMaster);
+        CloseLibrary((struct Library *) MUIMasterBase);
     }
 
     if(ICyberGfx)
     {
-        DropInterface((struct Interface *)ICyberGfx);
-    }
-
-    if(CyberGfxBase)
-    {
-        CloseLibrary((struct Library *)CyberGfxBase);
+        DropInterface((struct Interface *) ICyberGfx);
+        CloseLibrary((struct Library *) CyberGfxBase);
     }
 
     if(IKeymap)
     {
-        DropInterface((struct Interface*)IKeymap);
-    }
-
-    if(KeymapBase)
-    {
-        CloseLibrary((struct Library *)KeymapBase);
+        DropInterface((struct Interface*) IKeymap);
+        CloseLibrary((struct Library *) KeymapBase);
     }
 #endif
 }
@@ -3774,12 +3762,14 @@ void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 void gui_mch_add_menu(vimmenu_T *menu, int index)
 {
     (void) index;
+
     if(menu_is_popup(menu->name) || menu_is_toolbar(menu->name))
     {
         return;
     }
 
-    (void) DoMethod(Mnu, MUIM_VimMenu_AddMenu, menu->parent, menu, menu->dname);
+    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenu), menu->parent, menu,
+                    menu->dname);
 }
 
 //------------------------------------------------------------------------------
@@ -3808,7 +3798,8 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     // Menu items can be proper menu items or toolbar buttons
     if(menu_is_toolbar(p->name) && !menu_is_separator(menu->name))
     {
-        (void) DoMethod(Tlb, MUIM_VimToolbar_AddButton, menu, menu->dname,
+
+        (void) DoMethod(Tlb, M_ID(VimToolbar, AddButton), menu, menu->dname,
                         menu->dname);
         return;
     }
@@ -3816,12 +3807,12 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     // A menu spacer?
     if(menu_is_separator(menu->name) )
     {
-        (void) DoMethod(Mnu, MUIM_VimMenu_AddSpacer, menu->parent);
+        (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), menu->parent);
         return;
     }
 
     // A normal menu item.
-    (void) DoMethod(Mnu, MUIM_VimMenu_AddMenuItem, menu->parent, menu,
+    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenuItem), menu->parent, menu,
                     menu->dname);
 }
 
@@ -3838,7 +3829,7 @@ void gui_mch_show_toolbar(int showit)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_menu(vimmenu_T *menu)
 {
-    (void) DoMethod(Mnu, MUIM_VimMenu_RemoveMenu, menu);
+    (void) DoMethod(Mnu, M_ID(VimMenu, RemoveMenu), menu);
 }
 
 //------------------------------------------------------------------------------
@@ -3846,7 +3837,7 @@ void gui_mch_destroy_menu(vimmenu_T *menu)
 //------------------------------------------------------------------------------
 void gui_mch_menu_grey(vimmenu_T *menu, int grey)
 {
-    (void) DoMethod(Mnu, MUIM_VimMenu_Grey, menu, grey);
+    (void) DoMethod(Mnu, M_ID(VimMenu, Grey), menu, grey);
 }
 
 //------------------------------------------------------------------------------
@@ -3966,7 +3957,7 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(!sb || !sb->id || !DoMethod(sb->id, MUIM_VimScrollbar_Uninstall))
+    if(!sb || !sb->id || !DoMethod(sb->id, M_ID(VimScrollbar, Uninstall)))
     {
         return;
     }
