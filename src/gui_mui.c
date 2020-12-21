@@ -95,7 +95,6 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
   struct MUI_CustomClass * C ## Class; \
   struct C ## Data
 #endif
-
 #ifdef __AROS__
 # define DISPATCH(C) BOOPSI_DISPATCHER(IPTR, C ## Dispatch, cls, obj, msg)
 # define DISPATCH_END BOOPSI_DISPATCHER_END
@@ -103,9 +102,6 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 # define DISPATCH(C) static IPTR C ## Dispatch (DISPATCH_ARGS)
 # define DISPATCH_END
 #endif
-
-#define CLASS_DATA(C) C ## Data
-#define TAGBASE_sTx (TAG_USER | 27<<16)
 #ifdef __GNUC__
 # define MUIDSP static inline __attribute__((always_inline))
 #else
@@ -154,15 +150,12 @@ CLASS_DEF(VimCon)
     struct MUI_InputHandlerNode timeout;
 #endif
 };
-
-//------------------------------------------------------------------------------
-// VimCon constants.
-//------------------------------------------------------------------------------
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #define MUIV_VimCon_State_Timeout    (1 << 2)
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
+//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 // VimConAppMessage - AppMessage notification handler
@@ -795,8 +788,11 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
 //------------------------------------------------------------------------------
 METHOD(VimCon, SetFgColor, Color)
 {
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
-                                    { .ti_Tag = TAG_END, .ti_Data = 0      }};
+    static struct TagItem tags[] =
+    {
+        { .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
+        { .ti_Tag = TAG_END, .ti_Data = 0 }
+    };
 
     if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
@@ -815,8 +811,11 @@ METHOD(VimCon, SetFgColor, Color)
 //------------------------------------------------------------------------------
 METHOD(VimCon, SetBgColor, Color)
 {
-    static struct TagItem tags[] = {{ .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
-                                    { .ti_Tag = TAG_END, .ti_Data = 0      }};
+    static struct TagItem tags[] =
+    {
+        { .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
+        { .ti_Tag = TAG_END, .ti_Data = 0 }
+    };
 
     if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
     {
@@ -1275,116 +1274,116 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     // No, something else....
     switch(msg->imsg->Code)
     {
-    case RAWKEY_UP:
-        c = TO_SPECIAL('k', 'u');
-        break;
+        case RAWKEY_UP:
+            c = TO_SPECIAL('k', 'u');
+            break;
 
-    case RAWKEY_DOWN:
-        c = TO_SPECIAL('k', 'd');
-        break;
+        case RAWKEY_DOWN:
+            c = TO_SPECIAL('k', 'd');
+            break;
 
-    case RAWKEY_LEFT:
-        c = TO_SPECIAL('k', 'l');
-        break;
+        case RAWKEY_LEFT:
+            c = TO_SPECIAL('k', 'l');
+            break;
 
-    case RAWKEY_RIGHT:
-        c = TO_SPECIAL('k', 'r');
-        break;
+        case RAWKEY_RIGHT:
+            c = TO_SPECIAL('k', 'r');
+            break;
 
-    case RAWKEY_F1:
-        c = TO_SPECIAL('k', '1');
-        break;
+        case RAWKEY_F1:
+            c = TO_SPECIAL('k', '1');
+            break;
 
-    case RAWKEY_F2:
-        c = TO_SPECIAL('k', '2');
-        break;
+        case RAWKEY_F2:
+            c = TO_SPECIAL('k', '2');
+            break;
 
-    case RAWKEY_F3:
-        c = TO_SPECIAL('k', '3');
-        break;
+        case RAWKEY_F3:
+            c = TO_SPECIAL('k', '3');
+            break;
 
-    case RAWKEY_F4:
-        c = TO_SPECIAL('k', '4');
-        break;
+        case RAWKEY_F4:
+            c = TO_SPECIAL('k', '4');
+            break;
 
-    case RAWKEY_F5:
-        c = TO_SPECIAL('k', '5');
-        break;
+        case RAWKEY_F5:
+            c = TO_SPECIAL('k', '5');
+            break;
 
-    case RAWKEY_F6:
-        c = TO_SPECIAL('k', '6');
-        break;
+        case RAWKEY_F6:
+            c = TO_SPECIAL('k', '6');
+            break;
 
-    case RAWKEY_F7:
-        c = TO_SPECIAL('k', '7');
-        break;
+        case RAWKEY_F7:
+            c = TO_SPECIAL('k', '7');
+            break;
 
-    case RAWKEY_F8:
-        c = TO_SPECIAL('k', '8');
-        break;
+        case RAWKEY_F8:
+            c = TO_SPECIAL('k', '8');
+            break;
 
-    case RAWKEY_F9:
-        c = TO_SPECIAL('k', '9');
-        break;
+        case RAWKEY_F9:
+            c = TO_SPECIAL('k', '9');
+            break;
 
-    case RAWKEY_F10:
-        c = TO_SPECIAL('k', ';');
-        break;
+        case RAWKEY_F10:
+            c = TO_SPECIAL('k', ';');
+            break;
 
-    case RAWKEY_F11:
-        c = TO_SPECIAL('F', '1');
-        break;
+        case RAWKEY_F11:
+            c = TO_SPECIAL('F', '1');
+            break;
 
-    case RAWKEY_F12:
-        c = TO_SPECIAL('F', '2');
-        break;
+        case RAWKEY_F12:
+            c = TO_SPECIAL('F', '2');
+            break;
 
-    case RAWKEY_HELP:
-        c = TO_SPECIAL('%', '1');
-        break;
+        case RAWKEY_HELP:
+            c = TO_SPECIAL('%', '1');
+            break;
 
-    case RAWKEY_INSERT:
-        c = TO_SPECIAL('k', 'I');
-        break;
+        case RAWKEY_INSERT:
+            c = TO_SPECIAL('k', 'I');
+            break;
 
-    case RAWKEY_HOME:
-        c = TO_SPECIAL('k', 'h');
-        break;
+        case RAWKEY_HOME:
+            c = TO_SPECIAL('k', 'h');
+            break;
 
-    case RAWKEY_END:
-        c = TO_SPECIAL('@', '7');
-        break;
+        case RAWKEY_END:
+            c = TO_SPECIAL('@', '7');
+            break;
 
-    case RAWKEY_PAGEUP:
-        c = TO_SPECIAL('k', 'P');
-        break;
+        case RAWKEY_PAGEUP:
+            c = TO_SPECIAL('k', 'P');
+            break;
 
-    case RAWKEY_PAGEDOWN:
-        c = TO_SPECIAL('k', 'N');
-        break;
+        case RAWKEY_PAGEDOWN:
+            c = TO_SPECIAL('k', 'N');
+            break;
 
-    case RAWKEY_NM_WHEEL_DOWN:
-        gui_send_mouse_event(MOUSE_5, msg->imsg->MouseX, msg->imsg->MouseY,
-                             FALSE, 0);
-        return TRUE;
+        case RAWKEY_NM_WHEEL_DOWN:
+            gui_send_mouse_event(MOUSE_5, msg->imsg->MouseX, msg->imsg->MouseY,
+                                 FALSE, 0);
+            return TRUE;
 
-    case RAWKEY_NM_WHEEL_UP:
-        gui_send_mouse_event(MOUSE_4, msg->imsg->MouseX, msg->imsg->MouseY,
-                             FALSE, 0);
-        return TRUE;
+        case RAWKEY_NM_WHEEL_UP:
+            gui_send_mouse_event(MOUSE_4, msg->imsg->MouseX, msg->imsg->MouseY,
+                                 FALSE, 0);
+            return TRUE;
 
-    case RAWKEY_NM_WHEEL_LEFT:
-        gui_send_mouse_event(MOUSE_7, msg->imsg->MouseX, msg->imsg->MouseY,
-                             FALSE, 0);
-        return TRUE;
+        case RAWKEY_NM_WHEEL_LEFT:
+            gui_send_mouse_event(MOUSE_7, msg->imsg->MouseX, msg->imsg->MouseY,
+                                 FALSE, 0);
+            return TRUE;
 
-    case RAWKEY_NM_WHEEL_RIGHT:
-        gui_send_mouse_event(MOUSE_6, msg->imsg->MouseX, msg->imsg->MouseY,
-                             FALSE, 0);
-        return TRUE;
+        case RAWKEY_NM_WHEEL_RIGHT:
+            gui_send_mouse_event(MOUSE_6, msg->imsg->MouseX, msg->imsg->MouseY,
+                                 FALSE, 0);
+            return TRUE;
 
-    default:
-        return TRUE;
+        default:
+            return TRUE;
     }
 
     if(!c)
@@ -1439,55 +1438,54 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
 
     switch(msg->imsg->Class)
     {
-    case IDCMP_MOUSEMOVE:
-    case IDCMP_INTUITICKS:
-        VimConMouseMove(cls, obj, msg);
-        break;
+        case IDCMP_MOUSEMOVE:
+        case IDCMP_INTUITICKS:
+            VimConMouseMove(cls, obj, msg);
+            break;
 
 #ifdef __amigaos4__
-    case IDCMP_EXTENDEDMOUSE:
-        if(msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
-        {
-            struct IntuiWheelData *iwd = (struct IntuiWheelData *)
-                   msg->imsg->IAddress;
-
-            if(iwd->WheelY<0)
+        case IDCMP_EXTENDEDMOUSE:
+            if(msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
             {
-                msg->imsg->Code=RAWKEY_NM_WHEEL_UP;
-            }
-            else if(iwd->WheelY>0)
-            {
-                msg->imsg->Code=RAWKEY_NM_WHEEL_DOWN;
-            }
-            else if(iwd->WheelX<0)
-            {
-                msg->imsg->Code=RAWKEY_NM_WHEEL_LEFT;
-            }
-            else if(iwd->WheelX>0)
-            {
-                msg->imsg->Code=RAWKEY_NM_WHEEL_RIGHT;
-            }
+                struct IntuiWheelData *iwd = (struct IntuiWheelData *)
+                       msg->imsg->IAddress;
 
-            VimConHandleRaw(cls, obj, msg);
-        }
-        break;
-#endif
+                if(iwd->WheelY<0)
+                {
+                    msg->imsg->Code=RAWKEY_NM_WHEEL_UP;
+                }
+                else if(iwd->WheelY>0)
+                {
+                    msg->imsg->Code=RAWKEY_NM_WHEEL_DOWN;
+                }
+                else if(iwd->WheelX<0)
+                {
+                    msg->imsg->Code=RAWKEY_NM_WHEEL_LEFT;
+                }
+                else if(iwd->WheelX>0)
+                {
+                    msg->imsg->Code=RAWKEY_NM_WHEEL_RIGHT;
+                }
 
-    case IDCMP_RAWKEY:
-        VimConHandleRaw(cls, obj, msg);
-        break;
-
-    case IDCMP_MOUSEBUTTONS:
-        // Fall through unless we eat the button.
-        if(VimConMouseHandleButton(cls, obj, msg))
-        {
+                VimConHandleRaw(cls, obj, msg);
+            }
             break;
-        }
-        // FALLTHRU
+#endif
+        case IDCMP_RAWKEY:
+            VimConHandleRaw(cls, obj, msg);
+            break;
 
-    default:
-        // Leave the rest to our parent class
-        return DoSuperMethodA(cls, obj, (Msg) msg);
+        case IDCMP_MOUSEBUTTONS:
+            // Fall through unless we eat the button.
+            if(VimConMouseHandleButton(cls, obj, msg))
+            {
+                break;
+            }
+            // FALLTHRU
+
+        default:
+            // Leave the rest to our parent class
+            return DoSuperMethodA(cls, obj, (Msg) msg);
     }
 
     my->state |= MUIV_VimCon_State_Yield;
@@ -2205,7 +2203,7 @@ CLASS_DEF(VimMenu)
 //------------------------------------------------------------------------------
 // VimMenu constants
 //------------------------------------------------------------------------------
-#define MUIV_VimMenu_AddMenu_AlwaysLast (TAGBASE_sTx + 306)
+#define MUIV_VimMenu_AddMenu_AlwaysLast 303
 
 //------------------------------------------------------------------------------
 // VimMenuGrey - Enable/disable menu item
@@ -2446,8 +2444,8 @@ CLASS_DEF(VimScrollbar)
     IPTR top, visible, weight;
     Object *grp;
 };
-
-#define MUIA_VimScrollbar_Sb        (TAGBASE_sTx + 411)
+#define MUIA_VimScrollbar_Sb 808
+//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 // VimScrollbarTop - Get top of scrollbar
@@ -3457,7 +3455,7 @@ int gui_mch_init(void)
 
     // Create custom classes
     VimToolbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_TheBar, NULL,
-                                            sizeof(struct CLASS_DATA(VimToolbar)),
+                                            sizeof(struct VimToolbarData),
                                             (APTR) DISPATCH_GATE(VimToolbar));
     if(!VimToolbarClass)
     {
@@ -3466,15 +3464,15 @@ int gui_mch_init(void)
     }
 
     VimConClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Area, NULL,
-                                        sizeof(struct CLASS_DATA(VimCon)),
+                                        sizeof(struct VimConData),
                                         (APTR) DISPATCH_GATE(VimCon));
     VimMenuClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Menustrip, NULL,
-                                         sizeof(struct CLASS_DATA(VimMenu)),
+                                         sizeof(struct VimMenuData),
                                          (APTR) DISPATCH_GATE(VimMenu));
 
 #ifdef MUIVIM_FEAT_SCROLLBAR
     VimScrollbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Scrollbar, NULL,
-                                         sizeof(struct CLASS_DATA(VimScrollbar)),
+                                         sizeof(struct VimScrollbarData),
                                          (APTR) DISPATCH_GATE(VimScrollbar));
 
     if(!VimConClass || !VimMenuClass || !VimScrollbarClass)
