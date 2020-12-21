@@ -3253,7 +3253,6 @@ int gui_mch_wait_for_chars(int wtime)
             if(sig & SIGBREAKF_CTRL_C)
             {
                 getout_preserve_modified(0);
-                return FAIL;
             }
         }
 
@@ -3447,11 +3446,10 @@ static int gui_os4_init(void)
 int gui_mch_init(void)
 {
     Object *Win, *Set = NULL, *Abo = NULL;
-
 #ifdef __amigaos4__
-    if(gui_os4_init() == FAIL)
+    if(!gui_os4_init())
     {
-        return FAIL;
+        getout(1);
     }
 #endif
     static const CONST_STRPTR classes[] = {"TheBar.mcc", NULL};
@@ -3464,7 +3462,7 @@ int gui_mch_init(void)
     if(!VimToolbarClass)
     {
         VimMessage("Error", "MCC_TheBar required", "OK");
-        return FAIL;
+        getout(1);
     }
 
     VimConClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Area, NULL,
@@ -3485,7 +3483,7 @@ int gui_mch_init(void)
 #endif
     {
         kmsg(_(e_outofmem));
-        return FAIL;
+        getout(1);
     }
 
     // Generate full version string
@@ -3571,7 +3569,7 @@ int gui_mch_init(void)
     if(!App)
     {
         kmsg(_(e_outofmem));
-        return FAIL;
+        getout(1);
     }
 
     // Open the window to finish setup, cheat (see gui_mch_open).
@@ -3611,7 +3609,8 @@ int gui_mch_init(void)
 //------------------------------------------------------------------------------
 void gui_mch_prepare(int *argc, char **argv)
 {
-    gui.starting = TRUE;
+HERE;
+//    gui.starting = TRUE;
 }
 
 //------------------------------------------------------------------------------
@@ -3655,6 +3654,7 @@ void gui_mch_exit(int rc)
 {
     (void) rc;
 
+HERE;
     if(App)
     {
         // Save icon pointer
