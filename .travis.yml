@@ -17,7 +17,7 @@ git:
     depth: 1
 
 script:
-    - wget -nc -q http://aminet.net/dev/mui/MCC_TheBar-26.20.lha -O thebar.lha
+    - wget -nc -q http://aminet.net/dev/mui/MCC_TheBar-26.21.lha -O thebar.lha
     - wget -nc -q http://hpux.connect.org.uk/ftp/hpux/Misc/lha-114i/lha-114i-src-11.11.tar.gz -O lha.tar.gz
     - wget -nc -q https://muidev.de/download/MUI%205.0%20-%20Release/MUI-5.0-2019R2-os4.lha
     - wget -nc -q 'http://hyperion-entertainment.biz/index.php/downloads?view=download&amp;format=raw&amp;file=69' -O SDK_53.24.lha
