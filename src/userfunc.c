@@ -1225,6 +1225,8 @@ func_clear_items(ufunc_T *fp)
     VIM_CLEAR(fp->uf_block_ids);
     VIM_CLEAR(fp->uf_va_name);
     clear_type_list(&fp->uf_type_list);
+    partial_unref(fp->uf_partial);
+    fp->uf_partial = NULL;
 
 #ifdef FEAT_LUA
     if (fp->uf_cb_free != NULL)
@@ -1305,12 +1307,13 @@ func_clear_free(ufunc_T *fp, int force)
 /*
  * Copy already defined function "lambda" to a new function with name "global".
  * This is for when a compiled function defines a global function.
+ * Caller should take care of adding a partial for a closure.
  */
-    void
+    ufunc_T *
 copy_func(char_u *lambda, char_u *global)
 {
     ufunc_T *ufunc = find_func_even_dead(lambda, TRUE, NULL);
-    ufunc_T *fp;
+    ufunc_T *fp = NULL;
 
     if (ufunc == NULL)
 	semsg(_(e_lambda_function_not_found_str), lambda);
@@ -1321,12 +1324,12 @@ copy_func(char_u *lambda, char_u *global)
 	if (fp != NULL)
 	{
 	    semsg(_(e_funcexts), global);
-	    return;
+	    return NULL;
 	}
 
 	fp = alloc_clear(offsetof(ufunc_T, uf_name) + STRLEN(global) + 1);
 	if (fp == NULL)
-	    return;
+	    return NULL;
 
 	fp->uf_varargs = ufunc->uf_varargs;
 	fp->uf_flags = (ufunc->uf_flags & ~FC_VIM9) | FC_COPY;
@@ -1362,15 +1365,17 @@ copy_func(char_u *lambda, char_u *global)
 	    if (fp->uf_va_name == NULL)
 		goto failed;
 	}
+	fp->uf_ret_type = ufunc->uf_ret_type;
 
 	fp->uf_refcount = 1;
 	STRCPY(fp->uf_name, global);
 	hash_add(&func_hashtab, UF2HIKEY(fp));
     }
-    return;
+    return fp;
 
 failed:
     func_clear_free(fp, TRUE);
+    return NULL;
 }
 
 static int	funcdepth = 0;
@@ -1409,7 +1414,7 @@ funcdepth_get(void)
 
 /*
  * Restore the function call depth.  This is for cases where there is no
- * garantee funcdepth_decrement() can be called exactly the same number of
+ * guarantee funcdepth_decrement() can be called exactly the same number of
  * times as funcdepth_increment().
  */
     void
@@ -1829,6 +1834,22 @@ call_user_func(
 }
 
 /*
+ * Check the argument count for user function "fp".
+ * Return FCERR_UNKNOWN if OK, FCERR_TOOFEW or FCERR_TOOMANY otherwise.
+ */
+    int
+check_user_func_argcount(ufunc_T *fp, int argcount)
+{
+    int regular_args = fp->uf_args.ga_len;
+
+    if (argcount < regular_args - fp->uf_def_args.ga_len)
+	return FCERR_TOOFEW;
+    else if (!has_varargs(fp) && argcount > regular_args)
+	return FCERR_TOOMANY;
+    return FCERR_UNKNOWN;
+}
+
+/*
  * Call a user function after checking the arguments.
  */
     int
@@ -1841,15 +1862,13 @@ call_user_func_check(
 	dict_T	    *selfdict)
 {
     int error;
-    int regular_args = fp->uf_args.ga_len;
 
     if (fp->uf_flags & FC_RANGE && funcexe->doesrange != NULL)
 	*funcexe->doesrange = TRUE;
-    if (argcount < regular_args - fp->uf_def_args.ga_len)
-	error = FCERR_TOOFEW;
-    else if (!has_varargs(fp) && argcount > regular_args)
-	error = FCERR_TOOMANY;
-    else if ((fp->uf_flags & FC_DICT) && selfdict == NULL)
+    error = check_user_func_argcount(fp, argcount);
+    if (error != FCERR_UNKNOWN)
+	return error;
+    if ((fp->uf_flags & FC_DICT) && selfdict == NULL)
 	error = FCERR_DICT;
     else
     {
@@ -2654,8 +2673,18 @@ trans_function_name(
 	goto theend;
     }
 
-    // In Vim9 script a user function is script-local by default.
+    // In Vim9 script a user function is script-local by default, unless it
+    // starts with a lower case character: dict.func().
     vim9script = ASCII_ISUPPER(*start) && in_vim9script();
+    if (vim9script)
+    {
+	char_u *p;
+
+	// SomeScript#func() is a global function.
+	for (p = start; *p != NUL && *p != '('; ++p)
+	    if (*p == AUTOLOAD_CHAR)
+		vim9script = FALSE;
+    }
 
     /*
      * Copy the function name to allocated memory.

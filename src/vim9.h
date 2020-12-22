@@ -24,6 +24,7 @@ typedef enum {
     ISN_LOAD,	    // push local variable isn_arg.number
     ISN_LOADV,	    // push v: variable isn_arg.number
     ISN_LOADG,	    // push g: variable isn_arg.string
+    ISN_LOADAUTO,   // push g: autoload variable isn_arg.string
     ISN_LOADB,	    // push b: variable isn_arg.string
     ISN_LOADW,	    // push w: variable isn_arg.string
     ISN_LOADT,	    // push t: variable isn_arg.string
@@ -41,6 +42,7 @@ typedef enum {
     ISN_STORE,	    // pop into local variable isn_arg.number
     ISN_STOREV,	    // pop into v: variable isn_arg.number
     ISN_STOREG,	    // pop into global variable isn_arg.string
+    ISN_STOREAUTO,  // pop into global autoload variable isn_arg.string
     ISN_STOREB,	    // pop into buffer-local variable isn_arg.string
     ISN_STOREW,	    // pop into window-local variable isn_arg.string
     ISN_STORET,	    // pop into tab-local variable isn_arg.string
@@ -53,8 +55,8 @@ typedef enum {
     // ISN_STOREOTHER, // pop into other script variable isn_arg.other.
 
     ISN_STORENR,    // store number into local variable isn_arg.storenr.stnr_idx
-    ISN_STORELIST,	// store into list, value/index/varable on stack
-    ISN_STOREDICT,	// store into dictionary, value/index/variable on stack
+    ISN_STOREINDEX,	// store into list or dictionary, type isn_arg.vartype,
+			// value/index/variable on stack
 
     ISN_UNLET,		// unlet variable isn_arg.unlet.ul_name
     ISN_UNLETENV,	// unlet environment variable isn_arg.unlet.ul_name
@@ -302,6 +304,7 @@ struct isn_S {
 	char_u		    *string;
 	varnumber_T	    number;
 	blob_T		    *blob;
+	vartype_T	    vartype;
 #ifdef FEAT_FLOAT
 	float_T		    fnumber;
 #endif

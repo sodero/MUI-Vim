@@ -606,6 +606,16 @@ call_ufunc(ufunc_T *ufunc, int argcount, ectx_T *ectx, isn_T *iptr)
 	return FAIL;
     if (ufunc->uf_def_status == UF_COMPILED)
     {
+	error = check_user_func_argcount(ufunc, argcount);
+	if (error != FCERR_UNKNOWN)
+	{
+	    if (error == FCERR_TOOMANY)
+		semsg(_(e_toomanyarg), ufunc->uf_name);
+	    else
+		semsg(_(e_toofewarg), ufunc->uf_name);
+	    return FAIL;
+	}
+
 	// The function has been compiled, can call it quickly.  For a function
 	// that was defined later: we can call it directly next time.
 	if (iptr != NULL)
@@ -791,6 +801,58 @@ store_var(char_u *name, typval_T *tv)
     restore_funccal();
 }
 
+/*
+ * Convert "tv" to a string.
+ * Return FAIL if not allowed.
+ */
+    static int
+do_2string(typval_T *tv, int is_2string_any)
+{
+    if (tv->v_type != VAR_STRING)
+    {
+	char_u *str;
+
+	if (is_2string_any)
+	{
+	    switch (tv->v_type)
+	    {
+		case VAR_SPECIAL:
+		case VAR_BOOL:
+		case VAR_NUMBER:
+		case VAR_FLOAT:
+		case VAR_BLOB:	break;
+		default:	to_string_error(tv->v_type);
+				return FAIL;
+	    }
+	}
+	str = typval_tostring(tv);
+	clear_tv(tv);
+	tv->v_type = VAR_STRING;
+	tv->vval.v_string = str;
+    }
+    return OK;
+}
+
+/*
+ * When the value of "sv" is a null list of dict, allocate it.
+ */
+    static void
+allocate_if_null(typval_T *tv)
+{
+    switch (tv->v_type)
+    {
+	case VAR_LIST:
+	    if (tv->vval.v_list == NULL)
+		rettv_list_alloc(tv);
+	    break;
+	case VAR_DICT:
+	    if (tv->vval.v_dict == NULL)
+		rettv_dict_alloc(tv);
+	    break;
+	default:
+	    break;
+    }
+}
 
 /*
  * Execute a function by "name".
@@ -822,6 +884,49 @@ call_eval_func(char_u *name, int argcount, ectx_T *ectx, isn_T *iptr)
 	return call_partial(&v->di_tv, argcount, ectx);
     }
     return res;
+}
+
+/*
+ * When a function reference is used, fill a partial with the information
+ * needed, especially when it is used as a closure.
+ */
+    static int
+fill_partial_and_closure(partial_T *pt, ufunc_T *ufunc, ectx_T *ectx)
+{
+    pt->pt_func = ufunc;
+    pt->pt_refcount = 1;
+
+    if (pt->pt_func->uf_flags & FC_CLOSURE)
+    {
+	dfunc_T	*dfunc = ((dfunc_T *)def_functions.ga_data)
+							  + ectx->ec_dfunc_idx;
+
+	// The closure needs to find arguments and local
+	// variables in the current stack.
+	pt->pt_ectx_stack = &ectx->ec_stack;
+	pt->pt_ectx_frame = ectx->ec_frame_idx;
+
+	// If this function returns and the closure is still
+	// being used, we need to make a copy of the context
+	// (arguments and local variables). Store a reference
+	// to the partial so we can handle that.
+	if (ga_grow(&ectx->ec_funcrefs, 1) == FAIL)
+	{
+	    vim_free(pt);
+	    return FAIL;
+	}
+	// Extra variable keeps the count of closures created
+	// in the current function call.
+	++(((typval_T *)ectx->ec_stack.ga_data) + ectx->ec_frame_idx
+		       + STACK_FRAME_SIZE + dfunc->df_varcount)->vval.v_number;
+
+	((partial_T **)ectx->ec_funcrefs.ga_data)
+			       [ectx->ec_funcrefs.ga_len] = pt;
+	++pt->pt_refcount;
+	++ectx->ec_funcrefs.ga_len;
+    }
+    ++pt->pt_func->uf_refcount;
+    return OK;
 }
 
 /*
@@ -982,6 +1087,11 @@ call_def_function(
 	    ectx.ec_outer_stack = partial->pt_ectx_stack;
 	    ectx.ec_outer_frame = partial->pt_ectx_frame;
 	}
+    }
+    else if (ufunc->uf_partial != NULL)
+    {
+	ectx.ec_outer_stack = ufunc->uf_partial->pt_ectx_stack;
+	ectx.ec_outer_frame = ufunc->uf_partial->pt_ectx_frame;
     }
 
     // dummy frame entries
@@ -1289,6 +1399,7 @@ call_def_function(
 
 		    sv = ((svar_T *)si->sn_var_vals.ga_data)
 					     + iptr->isn_arg.script.script_idx;
+		    allocate_if_null(sv->sv_tv);
 		    if (GA_GROW(&ectx.ec_stack, 1) == FAIL)
 			goto failed;
 		    copy_tv(sv->sv_tv, STACK_TV_BOT(0));
@@ -1367,6 +1478,21 @@ call_def_function(
 			copy_tv(&di->di_tv, STACK_TV_BOT(0));
 			++ectx.ec_stack.ga_len;
 		    }
+		}
+		break;
+
+	    // load autoload variable
+	    case ISN_LOADAUTO:
+		{
+		    char_u *name = iptr->isn_arg.string;
+
+		    if (GA_GROW(&ectx.ec_stack, 1) == FAIL)
+			goto failed;
+		    SOURCING_LNUM = iptr->isn_lnum;
+		    if (eval_variable(name, STRLEN(name),
+				  STACK_TV_BOT(0), NULL, TRUE, FALSE) == FAIL)
+			goto on_error;
+		    ++ectx.ec_stack.ga_len;
 		}
 		break;
 
@@ -1590,6 +1716,14 @@ call_def_function(
 		}
 		break;
 
+	    // store an autoload variable
+	    case ISN_STOREAUTO:
+		SOURCING_LNUM = iptr->isn_lnum;
+		set_var(iptr->isn_arg.string, STACK_TV_BOT(-1), TRUE);
+		clear_tv(STACK_TV_BOT(-1));
+		--ectx.ec_stack.ga_len;
+		break;
+
 	    // store number in local variable
 	    case ISN_STORENR:
 		tv = STACK_TV_VAR(iptr->isn_arg.storenr.stnr_idx);
@@ -1598,92 +1732,126 @@ call_def_function(
 		tv->vval.v_number = iptr->isn_arg.storenr.stnr_val;
 		break;
 
-	    // store value in list variable
-	    case ISN_STORELIST:
+	    // store value in list or dict variable
+	    case ISN_STOREINDEX:
 		{
+		    vartype_T	dest_type = iptr->isn_arg.vartype;
 		    typval_T	*tv_idx = STACK_TV_BOT(-2);
-		    varnumber_T	lidx = tv_idx->vval.v_number;
-		    typval_T	*tv_list = STACK_TV_BOT(-1);
-		    list_T	*list = tv_list->vval.v_list;
+		    typval_T	*tv_dest = STACK_TV_BOT(-1);
+		    int		status = OK;
 
-		    SOURCING_LNUM = iptr->isn_lnum;
-		    if (lidx < 0 && list->lv_len + lidx >= 0)
-			// negative index is relative to the end
-			lidx = list->lv_len + lidx;
-		    if (lidx < 0 || lidx > list->lv_len)
-		    {
-			semsg(_(e_listidx), lidx);
-			goto on_error;
-		    }
 		    tv = STACK_TV_BOT(-3);
-		    if (lidx < list->lv_len)
+		    SOURCING_LNUM = iptr->isn_lnum;
+		    if (dest_type == VAR_ANY)
 		    {
-			listitem_T *li = list_find(list, lidx);
+			dest_type = tv_dest->v_type;
+			if (dest_type == VAR_DICT)
+			    status = do_2string(tv_idx, TRUE);
+			else if (dest_type == VAR_LIST
+					       && tv_idx->v_type != VAR_NUMBER)
+			{
+			    emsg(_(e_number_exp));
+			    status = FAIL;
+			}
+		    }
+		    else if (dest_type != tv_dest->v_type)
+		    {
+			// just in case, should be OK
+			semsg(_(e_expected_str_but_got_str),
+				    vartype_name(dest_type),
+				    vartype_name(tv_dest->v_type));
+			status = FAIL;
+		    }
 
-			if (error_if_locked(li->li_tv.v_lock,
+		    if (status == OK && dest_type == VAR_LIST)
+		    {
+			varnumber_T	lidx = tv_idx->vval.v_number;
+			list_T		*list = tv_dest->vval.v_list;
+
+			if (list == NULL)
+			{
+			    emsg(_(e_list_not_set));
+			    goto on_error;
+			}
+			if (lidx < 0 && list->lv_len + lidx >= 0)
+			    // negative index is relative to the end
+			    lidx = list->lv_len + lidx;
+			if (lidx < 0 || lidx > list->lv_len)
+			{
+			    semsg(_(e_listidx), lidx);
+			    goto on_error;
+			}
+			if (lidx < list->lv_len)
+			{
+			    listitem_T *li = list_find(list, lidx);
+
+			    if (error_if_locked(li->li_tv.v_lock,
 						    e_cannot_change_list_item))
-			    goto failed;
-			// overwrite existing list item
-			clear_tv(&li->li_tv);
-			li->li_tv = *tv;
+				goto on_error;
+			    // overwrite existing list item
+			    clear_tv(&li->li_tv);
+			    li->li_tv = *tv;
+			}
+			else
+			{
+			    if (error_if_locked(list->lv_lock,
+							 e_cannot_change_list))
+				goto on_error;
+			    // append to list, only fails when out of memory
+			    if (list_append_tv(list, tv) == FAIL)
+				goto failed;
+			    clear_tv(tv);
+			}
+		    }
+		    else if (status == OK && dest_type == VAR_DICT)
+		    {
+			char_u		*key = tv_idx->vval.v_string;
+			dict_T		*dict = tv_dest->vval.v_dict;
+			dictitem_T	*di;
+
+			SOURCING_LNUM = iptr->isn_lnum;
+			if (dict == NULL)
+			{
+			    emsg(_(e_dictionary_not_set));
+			    goto on_error;
+			}
+			if (key == NULL)
+			    key = (char_u *)"";
+			di = dict_find(dict, key, -1);
+			if (di != NULL)
+			{
+			    if (error_if_locked(di->di_tv.v_lock,
+						    e_cannot_change_dict_item))
+				goto on_error;
+			    // overwrite existing value
+			    clear_tv(&di->di_tv);
+			    di->di_tv = *tv;
+			}
+			else
+			{
+			    if (error_if_locked(dict->dv_lock,
+							 e_cannot_change_dict))
+				goto on_error;
+			    // add to dict, only fails when out of memory
+			    if (dict_add_tv(dict, (char *)key, tv) == FAIL)
+				goto failed;
+			    clear_tv(tv);
+			}
 		    }
 		    else
 		    {
-			if (error_if_locked(list->lv_lock,
-							 e_cannot_change_list))
-			    goto failed;
-			// append to list, only fails when out of memory
-			if (list_append_tv(list, tv) == FAIL)
-			    goto failed;
-			clear_tv(tv);
+			status = FAIL;
+			semsg(_(e_cannot_index_str), vartype_name(dest_type));
 		    }
+
 		    clear_tv(tv_idx);
-		    clear_tv(tv_list);
+		    clear_tv(tv_dest);
 		    ectx.ec_stack.ga_len -= 3;
-		}
-		break;
-
-	    // store value in dict variable
-	    case ISN_STOREDICT:
-		{
-		    typval_T	*tv_key = STACK_TV_BOT(-2);
-		    char_u	*key = tv_key->vval.v_string;
-		    typval_T	*tv_dict = STACK_TV_BOT(-1);
-		    dict_T	*dict = tv_dict->vval.v_dict;
-		    dictitem_T	*di;
-
-		    SOURCING_LNUM = iptr->isn_lnum;
-		    if (dict == NULL)
+		    if (status == FAIL)
 		    {
-			emsg(_(e_dictionary_not_set));
+			clear_tv(tv);
 			goto on_error;
 		    }
-		    if (key == NULL)
-			key = (char_u *)"";
-		    tv = STACK_TV_BOT(-3);
-		    di = dict_find(dict, key, -1);
-		    if (di != NULL)
-		    {
-			if (error_if_locked(di->di_tv.v_lock,
-						    e_cannot_change_dict_item))
-			    goto failed;
-			// overwrite existing value
-			clear_tv(&di->di_tv);
-			di->di_tv = *tv;
-		    }
-		    else
-		    {
-			if (error_if_locked(dict->dv_lock,
-							 e_cannot_change_dict))
-			    goto failed;
-			// add to dict, only fails when out of memory
-			if (dict_add_tv(dict, (char *)key, tv) == FAIL)
-			    goto failed;
-			clear_tv(tv);
-		    }
-		    clear_tv(tv_key);
-		    clear_tv(tv_dict);
-		    ectx.ec_stack.ga_len -= 3;
 		}
 		break;
 
@@ -1925,10 +2093,10 @@ call_def_function(
 	    // push a function reference to a compiled function
 	    case ISN_FUNCREF:
 		{
-		    partial_T   *pt = NULL;
-		    dfunc_T	*pt_dfunc;
+		    partial_T   *pt = ALLOC_CLEAR_ONE(partial_T);
+		    dfunc_T	*pt_dfunc = ((dfunc_T *)def_functions.ga_data)
+					       + iptr->isn_arg.funcref.fr_func;
 
-		    pt = ALLOC_CLEAR_ONE(partial_T);
 		    if (pt == NULL)
 			goto failed;
 		    if (GA_GROW(&ectx.ec_stack, 1) == FAIL)
@@ -1936,41 +2104,9 @@ call_def_function(
 			vim_free(pt);
 			goto failed;
 		    }
-		    pt_dfunc = ((dfunc_T *)def_functions.ga_data)
-					       + iptr->isn_arg.funcref.fr_func;
-		    pt->pt_func = pt_dfunc->df_ufunc;
-		    pt->pt_refcount = 1;
-
-		    if (pt_dfunc->df_ufunc->uf_flags & FC_CLOSURE)
-		    {
-			dfunc_T	*dfunc = ((dfunc_T *)def_functions.ga_data)
-							   + ectx.ec_dfunc_idx;
-
-			// The closure needs to find arguments and local
-			// variables in the current stack.
-			pt->pt_ectx_stack = &ectx.ec_stack;
-			pt->pt_ectx_frame = ectx.ec_frame_idx;
-
-			// If this function returns and the closure is still
-			// being used, we need to make a copy of the context
-			// (arguments and local variables). Store a reference
-			// to the partial so we can handle that.
-			if (ga_grow(&ectx.ec_funcrefs, 1) == FAIL)
-			{
-			    vim_free(pt);
-			    goto failed;
-			}
-			// Extra variable keeps the count of closures created
-			// in the current function call.
-			tv = STACK_TV_VAR(dfunc->df_varcount);
-			++tv->vval.v_number;
-
-			((partial_T **)ectx.ec_funcrefs.ga_data)
-					       [ectx.ec_funcrefs.ga_len] = pt;
-			++pt->pt_refcount;
-			++ectx.ec_funcrefs.ga_len;
-		    }
-		    ++pt_dfunc->df_ufunc->uf_refcount;
+		    if (fill_partial_and_closure(pt, pt_dfunc->df_ufunc,
+								&ectx) == FAIL)
+			goto failed;
 
 		    tv = STACK_TV_BOT(0);
 		    ++ectx.ec_stack.ga_len;
@@ -1984,8 +2120,25 @@ call_def_function(
 	    case ISN_NEWFUNC:
 		{
 		    newfunc_T	*newfunc = &iptr->isn_arg.newfunc;
+		    ufunc_T	*new_ufunc;
 
-		    copy_func(newfunc->nf_lambda, newfunc->nf_global);
+		    new_ufunc = copy_func(
+				       newfunc->nf_lambda, newfunc->nf_global);
+		    if (new_ufunc != NULL
+					 && (new_ufunc->uf_flags & FC_CLOSURE))
+		    {
+			partial_T   *pt = ALLOC_CLEAR_ONE(partial_T);
+
+			// Need to create a partial to store the context of the
+			// function.
+			if (pt == NULL)
+			    goto failed;
+			if (fill_partial_and_closure(pt, new_ufunc,
+								&ectx) == FAIL)
+			    goto failed;
+			new_ufunc->uf_partial = pt;
+			--pt->pt_refcount;  // not referenced here
+		    }
 		}
 		break;
 
@@ -2834,31 +2987,9 @@ call_def_function(
 
 	    case ISN_2STRING:
 	    case ISN_2STRING_ANY:
-		{
-		    char_u *str;
-
-		    tv = STACK_TV_BOT(iptr->isn_arg.number);
-		    if (tv->v_type != VAR_STRING)
-		    {
-			if (iptr->isn_type == ISN_2STRING_ANY)
-			{
-			    switch (tv->v_type)
-			    {
-				case VAR_SPECIAL:
-				case VAR_BOOL:
-				case VAR_NUMBER:
-				case VAR_FLOAT:
-				case VAR_BLOB:	break;
-				default:	to_string_error(tv->v_type);
-						goto on_error;
-			    }
-			}
-			str = typval_tostring(tv);
-			clear_tv(tv);
-			tv->v_type = VAR_STRING;
-			tv->vval.v_string = str;
-		    }
-		}
+		if (do_2string(STACK_TV_BOT(iptr->isn_arg.number),
+			iptr->isn_type == ISN_2STRING_ANY) == FAIL)
+			    goto on_error;
 		break;
 
 	    case ISN_RANGE:
@@ -3070,7 +3201,10 @@ failed:
 
     // Deal with any remaining closures, they may be in use somewhere.
     if (ectx.ec_funcrefs.ga_len > 0)
+    {
 	handle_closure_in_use(&ectx, FALSE);
+	ga_clear(&ectx.ec_funcrefs);  // TODO: should not be needed?
+    }
 
     estack_pop();
     current_sctx = save_current_sctx;
@@ -3116,7 +3250,7 @@ failed_early:
 }
 
 /*
- * ":dissassemble".
+ * ":disassemble".
  * We don't really need this at runtime, but we do have tests that require it,
  * so always include this.
  */
@@ -3265,6 +3399,9 @@ ex_disassemble(exarg_T *eap)
 				 iptr->isn_arg.loadstore.ls_name, si->sn_name);
 		}
 		break;
+	    case ISN_LOADAUTO:
+		smsg("%4d LOADAUTO %s", current, iptr->isn_arg.string);
+		break;
 	    case ISN_LOADG:
 		smsg("%4d LOADG g:%s", current, iptr->isn_arg.string);
 		break;
@@ -3316,6 +3453,9 @@ ex_disassemble(exarg_T *eap)
 		smsg("%4d STOREV v:%s", current,
 				       get_vim_var_name(iptr->isn_arg.number));
 		break;
+	    case ISN_STOREAUTO:
+		smsg("%4d STOREAUTO %s", current, iptr->isn_arg.string);
+		break;
 	    case ISN_STOREG:
 		smsg("%4d STOREG %s", current, iptr->isn_arg.string);
 		break;
@@ -3366,12 +3506,20 @@ ex_disassemble(exarg_T *eap)
 				iptr->isn_arg.storenr.stnr_idx);
 		break;
 
-	    case ISN_STORELIST:
-		smsg("%4d STORELIST", current);
-		break;
-
-	    case ISN_STOREDICT:
-		smsg("%4d STOREDICT", current);
+	    case ISN_STOREINDEX:
+		switch (iptr->isn_arg.vartype)
+		{
+		    case VAR_LIST:
+			    smsg("%4d STORELIST", current);
+			    break;
+		    case VAR_DICT:
+			    smsg("%4d STOREDICT", current);
+			    break;
+		    case VAR_ANY:
+			    smsg("%4d STOREINDEX", current);
+			    break;
+		    default: break;
+		}
 		break;
 
 	    // constants

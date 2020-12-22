@@ -23,6 +23,7 @@ def s:ScriptFuncLoad(arg: string)
   echo s:scriptvar
   echo g:globalvar
   echo get(g:, "global")
+  echo g:auto#var
   echo b:buffervar
   echo get(b:, "buffer")
   echo w:windowvar
@@ -68,8 +69,14 @@ def Test_disassemble_load()
         'echo get(g:, "global")\_s*' ..
         '\d\+ LOAD g:\_s*' ..
         '\d\+ PUSHS "global"\_s*' ..
-        '\d\+ BCALL get(argc 2).*' ..
-        ' LOADB b:buffervar.*' ..
+        '\d\+ BCALL get(argc 2)\_s*' ..
+        '\d\+ ECHO 1\_s*' ..
+        'echo g:auto#var\_s*' ..
+        '\d\+ LOADAUTO g:auto#var\_s*' ..
+        '\d\+ ECHO 1\_s*' ..
+        'echo b:buffervar\_s*' ..
+        '\d\+ LOADB b:buffervar\_s*' ..
+        '\d\+ ECHO 1\_s*' ..
         'echo get(b:, "buffer")\_s*' ..
         '\d\+ LOAD b:\_s*' ..
         '\d\+ PUSHS "buffer"\_s*' ..
@@ -197,6 +204,7 @@ def s:ScriptFuncStore()
   v:char = 'abc'
   s:scriptvar = 'sv'
   g:globalvar = 'gv'
+  g:auto#var = 'av'
   b:buffervar = 'bv'
   w:windowvar = 'wv'
   t:tabpagevar = 'tv'
@@ -220,6 +228,8 @@ def Test_disassemble_store()
         ' STORES s:scriptvar in .*test_vim9_disassemble.vim.*' ..
         'g:globalvar = ''gv''.*' ..
         ' STOREG g:globalvar.*' ..
+        'g:auto#var = ''av''.*' ..
+        ' STOREAUTO g:auto#var.*' ..
         'b:buffervar = ''bv''.*' ..
         ' STOREB b:buffervar.*' ..
         'w:windowvar = ''wv''.*' ..
@@ -261,6 +271,30 @@ def Test_disassemble_store_member()
         '\d\+ PUSHS "a"\_s*' ..
         '\d\+ LOAD $1\_s*' ..
         '\d\+ STOREDICT\_s*' ..
+        '\d\+ PUSHNR 0\_s*' ..
+        '\d\+ RETURN',
+        res)
+enddef
+
+def s:ScriptFuncStoreIndex()
+  var d = {dd: {}}
+  d.dd[0] = 0
+enddef
+
+def Test_disassemble_store_index()
+  var res = execute('disass s:ScriptFuncStoreIndex')
+  assert_match('<SNR>\d*_ScriptFuncStoreIndex\_s*' ..
+        'var d = {dd: {}}\_s*' ..
+        '\d PUSHS "dd"\_s*' ..
+        '\d NEWDICT size 0\_s*' ..
+        '\d NEWDICT size 1\_s*' ..
+        '\d STORE $0\_s*' ..
+        'd.dd\[0\] = 0\_s*' ..
+        '\d PUSHNR 0\_s*' ..
+        '\d PUSHNR 0\_s*' ..
+        '\d LOAD $0\_s*' ..
+        '\d MEMBER dd\_s*' ..
+        '\d STOREINDEX\_s*' ..
         '\d\+ PUSHNR 0\_s*' ..
         '\d\+ RETURN',
         res)

@@ -1312,12 +1312,12 @@ def Test_vim9script_reload_delfunc()
   # FuncNo() is not redefined
   writefile(first_lines + nono_lines, 'Xreloaded.vim')
   source Xreloaded.vim
-  g:DoCheck()
+  g:DoCheck(false)
 
   # FuncNo() is back
   writefile(first_lines + withno_lines, 'Xreloaded.vim')
   source Xreloaded.vim
-  g:DoCheck()
+  g:DoCheck(false)
 
   delete('Xreloaded.vim')
 enddef
@@ -2412,7 +2412,7 @@ def Test_vim9_comment()
       'delcommand Echo',
       ])
   CheckScriptSuccess([
-      'vim9script'
+      'vim9script',
       'command Echo cd # comment',
       'Echo',
       'delcommand Echo',
@@ -2779,8 +2779,42 @@ def Test_vim9_copen()
   quit
 enddef
 
-" test using a vim9script that is auto-loaded from an autocmd
+" test using an auto-loaded function and variable
 def Test_vim9_autoload()
+  var lines =<< trim END
+     vim9script
+     def some#gettest(): string
+       return 'test'
+     enddef
+     g:some#name = 'name'
+  END
+
+  mkdir('Xdir/autoload', 'p')
+  writefile(lines, 'Xdir/autoload/some.vim')
+  var save_rtp = &rtp
+  exe 'set rtp^=' .. getcwd() .. '/Xdir'
+
+  assert_equal('test', g:some#gettest())
+  assert_equal('name', g:some#name)
+  g:some#other = 'other'
+  assert_equal('other', g:some#other)
+
+  # upper case script name works
+  lines =<< trim END
+     vim9script
+     def Other#getOther(): string
+       return 'other'
+     enddef
+  END
+  writefile(lines, 'Xdir/autoload/Other.vim')
+  assert_equal('other', g:Other#getOther())
+
+  delete('Xdir', 'rf')
+  &rtp = save_rtp
+enddef
+
+" test using a vim9script that is auto-loaded from an autocmd
+def Test_vim9_aucmd_autoload()
   var lines =<< trim END
      vim9script
      def foo#test()
@@ -2842,6 +2876,12 @@ def Test_vim9_autoload_error()
   delete('Xdidit')
   delete('Xscript')
   delete('Xruntime', 'rf')
+
+  lines =<< trim END
+    vim9script
+    var foo#bar = 'asdf'
+  END
+  CheckScriptFailure(lines, 'E461: Illegal variable name: foo#bar', 2)
 enddef
 
 def Test_script_var_in_autocmd()
@@ -2909,6 +2949,7 @@ def Test_restoring_cpo()
   endif
   delete('Xsourced')
   delete('Xclose')
+  delete('Xdone')
 enddef
 
 
@@ -3055,7 +3096,10 @@ def Test_no_unknown_error_after_error()
           source += l
       enddef
       var myjob = job_start('echo burp', {out_cb: Out_cb, exit_cb: Exit_cb, mode: 'raw'})
-      sleep 100m
+      while job_status(myjob) == 'run'
+        sleep 10m
+      endwhile
+      sleep 10m
   END
   writefile(lines, 'Xdef')
   assert_fails('so Xdef', ['E684:', 'E1012:'])

@@ -318,7 +318,7 @@ find_script_var(char_u *name, size_t len, cctx_T *cctx)
 }
 
 /*
- * Returnd TRUE if the script context is Vim9 script.
+ * Return TRUE if the script context is Vim9 script.
  */
     static int
 script_is_vim9()
@@ -1958,7 +1958,7 @@ generate_cmdmods(cctx_T *cctx, cmdmod_T *cmod)
 	if (isn->isn_arg.cmdmod.cf_cmdmod == NULL)
 	    return FAIL;
 	mch_memmove(isn->isn_arg.cmdmod.cf_cmdmod, cmod, sizeof(cmdmod_T));
-	// filter progam now belongs to the instruction
+	// filter program now belongs to the instruction
 	cmod->cmod_filter_regmatch.regprog = NULL;
     }
 
@@ -2535,7 +2535,17 @@ compile_load(
 		case 's': res = compile_load_scriptvar(cctx, name,
 							    NULL, NULL, error);
 			  break;
-		case 'g': isn_type = ISN_LOADG; break;
+		case 'g': if (vim_strchr(name, AUTOLOAD_CHAR) == NULL)
+			      isn_type = ISN_LOADG;
+			  else
+			  {
+			      isn_type = ISN_LOADAUTO;
+			      vim_free(name);
+			      name = vim_strnsave(*arg, end - *arg);
+			      if (name == NULL)
+				  return FAIL;
+			  }
+			  break;
 		case 'w': isn_type = ISN_LOADW; break;
 		case 't': isn_type = ISN_LOADT; break;
 		case 'b': isn_type = ISN_LOADB; break;
@@ -2738,7 +2748,7 @@ compile_call(
     if (compile_arguments(arg, cctx, &argcount) == FAIL)
 	goto theend;
 
-    is_autoload = vim_strchr(name, '#') != NULL;
+    is_autoload = vim_strchr(name, AUTOLOAD_CHAR) != NULL;
     if (ASCII_ISLOWER(*name) && name[1] != ':' && !is_autoload)
     {
 	int	    idx;
@@ -3507,7 +3517,7 @@ compile_subscript(
 	    }
 	}
 
-	// Do not skip over white space to find the "(", "exeucte 'x' ()" is
+	// Do not skip over white space to find the "(", "execute 'x' ()" is
 	// not a function call.
 	if (**arg == '(')
 	{
@@ -4986,7 +4996,10 @@ generate_loadvar(
 	    generate_LOAD(cctx, ISN_LOADOPT, 0, name, type);
 	    break;
 	case dest_global:
-	    generate_LOAD(cctx, ISN_LOADG, 0, name + 2, type);
+	    if (vim_strchr(name, AUTOLOAD_CHAR) == NULL)
+		generate_LOAD(cctx, ISN_LOADG, 0, name + 2, type);
+	    else
+		generate_LOAD(cctx, ISN_LOADAUTO, 0, name, type);
 	    break;
 	case dest_buffer:
 	    generate_LOAD(cctx, ISN_LOADB, 0, name + 2, type);
@@ -5198,7 +5211,8 @@ generate_store_var(
 								    opt_flags);
 	case dest_global:
 	    // include g: with the name, easier to execute that way
-	    return generate_STORE(cctx, ISN_STOREG, 0, name);
+	    return generate_STORE(cctx, vim_strchr(name, AUTOLOAD_CHAR) == NULL
+					? ISN_STOREG : ISN_STOREAUTO, 0, name);
 	case dest_buffer:
 	    // include b: with the name, easier to execute that way
 	    return generate_STORE(cctx, ISN_STOREB, 0, name);
@@ -5862,7 +5876,8 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 
 	if (has_index)
 	{
-	    int r;
+	    int		r;
+	    vartype_T	dest_type;
 
 	    // Compile the "idx" in "var[idx]" or "key" in "var.key".
 	    p = var_start + varlen;
@@ -5889,25 +5904,22 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 
 	    if (type == &t_any)
 	    {
-		type_T	    *idx_type = ((type_T **)stack->ga_data)[
-							    stack->ga_len - 1];
-		// Index on variable of unknown type: guess the type from the
-		// index type: number is dict, otherwise dict.
-		// TODO: should do the assignment at runtime
-		if (idx_type->tt_type == VAR_NUMBER)
-		    type = &t_list_any;
-		else
-		    type = &t_dict_any;
+		// Index on variable of unknown type: check at runtime.
+		dest_type = VAR_ANY;
 	    }
-	    if (type->tt_type == VAR_DICT
-		    && may_generate_2STRING(-1, cctx) == FAIL)
-		goto theend;
-	    if (type->tt_type == VAR_LIST
-		    && ((type_T **)stack->ga_data)[stack->ga_len - 1]->tt_type
-								 != VAR_NUMBER)
+	    else
 	    {
-		emsg(_(e_number_exp));
-		goto theend;
+		dest_type = type->tt_type;
+		if (dest_type == VAR_DICT
+			&& may_generate_2STRING(-1, cctx) == FAIL)
+		    goto theend;
+		if (dest_type == VAR_LIST
+		     && ((type_T **)stack->ga_data)[stack->ga_len - 1]->tt_type
+								 != VAR_NUMBER)
+		{
+		    emsg(_(e_number_exp));
+		    goto theend;
+		}
 	    }
 
 	    // Load the dict or list.  On the stack we then have:
@@ -5940,15 +5952,14 @@ compile_assignment(char_u *arg, exarg_T *eap, cmdidx_T cmdidx, cctx_T *cctx)
 	    else
 		generate_loadvar(cctx, dest, name, lvar, type);
 
-	    if (type->tt_type == VAR_LIST)
+	    if (dest_type == VAR_LIST || dest_type == VAR_DICT
+						       || dest_type == VAR_ANY)
 	    {
-		if (generate_instr_drop(cctx, ISN_STORELIST, 3) == FAIL)
+		isn_T	*isn = generate_instr_drop(cctx, ISN_STOREINDEX, 3);
+
+		if (isn == NULL)
 		    goto theend;
-	    }
-	    else if (type->tt_type == VAR_DICT)
-	    {
-		if (generate_instr_drop(cctx, ISN_STOREDICT, 3) == FAIL)
-		    goto theend;
+		isn->isn_arg.vartype = dest_type;
 	    }
 	    else
 	    {
@@ -6835,7 +6846,7 @@ compile_endblock(cctx_T *cctx)
  *	    ... try block
  *	" catch {expr}"
  *	    JUMP -> finally
- * catch1:  PUSH exeception
+ * catch1:  PUSH exception
  *	    EVAL {expr}
  *	    MATCH
  *	    JUMP nomatch -> catch2
@@ -7132,7 +7143,7 @@ compile_mult_expr(char_u *arg, int cmdidx, cctx_T *cctx)
 }
 
 /*
- * If "eap" has a range that is not a contstant generate an ISN_RANGE
+ * If "eap" has a range that is not a constant generate an ISN_RANGE
  * instruction to compute it and return OK.
  * Otherwise return FAIL, the caller must deal with any range.
  */
@@ -7665,8 +7676,9 @@ compile_def_function(ufunc_T *ufunc, int set_return_type, cctx_T *outer_cctx)
 	    // Expression or function call.
 	    if (ea.cmdidx != CMD_eval)
 	    {
-		// CMD_var cannot happen, compile_assignment() above is used
-		iemsg("Command from find_ex_command() not handled");
+		// CMD_var cannot happen, compile_assignment() above would be
+		// used.  Most likely an assignment to a non-existing variable.
+		semsg(_(e_command_not_recognized_str), ea.cmd);
 		goto erret;
 	    }
 	}
@@ -8007,6 +8019,7 @@ delete_instr(isn_T *isn)
     {
 	case ISN_DEF:
 	case ISN_EXEC:
+	case ISN_LOADAUTO:
 	case ISN_LOADB:
 	case ISN_LOADENV:
 	case ISN_LOADG:
@@ -8017,6 +8030,7 @@ delete_instr(isn_T *isn)
 	case ISN_PUSHFUNC:
 	case ISN_PUSHS:
 	case ISN_RANGE:
+	case ISN_STOREAUTO:
 	case ISN_STOREB:
 	case ISN_STOREENV:
 	case ISN_STOREG:
@@ -8175,8 +8189,7 @@ delete_instr(isn_T *isn)
 	case ISN_SHUFFLE:
 	case ISN_SLICE:
 	case ISN_STORE:
-	case ISN_STOREDICT:
-	case ISN_STORELIST:
+	case ISN_STOREINDEX:
 	case ISN_STORENR:
 	case ISN_STOREOUTER:
 	case ISN_STOREREG:

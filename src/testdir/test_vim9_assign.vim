@@ -391,6 +391,16 @@ def Test_extend_list()
       assert_equal(['a', 'b'], list)
   END
   CheckScriptSuccess(lines)
+  lines =<< trim END
+      vim9script
+      var list: list<string>
+      def Func()
+        extend(list, ['x', 'b'])
+      enddef
+      Func()
+      assert_equal(['x', 'b'], list)
+  END
+  CheckScriptSuccess(lines)
 
   lines =<< trim END
       vim9script
@@ -523,6 +533,12 @@ def Test_assignment_list()
 
   # type becomes list<any>
   var somelist = rand() > 0 ? [1, 2, 3] : ['a', 'b', 'c']
+
+  var lines =<< trim END
+    var d = {dd: test_null_list()}
+    d.dd[0] = 0
+  END
+  CheckDefExecFailure(lines, 'E1147:', 2)
 enddef
 
 def Test_assignment_list_vim9script()
@@ -550,11 +566,39 @@ def Test_assignment_dict()
   dict3.key = 'yet another'
   assert_equal(dict3, {key: 'yet another'})
 
+  # member "any" can also be a dict and assigned to
+  var anydict: dict<any> = {nest: {}, nr: 0}
+  anydict.nest['this'] = 123
+  anydict.nest.that = 456
+  assert_equal({nest: {this: 123, that: 456}, nr: 0}, anydict)
+
   var lines =<< trim END
+    var dd = {}
+    dd.two = 2
+    assert_equal({two: 2}, dd)
+  END
+  CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+    var d = {dd: {}}
+    d.dd[0] = 2
+    d.dd['x'] = 3
+    d.dd.y = 4
+    assert_equal({dd: {0: 2, x: 3, y: 4}}, d)
+  END
+  CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
     var dd = {one: 1}
     dd.one) = 2
   END
-  CheckDefFailure(lines, 'E15:', 2)
+  CheckDefFailure(lines, 'E488:', 2)
+
+  lines =<< trim END
+    var dd = {one: 1}
+    var dd.one = 2
+  END
+  CheckDefAndScriptFailure(lines, 'E1017:', 2)
 
   # empty key can be used
   var dd = {}
@@ -584,8 +628,9 @@ def Test_assignment_dict()
       return test
     enddef
     FillDict()
+    assert_equal({a: 43}, test)
   END
-  CheckScriptFailure(lines, 'E1103:')
+  CheckScriptSuccess(lines)
 
   # assignment to global dict
   lines =<< trim END
@@ -610,6 +655,18 @@ def Test_assignment_dict()
     assert_equal({a: 43}, FillDict())
   END
   CheckScriptSuccess(lines)
+
+  lines =<< trim END
+    var d = {dd: test_null_dict()}
+    d.dd[0] = 0
+  END
+  CheckDefExecFailure(lines, 'E1103:', 2)
+
+  lines =<< trim END
+    var d = {dd: 'string'}
+    d.dd[0] = 0
+  END
+  CheckDefExecFailure(lines, 'E1148:', 2)
 enddef
 
 def Test_assignment_local()
@@ -1207,6 +1264,14 @@ def Test_unlet()
    '  unlet svar',
    'enddef',
    'defcompile',
+   ], 'E1081:')
+  CheckScriptFailure([
+   'vim9script',
+   'var svar = 123',
+   'func Func()',
+   '  unlet s:svar',
+   'endfunc',
+   'Func()',
    ], 'E1081:')
   CheckScriptFailure([
    'vim9script',

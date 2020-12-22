@@ -710,5 +710,47 @@ def Test_ambiguous_user_cmd()
   CheckScriptFailure(lines, 'E464:')
 enddef
 
+def Test_command_not_recognized()
+  var lines =<< trim END
+    d.key = 'asdf'
+  END
+  CheckDefFailure(lines, 'E1146:', 1)
+
+  lines =<< trim END
+    d['key'] = 'asdf'
+  END
+  CheckDefFailure(lines, 'E1146:', 1)
+enddef
+
+def Test_magic_not_used()
+  new
+  for cmd in ['set magic', 'set nomagic']
+    exe cmd
+    setline(1, 'aaa')
+    s/.../bbb/
+    assert_equal('bbb', getline(1))
+  endfor
+
+  set magic
+  setline(1, 'aaa')
+  assert_fails('s/.\M../bbb/', 'E486:')
+  assert_fails('snomagic/.../bbb/', 'E486:')
+  assert_equal('aaa', getline(1))
+
+  bwipe!
+enddef
+
+def Test_gdefault_not_used()
+  new
+  for cmd in ['set gdefault', 'set nogdefault']
+    exe cmd
+    setline(1, 'aaa')
+    s/./b/
+    assert_equal('baa', getline(1))
+  endfor
+
+  set nogdefault
+  bwipe!
+enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

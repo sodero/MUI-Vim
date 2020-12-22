@@ -1464,7 +1464,8 @@ ex_let_one(
     {
 	lval_T	lv;
 
-	p = get_lval(arg, tv, &lv, FALSE, FALSE, 0, FNE_CHECK_START);
+	p = get_lval(arg, tv, &lv, FALSE, FALSE,
+		(flags & ASSIGN_NO_DECL) ? GLV_NO_DECL : 0, FNE_CHECK_START);
 	if (p != NULL && lv.ll_name != NULL)
 	{
 	    if (endchars != NULL && vim_strchr(endchars,
@@ -1663,10 +1664,20 @@ do_unlet(char_u *name, int forceit)
     dict_T	*d;
     dictitem_T	*di;
 
+    // can't :unlet a script variable in Vim9 script
     if (in_vim9script() && check_vim9_unlet(name) == FAIL)
 	return FAIL;
 
     ht = find_var_ht(name, &varname);
+
+    // can't :unlet a script variable in Vim9 script from a function
+    if (ht == get_script_local_ht()
+	    && SCRIPT_ID_VALID(current_sctx.sc_sid)
+	    && SCRIPT_ITEM(current_sctx.sc_sid)->sn_version
+							 == SCRIPT_VERSION_VIM9
+	    && check_vim9_unlet(name) == FAIL)
+	return FAIL;
+
     if (ht != NULL && *varname != NUL)
     {
 	d = get_current_funccal_dict(ht);
@@ -3185,8 +3196,10 @@ set_var_const(
 	    goto failed;
 	}
 
-	// Make sure the variable name is valid.
-	if (!valid_varname(varname))
+	// Make sure the variable name is valid.  In Vim9 script an autoload
+	// variable must be prefixed with "g:".
+	if (!valid_varname(varname, !vim9script
+					       || STRNCMP(name, "g:", 2) == 0))
 	    goto failed;
 
 	di = alloc(sizeof(dictitem_T) + STRLEN(varname));
@@ -3339,17 +3352,17 @@ value_check_lock(int lock, char_u *name, int use_gettext)
 }
 
 /*
- * Check if a variable name is valid.
+ * Check if a variable name is valid.  When "autoload" is true "#" is allowed.
  * Return FALSE and give an error if not.
  */
     int
-valid_varname(char_u *varname)
+valid_varname(char_u *varname, int autoload)
 {
     char_u *p;
 
     for (p = varname; *p != NUL; ++p)
 	if (!eval_isnamec1(*p) && (p == varname || !VIM_ISDIGIT(*p))
-						   && *p != AUTOLOAD_CHAR)
+					 && !(autoload && *p == AUTOLOAD_CHAR))
 	{
 	    semsg(_(e_illvar), varname);
 	    return FALSE;
