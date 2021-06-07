@@ -72,6 +72,17 @@ struct KeymapIFace *IKeymap = NULL;
 do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 
 //------------------------------------------------------------------------------
+// Misc
+//------------------------------------------------------------------------------
+#if __has_builtin (__builtin_expect)
+#define likely(X) __builtin_expect((X), 1)
+#define unlikely(X) __builtin_expect((X), 0)
+#else
+#define likely(X) X
+#define unlikely(X) X
+#endif
+
+//------------------------------------------------------------------------------
 // Macros - MUI
 //------------------------------------------------------------------------------
 #ifdef __MORPHOS__
@@ -169,7 +180,7 @@ METHOD(VimCon, AppMessage, Message)
     struct AppMessage *m = (struct AppMessage *) msg->Message;
     char_u **fnames = calloc(m->am_NumArgs, sizeof(char_u *));
 
-    if(!fnames)
+    if(unlikely(!fnames))
     {
         kmsg(_(e_outofmem));
         return 0;
@@ -186,7 +197,7 @@ METHOD(VimCon, AppMessage, Message)
         // If we can get a read lock, Vim might be able to use this.
         BPTR f = Lock((STRPTR) m->am_ArgList[arg++].wa_Name, ACCESS_READ);
 
-        if(!f)
+        if(unlikely(!f))
         {
             continue;
         }
@@ -194,7 +205,7 @@ METHOD(VimCon, AppMessage, Message)
         // Allocate buffer for current filename.
         char_u *fn = calloc(PATH_MAX, sizeof(char_u));
 
-        if(!fn)
+        if(unlikely(!fn))
         {
             UnLock(f);
 
@@ -212,10 +223,10 @@ METHOD(VimCon, AppMessage, Message)
         struct FileInfoBlock *fib = (struct FileInfoBlock *) AllocDosObject
                                     (DOS_FIB, NULL);
 
-        if(fib)
+        if(likely(fib))
         {
             // If it's a file, save it in the list.
-            if(Examine(f, fib) && fib->fib_DirEntryType < 0)
+            if(likely(Examine(f, fib) && fib->fib_DirEntryType < 0))
             {
                 NameFromLock(f, (STRPTR) fn, PATH_MAX);
                 fnames[nfiles++] = fn;
@@ -229,7 +240,7 @@ METHOD(VimCon, AppMessage, Message)
     }
 
     // Don't do anything if all we get is garbage.
-    if(nfiles > 0)
+    if(likely(nfiles > 0))
     {
         // Transpose and cap mouse coordinates.
         int x = m->am_MouseX - my->left;
@@ -242,11 +253,11 @@ METHOD(VimCon, AppMessage, Message)
 
         // There was something among the arguments that we could not acquire a
         // read lock for. Shrink list of files before handing it over to Vim.
-        if(nfiles < m->am_NumArgs)
+        if(unlikely(nfiles < m->am_NumArgs))
         {
             char_u **shrunk = calloc(nfiles, sizeof(char_u *));
 
-            if(shrunk)
+            if(likely(shrunk))
             {
                 // Copy old contents to new list.
                 for(arg = 0; arg < nfiles; ++arg)
@@ -261,7 +272,7 @@ METHOD(VimCon, AppMessage, Message)
         }
 
         // The shrunk allocation could have failed.
-        if(fnames)
+        if(likely(fnames))
         {
             // Vim will sometimes try to interact with the user when handling
             // the file drop. Activate the window to save one annoying mouse
@@ -293,7 +304,7 @@ METHOD(VimCon, AppMessage, Message)
 //------------------------------------------------------------------------------
 METHOD0(VimCon, StopBlink)
 {
-    if(!my->blink || my->block)
+    if(unlikely(!my->blink || my->block))
     {
         return FALSE;
     }
@@ -335,7 +346,7 @@ METHOD0(VimCon, AboutMUI)
 //------------------------------------------------------------------------------
 METHOD0(VimCon, Clear)
 {
-    if(!my->width || !my->height)
+    if(unlikely(!my->width || !my->height))
     {
         return FALSE;
     }
@@ -367,8 +378,8 @@ METHOD0(VimCon, StartBlink)
 {
     // If not enabled and none of the delays (wait, on, off) are 0 add input
     // handler and increase status / delay index.
-    if(!my->block && !my->blink && my->cursor[0] && my->cursor[1] &&
-        my->cursor[2])
+    if(likely(!my->block && !my->blink && my->cursor[0] && my->cursor[1] &&
+        my->cursor[2]))
     {
         my->ticker.ihn_Millis = my->cursor[my->blink++];
         DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->ticker);
@@ -409,7 +420,7 @@ METHOD(VimCon, Browse, Title, Drawer)
     // Create file requester.
     req = MUI_AllocAslRequestTags(ASL_FileRequest, ASLFR_TitleText, msg->Title,
                                   ASLFR_InitialDrawer, msg->Drawer, TAG_DONE);
-    if(!req)
+    if(unlikely(!req))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -418,7 +429,7 @@ METHOD(VimCon, Browse, Title, Drawer)
     // Go to sleep and show requester.
     set(_app(me), MUIA_Application_Sleep, TRUE);
 
-    if(MUI_AslRequestTags(req,TAG_DONE) && req->fr_File)
+    if(likely(MUI_AslRequestTags(req,TAG_DONE) && req->fr_File))
     {
         // 2 extra bytes for term 0 + AddPart() separator
         size_t s = STRLEN(req->fr_Drawer) + STRLEN(req->fr_File) + 2;
@@ -426,7 +437,7 @@ METHOD(VimCon, Browse, Title, Drawer)
         // Vim will take care of freeing this memory.
         res = calloc(s, sizeof(unsigned char));
 
-        if(res)
+        if(likely(res))
         {
             // Prepare the result
             STRCPY(res, req->fr_Drawer);
@@ -451,7 +462,7 @@ METHOD(VimCon, Browse, Title, Drawer)
 //------------------------------------------------------------------------------
 METHOD(VimCon, GetScreenDim, WidthPtr, HeightPtr)
 {
-    if(!my->bm)
+    if(unlikely(!my->bm))
     {
         kmsg(_(e_null));
         return 0;
@@ -470,7 +481,7 @@ METHOD(VimCon, GetScreenDim, WidthPtr, HeightPtr)
 //------------------------------------------------------------------------------
 METHOD(VimCon, SetTitle, Title)
 {
-    if(!msg->Title)
+    if(unlikely(!msg->Title))
     {
         return FALSE;
     }
@@ -487,7 +498,7 @@ METHOD(VimCon, SetTitle, Title)
 METHOD0(VimCon, Ticker)
 {
     // Only on (2) or off (1) here.
-    if(my->blink < 1 || my->blink > 2)
+    if(unlikely(my->blink < 1 || my->blink > 2))
     {
         kmsg(_(e_internal));
         return FALSE;
@@ -556,20 +567,20 @@ METHOD0(VimCon, Timeout)
 METHOD(VimCon, SetTimeout, Timeout)
 {
     // Only act if old timeout != new timout
-    if(my->timeout.ihn_Millis == msg->Timeout)
+    if(unlikely(my->timeout.ihn_Millis == msg->Timeout))
     {
         return FALSE;
     }
 
     // If old timeout exists, remove it
-    if(my->timeout.ihn_Millis)
+    if(unlikely(my->timeout.ihn_Millis))
     {
         DoMethod(_app(me), MUIM_Application_RemInputHandler, &my->timeout);
         my->timeout.ihn_Millis = 0;
     }
 
     // If new timeout > 0, install new handler
-    if(msg->Timeout)
+    if(likely(msg->Timeout))
     {
         my->timeout.ihn_Millis = (UWORD) msg->Timeout;
         DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->timeout);
@@ -589,25 +600,53 @@ METHOD(VimCon, SetTimeout, Timeout)
 //------------------------------------------------------------------------------
 MUIDSP void VimConDirty(struct VimConData *my, int x1, int y1, int x2, int y2)
 {
-    // Grow dirty region if it doesn't cover the new one.
+    // Grow dirty region if it doesn't cover the new one. Check bounds.
     if(x1 < my->xd1)
     {
-        my->xd1 = (x1 >= 0 && x1 < my->width) ? x1 : 0;
+        if(likely(x1 >= 0 && x1 < my->width))
+        {
+            my->xd1 = x1;
+        }
+        else
+        {
+            my->xd1 = 0;
+        }
     }
 
     if(x2 > my->xd2)
     {
-        my->xd2 = (x2 >= x1 && x2 < my->width) ? x2 : my->width - 1;
+        if(likely(x2 >= x1 && x2 < my->width))
+        {
+            my->xd2 = x2;
+        }
+        else
+        {
+            my->xd2 = my->width - 1;
+        }
     }
 
     if(y1 < my->yd1)
     {
-        my->yd1 = (y1 >= 0 && y1 < my->height) ? y1 : 0;
+        if(likely((y1 >= 0 && y1 < my->height)))
+        {
+            my->yd1 = y1;
+        }
+        else
+        {
+            my->yd1 = 0;
+        }
     }
 
     if(y2 > my->yd2)
     {
-        my->yd2 = (y2 >= y1 && y2 < my->height) ? y2 : my->height - 1;
+        if(likely((y2 >= y1 && y2 < my->height)))
+        {
+            my->yd2 = y2;
+        }
+        else
+        {
+            my->yd2 = my->height - 1;
+        }
     }
 }
 
@@ -635,7 +674,7 @@ METHOD(VimCon, DrawHollowCursor, Row, Col, Color)
     int x1 = msg->Col * my->xdelta, y1 = msg->Row * my->ydelta,
         x2 = x1 + my->xdelta - my->space, y2 = y1 + my->ydelta;
 
-    if(x2 <= x1 || y2 <= y1)
+    if(unlikely(x2 <= x1 || y2 <= y1))
     {
         return FALSE;
     }
@@ -663,7 +702,7 @@ METHOD(VimCon, DrawPartCursor, Row, Col, Width, Height, Color)
         y = msg->Row * my->ydelta + my->ydelta - msg->Height,
         ys = msg->Height - my->space;
 
-    if(xs < 1 || ys < 1)
+    if(unlikely(xs < 1 || ys < 1))
     {
         return FALSE;
     }
@@ -686,7 +725,7 @@ METHOD(VimCon, InvertRect, Row, Col, Rows, Cols)
     int x = msg->Col * my->xdelta, xs = my->xdelta * msg->Cols,
         y = msg->Row * my->ydelta, ys = my->ydelta * msg->Rows;
 
-    if(xs < 1 || ys < 1)
+    if(unlikely(xs < 1 || ys < 1))
     {
         return FALSE;
     }
@@ -710,7 +749,7 @@ METHOD(VimCon, FillBlock, Row1, Col1, Row2, Col2, Color)
     int x = msg->Col1 * my->xdelta, xs = my->xdelta * (msg->Col2 + 1) - x,
         y = msg->Row1 * my->ydelta, ys = my->ydelta * (msg->Row2 + 1) - y;
 
-    if(xs < 1 || ys < 1)
+    if(unlikely(xs < 1 || ys < 1))
     {
         return FALSE;
     }
@@ -738,7 +777,7 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
 {
     int n = (int) msg->Lines;
 
-    if(!n)
+    if(unlikely(!n))
     {
         return FALSE;
     }
@@ -794,7 +833,7 @@ METHOD(VimCon, SetFgColor, Color)
         { .ti_Tag = TAG_END, .ti_Data = 0 }
     };
 
-    if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
+    if(likely((msg->Color|ALPHA_MASK) == tags[0].ti_Data))
     {
         return FALSE;
     }
@@ -817,7 +856,7 @@ METHOD(VimCon, SetBgColor, Color)
         { .ti_Tag = TAG_END, .ti_Data = 0 }
     };
 
-    if((msg->Color|ALPHA_MASK) == tags[0].ti_Data)
+    if(unlikely((msg->Color|ALPHA_MASK) == tags[0].ti_Data))
     {
         return FALSE;
     }
@@ -845,7 +884,7 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
     VimConDirty(my, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
 
-    if(flags == msg->Flags)
+    if(likely(flags == msg->Flags))
     {
         Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
         return TRUE;
@@ -860,11 +899,40 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
         { .ti_Tag = TAG_END, .ti_Data = 0 }
     };
 
-    // Translate Vim flags to Amiga flags.
-    tags[0].ti_Data = (msg->Flags & DRAW_TRANSP) ? JAM1 : JAM2;
-    tags[1].ti_Data = (msg->Flags & (DRAW_UNDERL | DRAW_BOLD)) ?
-                      ((msg->Flags & DRAW_UNDERL ? FSF_UNDERLINED : 0) |
-                      (msg->Flags & DRAW_BOLD ? FSF_BOLD : 0)) : FS_NORMAL;
+    // Translate Vim transparence flags to Amiga flags.
+    if(unlikely(msg->Flags & DRAW_TRANSP))
+    {
+        tags[0].ti_Data = JAM1;
+    }
+    else
+    {
+        tags[0].ti_Data = JAM2;
+    }
+
+#ifdef RPTAG_SoftStyle
+    // Translate Vim bold / underline flags to Amiga flags.
+    if(unlikely(msg->Flags & (DRAW_UNDERL | DRAW_BOLD)))
+    {
+
+        if(unlikely(msg->Flags & DRAW_UNDERL))
+        {
+            tags[1].ti_Data = FSF_UNDERLINED;
+        }
+        else
+        {
+            tags[1].ti_Data = 0;
+        }
+
+        if(likely(msg->Flags & DRAW_BOLD))
+        {
+            tags[1].ti_Data |= FSF_BOLD;
+        }
+    }
+    else
+    {
+        tags[1].ti_Data = FS_NORMAL;
+    }
+#endif
 
     // Set rastport attributes.
     SetRPAttrsA(&my->rp, tags);
@@ -873,7 +941,7 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
     Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
 
     // Reset draw mode to JAM2.
-    if(tags[0].ti_Data != JAM2)
+    if(unlikely(tags[0].ti_Data != JAM2))
     {
         tags[0].ti_Data = JAM2;
         SetRPAttrsA(&my->rp, tags);
@@ -903,7 +971,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
 
-    if(!obj)
+    if(unlikely(!obj))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -911,7 +979,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     struct Screen *s = LockPubScreen(NULL);
 
-    if(!s)
+    if(unlikely(!s))
     {
         kmsg(_(e_null));
         CoerceMethod(cls, obj, OM_DISPOSE);
@@ -935,7 +1003,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     UnlockPubScreen(NULL, s);
 
-    if(!my->bm)
+    if(unlikely(!my->bm))
     {
         kmsg(_(e_outofmem));
         CoerceMethod(cls, obj, OM_DISPOSE);
@@ -994,7 +1062,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 {
     // Setup parent class
-    if(!DoSuperMethodA(cls, obj, (Msg) msg))
+    if(unlikely(!DoSuperMethodA(cls, obj, (Msg) msg)))
     {
         kmsg(_(e_internal));
         return FALSE;
@@ -1010,7 +1078,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 
     // If we aren't using a bitmap font we need to do more work to determine the
     // right amount of spacing necessary to avoid overlap
-    if(!(my->rp.Font->tf_Flags & FPF_DESIGNED))
+    if(unlikely(!(my->rp.Font->tf_Flags & FPF_DESIGNED)))
     {
         struct TextExtent te;
         TextExtent(&my->rp, (STRPTR) "VI", 2, &te);
@@ -1033,7 +1101,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 
 #ifdef MUIVIM_FEAT_TIMEOUT
     // Install timeout timer if previously present
-    if(my->timeout.ihn_Millis)
+    if(unlikely(my->timeout.ihn_Millis))
     {
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->timeout);
     }
@@ -1043,7 +1111,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     my->block = FALSE;
 
     // Install blink handler if previously present
-    if(my->blink)
+    if(likely(my->blink))
     {
         DoMethod(_app(obj), MUIM_Application_AddInputHandler, &my->ticker);
     }
@@ -1060,7 +1128,7 @@ MUIDSP IPTR VimConDispose(Class *cls, Object *obj, Msg msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
 
-    if(my->bm)
+    if(likely(my->bm))
     {
         WaitBlit();
         FreeBitMap(my->bm);
@@ -1081,13 +1149,13 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
 
 #ifdef MUIVIM_FEAT_TIMEOUT
     // Remove timeout timer if present
-    if(my->timeout.ihn_Millis)
+    if(unlikely(my->timeout.ihn_Millis))
     {
         DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->timeout);
     }
 #endif
     // Remove cursor blink timer if present
-    if(my->blink)
+    if(likely(my->blink))
     {
         DoMethod(_app(obj), MUIM_Application_RemInputHandler, &my->ticker);
     }
@@ -1109,7 +1177,7 @@ static void VimConAddEvent(Class *cls, Object *obj, IPTR event)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Don't add events more than once.
-    if(event == (my->event.ehn_Events & event))
+    if(unlikely(event == (my->event.ehn_Events & event)))
     {
         return;
     }
@@ -1130,7 +1198,7 @@ static void VimConRemEvent(Class *cls, Object *obj, ULONG event)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Don't remove what's not there.
-    if(!(my->event.ehn_Events & event))
+    if(unlikely(!(my->event.ehn_Events & event)))
     {
         return;
     }
@@ -1174,13 +1242,13 @@ MUIDSP int VimConMouseMove(Class *cls, Object *obj,
               msg->imsg->MouseY >= my->bottom;
 
     // Replace MOUSEMOVE with INTUITICKS when we're outside
-    if(out)
+    if(unlikely(out))
     {
         int event = VimConMouseScrollEvent(cls, obj, msg);
         gui_send_mouse_event(event, x, y, FALSE, 0);
 
         // But only do it once
-        if(!tick)
+        if(unlikely(!tick))
         {
             VimConRemEvent(cls, obj, IDCMP_MOUSEMOVE);
             VimConAddEvent(cls, obj, IDCMP_INTUITICKS);
@@ -1194,7 +1262,7 @@ MUIDSP int VimConMouseMove(Class *cls, Object *obj,
         y = msg->imsg->MouseY - my->top;
 
         // But only do it once
-        if(tick)
+        if(unlikely(tick))
         {
             VimConRemEvent(cls, obj, IDCMP_INTUITICKS);
             VimConAddEvent(cls, obj, IDCMP_MOUSEMOVE);
@@ -1386,7 +1454,7 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
             return TRUE;
     }
 
-    if(!c)
+    if(unlikely(!c))
     {
         return TRUE;
     }
@@ -1404,14 +1472,14 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
 
     int l = 0;
 
-    if(m)
+    if(unlikely(m))
     {
         s[l++] = CSI;
         s[l++] = KS_MODIFIER;
         s[l++] = (char_u) m;
     }
 
-    if(IS_SPECIAL(c) )
+    if(likely(IS_SPECIAL(c)))
     {
         s[l++] = CSI;
         s[l++] = K_SECOND(c);
@@ -1502,7 +1570,7 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
     IPTR r = (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
     struct VimConData *my = INST_DATA(cls,obj);
 
-    if(!my->bm)
+    if(unlikely(!my->bm))
     {
         kmsg(_(e_null));
         return 0;
@@ -1531,9 +1599,9 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
     struct VimConData *my = INST_DATA(cls,obj);
 
     // Update dirty parts.
-    if(msg->flags & MADF_DRAWUPDATE)
+    if(likely(msg->flags & MADF_DRAWUPDATE))
     {
-        if(my->xd1 == INT_MAX)
+        if(unlikely(my->xd1 == INT_MAX))
         {
             // No dirt.
             return r;
@@ -1548,16 +1616,16 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         VimConClean(my);
     }
     // Update everything.
-    else if(msg->flags & MADF_DRAWOBJECT)
+    else if(unlikely(msg->flags & MADF_DRAWOBJECT))
     {
-        if(my->width < _mwidth(obj))
+        if(likely(my->width < _mwidth(obj)))
         {
             // We're wider. Clear new bitmap area before showing it.
             FillPixelArray(&my->rp, my->width, 0,  _mwidth(obj) - my->width,
                            _mheight(obj), gui.back_pixel);
         }
 
-        if(my->height < _mheight(obj))
+        if(likely(my->height < _mheight(obj)))
         {
             // We're taller. Clear new bitmap area before showing it.
             FillPixelArray(&my->rp, 0, my->height, _mwidth(obj), _mheight(obj) -
@@ -1592,7 +1660,7 @@ METHOD(VimCon, Callback, VimMenuPtr)
 {
     vimmenu_T *mp = (vimmenu_T *) msg->VimMenuPtr;
 
-    if(!mp || !mp->cb)
+    if(unlikely(!mp || !mp->cb))
     {
         return FALSE;
     }
@@ -1611,13 +1679,13 @@ METHOD(VimCon, Callback, VimMenuPtr)
 METHOD0(VimCon, GetState)
 {
     // Can't idle and X at the same time
-    if(my->state == MUIV_VimCon_State_Idle)
+    if(likely(my->state == MUIV_VimCon_State_Idle))
     {
         return MUIV_VimCon_State_Idle;
     }
 
     // Reset terminal and let Vim know our size.
-    if(my->state & MUIV_VimCon_State_Reset)
+    if(unlikely(my->state & MUIV_VimCon_State_Reset))
     {
         my->state = MUIV_VimCon_State_Idle;
         gui_resize_shell(my->width, my->height);
@@ -1626,7 +1694,7 @@ METHOD0(VimCon, GetState)
     }
 
     // Yields take precendence over timeouts
-    if(my->state & MUIV_VimCon_State_Yield)
+    if(unlikely(my->state & MUIV_VimCon_State_Yield))
     {
         my->state = MUIV_VimCon_State_Idle;
         return MUIV_VimCon_State_Yield;
@@ -1634,7 +1702,7 @@ METHOD0(VimCon, GetState)
 
 #ifdef MUIVIM_FEAT_TIMEOUT
     // Timeout takes precedence over nothing
-    if(my->state & MUIV_VimCon_State_Timeout)
+    if(unlikely(my->state & MUIV_VimCon_State_Timeout))
     {
         my->state = MUIV_VimCon_State_Idle;
         return MUIV_VimCon_State_Timeout;
@@ -1684,7 +1752,7 @@ METHOD(VimCon, Copy, Clipboard)
 {
     Clipboard_T *cbd = (Clipboard_T *) msg->Clipboard;
 
-    if(!cbd->owned)
+    if(unlikely(!cbd->owned))
     {
         return 0;
     }
@@ -1696,7 +1764,7 @@ METHOD(VimCon, Copy, Clipboard)
     char_u *data;
     int type = clip_convert_selection(&data, &size, cbd);
 
-    if(type == -1)
+    if(unlikely(type == -1))
     {
         // Do nothing if conversion fails
         vim_free(data);
@@ -1705,7 +1773,7 @@ METHOD(VimCon, Copy, Clipboard)
 
     struct IFFHandle *iffh = AllocIFF();
 
-    if(!iffh)
+    if(unlikely(!iffh))
     {
         kmsg(_(e_outofmem));
         vim_free(data);
@@ -1714,17 +1782,18 @@ METHOD(VimCon, Copy, Clipboard)
 
     iffh->iff_Stream = (IPTR) OpenClipboard(PRIMARY_CLIP);
 
-    if(iffh->iff_Stream)
+    if(likely(iffh->iff_Stream))
     {
         LONG ftxt = MAKE_ID('F','T','X','T'),
              chrs = MAKE_ID('C','H','R','S');
 
         InitIFFasClip(iffh);
-        if(!OpenIFF(iffh, IFFF_WRITE))
+
+        if(likely(!OpenIFF(iffh, IFFF_WRITE)))
         {
-            if(!PushChunk(iffh, ftxt, ID_FORM, IFFSIZE_UNKNOWN))
+            if(likely(!PushChunk(iffh, ftxt, ID_FORM, IFFSIZE_UNKNOWN)))
             {
-                if(!PushChunk(iffh, 0, chrs, IFFSIZE_UNKNOWN))
+                if(likely(!PushChunk(iffh, 0, chrs, IFFSIZE_UNKNOWN)))
                 {
                     WriteChunkBytes(iffh, data, size);
                     PopChunk(iffh);
@@ -1765,7 +1834,7 @@ METHOD(VimCon, Paste, Clipboard)
     Clipboard_T *cbd = (Clipboard_T *) msg->Clipboard;
     struct IFFHandle *iffh = AllocIFF();
 
-    if(!iffh)
+    if(unlikely(!iffh))
     {
         kmsg(_(e_outofmem));
         return 0;
@@ -1773,7 +1842,7 @@ METHOD(VimCon, Paste, Clipboard)
 
     iffh->iff_Stream = (IPTR) OpenClipboard(PRIMARY_CLIP);
 
-    if(!iffh->iff_Stream)
+    if(unlikely(!iffh->iff_Stream))
     {
         FreeIFF(iffh);
         return 0;
@@ -1785,8 +1854,8 @@ METHOD(VimCon, Paste, Clipboard)
     InitIFFasClip(iffh);
 
     // Open and set stop points
-    if(!OpenIFF(iffh,IFFF_READ) && !StopChunk(iffh, ftxt, chrs) &&
-       !StopChunk(iffh, ftxt, cset))
+    if(likely(!OpenIFF(iffh,IFFF_READ) && !StopChunk(iffh, ftxt, chrs) &&
+       !StopChunk(iffh, ftxt, cset)))
     {
         LONG stat;
 
@@ -1797,7 +1866,7 @@ METHOD(VimCon, Paste, Clipboard)
             {
                 struct ContextNode *c = CurrentChunk(iffh);
 
-                if(!c || c->cn_Type != ftxt || c->cn_ID != chrs)
+                if(unlikely(!c || c->cn_Type != ftxt || c->cn_ID != chrs))
                 {
                     continue;
                 }
@@ -1806,7 +1875,7 @@ METHOD(VimCon, Paste, Clipboard)
                 LONG size = 1 << 10;
                 char_u *data = calloc(size, sizeof(char_u));
 
-                if(!data)
+                if(unlikely(!data))
                 {
                     kmsg(_(e_outofmem));
                     break;
@@ -1819,7 +1888,7 @@ METHOD(VimCon, Paste, Clipboard)
                 {
                     char_u *next = calloc(size << 1, sizeof(char_u));
 
-                    if(!next)
+                    if(unlikely(!next))
                     {
                         kmsg(_(e_outofmem));
                         stat = IFFERR_NOMEM;
@@ -1835,7 +1904,7 @@ METHOD(VimCon, Paste, Clipboard)
                 }
 
                 // Yank unless we ran out of memory
-                if(!stat)
+                if(likely(!stat))
                 {
                     clip_yank_selection(MCHAR, data, read, cbd);
                 }
@@ -2011,7 +2080,7 @@ METHOD(VimToolbar, AddButton, ID, Label, Help)
     // Traverse our static toolbar and set up a notification if we find a match.
     while(b->img != (IPTR) MUIV_TheBar_End)
     {
-        if(b->help && !strcmp((const char *) msg->Label, b->help))
+        if(unlikely(b->help && !strcmp((const char *) msg->Label, b->help)))
         {
             DoMethod(me, MUIM_TheBar_Notify, (IPTR) b->ID, MUIA_Pressed, FALSE,
                      Con, 2, M_ID(VimCon, Callback), (IPTR) msg->ID);
@@ -2044,7 +2113,7 @@ METHOD(VimToolbar, DisableButton, ID, Grey)
     // find one, we can translate this into a MUI ID and use the TheBar method.
     while(b->img != MUIV_TheBar_End)
     {
-        if(msg->ID == (IPTR) b->_class)
+        if(unlikely(msg->ID == (IPTR) b->_class))
         {
             // We found the MUI ID. Use the proper TheBar method to disable /
             // enable the button.
@@ -2147,7 +2216,7 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
 
-    if(obj)
+    if(likely(obj))
     {
         struct VimToolbarData *my = INST_DATA(cls,obj);
         my->btn = b;
@@ -2214,7 +2283,7 @@ CLASS_DEF(VimMenu)
 METHOD(VimMenu, Grey, ID, Grey)
 {
     // ID:s must be valid vim menu pointers
-    if(!msg || !msg->ID)
+    if(unlikely(!msg || !msg->ID))
     {
         return FALSE;
     }
@@ -2222,15 +2291,15 @@ METHOD(VimMenu, Grey, ID, Grey)
     vimmenu_T *menu = (vimmenu_T *) msg->ID;
 
     // Ignore popup menus and separators
-    if(menu_is_popup(menu->name) || menu_is_separator(menu->name) ||
-      (menu->parent && menu_is_popup(menu->parent->name)))
+    if(unlikely(menu_is_popup(menu->name) || menu_is_separator(menu->name) ||
+      (menu->parent && menu_is_popup(menu->parent->name))))
     {
         return FALSE;
     }
 
     // Some of our menu items are in fact toolbar buttons
-    if(menu_is_toolbar(menu->name) ||
-      (menu->parent && menu_is_toolbar(menu->parent->name)))
+    if(unlikely(menu_is_toolbar(menu->name) ||
+      (menu->parent && menu_is_toolbar(menu->parent->name))))
     {
         DoMethod(Tlb, MUIM_VimToolbar_DisableButton, menu, msg->Grey);
         return TRUE;
@@ -2239,7 +2308,7 @@ METHOD(VimMenu, Grey, ID, Grey)
     // Vim menu pointers are used as MUI user data / ID:s
     Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
 
-    if(!m)
+    if(unlikely(!m))
     {
         return FALSE;
     }
@@ -2267,7 +2336,7 @@ METHOD(VimMenu, Grey, ID, Grey)
 METHOD(VimMenu, RemoveMenu, ID)
 {
     // ID:s must be valid vim menu pointers
-    if(!msg || !msg->ID)
+    if(unlikely(!msg || !msg->ID))
     {
         return FALSE;
     }
@@ -2275,7 +2344,7 @@ METHOD(VimMenu, RemoveMenu, ID)
     // Vim menu pointers are used as MUI user data / ID:s
     Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
 
-    if(!m)
+    if(unlikely(!m))
     {
         return FALSE;
     }
@@ -2295,7 +2364,7 @@ METHOD(VimMenu, AddSpacer, ParentID)
     // All spacers have parents (they can't be top level menus)
     Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
 
-    if(!m)
+    if(unlikely(!m))
     {
         return (IPTR) NULL;
     }
@@ -2303,7 +2372,7 @@ METHOD(VimMenu, AddSpacer, ParentID)
     // No MUI user data needed, spacers have no callback
     Object *i = MUI_NewObject(MUIC_Menuitem, MUIA_Menuitem_Title, NM_BARLABEL,
                               TAG_END);
-    if(!i)
+    if(unlikely(!i))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -2326,7 +2395,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
     // Sub menus have their own parents. Top level menus belong to us.
     Object *m = msg->ParentID ? (Object *) DoMethod(me, MUIM_FindUData,
                                                     msg->ParentID) : me;
-    if(!m)
+    if(unlikely(!m))
     {
         // Parent not found.
         return (IPTR) NULL;
@@ -2335,7 +2404,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
     // Vim menu type pointers used as MUI user data
     Object *i = MUI_NewObject(MUIC_Menu, MUIA_Menu_Title, msg->Label,
                               MUIA_UserData, msg->ID, TAG_END);
-    if(!i)
+    if(unlikely(!i))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -2347,7 +2416,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
     // Make sure that the AlwaysLast menu really is last.
     Object *l = (Object *) DoMethod(me, MUIM_FindUData,
                                     MUIV_VimMenu_AddMenu_AlwaysLast);
-    if(l)
+    if(likely(l))
     {
         DoMethod(me, MUIM_Family_Remove, l);
         DoMethod(me, MUIM_Family_AddTail, l);
@@ -2368,7 +2437,7 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
     // Menu items must have a parent menu
     Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
 
-    if(!m)
+    if(unlikely(!m))
     {
         // Parent not found.
         return (IPTR) NULL;
@@ -2377,7 +2446,7 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
     // Vim menu type pointers used as MUI user data
     Object *i = MUI_NewObject(MUIC_Menuitem, MUIA_Menuitem_Title, msg->Label,
                               MUIA_UserData, msg->ID, TAG_END);
-    if(!i)
+    if(unlikely(!i))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -2474,7 +2543,7 @@ METHOD0(VimScrollbar, Visible)
 //------------------------------------------------------------------------------
 METHOD(VimScrollbar, Drag, Value)
 {
-    if(!my->sb)
+    if(unlikely(!my->sb))
     {
         return FALSE;
     }
@@ -2492,7 +2561,7 @@ METHOD(VimScrollbar, Show, Show)
 {
     // Vim likes to update scrollbars even though nothing changed. Bail out if
     // nothing changed since the last invocation.
-    if(my->visible == msg->Show || !my->grp)
+    if(likely(my->visible == msg->Show || !my->grp))
     {
         return FALSE;
     }
@@ -2567,7 +2636,7 @@ MUIDSP IPTR VimScrollbarSortNeeded(Object *grp)
         IPTR stop = DoMethod(chl, M_ID(VimScrollbar, Top));
 
         // Ascending order.
-        if(top > stop)
+        if(unlikely(top > stop))
         {
             return TRUE;
         }
@@ -2630,7 +2699,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
     // The array must be NULL terminated.
     Object **scs = calloc(cnt + 1, sizeof(scrollbar_T *));
 
-    if(!scs)
+    if(unlikely(!scs))
     {
         kmsg(_(e_outofmem));
         return NULL;
@@ -2663,15 +2732,16 @@ MUIDSP void VimScrollbarSort(Object *grp)
     // Get number of objects in group.
     size_t cnt = VimScrollbarCount(grp);
 
-    if(cnt < 2)
+    if(unlikely(cnt < 2))
     {
+        HERE;
         return;
     }
 
     // Create an array of object pointers.
     Object **scs = VimScrollbarGroupCopy(grp, cnt);
 
-    if(!scs)
+    if(unlikely(!scs))
     {
         kmsg(_(e_outofmem));
         return;
@@ -2693,7 +2763,7 @@ MUIDSP void VimScrollbarSort(Object *grp)
             IPTR alfa = DoMethod(scs[end], M_ID(VimScrollbar, Top)),
                  beta = DoMethod(scs[end + 1], M_ID(VimScrollbar, Top));
 
-            if(beta < alfa)
+            if(unlikely(beta < alfa))
             {
                 // Flip non sorted pairs.
                 Object *tmp = scs[end];
@@ -2723,14 +2793,14 @@ METHOD(VimScrollbar, Pos, Top, Height)
 {
     // Vim likes to update scrollbars even though nothing changed. Bail out if
     // nothing changed since the last invocation.
-    if((my->top == msg->Top && my->weight == msg->Height) ||
-       !my->grp || !my->sb)
+    if(likely((my->top == msg->Top && my->weight == msg->Height) ||
+       !my->grp || !my->sb))
     {
         return FALSE;
     }
 
     // The bottom scrollbar needs no weight and no position.
-    if(my->sb->type == SBAR_BOTTOM)
+    if(unlikely(my->sb->type == SBAR_BOTTOM))
     {
         return TRUE;
     }
@@ -2741,7 +2811,7 @@ METHOD(VimScrollbar, Pos, Top, Height)
     DoMethod(my->grp, MUIM_Group_InitChange);
 
     // Test if the scrollbar is properly located.
-    if(VimScrollbarSortNeeded(my->grp))
+    if(unlikely(VimScrollbarSortNeeded(my->grp)))
     {
         // It's not, sort parent group.
         VimScrollbarSort(my->grp);
@@ -2761,7 +2831,7 @@ METHOD(VimScrollbar, Pos, Top, Height)
 //------------------------------------------------------------------------------
 METHOD0(VimScrollbar, Install)
 {
-    if(!my->sb)
+    if(unlikely(!my->sb))
     {
         return FALSE;
     }
@@ -2783,7 +2853,7 @@ METHOD0(VimScrollbar, Install)
 //------------------------------------------------------------------------------
 METHOD0(VimScrollbar, Uninstall)
 {
-    if(!my->sb || !my->grp)
+    if(unlikely(!my->sb || !my->grp))
     {
         return FALSE;
     }
@@ -2818,7 +2888,7 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     obj = (Object *) DoSuperMethod(cls, obj, OM_NEW, tags, NULL);
 
-    if(!obj)
+    if(unlikely(!obj))
     {
         kmsg(_(e_outofmem));
         return (IPTR) NULL;
@@ -2939,8 +3009,8 @@ void gui_mch_free_font(GuiFont font)
 //------------------------------------------------------------------------------
 int gui_mch_get_winpos(int *x, int *y)
 {
-    if(GetAttr(MUIA_Window_TopEdge, _win(Con), (IPTR *) x) &&
-       GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y))
+    if(likely(GetAttr(MUIA_Window_TopEdge, _win(Con), (IPTR *) x) &&
+       GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y)))
     {
         return OK;
     }
@@ -2963,7 +3033,7 @@ void gui_mch_set_winpos(int x, int y)
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(!sb || !sb->id)
+    if(unlikely(!sb || !sb->id))
     {
         return;
     }
@@ -2983,7 +3053,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 #ifdef MUIVIM_FEAT_SCROLLBAR
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
                             MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
-    if(!obj)
+    if(unlikely(!obj))
     {
         kmsg(_(e_outofmem));
         return;
@@ -3002,7 +3072,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(!sb->id)
+    if(unlikely(!sb->id))
     {
         return;
     }
@@ -3023,7 +3093,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
 {
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(!sb->id || !h)
+    if(unlikely(!sb->id || !h))
     {
         return;
     }
@@ -3228,8 +3298,8 @@ int gui_mch_wait_for_chars(int wtime)
     static IPTR sig;
 
     // Pass control over to MUI.
-    if(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) == (IPTR)
-                MUIV_Application_ReturnID_Quit)
+    if(unlikely(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) == (IPTR)
+                MUIV_Application_ReturnID_Quit))
     {
         // Quit.
         gui_shell_closed();
@@ -3240,15 +3310,15 @@ int gui_mch_wait_for_chars(int wtime)
     int state = DoMethod(Con, M_ID(VimCon, GetState));
 
     // Wait for something to happen if we're idle.
-    if(state == MUIV_VimCon_State_Idle)
+    if(likely(state == MUIV_VimCon_State_Idle))
     {
         // For some reason MUI returns 0 when jumping to the same screen that
         // we're currently on. If so, just pass control over to Vim.
-        if(sig)
+        if(likely(sig))
         {
             sig = Wait(sig | SIGBREAKF_CTRL_C);
 
-            if(sig & SIGBREAKF_CTRL_C)
+            if(unlikely(sig & SIGBREAKF_CTRL_C))
             {
                 getout_preserve_modified(0);
             }
@@ -3410,7 +3480,7 @@ void gui_mch_set_menu_pos(int x, int y, int w, int h)
 #ifdef __amigaos4__
 static int gui_os4_init(void)
 {
-    if(!(MUIMasterBase = OpenLibrary("muimaster.library", 19)))
+    if(unlikely(!(MUIMasterBase = OpenLibrary("muimaster.library", 19))))
     {
         fprintf(stderr, "Failed to open muimaster.library.\n");
         return FALSE;
@@ -3419,7 +3489,7 @@ static int gui_os4_init(void)
     IMUIMaster = (struct MUIMasterIFace *)
                  GetInterface(MUIMasterBase, "main", 1, NULL);
 
-    if(!(CyberGfxBase=OpenLibrary("cybergraphics.library",40)))
+    if(unlikely(!(CyberGfxBase=OpenLibrary("cybergraphics.library",40))))
     {
         fprintf(stderr, "Failed to open cybergraphics.library.\n");
         return FALSE;
@@ -3427,7 +3497,7 @@ static int gui_os4_init(void)
 
     ICyberGfx= (struct CyberGfxIFace*) GetInterface(CyberGfxBase,"main",1,NULL);
 
-    if(!(KeymapBase =OpenLibrary("keymap.library", 50)))
+    if(unlikely(!(KeymapBase =OpenLibrary("keymap.library", 50))))
     {
         fprintf(stderr, "Failed to open keymap.library.\n");
         return FALSE;
@@ -3445,7 +3515,7 @@ int gui_mch_init(void)
 {
     Object *Win, *Set = NULL, *Abo = NULL;
 #ifdef __amigaos4__
-    if(!gui_os4_init())
+    if(unlikely(!gui_os4_init()))
     {
         getout(1);
     }
@@ -3457,7 +3527,7 @@ int gui_mch_init(void)
     VimToolbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_TheBar, NULL,
                                             sizeof(struct VimToolbarData),
                                             (APTR) DISPATCH_GATE(VimToolbar));
-    if(!VimToolbarClass)
+    if(unlikely(!VimToolbarClass))
     {
         VimMessage("Error", "MCC_TheBar required", "OK");
         getout(1);
@@ -3475,9 +3545,9 @@ int gui_mch_init(void)
                                          sizeof(struct VimScrollbarData),
                                          (APTR) DISPATCH_GATE(VimScrollbar));
 
-    if(!VimConClass || !VimMenuClass || !VimScrollbarClass)
+    if(unlikely(!VimConClass || !VimMenuClass || !VimScrollbarClass))
 #else
-    if(!VimConClass || !VimMenuClass)
+    if(unlikely(!VimConClass || !VimMenuClass))
 #endif
     {
         kmsg(_(e_outofmem));
@@ -3564,7 +3634,7 @@ int gui_mch_init(void)
             TAG_END),
         TAG_END);
 
-    if(!App)
+    if(unlikely(!App))
     {
         kmsg(_(e_outofmem));
         getout(1);
@@ -3591,7 +3661,7 @@ int gui_mch_init(void)
                     MUIV_TriggerValue);
 
     // MUI specific menu parts
-    if(Abo && Set)
+    if(likely(Abo && Set))
     {
         (void) DoMethod(Abo, MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
                         Con, 1, M_ID(VimCon, AboutMUI));
@@ -3616,7 +3686,7 @@ int gui_mch_init_check(void)
 {
     BPTR icons = Lock("VIM:icons", ACCESS_READ);
 
-    if(!icons)
+    if(unlikely(!icons))
     {
         VimMessage("Warning", "Invalid VIM assign", "OK");
     }
@@ -3650,7 +3720,7 @@ void gui_mch_exit(int rc)
 {
     (void) rc;
 
-    if(App)
+    if(likely(App))
     {
         // Save icon pointer
         IPTR icon = 0;
@@ -3661,49 +3731,49 @@ void gui_mch_exit(int rc)
         MUI_DisposeObject(App);
 
         // Free icon resources, MUI won't do this
-        if(icon)
+        if(likely(icon))
         {
             FreeDiskObject((struct DiskObject *) icon);
         }
     }
 
     // Destroy custom classes. Must check for NULL.
-    if(VimMenuClass)
+    if(likely(VimMenuClass))
     {
         MUI_DeleteCustomClass(VimMenuClass);
     }
 
-    if(VimConClass)
+    if(likely(VimConClass))
     {
         MUI_DeleteCustomClass(VimConClass);
     }
 
-    if(VimToolbarClass)
+    if(likely(VimToolbarClass))
     {
         MUI_DeleteCustomClass(VimToolbarClass);
     }
 
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(VimScrollbarClass)
+    if(likely(VimScrollbarClass))
     {
         MUI_DeleteCustomClass(VimScrollbarClass);
     }
 #endif
 
 #ifdef __amigaos4__
-    if(IMUIMaster)
+    if(likely(IMUIMaster))
     {
         DropInterface((struct Interface *) IMUIMaster);
         CloseLibrary((struct Library *) MUIMasterBase);
     }
 
-    if(ICyberGfx)
+    if(likely(ICyberGfx))
     {
         DropInterface((struct Interface *) ICyberGfx);
         CloseLibrary((struct Library *) CyberGfxBase);
     }
 
-    if(IKeymap)
+    if(likely(IKeymap))
     {
         DropInterface((struct Interface*) IKeymap);
         CloseLibrary((struct Library *) KeymapBase);
@@ -3757,7 +3827,7 @@ void gui_mch_add_menu(vimmenu_T *menu, int index)
 {
     (void) index;
 
-    if(menu_is_popup(menu->name) || menu_is_toolbar(menu->name))
+    if(unlikely(menu_is_popup(menu->name) || menu_is_toolbar(menu->name)))
     {
         return;
     }
@@ -3777,20 +3847,20 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     vimmenu_T *p = menu->parent;
 
     // Menu items must have parents
-    if(!p)
+    if(unlikely(!p))
     {
         kmsg(_(e_null));
         return;
     }
 
     // Ignore popups for now
-    if(menu_is_popup(p->name))
+    if(unlikely(menu_is_popup(p->name)))
     {
         return;
     }
 
     // Menu items can be proper menu items or toolbar buttons
-    if(menu_is_toolbar(p->name) && !menu_is_separator(menu->name))
+    if(unlikely(menu_is_toolbar(p->name) && !menu_is_separator(menu->name)))
     {
 
         (void) DoMethod(Tlb, M_ID(VimToolbar, AddButton), menu, menu->dname,
@@ -3799,7 +3869,7 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     }
 
     // A menu spacer?
-    if(menu_is_separator(menu->name) )
+    if(unlikely(menu_is_separator(menu->name)))
     {
         (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), menu->parent);
         return;
@@ -3951,7 +4021,7 @@ void clip_mch_set_selection(Clipboard_T *cbd)
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
 #ifdef MUIVIM_FEAT_SCROLLBAR
-    if(!sb || !sb->id || !DoMethod(sb->id, M_ID(VimScrollbar, Uninstall)))
+    if(unlikely(!sb || !sb->id || !DoMethod(sb->id, M_ID(VimScrollbar, Uninstall))))
     {
         return;
     }
