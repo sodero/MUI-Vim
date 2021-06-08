@@ -1672,6 +1672,17 @@ METHOD(VimCon, Callback, VimMenuPtr)
 }
 
 //------------------------------------------------------------------------------
+// VimConYield - FIXME
+// Input:        -
+// Return:       TRUE 
+//------------------------------------------------------------------------------
+METHOD0(VimCon, Yield)
+{
+    my->state = MUIV_VimCon_State_Yield;
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
 // VimConGetState - Why did we wake up?
 // Input:           -
 // Return:          MUIV_VimCon_GetState_(Idle|Input|Timeout|Unknown)
@@ -2001,6 +2012,9 @@ DISPATCH(VimCon)
 
         case M_ID(VimCon, GetScreenDim):
             return M_FN(VimCon, GetScreenDim);
+
+        case M_ID(VimCon, Yield):
+            return M_FN0(VimCon, Yield);
 
         case M_ID(VimCon, GetState):
             return M_FN0(VimCon, GetState);
@@ -2549,6 +2563,7 @@ METHOD(VimScrollbar, Drag, Value)
     }
 
 	gui_drag_scrollbar(my->sb, (int) msg->Value, FALSE);
+    (void) DoMethod(Con, M_ID(VimCon, Yield));
     return TRUE;
 }
 
@@ -3289,43 +3304,44 @@ void gui_mch_update(void)
 //------------------------------------------------------------------------------
 int gui_mch_wait_for_chars(int wtime)
 {
+#ifdef MUIVIM_FEAT_TIMEOUT
     // Don't enable timeouts for now, it might cause problems in the MUI message
     // loop. Passing the control over to Vim at any time is not safe.
-#ifdef MUIVIM_FEAT_TIMEOUT
     #warning Timeout support will cause MUI message loop problems
     (void) DoMethod(Con, M_ID(VimCon, SetTimeout), wtime > 0 ? wtime : 0);
 #endif
-    static IPTR sig;
+    // Assume that we're idling.
+    int state = MUIV_VimCon_State_Idle;
 
-    // Pass control over to MUI.
-    if(unlikely(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) == (IPTR)
-                MUIV_Application_ReturnID_Quit))
+    // Wait until something happens.
+    for(; state == MUIV_VimCon_State_Idle ;
+        state = DoMethod(Con, M_ID(VimCon, GetState)))
     {
-        // Quit.
-        gui_shell_closed();
-        return OK;
-    }
+        IPTR sig;
 
-    // Get current input state.
-    int state = DoMethod(Con, M_ID(VimCon, GetState));
-
-    // Wait for something to happen if we're idle.
-    if(likely(state == MUIV_VimCon_State_Idle))
-    {
-        // For some reason MUI returns 0 when jumping to the same screen that
-        // we're currently on. If so, just pass control over to Vim.
-        if(likely(sig))
+        // Pass control over to MUI.
+        if(unlikely(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) ==
+          (IPTR) MUIV_Application_ReturnID_Quit))
         {
-            sig = Wait(sig | SIGBREAKF_CTRL_C);
-
-            if(unlikely(sig & SIGBREAKF_CTRL_C))
-            {
-                getout_preserve_modified(0);
-            }
+            // Quit.
+            gui_shell_closed();
+            break;
         }
 
-        // Input (maybe).
-        return OK;
+        // For some reason MUI returns 0 when jumping to the same screen that
+        // we're currently on. If that happens, just pass control over to Vim.
+        if(unlikely(!sig))
+        {
+            break;
+        }
+
+        sig = Wait(sig | SIGBREAKF_CTRL_C);
+
+        if(unlikely(sig & SIGBREAKF_CTRL_C))
+        {
+            // SIGKILL.
+            getout_preserve_modified(0);
+        }
     }
 
     // Timeout or yield.
