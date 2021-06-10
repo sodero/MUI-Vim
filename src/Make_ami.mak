@@ -15,6 +15,8 @@ CFLAGS += \
 	-DNEW_SHELLSIZE \
 	-I proto \
 	-Wno-attributes \
+	-Wno-int-conversion \
+	-Wno-incompatible-pointer-types \
 	-Wextra
 
 # Vim 'huge' build with MUI GUI
