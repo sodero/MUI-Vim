@@ -872,78 +872,55 @@ METHOD(VimCon, SetBgColor, Color)
 //                    Col - Character column
 //                    Str - String
 //                    Len - Number of characters to render
-//                    Flags - DRAW_UNDERL | DRAW_BOLD
+//                    Flags - DRAW_UNDERL | DRAW_BOLD | DRAW_TRANSP
 // Return:            TRUE if anything was rendered, FALSE otherwise
 //------------------------------------------------------------------------------
 METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
 {
     static IPTR flags;
+
+    if(unlikely(flags != msg->Flags))
+    {
+        // Store until next invocation.
+        flags = msg->Flags;
+
+        IPTR style = FS_NORMAL;
+
+        // Translate Vim bold flag.
+        if(likely(msg->Flags & DRAW_BOLD))
+        {
+            style |= FSF_BOLD;
+        }
+
+        // Translate Vim underline flag.
+        if(unlikely(msg->Flags & DRAW_UNDERL))
+        {
+            style |= FSF_UNDERLINED;
+        }
+
+        IPTR mode = JAM2;
+
+        // Translate Vim transparency flag.
+        if(unlikely(msg->Flags & DRAW_TRANSP))
+        {
+            mode = JAM1;
+        }
+
+#ifndef __amigaos4__
+        SetRPAttrs(&my->rp, RPTAG_DrMd, mode, RPTAG_SoftStyle, style, TAG_END);
+#else
+        SetSoftStyle(&my->rp, style, FS_NORMAL|FSF_BOLD|FSF_UNDERLINED);
+        SetRPAttrs(&my->rp, RPTAG_DrMd, mode, TAG_END);
+#endif
+    }
+
     int y = msg->Row * my->ydelta, x = msg->Col * my->xdelta;
 
     // Tag area as dirty and move into position.
     VimConDirty(my, x, y, x + msg->Len * my->xdelta, y + my->ydelta);
     Move(&my->rp, x, y + my->rp.TxBaseline);
-
-    if(likely(flags == msg->Flags))
-    {
-        Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
-        return TRUE;
-    }
-
-#ifndef __amigaos4__
-    static struct TagItem tags[] =
-    {
-        { .ti_Tag = RPTAG_SoftStyle, .ti_Data = FS_NORMAL },
-        { .ti_Tag = TAG_END, .ti_Data = 0 }
-    };
-#endif
-
-    // Translate Vim bold / underline flags to Amiga flags.
-    if(unlikely(msg->Flags & (DRAW_UNDERL|DRAW_BOLD)))
-    {
-
-        if(unlikely(msg->Flags & DRAW_UNDERL))
-        {
-#ifndef __amigaos4__
-            tags[0].ti_Data = FSF_UNDERLINED;
-#else
-            SetSoftStyle(&my->rp, FSF_UNDERLINED, FSF_UNDERLINED);
-#endif
-        }
-#ifndef __amigaos4__
-        else
-        {
-            tags[0].ti_Data = 0;
-        }
-#endif
-        if(likely(msg->Flags & DRAW_BOLD))
-        {
-#ifndef __amigaos4__
-            tags[0].ti_Data |= FSF_BOLD;
-#else
-            SetSoftStyle(&my->rp, FSF_BOLD, FSF_BOLD);
-#endif
-        }
-    }
-    else
-    {
-#ifndef __amigaos4__
-        tags[1].ti_Data = FS_NORMAL;
-#else
-        SetSoftStyle(&my->rp, FS_NORMAL, FSF_BOLD|FSF_UNDERLINED);
-#endif
-    }
-
-#ifndef __amigaos4__
-    // Set rastport attributes.
-    SetRPAttrsA(&my->rp, tags);
-#endif
-
-    // Render into off screen buffer.
     Text(&my->rp, (CONST_STRPTR) msg->Str, msg->Len);
 
-    // Store until next invocation.
-    flags = msg->Flags;
     return TRUE;
 }
 
@@ -2743,7 +2720,6 @@ MUIDSP void VimScrollbarSort(Object *grp)
 
     if(unlikely(cnt < 2))
     {
-        HERE;
         return;
     }
 
@@ -3372,7 +3348,7 @@ void gui_mch_set_sp_color(guicolor_T sp)
 void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 {
     (void) DoMethod(Con, M_ID(VimCon, DrawString), row, col, s, len,
-                    flags & (DRAW_UNDERL|DRAW_BOLD));
+                    flags & (DRAW_UNDERL|DRAW_BOLD|DRAW_TRANSP));
 }
 
 //------------------------------------------------------------------------------
