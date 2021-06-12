@@ -421,7 +421,7 @@
  * +conceal		'conceal' option.  Needs syntax highlighting
  *			as this is how the concealed text is defined.
  */
-#if defined(FEAT_BIG) && defined(FEAT_SYN_HL)
+#if defined(FEAT_BIG) && defined(FEAT_SYN_HL) && !defined(AMIGA)
 # define FEAT_CONCEAL
 #endif
 
