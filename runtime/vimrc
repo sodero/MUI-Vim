@@ -26,6 +26,9 @@ set noeb
 set ruler
 set autoindent
 set viminfo+=nVIM:viminfo
+set regexpengine=1
+set lazyredraw
+set ttyfast
 
 " Hack to disable the netrw plugin. Its file / dir browser
 " doesn't work very well on Amiga like systems, it will in

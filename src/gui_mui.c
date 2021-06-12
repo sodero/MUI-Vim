@@ -986,7 +986,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->rp.BitMap = my->bm;
     SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2,
 #ifndef __amigaos4__
-               RPTAG_PenMode, FALSE, 
+               RPTAG_PenMode, FALSE,
 #endif
                RPTAG_FgColor, 0,
                RPTAG_BgColor, 0,
