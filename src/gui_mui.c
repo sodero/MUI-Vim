@@ -74,12 +74,17 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 //------------------------------------------------------------------------------
 // Misc
 //------------------------------------------------------------------------------
-#if __has_builtin (__builtin_expect)
-#define likely(X) __builtin_expect((X), 1)
-#define unlikely(X) __builtin_expect((X), 0)
-#else
-#define likely(X) X
-#define unlikely(X) X
+#ifdef __has_builtin
+# if __has_builtin (__builtin_expect)
+#  define likely(X) __builtin_expect((X), 1)
+#  define unlikely(X) __builtin_expect((X), 0)
+# endif
+#endif
+#ifndef likely
+# define likely(X) X
+#endif
+#ifndef unlikely
+# define unlikely(X) X
 #endif
 
 //------------------------------------------------------------------------------
@@ -906,7 +911,7 @@ METHOD(VimCon, DrawString, Row, Col, Str, Len, Flags)
             mode = JAM1;
         }
 
-#ifndef __amigaos4__
+#ifdef RPTAG_SoftStyle
         SetRPAttrs(&my->rp, RPTAG_DrMd, mode, RPTAG_SoftStyle, style, TAG_END);
 #else
         SetSoftStyle(&my->rp, style, FS_NORMAL|FSF_BOLD|FSF_UNDERLINED);
