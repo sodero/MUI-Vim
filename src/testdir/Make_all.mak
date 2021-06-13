@@ -246,6 +246,7 @@ NEW_TESTS = \
 	test_shortpathname \
 	test_signals \
 	test_signs \
+	test_sleep \
 	test_smartindent \
 	test_sort \
 	test_sound \
@@ -458,6 +459,7 @@ NEW_TESTS_RES = \
 	test_quickfix.res \
 	test_quotestar.res \
 	test_random.res \
+	test_recover.res \
 	test_regex_char_classes.res \
 	test_registers.res \
 	test_rename.res \
@@ -472,6 +474,7 @@ NEW_TESTS_RES = \
 	test_shortpathname.res \
 	test_signals.res \
 	test_signs.res \
+	test_sleep.res \
 	test_smartindent.res \
 	test_sort.res \
 	test_sound.res \

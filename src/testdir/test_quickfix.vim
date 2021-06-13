@@ -32,7 +32,7 @@ func s:setup_commands(cchar)
     command! -count -nargs=* -bang Xnfile <mods><count>cnfile<bang> <args>
     command! -nargs=* -bang Xpfile <mods>cpfile<bang> <args>
     command! -nargs=* Xexpr <mods>cexpr <args>
-    command! -count -nargs=* Xvimgrep <mods> <count>vimgrep <args>
+    command! -count=999 -nargs=* Xvimgrep <mods> <count>vimgrep <args>
     command! -nargs=* Xvimgrepadd <mods> vimgrepadd <args>
     command! -nargs=* Xgrep <mods> grep <args>
     command! -nargs=* Xgrepadd <mods> grepadd <args>
@@ -69,7 +69,7 @@ func s:setup_commands(cchar)
     command! -count -nargs=* -bang Xnfile <mods><count>lnfile<bang> <args>
     command! -nargs=* -bang Xpfile <mods>lpfile<bang> <args>
     command! -nargs=* Xexpr <mods>lexpr <args>
-    command! -count -nargs=* Xvimgrep <mods> <count>lvimgrep <args>
+    command! -count=999 -nargs=* Xvimgrep <mods> <count>lvimgrep <args>
     command! -nargs=* Xvimgrepadd <mods> lvimgrepadd <args>
     command! -nargs=* Xgrep <mods> lgrep <args>
     command! -nargs=* Xgrepadd <mods> lgrepadd <args>
@@ -701,6 +701,42 @@ func Test_helpgrep()
   helpclose
   call s:test_xhelpgrep('l')
 endfunc
+
+def Test_helpgrep_vim9_restore_cpo()
+  assert_equal('aABceFs', &cpo)
+
+  var rtp_save = &rtp
+  var dir = 'Xruntime/after'
+  &rtp ..= ',' .. dir
+  mkdir(dir .. '/ftplugin', 'p')
+  writefile(['vim9script'], dir .. '/ftplugin/qf.vim')
+  filetype plugin on
+  silent helpgrep grail
+  cwindow
+  silent helpgrep grail
+
+  assert_equal('aABceFs', &cpo)
+  delete(dir, 'rf')
+  &rtp = rtp_save
+  cclose
+  helpclose
+enddef
+
+def Test_vim9_cexpr()
+  var text = 'somefile:95:error'
+  cexpr text
+  var l = getqflist()
+  assert_equal(1, l->len())
+  assert_equal(95, l[0].lnum)
+  assert_equal('error', l[0].text)
+
+  text = 'somefile:77:warning'
+  caddexpr text
+  l = getqflist()
+  assert_equal(2, l->len())
+  assert_equal(77, l[1].lnum)
+  assert_equal('warning', l[1].text)
+enddef
 
 func Test_errortitle()
   augroup QfBufWinEnter
@@ -2845,6 +2881,13 @@ func Test_vimgrep()
   call XvimgrepTests('l')
 endfunc
 
+func Test_vimgrep_wildcards_expanded_once()
+  new X[id-01] file.txt
+  call setline(1, 'some text to search for')
+  vimgrep text %
+  bwipe!
+endfunc
+
 " Test for incsearch highlighting of the :vimgrep pattern
 " This test used to cause "E315: ml_get: invalid lnum" errors.
 func Test_vimgrep_incsearch()
@@ -3813,7 +3856,7 @@ func Test_lbuffer_crash()
   sv Xtest
   augroup QF_Test
     au!
-    au * * bw
+    au QuickFixCmdPre,QuickFixCmdPost,BufEnter,BufLeave * bw
   augroup END
   lbuffer
   augroup QF_Test
@@ -3825,7 +3868,7 @@ endfunc
 func Test_lexpr_crash()
   augroup QF_Test
     au!
-    au * * call setloclist(0, [], 'f')
+    au QuickFixCmdPre,QuickFixCmdPost,BufEnter,BufLeave * call setloclist(0, [], 'f')
   augroup END
   lexpr ""
   augroup QF_Test
@@ -3860,7 +3903,7 @@ func Test_lvimgrep_crash()
   sv Xtest
   augroup QF_Test
     au!
-    au * * call setloclist(0, [], 'f')
+    au QuickFixCmdPre,QuickFixCmdPost,BufEnter,BufLeave * call setloclist(0, [], 'f')
   augroup END
   lvimgrep quickfix test_quickfix.vim
   augroup QF_Test
@@ -4195,7 +4238,7 @@ func Test_lbuffer_with_bwipe()
   new
   new
   augroup nasty
-    au * * bwipe
+    au QuickFixCmdPre,QuickFixCmdPost,BufEnter,BufLeave * bwipe
   augroup END
   lbuffer
   augroup nasty
@@ -4208,9 +4251,9 @@ endfunc
 func Xexpr_acmd_freelist(cchar)
   call s:setup_commands(a:cchar)
 
-  " This was using freed memory.
+  " This was using freed memory (but with what events?)
   augroup nasty
-    au * * call g:Xsetlist([], 'f')
+    au QuickFixCmdPre,QuickFixCmdPost,BufEnter,BufLeave * call g:Xsetlist([], 'f')
   augroup END
   Xexpr "x"
   augroup nasty
@@ -5333,6 +5376,62 @@ endfunc
 func Test_qfbuf_update()
   call Xqfbuf_update('c')
   call Xqfbuf_update('l')
+endfunc
+
+func Test_vimgrep_noswapfile()
+  set noswapfile
+  call writefile(['one', 'two', 'three'], 'Xgreppie')
+  vimgrep two Xgreppie
+  call assert_equal('two', getline('.'))
+
+  call delete('Xgreppie')
+  set swapfile
+endfunc
+
+" Test for the :vimgrep 'f' flag (fuzzy match)
+func Xvimgrep_fuzzy_match(cchar)
+  call s:setup_commands(a:cchar)
+
+  Xvimgrep /three one/f Xfile*
+  let l = g:Xgetlist()
+  call assert_equal(2, len(l))
+  call assert_equal(['Xfile1', 1, 9, 'one two three'],
+        \ [bufname(l[0].bufnr), l[0].lnum, l[0].col, l[0].text])
+  call assert_equal(['Xfile2', 2, 1, 'three one two'],
+        \ [bufname(l[1].bufnr), l[1].lnum, l[1].col, l[1].text])
+
+  Xvimgrep /the/f Xfile*
+  let l = g:Xgetlist()
+  call assert_equal(3, len(l))
+  call assert_equal(['Xfile1', 1, 9, 'one two three'],
+        \ [bufname(l[0].bufnr), l[0].lnum, l[0].col, l[0].text])
+  call assert_equal(['Xfile2', 2, 1, 'three one two'],
+        \ [bufname(l[1].bufnr), l[1].lnum, l[1].col, l[1].text])
+  call assert_equal(['Xfile2', 4, 4, 'aaathreeaaa'],
+        \ [bufname(l[2].bufnr), l[2].lnum, l[2].col, l[2].text])
+
+  Xvimgrep /aaa/fg Xfile*
+  let l = g:Xgetlist()
+  call assert_equal(4, len(l))
+  call assert_equal(['Xfile1', 2, 1, 'aaaaaa'],
+        \ [bufname(l[0].bufnr), l[0].lnum, l[0].col, l[0].text])
+  call assert_equal(['Xfile1', 2, 4, 'aaaaaa'],
+        \ [bufname(l[1].bufnr), l[1].lnum, l[1].col, l[1].text])
+  call assert_equal(['Xfile2', 4, 1, 'aaathreeaaa'],
+        \ [bufname(l[2].bufnr), l[2].lnum, l[2].col, l[2].text])
+  call assert_equal(['Xfile2', 4, 9, 'aaathreeaaa'],
+        \ [bufname(l[3].bufnr), l[3].lnum, l[3].col, l[3].text])
+
+  call assert_fails('Xvimgrep /xyz/fg Xfile*', 'E480:')
+endfunc
+
+func Test_vimgrep_fuzzy_match()
+  call writefile(['one two three', 'aaaaaa'], 'Xfile1')
+  call writefile(['one', 'three one two', 'two', 'aaathreeaaa'], 'Xfile2')
+  call Xvimgrep_fuzzy_match('c')
+  call Xvimgrep_fuzzy_match('l')
+  call delete('Xfile1')
+  call delete('Xfile2')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

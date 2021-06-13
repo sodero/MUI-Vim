@@ -55,9 +55,7 @@ typedef struct AutoCmd
     char	    once;		// "One shot": removed after execution
     char	    nested;		// If autocommands nest here.
     char	    last;		// last command in list
-#ifdef FEAT_EVAL
     sctx_T	    script_ctx;		// script context where defined
-#endif
     struct AutoCmd  *next;		// next AutoCmd in list
 } AutoCmd;
 
@@ -958,11 +956,14 @@ do_autocmd(char_u *arg_in, int forceit)
     last_group = AUGROUP_ERROR;		// for listing the group name
     if (*arg == '*' || *arg == NUL || *arg == '|')
     {
-	for (event = (event_T)0; (int)event < (int)NUM_EVENTS;
-					    event = (event_T)((int)event + 1))
-	    if (do_autocmd_event(event, pat,
-				 once, nested, cmd, forceit, group) == FAIL)
-		break;
+	if (!forceit && *cmd != NUL)
+	    emsg(_(e_cannot_define_autocommands_for_all_events));
+	else
+	    for (event = (event_T)0; (int)event < (int)NUM_EVENTS;
+					     event = (event_T)((int)event + 1))
+		if (do_autocmd_event(event, pat,
+				    once, nested, cmd, forceit, group) == FAIL)
+		    break;
     }
     else
     {
@@ -1249,8 +1250,8 @@ do_autocmd_event(
 	    if (ac == NULL)
 		return FAIL;
 	    ac->cmd = vim_strsave(cmd);
-#ifdef FEAT_EVAL
 	    ac->script_ctx = current_sctx;
+#ifdef FEAT_EVAL
 	    ac->script_ctx.sc_lnum += SOURCING_LNUM;
 #endif
 	    if (ac->cmd == NULL)
@@ -1335,7 +1336,7 @@ do_doautocmd(
     void
 ex_doautoall(exarg_T *eap)
 {
-    int		retval;
+    int		retval = OK;
     aco_save_T	aco;
     buf_T	*buf;
     bufref_T	bufref;
@@ -1352,7 +1353,8 @@ ex_doautoall(exarg_T *eap)
      */
     FOR_ALL_BUFFERS(buf)
     {
-	if (buf->b_ml.ml_mfp != NULL)
+	// Only do loaded buffers and skip the current buffer, it's done last.
+	if (buf->b_ml.ml_mfp != NULL && buf != curbuf)
 	{
 	    // find a window for this buffer and save some values
 	    aucmd_prepbuf(&aco, buf);
@@ -1362,20 +1364,29 @@ ex_doautoall(exarg_T *eap)
 	    retval = do_doautocmd(arg, FALSE, &did_aucmd);
 
 	    if (call_do_modelines && did_aucmd)
-	    {
 		// Execute the modeline settings, but don't set window-local
 		// options if we are using the current window for another
 		// buffer.
 		do_modelines(curwin == aucmd_win ? OPT_NOWIN : 0);
-	    }
 
 	    // restore the current window
 	    aucmd_restbuf(&aco);
 
 	    // stop if there is some error or buffer was deleted
 	    if (retval == FAIL || !bufref_valid(&bufref))
+	    {
+		retval = FAIL;
 		break;
+	    }
 	}
+    }
+
+    // Execute autocommands for the current buffer last.
+    if (retval == OK)
+    {
+	do_doautocmd(arg, FALSE, &did_aucmd);
+	if (call_do_modelines && did_aucmd)
+	    do_modelines(0);
     }
 
     check_cursor();	    // just in case lines got deleted
@@ -1819,8 +1830,8 @@ apply_autocmds_group(
     static int	nesting = 0;
     AutoPatCmd	patcmd;
     AutoPat	*ap;
-#ifdef FEAT_EVAL
     sctx_T	save_current_sctx;
+#ifdef FEAT_EVAL
     funccal_entry_T funccal_entry;
     char_u	*save_cmdarg;
     long	save_cmdbang;
@@ -2029,9 +2040,9 @@ apply_autocmds_group(
     estack_push(ETYPE_AUCMD, NULL, 0);
     ESTACK_CHECK_SETUP
 
-#ifdef FEAT_EVAL
     save_current_sctx = current_sctx;
 
+#ifdef FEAT_EVAL
 # ifdef FEAT_PROFILE
     if (do_profiling == PROF_YES)
 	prof_child_enter(&wait_time); // doesn't count for the caller itself
@@ -2105,14 +2116,16 @@ apply_autocmds_group(
 	    ap->last = FALSE;
 	ap->last = TRUE;
 
-	// make sure cursor and topline are valid
-	check_lnums(TRUE);
+	if (nesting == 1)
+	    // make sure cursor and topline are valid
+	    check_lnums(TRUE);
 
 	do_cmdline(NULL, getnextac, (void *)&patcmd,
 				     DOCMD_NOWAIT|DOCMD_VERBOSE|DOCMD_REPEAT);
 
-	// restore cursor and topline, unless they were changed
-	reset_lnums();
+	if (nesting == 1)
+	    // restore cursor and topline, unless they were changed
+	    reset_lnums();
 
 #ifdef FEAT_EVAL
 	if (eap != NULL)
@@ -2138,8 +2151,8 @@ apply_autocmds_group(
     autocmd_fname_full = save_autocmd_fname_full;
     autocmd_bufnr = save_autocmd_bufnr;
     autocmd_match = save_autocmd_match;
-#ifdef FEAT_EVAL
     current_sctx = save_current_sctx;
+#ifdef FEAT_EVAL
     restore_funccal();
 # ifdef FEAT_PROFILE
     if (do_profiling == PROF_YES)
@@ -2165,12 +2178,14 @@ apply_autocmds_group(
 	while (au_pending_free_buf != NULL)
 	{
 	    buf_T *b = au_pending_free_buf->b_next;
+
 	    vim_free(au_pending_free_buf);
 	    au_pending_free_buf = b;
 	}
 	while (au_pending_free_win != NULL)
 	{
 	    win_T *w = au_pending_free_win->w_next;
+
 	    vim_free(au_pending_free_win);
 	    au_pending_free_win = w;
 	}
@@ -2370,9 +2385,7 @@ getnextac(
     if (ac->once)
 	au_del_cmd(ac);
     autocmd_nested = ac->nested;
-#ifdef FEAT_EVAL
     current_sctx = ac->script_ctx;
-#endif
     if (ac->last)
 	acp->nextcmd = NULL;
     else

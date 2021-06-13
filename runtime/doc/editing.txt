@@ -1,4 +1,4 @@
-*editing.txt*   For Vim version 8.2.  Last change: 2020 Oct 23
+*editing.txt*   For Vim version 8.2.  Last change: 2021 May 27
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -1014,7 +1014,7 @@ to write anyway add a '!' to the command.
 
 							*write-permissions*
 When writing a new file the permissions are read-write.  For unix the mask is
-0666 with additionally umask applied.  When writing a file that was read Vim
+0o666 with additionally umask applied.  When writing a file that was read Vim
 will preserve the permissions, but clear the s-bit.
 
 							*write-readonly*
@@ -1033,7 +1033,7 @@ original file fails, there will be an error message telling you that you
 lost the original file.
 
 						*DOS-format-write*
-If the 'fileformat' is "dos", <CR> <NL> is used for <EOL>.  This is default
+If the 'fileformat' is "dos", <CR><NL> is used for <EOL>.  This is default
 for Win32.  On other systems the message "[dos format]" is shown to remind you
 that an unusual <EOL> was used.
 						*Unix-format-write*
@@ -1253,7 +1253,7 @@ For versions of Vim where browsing is not supported, the command is executed
 unmodified.
 
 							*browsefilter*
-For MS Windows and GTK, you can modify the filters that are used in the browse
+For MS-Windows and GTK, you can modify the filters that are used in the browse
 dialog.  By setting the g:browsefilter or b:browsefilter variables, you can
 change the filters globally or locally to the buffer.  The variable is set to
 a string in the format "{filter label}\t{pattern};{pattern}\n" where {filter
@@ -1320,8 +1320,8 @@ present in 'cpoptions' and "!" is not used in the command.
 							*:chd* *:chdir*
 :chd[ir][!] [path]	Same as |:cd|.
 
-							*:tcd*
-:tcd[!] {path}		Like |:cd|, but only set the directory for the current
+							*:tc* *:tcd*
+:tc[d][!] {path}	Like |:cd|, but only set the directory for the current
 			tab.  The current window will also use this directory.
 			The current directory is not changed for windows in
 			other tabs and for windows in the current tab that
@@ -1331,7 +1331,7 @@ present in 'cpoptions' and "!" is not used in the command.
 :tch[dir][!]		Same as |:tcd|.
 
 							*:tcd-*
-:tcd[!] -		Change to the previous current directory, before the
+:tc[d][!] -		Change to the previous current directory, before the
 			last ":tcd {path}" command.
 
 							*:lc* *:lcd*
@@ -1419,8 +1419,8 @@ There are a few things to remember when editing binary files:
   the file.  It is also possible that you get an "out of memory" error when
   reading the file.
 - Make sure the 'binary' option is set BEFORE loading the
-  file.  Otherwise both <CR> <NL> and <NL> are considered to end a line
-  and when the file is written the <NL> will be replaced with <CR> <NL>.
+  file.  Otherwise both <CR><NL> and <NL> are considered to end a line
+  and when the file is written the <NL> will be replaced with <CR><NL>.
 - <Nul> characters are shown on the screen as ^@.  You can enter them with
   "CTRL-V CTRL-@" or "CTRL-V 000"
 - To insert a <NL> character in the file split a line.  When writing the

@@ -1020,8 +1020,9 @@ set_one_cmd_context(
 	p = cmd;
 	while (ASCII_ISALPHA(*p) || *p == '*')    // Allow * wild card
 	    ++p;
-	// a user command may contain digits
-	if (ASCII_ISUPPER(cmd[0]))
+	// A user command may contain digits.
+	// Include "9" for "vim9*" commands; "vim9cmd" and "vim9script".
+	if (ASCII_ISUPPER(cmd[0]) || STRNCMP("vim9", cmd, 4) == 0)
 	    while (ASCII_ISALNUM(*p) || *p == '*')
 		++p;
 	// for python 3.x: ":py3*" commands completion
@@ -1369,6 +1370,8 @@ set_one_cmd_context(
 	case CMD_verbose:
 	case CMD_vertical:
 	case CMD_windo:
+	case CMD_vim9cmd:
+	case CMD_legacy:
 	    return arg;
 
 	case CMD_filter:
@@ -1554,9 +1557,11 @@ set_one_cmd_context(
 
 	case CMD_function:
 	case CMD_delfunction:
-	case CMD_disassemble:
 	    xp->xp_context = EXPAND_USER_FUNC;
 	    xp->xp_pattern = arg;
+	    break;
+	case CMD_disassemble:
+	    set_context_in_disassemble_cmd(xp, arg);
 	    break;
 
 	case CMD_echohl:
@@ -2117,6 +2122,7 @@ ExpandFromContext(
 	    {EXPAND_USER_VARS, get_user_var_name, FALSE, TRUE},
 	    {EXPAND_FUNCTIONS, get_function_name, FALSE, TRUE},
 	    {EXPAND_USER_FUNC, get_user_func_name, FALSE, TRUE},
+	    {EXPAND_DISASSEMBLE, get_disassemble_argument, FALSE, TRUE},
 	    {EXPAND_EXPRESSION, get_expr_name, FALSE, TRUE},
 # endif
 # ifdef FEAT_MENU
@@ -2154,7 +2160,7 @@ ExpandFromContext(
 	// Find a context in the table and call the ExpandGeneric() with the
 	// right function to do the expansion.
 	ret = FAIL;
-	for (i = 0; i < (int)(sizeof(tab) / sizeof(struct expgen)); ++i)
+	for (i = 0; i < (int)ARRAY_LENGTH(tab); ++i)
 	    if (xp->xp_context == tab[i].context)
 	    {
 		if (tab[i].ic)
@@ -2680,7 +2686,10 @@ wildmenu_process_key(cmdline_info_T *cclp, int key, expand_T *xp)
 	// Hitting <Down> after "emenu Name.": complete submenu
 	if (c == K_DOWN && cclp->cmdpos > 0
 		&& cclp->cmdbuff[cclp->cmdpos - 1] == '.')
+	{
 	    c = p_wc;
+	    KeyTyped = TRUE;  // in case the key was mapped
+	}
 	else if (c == K_UP)
 	{
 	    // Hitting <Up>: Remove one submenu name in front of the
@@ -2714,6 +2723,7 @@ wildmenu_process_key(cmdline_info_T *cclp, int key, expand_T *xp)
 	    if (i > 0)
 		cmdline_del(cclp, i);
 	    c = p_wc;
+	    KeyTyped = TRUE;  // in case the key was mapped
 	    xp->xp_context = EXPAND_NOTHING;
 	}
     }
@@ -2738,6 +2748,7 @@ wildmenu_process_key(cmdline_info_T *cclp, int key, expand_T *xp)
 	{
 	    // go down a directory
 	    c = p_wc;
+	    KeyTyped = TRUE;  // in case the key was mapped
 	}
 	else if (STRNCMP(xp->xp_pattern, upseg + 1, 3) == 0 && c == K_DOWN)
 	{
@@ -2763,6 +2774,7 @@ wildmenu_process_key(cmdline_info_T *cclp, int key, expand_T *xp)
 	    {
 		cmdline_del(cclp, j - 2);
 		c = p_wc;
+		KeyTyped = TRUE;  // in case the key was mapped
 	    }
 	}
 	else if (c == K_UP)

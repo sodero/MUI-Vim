@@ -55,7 +55,12 @@ func Test_function_lists()
   " Verify that the ":help functions" list is complete and in ASCII order.
 
   enew!
-  read ../../runtime/doc/eval.txt
+  if filereadable('../../doc/eval.txt')
+    " unpacked MS-Windows zip archive
+    read ../../doc/eval.txt
+  else
+    read ../../runtime/doc/eval.txt
+  endif
   call search('\*functions\*$')
   call search('^USAGE')
   1,.d
@@ -75,7 +80,12 @@ func Test_function_lists()
   " Verify that the ":help function-list" list is complete.
 
   enew!
-  read ../../runtime/doc/usr_41.txt
+  if filereadable('../../doc/usr_41.txt')
+    " unpacked MS-Windows zip archive
+    read ../../doc/usr_41.txt
+  else
+    read ../../runtime/doc/usr_41.txt
+  endif
   call search('\*function-list\*$')
   1,.d
   call search('^==*$')
@@ -86,7 +96,7 @@ func Test_function_lists()
   sort u
   w! ++ff=unix Xfunction-list
   let l:unequal = assert_equalfile("Xsorted_current_global_functions", "Xfunction-list",
-      \ "\":help functions-list\" incomplete")
+      \ "\":help function-list\" incomplete")
   if l:unequal && executable("diff")
     call system("diff -u Xsorted_current_global_functions Xfunction-list > Xfunction-list.diff")
   endif

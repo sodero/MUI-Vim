@@ -411,6 +411,33 @@ func Test_edit_13()
   bwipe!
 endfunc
 
+" Test for autoindent removing indent when insert mode is stopped.  Some parts
+" of the code is exercised only when interactive mode is used. So use Vim in a
+" terminal.
+func Test_autoindent_remove_indent()
+  CheckRunVimInTerminal
+  let buf = RunVimInTerminal('-N Xfile', {'rows': 6, 'cols' : 20})
+  call TermWait(buf)
+  call term_sendkeys(buf, ":set autoindent\n")
+  " leaving insert mode in a new line with indent added by autoindent, should
+  " remove the indent.
+  call term_sendkeys(buf, "i\<Tab>foo\<CR>\<Esc>")
+  " Need to delay for sometime, otherwise the code in getchar.c will not be
+  " exercised.
+  call TermWait(buf, 50)
+  " when a line is wrapped and the cursor is at the start of the second line,
+  " leaving insert mode, should move the cursor back to the first line.
+  call term_sendkeys(buf, "o" .. repeat('x', 20) .. "\<Esc>")
+  " Need to delay for sometime, otherwise the code in getchar.c will not be
+  " exercised.
+  call TermWait(buf, 50)
+  call term_sendkeys(buf, ":w\n")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+  call assert_equal(["\tfoo", '', repeat('x', 20)], readfile('Xfile'))
+  call delete('Xfile')
+endfunc
+
 func Test_edit_CR()
   " Test for <CR> in insert mode
   " basically only in quickfix mode ist tested, the rest
@@ -680,23 +707,26 @@ endfunc
 
 func Test_edit_CTRL_N()
   " Check keyword completion
-  new
-  set complete=.
-  call setline(1, ['INFER', 'loWER', '', '', ])
-  call cursor(3, 1)
-  call feedkeys("Ai\<c-n>\<cr>\<esc>", "tnix")
-  call feedkeys("ILO\<c-n>\<cr>\<esc>", 'tnix')
-  call assert_equal(['INFER', 'loWER', 'i', 'LO', '', ''], getline(1, '$'))
-  %d
-  call setline(1, ['INFER', 'loWER', '', '', ])
-  call cursor(3, 1)
-  set ignorecase infercase
-  call feedkeys("Ii\<c-n>\<cr>\<esc>", "tnix")
-  call feedkeys("ILO\<c-n>\<cr>\<esc>", 'tnix')
-  call assert_equal(['INFER', 'loWER', 'infer', 'LOWER', '', ''], getline(1, '$'))
+  for e in ['latin1', 'utf-8']
+    exe 'set encoding=' .. e
+    new
+    set complete=.
+    call setline(1, ['INFER', 'loWER', '', '', ])
+    call cursor(3, 1)
+    call feedkeys("Ai\<c-n>\<cr>\<esc>", "tnix")
+    call feedkeys("ILO\<c-n>\<cr>\<esc>", 'tnix')
+    call assert_equal(['INFER', 'loWER', 'i', 'LO', '', ''], getline(1, '$'), e)
+    %d
+    call setline(1, ['INFER', 'loWER', '', '', ])
+    call cursor(3, 1)
+    set ignorecase infercase
+    call feedkeys("Ii\<c-n>\<cr>\<esc>", "tnix")
+    call feedkeys("ILO\<c-n>\<cr>\<esc>", 'tnix')
+    call assert_equal(['INFER', 'loWER', 'infer', 'LOWER', '', ''], getline(1, '$'), e)
 
-  set noignorecase noinfercase complete&
-  bw!
+    set noignorecase noinfercase complete&
+    bw!
+  endfor
 endfunc
 
 func Test_edit_CTRL_O()
@@ -1703,6 +1733,8 @@ endfunc
 " Test for editing a file without read permission
 func Test_edit_file_no_read_perm()
   CheckUnix
+  CheckNotRoot
+
   call writefile(['one', 'two'], 'Xfile')
   call setfperm('Xfile', '-w-------')
   new
@@ -1837,6 +1869,30 @@ func Test_read_invalid()
   " This was not properly checking for going past the end.
   call assert_fails('r`=', 'E484')
   set encoding=utf-8
+endfunc
+
+" Test for the 'revins' option
+func Test_edit_revins()
+  CheckFeature rightleft
+  new
+  set revins
+  exe "normal! ione\ttwo three"
+  call assert_equal("eerht owt\teno", getline(1))
+  call setline(1, "one\ttwo three")
+  normal! gg$bi a
+  call assert_equal("one\ttwo a three", getline(1))
+  exe "normal! $bi\<BS>\<BS>"
+  call assert_equal("one\ttwo a ree", getline(1))
+  exe "normal! 0wi\<C-W>"
+  call assert_equal("one\t a ree", getline(1))
+  exe "normal! 0wi\<C-U>"
+  call assert_equal("one\t ", getline(1))
+  " newline in insert mode starts at the end of the line
+  call setline(1, 'one two three')
+  exe "normal! wi\nfour"
+  call assert_equal(['one two three', 'ruof'], getline(1, '$'))
+  set revins&
+  bw!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

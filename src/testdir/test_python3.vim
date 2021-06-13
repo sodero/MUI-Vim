@@ -511,6 +511,8 @@ func Test_python3_window()
   10new
   py3 vim.current.window.height = 5
   call assert_equal(5, winheight(0))
+  py3 vim.current.window.height = 3.2
+  call assert_equal(3, winheight(0))
 
   " Test for setting the window width
   10vnew
@@ -573,6 +575,9 @@ func Test_python3_list()
   py3 ll = vim.bindeval('l')
   py3 ll[2] = 8
   call assert_equal([1, 2, 8], l)
+
+  " iterating over list from Python
+  py3 print([x for x in vim.Function("getline")(1, 2)])
 
   " Using dict as an index
   call AssertException(['py3 ll[{}] = 10'],
@@ -1004,8 +1009,12 @@ func Test_python3_vim_bindeval()
   call assert_equal(v:none, py3eval("vim.bindeval('v:none')"))
 
   " channel/job
-  call assert_equal(v:none, py3eval("vim.bindeval('test_null_channel()')"))
-  call assert_equal(v:none, py3eval("vim.bindeval('test_null_job()')"))
+  if has('channel')
+    call assert_equal(v:none, py3eval("vim.bindeval('test_null_channel()')"))
+  endif
+  if has('job')
+    call assert_equal(v:none, py3eval("vim.bindeval('test_null_job()')"))
+  endif
 endfunc
 
 " threading
@@ -4014,6 +4023,39 @@ func Test_python3_non_utf8_string()
   py3 vim.command('redir => _tmp_smaps | smap | redir END')
   py3 vim.eval('_tmp_smaps').splitlines()
   sunmap <Esc>@
+endfunc
+
+func Test_python3_fold_hidden_buffer()
+  CheckFeature folding
+
+  set fdm=expr fde=Fde(v:lnum)
+  let b:regex = '^'
+  func Fde(lnum)
+    let ld = [{}]
+    let lines = bufnr('%')->getbufline(1, '$')
+    let was_import = 0
+    for lnum in range(1, len(lines))
+      let line = lines[lnum]
+      call add(ld, {'a': b:regex})
+      let ld[lnum].foldexpr = was_import ? 1 : '>1'
+      let was_import = 1
+    endfor
+    return ld[a:lnum].foldexpr
+  endfunc
+
+  call setline(1, repeat([''], 15) + repeat(['from'], 3))
+  eval repeat(['x'], 17)->writefile('Xa.txt')
+  split Xa.txt
+  py3 import vim
+  py3 b = vim.current.buffer
+  py3 aaa = b[:]
+  hide
+  py3 b[:] = aaa
+
+  call delete('Xa.txt')
+  set fdm& fde&
+  delfunc Fde
+  bwipe! Xa.txt
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

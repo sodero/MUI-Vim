@@ -1497,6 +1497,9 @@ buf_write(
 #if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
 			mch_copy_sec(fname, backup);
 #endif
+#ifdef MSWIN
+			(void)mch_copy_file_attribute(fname, backup);
+#endif
 			break;
 		    }
 		}
@@ -1909,12 +1912,7 @@ restore_backup:
 
 #if defined(MSWIN)
 	    if (backup != NULL && overwriting && !append)
-	    {
-		if (backup_copy)
-		    (void)mch_copy_file_attribute(wfname, backup);
-		else
-		    (void)mch_copy_file_attribute(backup, wfname);
-	    }
+		(void)mch_copy_file_attribute(backup, wfname);
 
 	    if (!overwriting && !append)
 	    {
@@ -2031,7 +2029,7 @@ restore_backup:
 	    if (end == 0
 		    || (lnum == end
 			&& (write_bin || !buf->b_p_fixeol)
-			&& (lnum == buf->b_no_eol_lnum
+			&& ((write_bin && lnum == buf->b_no_eol_lnum)
 			    || (lnum == buf->b_ml.ml_line_count
 							   && !buf->b_p_eol))))
 	    {

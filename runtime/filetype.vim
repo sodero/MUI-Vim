@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2020 Dec 07
+" Last Change:	2021 Jun 13
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -171,6 +171,9 @@ au BufNewFile,BufRead *.mar			setf vmasm
 " Atlas
 au BufNewFile,BufRead *.atl,*.as		setf atlas
 
+" Atom is based on XML
+au BufNewFile,BufRead *.atom			setf xml
+
 " Autoit v3
 au BufNewFile,BufRead *.au3			setf autoit
 
@@ -218,6 +221,9 @@ au BufNewFile,BufRead *.bc			setf bc
 
 " BDF font
 au BufNewFile,BufRead *.bdf			setf bdf
+
+" Beancount
+au BufNewFile,BufRead *.beancount		setf beancount
 
 " BibTeX bibliography database file
 au BufNewFile,BufRead *.bib			setf bib
@@ -414,6 +420,10 @@ endif
 " Lynx config files
 au BufNewFile,BufRead lynx.cfg			setf lynx
 
+" Modula-3 configuration language (must be before *.cfg and *makefile)
+au BufNewFile,BufRead *.quake,cm3.cfg		setf m3quake
+au BufNewFile,BufRead m3makefile,m3overrides	setf m3build
+
 " Quake
 au BufNewFile,BufRead *baseq[2-3]/*.cfg,*id1/*.cfg	setf quake
 au BufNewFile,BufRead *quake[1-3]/*.cfg			setf quake
@@ -502,6 +512,9 @@ au BufNewFile,BufRead *.com			call dist#ft#BindzoneCheck('dcl')
 " DOT
 au BufNewFile,BufRead *.dot,*.gv		setf dot
 
+" Dune
+au BufNewFile,BufRead jbuild,dune,dune-project,dune-workspace setf dune
+
 " Dylan - lid files
 au BufNewFile,BufRead *.lid			setf dylanlid
 
@@ -589,6 +602,9 @@ au BufNewFile,BufRead *.fan,*.fwt		setf fan
 " Factor
 au BufNewFile,BufRead *.factor			setf factor
 
+" Fennel
+autocmd BufRead,BufNewFile *.fnl		setf fennel
+
 " Fetchmail RC file
 au BufNewFile,BufRead .fetchmailrc		setf fetchmail
 
@@ -629,6 +645,9 @@ au BufNewFile,BufRead *.mo,*.gdmo		setf gdmo
 
 " Gedcom
 au BufNewFile,BufRead *.ged,lltxxxxx.txt	setf gedcom
+
+" Gift (Moodle)
+autocmd BufRead,BufNewFile *.gift		setf gift
 
 " Git
 au BufNewFile,BufRead COMMIT_EDITMSG,MERGE_MSG,TAG_EDITMSG	setf gitcommit
@@ -699,10 +718,10 @@ au BufNewFile,BufRead .gtkrc,gtkrc		setf gtkrc
 au BufNewFile,BufRead *.haml			setf haml
 
 " Hamster Classic | Playground files
-au BufNewFile,BufRead *.hsm	  		setf hamster
+au BufNewFile,BufRead *.hsm			setf hamster
 
 " Haskell
-au BufNewFile,BufRead *.hs,*.hsc,*.hs-boot	setf haskell
+au BufNewFile,BufRead *.hs,*.hsc,*.hs-boot,*.hsig setf haskell
 au BufNewFile,BufRead *.lhs			setf lhaskell
 au BufNewFile,BufRead *.chs			setf chaskell
 au BufNewFile,BufRead cabal.project		setf cabalproject
@@ -838,6 +857,9 @@ au BufNewFile,BufRead *.jov,*.j73,*.jovial	setf jovial
 
 " JSON
 au BufNewFile,BufRead *.json,*.jsonp,*.webmanifest	setf json
+
+" Jupyter Notebook is also json
+au BufNewFile,BufRead *.ipynb				setf json
 
 " Kixtart
 au BufNewFile,BufRead *.kix			setf kix
@@ -1003,6 +1025,7 @@ au BufNewFile,BufRead *.hgrc,*hgrc		setf cfg
 
 " Meson Build system config
 au BufNewFile,BufRead meson.build,meson_options.txt setf meson
+au BufNewFile,BufRead *.wrap			setf dosini
 
 " Messages (logs mostly)
 au BufNewFile,BufRead */log/{auth,cron,daemon,debug,kern,lpr,mail,messages,news/news,syslog,user}{,.log,.err,.info,.warn,.crit,.notice}{,.[0-9]*,-[0-9]*} setf messages
@@ -1033,10 +1056,10 @@ au BufNewFile,BufRead *.mod
 	\   setf modsim3 |
 	\ endif
 
-" Modula 2  (.md removed in favor of Markdown)
+" Modula-2  (.md removed in favor of Markdown)
 au BufNewFile,BufRead *.m2,*.DEF,*.MOD,*.mi	setf modula2
 
-" Modula 3 (.m3, .i3, .mg, .ig)
+" Modula-3 (.m3, .i3, .mg, .ig)
 au BufNewFile,BufRead *.[mi][3g]		setf modula3
 
 " Monk
@@ -1125,14 +1148,17 @@ au BufNewFile,BufRead *.nse			setf lua
 " NSIS
 au BufNewFile,BufRead *.nsi,*.nsh		setf nsis
 
-" OCAML
-au BufNewFile,BufRead *.ml,*.mli,*.mll,*.mly,.ocamlinit	setf ocaml
+" OCaml
+au BufNewFile,BufRead *.ml,*.mli,*.mll,*.mly,.ocamlinit,*.mlt,*.mlp,*.mlip,*.mli.cppo,*.ml.cppo setf ocaml
 
 " Occam
 au BufNewFile,BufRead *.occ			setf occam
 
 " Omnimark
 au BufNewFile,BufRead *.xom,*.xin		setf omnimark
+
+" OPAM
+au BufNewFile,BufRead opam,*.opam,*.opam.template setf opam
 
 " OpenROAD
 au BufNewFile,BufRead *.or			setf openroad
@@ -1167,11 +1193,17 @@ au BufNewFile,BufRead *.papp,*.pxml,*.pxsl	setf papp
 " Password file
 au BufNewFile,BufRead */etc/passwd,*/etc/passwd-,*/etc/passwd.edit,*/etc/shadow,*/etc/shadow-,*/etc/shadow.edit,*/var/backups/passwd.bak,*/var/backups/shadow.bak setf passwd
 
-" Pascal (also *.p)
-au BufNewFile,BufRead *.pas,*.pp		setf pascal
+" Pascal (also *.p, *.pp, *.inc)
+au BufNewFile,BufRead *.pas			setf pascal
+
+" Pascal or Puppet manifest
+au BufNewFile,BufRead *.pp			call dist#ft#FTpp()
 
 " Delphi or Lazarus program file
 au BufNewFile,BufRead *.dpr,*.lpr		setf pascal
+
+" Free Pascal makefile definition file
+au BufNewFile,BufRead *.fpc			setf fpcmake
 
 " PDF
 au BufNewFile,BufRead *.pdf			setf pdf
@@ -1186,8 +1218,6 @@ else
   au BufNewFile,BufRead *.pl			call dist#ft#FTpl()
 endif
 au BufNewFile,BufRead *.plx,*.al,*.psgi		setf perl
-au BufNewFile,BufRead *.p6,*.pm6,*.pl6		setf perl6
-au BufNewFile,BufRead *.raku,*.rakumod		setf perl6
 
 " Perl, XPM or XPM2
 au BufNewFile,BufRead *.pm
@@ -1201,7 +1231,6 @@ au BufNewFile,BufRead *.pm
 
 " Perl POD
 au BufNewFile,BufRead *.pod			setf pod
-au BufNewFile,BufRead *.pod6			setf pod6
 
 " Php, php3, php4, etc.
 " Also Phtml (was used for PHP 2 in the past)
@@ -1258,8 +1287,13 @@ au BufNewFile,BufRead *.pov			setf pov
 " Povray configuration
 au BufNewFile,BufRead .povrayrc			setf povini
 
-" Povray, PHP or assembly
+" Povray, Pascal, PHP or assembly
 au BufNewFile,BufRead *.inc			call dist#ft#FTinc()
+
+" PowerShell
+au BufNewFile,BufRead	*.ps1,*.psd1,*.psm1,*.pssc	setf ps1
+au BufNewFile,BufRead	*.ps1xml			setf ps1xml
+au BufNewFile,BufRead	*.cdxml,*.psc1			setf xml
 
 " Printcap and Termcap
 au BufNewFile,BufRead *printcap
@@ -1267,12 +1301,18 @@ au BufNewFile,BufRead *printcap
 au BufNewFile,BufRead *termcap
 	\ let b:ptcap_type = "term" | setf ptcap
 
-" PCCTS / ANTRL
-"au BufNewFile,BufRead *.g			setf antrl
+" PCCTS / ANTLR
+"au BufNewFile,BufRead *.g			setf antlr
 au BufNewFile,BufRead *.g			setf pccts
 
 " PPWizard
 au BufNewFile,BufRead *.it,*.ih			setf ppwiz
+
+" Puppet
+au BufNewFile,BufRead Puppetfile		setf ruby
+
+" Embedded Puppet
+au BufNewFile,BufRead *.epp			setf epuppet
 
 " Obj 3D file format
 " TODO: is there a way to avoid MS-Windows Object files?
@@ -1309,9 +1349,15 @@ au BufNewFile,BufRead *.pdb			setf prolog
 " Promela
 au BufNewFile,BufRead *.pml			setf promela
 
+" Property Specification Language (PSL)
+au BufNewFile,BufRead *.psl			setf psl
+
 " Google protocol buffers
 au BufNewFile,BufRead *.proto			setf proto
 au BufNewFile,BufRead *.pbtxt			setf pbtxt
+
+" Poke
+au BufNewFile,BufRead *.pk			setf poke
 
 " Protocols
 au BufNewFile,BufRead */etc/protocols		setf protocols
@@ -1326,6 +1372,9 @@ au BufNewFile,BufRead *.ptl,*.pyi,SConstruct		   setf python
 
 " Radiance
 au BufNewFile,BufRead *.rad,*.mat		setf radiance
+
+" Raku (formelly Perl6)
+au BufNewFile,BufRead *.pm6,*.p6,*.t6,*.pod6,*.raku,*.rakumod,*.rakudoc,*.rakutest  setf raku
 
 " Ratpoison config/command files
 au BufNewFile,BufRead .ratpoisonrc,ratpoisonrc	setf ratpoison
@@ -1369,6 +1418,9 @@ if has("fname_case")
 else
   au BufNewFile,BufRead *.rmd,*.smd			setf rmd
 endif
+
+" RSS looks like XML
+au BufNewFile,BufRead *.rss				setf xml
 
 " R reStructuredText file
 if has("fname_case")
@@ -1416,8 +1468,8 @@ au BufNewFile,BufRead *.rb,*.rbw		setf ruby
 " RubyGems
 au BufNewFile,BufRead *.gemspec			setf ruby
 
-" Rust
-au BufNewFile,BufRead *.rs			setf rust
+" RBS (Ruby Signature)
+au BufNewFile,BufRead *.rbs			setf rbs
 
 " Rackup
 au BufNewFile,BufRead *.ru			setf ruby
@@ -1430,6 +1482,9 @@ au BufNewFile,BufRead *.builder,*.rxml,*.rjs	setf ruby
 
 " Rantfile and Rakefile is like Ruby
 au BufNewFile,BufRead [rR]antfile,*.rant,[rR]akefile,*.rake	setf ruby
+
+" Rust
+au BufNewFile,BufRead *.rs			setf rust
 
 " S-lang (or shader language, or SmallLisp)
 au BufNewFile,BufRead *.sl			setf slang
@@ -1447,7 +1502,7 @@ au BufNewFile,BufRead *.sass			setf sass
 au BufNewFile,BufRead *.sa			setf sather
 
 " Scala
-au BufNewFile,BufRead *.scala			setf scala
+au BufNewFile,BufRead *.scala,*.sc		setf scala
 
 " SBT - Scala Build Tool
 au BufNewFile,BufRead *.sbt			setf sbt
@@ -1466,6 +1521,9 @@ au BufNewFile,BufRead *.sdl,*.pr		setf sdl
 
 " sed
 au BufNewFile,BufRead *.sed			setf sed
+
+" svelte
+au BufNewFile,BufRead *.svelte			setf svelte
 
 " Sieve (RFC 3028, 5228)
 au BufNewFile,BufRead *.siv,*.sieve		setf sieve
@@ -1516,10 +1574,9 @@ au BufNewFile,BufRead catalog			setf catalog
 " Gentoo ebuilds, Arch Linux PKGBUILDs and Alpine Linux APKBUILDs are actually
 " bash scripts.
 " NOTE: Patterns ending in a star are further down, these have lower priority.
-au BufNewFile,BufRead .bashrc,bashrc,bash.bashrc,.bash[_-]profile,.bash[_-]logout,.bash[_-]aliases,bash-fc[-.],*.bash,*/{,.}bash[_-]completion{,.d,.sh}{,/*},*.ebuild,*.eclass,PKGBUILD,APKBUILD call dist#ft#SetFileTypeSH("bash")
+au BufNewFile,BufRead .bashrc,bashrc,bash.bashrc,.bash[_-]profile,.bash[_-]logout,.bash[_-]aliases,bash-fc[-.],*.ebuild,*.bash,*.eclass,PKGBUILD,APKBUILD call dist#ft#SetFileTypeSH("bash")
 au BufNewFile,BufRead .kshrc,*.ksh call dist#ft#SetFileTypeSH("ksh")
 au BufNewFile,BufRead */etc/profile,.profile,*.sh,*.env call dist#ft#SetFileTypeSH(getline(1))
-
 
 " Shell script (Arch Linux), PHP file (Drupal) or Amiga Installer script
 au BufNewFile,BufRead *.install
@@ -1549,6 +1606,9 @@ au BufNewFile,BufRead *.scm,*.ss,*.rkt		setf scheme
 
 " Screen RC
 au BufNewFile,BufRead .screenrc,screenrc	setf screen
+
+" Sexplib
+au BufNewFile,BufRead *.sexp setf sexplib
 
 " Simula
 au BufNewFile,BufRead *.sim			setf simula
@@ -1609,6 +1669,9 @@ au BufNewFile,BufRead *.mib,*.my		setf mib
 " Snort Configuration
 au BufNewFile,BufRead *.hog,snort.conf,vision.conf	setf hog
 au BufNewFile,BufRead *.rules			call dist#ft#FTRules()
+
+" SPARQL queries
+au BufNewFile,BufRead *.rq,*.sparql		setf sparql
 
 " Spec (Linux RPM)
 au BufNewFile,BufRead *.spec			setf spec
@@ -1720,8 +1783,13 @@ au BufNewFile,BufRead *.tli			setf tli
 " Telix Salt
 au BufNewFile,BufRead *.slt			setf tsalt
 
-" Tera Term Language
-au BufRead,BufNewFile *.ttl			setf teraterm
+" Tera Term Language or Turtle
+au BufRead,BufNewFile *.ttl
+	\ if getline(1) =~ '^@\?\(prefix\|base\)' |
+	\   setf turtle |
+	\ else |
+	\   setf teraterm |
+	\ endif
 
 " Terminfo
 au BufNewFile,BufRead *.ti			setf terminfo
@@ -2183,8 +2251,11 @@ au BufNewFile,BufRead .reminders*		call s:StarSetf('remind')
 " SGML catalog file
 au BufNewFile,BufRead sgml.catalog*		call s:StarSetf('catalog')
 
+" avoid doc files being recognized a shell files
+au BufNewFile,BufRead */doc/{,.}bash[_-]completion{,.d,.sh}{,/*} setf text
+
 " Shell scripts ending in a star
-au BufNewFile,BufRead .bashrc*,.bash[_-]profile*,.bash[_-]logout*,.bash[_-]aliases*,bash-fc[-.]*,PKGBUILD*,APKBUILD* call dist#ft#SetFileTypeSH("bash")
+au BufNewFile,BufRead .bashrc*,.bash[_-]profile*,.bash[_-]logout*,.bash[_-]aliases*,bash-fc[-.]*,PKGBUILD*,APKBUILD*,*/{,.}bash[_-]completion{,.d,.sh}{,/*} call dist#ft#SetFileTypeSH("bash")
 au BufNewFile,BufRead .kshrc* call dist#ft#SetFileTypeSH("ksh")
 au BufNewFile,BufRead .profile* call dist#ft#SetFileTypeSH(getline(1))
 

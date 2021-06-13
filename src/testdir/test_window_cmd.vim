@@ -19,6 +19,8 @@ func Test_window_cmd_ls0_with_split()
 endfunc
 
 func Test_window_cmd_cmdwin_with_vsp()
+  CheckFeature cmdwin
+
   let efmt = 'Expected 0 but got %d (in ls=%d, %s window)'
   for v in range(0, 2)
     exec "set ls=" . v
@@ -395,7 +397,15 @@ func Test_window_width()
   call assert_inrange(ww1, ww1 + 1, ww2)
   call assert_inrange(ww3, ww3 + 1, ww2)
 
-  bw Xa Xb Xc
+  " when the current window width is less than the new 'winwidth', the current
+  " window width should be increased.
+  enew | only
+  split
+  10vnew
+  set winwidth=15
+  call assert_equal(15, winwidth(0))
+
+  %bw!
 endfunc
 
 func Test_equalalways_on_close()
@@ -565,8 +575,8 @@ endfunc
 
 func Test_access_freed_mem()
   call assert_equal(&columns, winwidth(0))
-  " This was accessing freed memory
-  au * 0 vs xxx
+  " This was accessing freed memory (but with what events?)
+  au BufEnter,BufLeave,WinEnter,WinLeave 0 vs xxx
   arg 0
   argadd
   call assert_fails("all", "E242:")
@@ -629,15 +639,28 @@ endfunc
 func Test_winrestcmd()
   2split
   3vsplit
-  let a = winrestcmd()
+  let restcmd = winrestcmd()
   call assert_equal(2, winheight(0))
   call assert_equal(3, winwidth(0))
   wincmd =
   call assert_notequal(2, winheight(0))
   call assert_notequal(3, winwidth(0))
-  exe a
+  exe restcmd
   call assert_equal(2, winheight(0))
   call assert_equal(3, winwidth(0))
+  only
+
+  wincmd v
+  wincmd s
+  wincmd v
+  redraw
+  let restcmd = winrestcmd()
+  wincmd _
+  wincmd |
+  exe restcmd
+  redraw
+  call assert_equal(restcmd, winrestcmd())
+
   only
 endfunc
 
@@ -1148,6 +1171,14 @@ func Test_window_resize()
   exe other_winnr .. 'resize +1'
   call assert_equal(12, winheight(other_winnr))
   call assert_equal(&lines - 10 - 3 -2, winheight(0))
+  close
+
+  vsplit
+  wincmd l
+  let other_winnr = winnr('h')
+  call assert_notequal(winnr(), other_winnr)
+  exe 'vert ' .. other_winnr .. 'resize -' .. &columns
+  call assert_equal(0, winwidth(other_winnr))
 
   %bwipe!
 endfunc

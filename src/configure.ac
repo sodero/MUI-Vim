@@ -90,7 +90,7 @@ with_x_arg="$with_x"
 dnl Set default value for CFLAGS if none is defined or it's empty
 if test -z "$CFLAGS"; then
   CFLAGS="-O"
-  test "$GCC" = yes && CFLAGS="-O2 -fno-strength-reduce -Wall"
+  test "$GCC" = yes && CFLAGS="-O2 -fno-strength-reduce -Wall -Wno-deprecated-declarations"
 fi
 if test "$GCC" = yes; then
   dnl method that should work for nearly all versions
@@ -127,8 +127,9 @@ if test x"$CLANG_VERSION_STRING" != x"" ; then
   dnl change the constant 500002075 below appropriately.  To get the
   dnl integer corresponding to a version number, refer to the
   dnl definition of CLANG_VERSION above.
+  dnl Clang 11 reports "11", assume Clang 10 and later work like this.
   AC_MSG_CHECKING(if clang supports -fno-strength-reduce)
-  if test "$CLANG_VERSION" -ge 500002075 ; then
+  if test "$CLANG_MAJOR" -ge 10 -o "$CLANG_VERSION" -ge 500002075 ; then
     AC_MSG_RESULT(no)
     CFLAGS=`echo "$CFLAGS" | sed -e 's/-fno-strength-reduce/ /'`
   else
@@ -437,9 +438,9 @@ fi
 
 dnl Set QUOTESED. Needs additional backslashes on zOS
 if test "$zOSUnix" = "yes"; then
-    QUOTESED="sed -e 's/[[\\\\\"]]/\\\\\\\\&/g' -e 's/\\\\\\\\\"/\"/' -e 's/\\\\\\\\\";\$\$/\";/'"
+    QUOTESED="sed -e 's/[[\\\\\"]]/\\\\\\\\&/g' -e 's/\\\\\\\\\"/\"/' -e 's/\\\\\\\\\";\$\$/\";/' -e 's/  */ /g'"
 else
-    QUOTESED="sed -e 's/[[\\\\\"]]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";\$\$/\";/'"
+    QUOTESED="sed -e 's/[[\\\\\"]]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";\$\$/\";/' -e 's/  */ /g'"
 fi
 AC_SUBST(QUOTESED)
 
@@ -1435,7 +1436,7 @@ if test "$enable_python3interp" = "yes" -o "$enable_python3interp" = "dynamic"; 
     dnl -- get its version number
     AC_CACHE_CHECK(Python version,vi_cv_var_python3_version,
     [[vi_cv_var_python3_version=`
-          ${vi_cv_path_python3} -c 'import sys; print(sys.version[:3])'`
+          ${vi_cv_path_python3} -c 'import sys; print("{}.{}".format(sys.version_info.major, sys.version_info.minor))'`
     ]])
 
     dnl -- it must be at least version 3
@@ -1486,7 +1487,10 @@ if test "$enable_python3interp" = "yes" -o "$enable_python3interp" = "dynamic"; 
       [
        vi_cv_path_python3_conf=
        config_dir="config-${vi_cv_var_python3_version}${vi_cv_var_python3_abiflags}"
-       d=`${vi_cv_path_python3} -c "import distutils.sysconfig; print(distutils.sysconfig.get_config_var('LIBPL'))"`
+       d=`${vi_cv_path_python3} -c "import sysconfig; print(sysconfig.get_config_var('LIBPL'))" 2> /dev/null`
+       if test "x$d" = "x"; then
+         d=`${vi_cv_path_python3} -c "import distutils.sysconfig; print(distutils.sysconfig.get_config_var('LIBPL'))"`
+       fi
        if test -d "$d" && test -f "$d/config.c"; then
          vi_cv_path_python3_conf="$d"
        else
@@ -2001,6 +2005,9 @@ if test "$enable_rubyinterp" = "yes" -o "$enable_rubyinterp" = "dynamic"; then
 	  RUBY_CFLAGS="-DDYNAMIC_RUBY_DLL=\\\"$libruby_soname\\\" $RUBY_CFLAGS"
 	  RUBY_LIBS=
 	fi
+	if test "X$CLANG_VERSION" != "X" -a "$rubyversion" -ge 30; then
+	  RUBY_CFLAGS="$RUBY_CFLAGS -fdeclspec"
+	fi
       else
 	AC_MSG_RESULT(not found; disabling Ruby)
       fi
@@ -2444,6 +2451,7 @@ else
     yes|""|auto)	AC_MSG_RESULT(yes/auto - automatic GUI support)
 		gui_auto=yes
 		SKIP_GTK2=
+		SKIP_GTK3=
 		SKIP_GNOME=
 		SKIP_MOTIF=
 		SKIP_ATHENA=
@@ -2580,6 +2588,9 @@ AC_DEFUN(AM_PATH_GTK,
 	     sed 's/\([[0-9]]*\)\.\([[0-9]]*\)\.\([[0-9]]*\)/\3/'`
     }
     else
+      dnl Put some text before the "no" to hint at installing the gtk-dev
+      dnl packages.
+      AC_MSG_CHECKING(for GTK -dev package)
       no_gtk=yes
     fi
 
@@ -2752,6 +2763,10 @@ if test -z "$SKIP_GTK2"; then
   if test "x$PKG_CONFIG" != "xno"; then
     dnl First try finding version 2.2.0 or later.  The 2.0.x series has
     dnl problems (bold fonts, --remote doesn't work).
+    dnl Disable checking for GTK3 here, otherwise it's found when GTK2 is not
+    dnl found.
+    save_skip_gtk3=$SKIP_GTK3
+    SKIP_GTK3=YES
     AM_PATH_GTK(2.2.0,
 		[GUI_LIB_LOC="$GTK_LIBDIR"
 		 GTK_LIBNAME="$GTK_LIBS"
@@ -2763,6 +2778,8 @@ if test -z "$SKIP_GTK2"; then
       SKIP_MOTIF=YES
       GUITYPE=GTK
       AC_SUBST(GTK_LIBNAME)
+    else
+      SKIP_GTK3=$save_skip_gtk3
     fi
   fi
   if test "x$GUITYPE" = "xGTK"; then
@@ -2798,6 +2815,8 @@ if test -z "$SKIP_GTK3"; then
   fi
 
   if test "x$PKG_CONFIG" != "xno"; then
+    save_skip_gtk2=$SKIP_GTK2
+    SKIP_GTK2=YES
     AM_PATH_GTK(3.0.0,
 		[GUI_LIB_LOC="$GTK_LIBDIR"
 		 GTK_LIBNAME="$GTK_LIBS"
@@ -2811,6 +2830,8 @@ if test -z "$SKIP_GTK3"; then
       GUITYPE=GTK
       AC_SUBST(GTK_LIBNAME)
       AC_DEFINE(USE_GTK3)
+    else
+      SKIP_GTK2=$save_skip_gtk2
     fi
   fi
 fi
@@ -3464,6 +3485,7 @@ if test "x$olibs" = "x$LIBS"; then
 	AC_MSG_RESULT(yes),
 	AC_MSG_ERROR([NOT FOUND!
       You need to install a terminal library; for example ncurses.
+      On Linux that would be the libncurses-dev package.
       Or specify the name of the library with --with-tlib.]))
 fi
 
@@ -4077,6 +4099,20 @@ AC_TRY_COMPILE(
 	AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYSINFO_MEM_UNIT),
 	AC_MSG_RESULT(no))
 
+dnl struct sysinfo may have the uptime field or not
+AC_MSG_CHECKING(for sysinfo.uptime)
+AC_TRY_COMPILE(
+[#include <sys/types.h>
+#include <sys/sysinfo.h>],
+[	struct sysinfo sinfo;
+        long ut;
+
+	(void)sysinfo(&sinfo);
+	ut = sinfo.uptime;
+	],
+	AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYSINFO_UPTIME),
+	AC_MSG_RESULT(no))
+
 dnl sysconf() may exist but not support what we want to use
 AC_MSG_CHECKING(for sysconf)
 AC_TRY_COMPILE(
@@ -4085,6 +4121,15 @@ AC_TRY_COMPILE(
 	(void)sysconf(_SC_PHYS_PAGES);
 	],
 	AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYSCONF),
+	AC_MSG_RESULT(not usable))
+
+dnl check if we have _SC_SIGSTKSZ via sysconf()
+AC_MSG_CHECKING(for _SC_SIGSTKSZ via sysconf())
+AC_TRY_COMPILE(
+[#include <unistd.h>],
+[	(void)sysconf(_SC_SIGSTKSZ);
+	],
+	AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYSCONF_SIGSTKSZ),
 	AC_MSG_RESULT(not usable))
 
 AC_CHECK_SIZEOF([int])
@@ -4443,8 +4488,8 @@ if test "$GCC" = yes; then
   dnl And undefine it first to avoid a warning.
   AC_MSG_CHECKING(whether we need -D_FORTIFY_SOURCE=1)
   if test "$gccmajor" -gt "3"; then
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/ *-Wp,-D_FORTIFY_SOURCE=.//g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g' -e 's/$/ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1/'`
-    CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/ *-Wp,-D_FORTIFY_SOURCE=.//g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g'`
+    CFLAGS=`echo "$CFLAGS" | sed -e 's/-D_FORTIFY_SOURCE=.,//g' -e 's/ *-Wp,-D_FORTIFY_SOURCE=. / /g' -e 's/,-D_FORTIFY_SOURCE=. //g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g' -e 's/$/ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1/'`
+    CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/-D_FORTIFY_SOURCE=.,//g' -e 's/ *-Wp,-D_FORTIFY_SOURCE=. / /g' -e 's/,-D_FORTIFY_SOURCE=. //g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g'`
     AC_MSG_RESULT(yes)
   else
     AC_MSG_RESULT(no)
@@ -4477,7 +4522,9 @@ AC_MSG_CHECKING(linker --as-needed support)
 LINK_AS_NEEDED=
 # Check if linker supports --as-needed and --no-as-needed options
 if $CC -Wl,--help 2>/dev/null | grep as-needed > /dev/null; then
-  LDFLAGS=`echo "$LDFLAGS" | sed -e 's/ *-Wl,--as-needed//g' | sed -e 's/$/ -Wl,--as-needed/'`
+  if ! echo "$LDFLAGS" | grep -q -- '-Wl,[[^[:space:]]]*--as-needed'; then
+    LDFLAGS="$LDFLAGS -Wl,--as-needed"
+  fi
   LINK_AS_NEEDED=yes
 fi
 if test "$LINK_AS_NEEDED" = yes; then

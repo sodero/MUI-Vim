@@ -867,9 +867,10 @@ gui_exit(int rc)
     void
 gui_shell_closed(void)
 {
-    cmdmod_T	    save_cmdmod;
+    cmdmod_T	    save_cmdmod = cmdmod;
 
-    save_cmdmod = cmdmod;
+    if (before_quit_autocmds(curwin, TRUE, FALSE))
+	return;
 
     // Only exit when there are no changed files
     exiting = TRUE;
@@ -1130,6 +1131,11 @@ gui_update_cursor(
 		    || gui.row != gui.cursor_row || gui.col != gui.cursor_col)
     {
 	gui_undraw_cursor();
+
+	// If a cursor-less sleep is ongoing, leave the cursor invisible
+	if (cursor_is_sleeping())
+	    return;
+
 	if (gui.row < 0)
 	    return;
 #ifdef HAVE_INPUT_METHOD
@@ -3075,6 +3081,9 @@ gui_send_mouse_event(
      */
     switch (button)
     {
+	case MOUSE_MOVE:
+	    button_char = KE_MOUSEMOVE_XY;
+	    goto button_set;
 	case MOUSE_X1:
 	    button_char = KE_X1MOUSE;
 	    goto button_set;
@@ -4929,7 +4938,7 @@ gui_mouse_moved(int x, int y)
     if (popup_visible)
 	// Generate a mouse-moved event, so that the popup can perhaps be
 	// closed, just like in the terminal.
-	gui_send_mouse_event(MOUSE_DRAG, x, y, FALSE, 0);
+	gui_send_mouse_event(MOUSE_MOVE, x, y, FALSE, 0);
 #endif
 }
 

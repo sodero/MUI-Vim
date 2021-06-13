@@ -2603,6 +2603,8 @@ qflist_valid(win_T *wp, int_u qf_id)
 
     if (wp != NULL)
     {
+	if (!win_valid(wp))
+	    return FALSE;
 	qi = GET_LOC_LIST(wp);	    // Location list
 	if (qi == NULL)
 	    return FALSE;
@@ -5910,6 +5912,7 @@ vgr_match_buflines(
 	qf_list_T   *qfl,
 	char_u	    *fname,
 	buf_T	    *buf,
+	char_u	    *spat,
 	regmmatch_T *regmatch,
 	long	    *tomatch,
 	int	    duplicate_name,
@@ -5918,45 +5921,91 @@ vgr_match_buflines(
     int		found_match = FALSE;
     long	lnum;
     colnr_T	col;
+    int		pat_len = (int)STRLEN(spat);
 
     for (lnum = 1; lnum <= buf->b_ml.ml_line_count && *tomatch > 0; ++lnum)
     {
 	col = 0;
-	while (vim_regexec_multi(regmatch, curwin, buf, lnum,
-		    col, NULL, NULL) > 0)
+	if (!(flags & VGR_FUZZY))
 	{
-	    // Pass the buffer number so that it gets used even for a
-	    // dummy buffer, unless duplicate_name is set, then the
-	    // buffer will be wiped out below.
-	    if (qf_add_entry(qfl,
-			NULL,       // dir
-			fname,
-			NULL,
-			duplicate_name ? 0 : buf->b_fnum,
-			ml_get_buf(buf,
-			    regmatch->startpos[0].lnum + lnum, FALSE),
-			regmatch->startpos[0].lnum + lnum,
-			regmatch->startpos[0].col + 1,
-			FALSE,      // vis_col
-			NULL,	    // search pattern
-			0,	    // nr
-			0,	    // type
-			TRUE	    // valid
-			) == QF_FAIL)
+	    // Regular expression match
+	    while (vim_regexec_multi(regmatch, curwin, buf, lnum,
+			col, NULL, NULL) > 0)
 	    {
-		got_int = TRUE;
-		break;
+		// Pass the buffer number so that it gets used even for a
+		// dummy buffer, unless duplicate_name is set, then the
+		// buffer will be wiped out below.
+		if (qf_add_entry(qfl,
+			    NULL,	// dir
+			    fname,
+			    NULL,
+			    duplicate_name ? 0 : buf->b_fnum,
+			    ml_get_buf(buf,
+				regmatch->startpos[0].lnum + lnum, FALSE),
+			    regmatch->startpos[0].lnum + lnum,
+			    regmatch->startpos[0].col + 1,
+			    FALSE,	// vis_col
+			    NULL,	// search pattern
+			    0,		// nr
+			    0,		// type
+			    TRUE	// valid
+			    ) == QF_FAIL)
+		{
+		    got_int = TRUE;
+		    break;
+		}
+		found_match = TRUE;
+		if (--*tomatch == 0)
+		    break;
+		if ((flags & VGR_GLOBAL) == 0
+			|| regmatch->endpos[0].lnum > 0)
+		    break;
+		col = regmatch->endpos[0].col
+		    + (col == regmatch->endpos[0].col);
+		if (col > (colnr_T)STRLEN(ml_get_buf(buf, lnum, FALSE)))
+		    break;
 	    }
-	    found_match = TRUE;
-	    if (--*tomatch == 0)
-		break;
-	    if ((flags & VGR_GLOBAL) == 0
-		    || regmatch->endpos[0].lnum > 0)
-		break;
-	    col = regmatch->endpos[0].col
-		+ (col == regmatch->endpos[0].col);
-	    if (col > (colnr_T)STRLEN(ml_get_buf(buf, lnum, FALSE)))
-		break;
+	}
+	else
+	{
+	    char_u  *str = ml_get_buf(buf, lnum, FALSE);
+	    int	    score;
+	    int_u   matches[MAX_FUZZY_MATCHES];
+	    int_u   sz = ARRAY_LENGTH(matches);
+
+	    // Fuzzy string match
+	    while (fuzzy_match(str + col, spat, FALSE, &score, matches, sz) > 0)
+	    {
+		// Pass the buffer number so that it gets used even for a
+		// dummy buffer, unless duplicate_name is set, then the
+		// buffer will be wiped out below.
+		if (qf_add_entry(qfl,
+			    NULL,	// dir
+			    fname,
+			    NULL,
+			    duplicate_name ? 0 : buf->b_fnum,
+			    str,
+			    lnum,
+			    matches[0] + col + 1,
+			    FALSE,	// vis_col
+			    NULL,	// search pattern
+			    0,		// nr
+			    0,		// type
+			    TRUE	// valid
+			    ) == QF_FAIL)
+		{
+		    got_int = TRUE;
+		    break;
+		}
+		found_match = TRUE;
+		if (--*tomatch == 0)
+		    break;
+		if ((flags & VGR_GLOBAL) == 0)
+		    break;
+		col = matches[pat_len - 1] + col + 1;
+		if (col > (colnr_T)STRLEN(str))
+		    break;
+	    }
 	}
 	line_breakcheck();
 	if (got_int)
@@ -6053,7 +6102,7 @@ vgr_process_args(
 	return FAIL;
     }
 
-    // parse the list of arguments
+    // Parse the list of arguments, wildcards have already been expanded.
     if (get_arglist_exp(p, &args->fcount, &args->fnames, TRUE) == FAIL)
 	return FAIL;
     if (args->fcount == 0)
@@ -6161,7 +6210,7 @@ vgr_process_files(
 	    // Try for a match in all lines of the buffer.
 	    // For ":1vimgrep" look for first match only.
 	    found_match = vgr_match_buflines(qf_get_curlist(qi),
-		    fname, buf, &cmd_args->regmatch,
+		    fname, buf, cmd_args->spat, &cmd_args->regmatch,
 		    &cmd_args->tomatch, duplicate_name, cmd_args->flags);
 
 	    if (using_dummy)
@@ -7815,7 +7864,7 @@ ex_cbuffer(exarg_T *eap)
 /*
  * Return the autocmd name for the :cexpr Ex commands.
  */
-    static char_u *
+    char_u *
 cexpr_get_auname(cmdidx_T cmdidx)
 {
     switch (cmdidx)
@@ -7830,32 +7879,83 @@ cexpr_get_auname(cmdidx_T cmdidx)
     }
 }
 
+    int
+trigger_cexpr_autocmd(int cmdidx)
+{
+    char_u	*au_name = cexpr_get_auname(cmdidx);
+
+    if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
+					       curbuf->b_fname, TRUE, curbuf))
+    {
+	if (aborting())
+	    return FAIL;
+    }
+    return OK;
+}
+
+    int
+cexpr_core(exarg_T *eap, typval_T *tv)
+{
+    qf_info_T	*qi;
+    win_T	*wp = NULL;
+
+    qi = qf_cmd_get_or_alloc_stack(eap, &wp);
+    if (qi == NULL)
+	return FAIL;
+
+    if ((tv->v_type == VAR_STRING && tv->vval.v_string != NULL)
+	    || (tv->v_type == VAR_LIST && tv->vval.v_list != NULL))
+    {
+	int	res;
+	int_u	save_qfid;
+	char_u	*au_name = cexpr_get_auname(eap->cmdidx);
+
+	incr_quickfix_busy();
+	res = qf_init_ext(qi, qi->qf_curlist, NULL, NULL, tv, p_efm,
+			(eap->cmdidx != CMD_caddexpr
+			 && eap->cmdidx != CMD_laddexpr),
+			     (linenr_T)0, (linenr_T)0,
+			     qf_cmdtitle(*eap->cmdlinep), NULL);
+	if (qf_stack_empty(qi))
+	{
+	    decr_quickfix_busy();
+	    return FAIL;
+	}
+	if (res >= 0)
+	    qf_list_changed(qf_get_curlist(qi));
+
+	// Remember the current quickfix list identifier, so that we can
+	// check for autocommands changing the current quickfix list.
+	save_qfid = qf_get_curlist(qi)->qf_id;
+	if (au_name != NULL)
+	    apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name,
+					    curbuf->b_fname, TRUE, curbuf);
+
+	// Jump to the first error for a new list and if autocmds didn't
+	// free the list.
+	if (res > 0 && (eap->cmdidx == CMD_cexpr || eap->cmdidx == CMD_lexpr)
+		&& qflist_valid(wp, save_qfid))
+	    // display the first error
+	    qf_jump_first(qi, save_qfid, eap->forceit);
+	decr_quickfix_busy();
+	return OK;
+    }
+
+    emsg(_("E777: String or List expected"));
+    return FAIL;
+}
+
 /*
  * ":cexpr {expr}", ":cgetexpr {expr}", ":caddexpr {expr}" command.
  * ":lexpr {expr}", ":lgetexpr {expr}", ":laddexpr {expr}" command.
+ * Also: ":caddexpr", ":cgetexpr", "laddexpr" and "laddexpr".
  */
     void
 ex_cexpr(exarg_T *eap)
 {
     typval_T	*tv;
-    qf_info_T	*qi;
-    char_u	*au_name = NULL;
-    int		res;
-    int_u	save_qfid;
-    win_T	*wp = NULL;
 
-    au_name = cexpr_get_auname(eap->cmdidx);
-    if (au_name != NULL && apply_autocmds(EVENT_QUICKFIXCMDPRE, au_name,
-					       curbuf->b_fname, TRUE, curbuf))
-    {
-#ifdef FEAT_EVAL
-	if (aborting())
-	    return;
-#endif
-    }
-
-    qi = qf_cmd_get_or_alloc_stack(eap, &wp);
-    if (qi == NULL)
+    if (trigger_cexpr_autocmd(eap->cmdidx) == FAIL)
 	return;
 
     // Evaluate the expression.  When the result is a string or a list we can
@@ -7863,42 +7963,7 @@ ex_cexpr(exarg_T *eap)
     tv = eval_expr(eap->arg, eap);
     if (tv != NULL)
     {
-	if ((tv->v_type == VAR_STRING && tv->vval.v_string != NULL)
-		|| (tv->v_type == VAR_LIST && tv->vval.v_list != NULL))
-	{
-	    incr_quickfix_busy();
-	    res = qf_init_ext(qi, qi->qf_curlist, NULL, NULL, tv, p_efm,
-			    (eap->cmdidx != CMD_caddexpr
-			     && eap->cmdidx != CMD_laddexpr),
-				 (linenr_T)0, (linenr_T)0,
-				 qf_cmdtitle(*eap->cmdlinep), NULL);
-	    if (qf_stack_empty(qi))
-	    {
-		decr_quickfix_busy();
-		goto cleanup;
-	    }
-	    if (res >= 0)
-		qf_list_changed(qf_get_curlist(qi));
-
-	    // Remember the current quickfix list identifier, so that we can
-	    // check for autocommands changing the current quickfix list.
-	    save_qfid = qf_get_curlist(qi)->qf_id;
-	    if (au_name != NULL)
-		apply_autocmds(EVENT_QUICKFIXCMDPOST, au_name,
-						curbuf->b_fname, TRUE, curbuf);
-
-	    // Jump to the first error for a new list and if autocmds didn't
-	    // free the list.
-	    if (res > 0 && (eap->cmdidx == CMD_cexpr
-						   || eap->cmdidx == CMD_lexpr)
-		    && qflist_valid(wp, save_qfid))
-		// display the first error
-		qf_jump_first(qi, save_qfid, eap->forceit);
-	    decr_quickfix_busy();
-	}
-	else
-	    emsg(_("E777: String or List expected"));
-cleanup:
+	(void)cexpr_core(eap, tv);
 	free_tv(tv);
     }
 }
@@ -8099,6 +8164,7 @@ ex_helpgrep(exarg_T *eap)
     int		new_qi = FALSE;
     char_u	*au_name =  NULL;
     char_u	*lang = NULL;
+    int		updated = FALSE;
 
     switch (eap->cmdidx)
     {
@@ -8150,14 +8216,24 @@ ex_helpgrep(exarg_T *eap)
 	qfl->qf_ptr = qfl->qf_start;
 	qfl->qf_index = 1;
 	qf_list_changed(qfl);
-	qf_update_buffer(qi, NULL);
+	updated = TRUE;
     }
 
     if (p_cpo == empty_option)
 	p_cpo = save_cpo;
     else
-	// Darn, some plugin changed the value.
+    {
+	// Darn, some plugin changed the value.  If it's still empty it was
+	// changed and restored, need to restore in the complicated way.
+	if (*p_cpo == NUL)
+	    set_option_value((char_u *)"cpo", 0L, save_cpo, 0);
 	free_string_option(save_cpo);
+    }
+
+    if (updated)
+	// This may open a window and source scripts, do this after 'cpo' was
+	// restored.
+	qf_update_buffer(qi, NULL);
 
     if (au_name != NULL)
     {

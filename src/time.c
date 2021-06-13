@@ -252,7 +252,6 @@ f_reltimestr(typval_T *argvars UNUSED, typval_T *rettv)
     void
 f_strftime(typval_T *argvars, typval_T *rettv)
 {
-    char_u	result_buf[256];
     struct tm	tmval;
     struct tm	*curtime;
     time_t	seconds;
@@ -271,6 +270,19 @@ f_strftime(typval_T *argvars, typval_T *rettv)
 	rettv->vval.v_string = vim_strsave((char_u *)_("(Invalid)"));
     else
     {
+# ifdef MSWIN
+	WCHAR	    result_buf[256];
+	WCHAR	    *wp;
+
+	wp = enc_to_utf16(p, NULL);
+	if (wp != NULL)
+	    (void)wcsftime(result_buf, ARRAY_LENGTH(result_buf), wp, curtime);
+	else
+	    result_buf[0] = NUL;
+	rettv->vval.v_string = utf16_to_enc(result_buf, NULL);
+	vim_free(wp);
+# else
+	char_u	    result_buf[256];
 	vimconv_T   conv;
 	char_u	    *enc;
 
@@ -296,6 +308,7 @@ f_strftime(typval_T *argvars, typval_T *rettv)
 	// Release conversion descriptors
 	convert_setup(&conv, NULL, NULL);
 	vim_free(enc);
+# endif
     }
 }
 # endif
@@ -478,6 +491,7 @@ check_due_timer(void)
 	    int save_must_redraw = must_redraw;
 	    int save_trylevel = trylevel;
 	    int save_did_throw = did_throw;
+	    int save_need_rethrow = need_rethrow;
 	    int save_ex_pressedreturn = get_pressedreturn();
 	    int save_may_garbage_collect = may_garbage_collect;
 	    except_T *save_current_exception = current_exception;
@@ -493,6 +507,7 @@ check_due_timer(void)
 	    must_redraw = 0;
 	    trylevel = 0;
 	    did_throw = FALSE;
+	    need_rethrow = FALSE;
 	    current_exception = NULL;
 	    may_garbage_collect = FALSE;
 	    save_vimvars(&vvsave);
@@ -513,6 +528,7 @@ check_due_timer(void)
 	    called_emsg = save_called_emsg;
 	    trylevel = save_trylevel;
 	    did_throw = save_did_throw;
+	    need_rethrow = save_need_rethrow;
 	    current_exception = save_current_exception;
 	    restore_vimvars(&vvsave);
 	    if (must_redraw != 0)

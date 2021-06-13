@@ -169,8 +169,7 @@ buf_init_chartab(
 	    }
 	    if (VIM_ISDIGIT(*p))
 		c = getdigits(&p);
-	    else
-		 if (has_mbyte)
+	    else if (has_mbyte)
 		c = mb_ptr2char_adv(&p);
 	    else
 		c = *p++;
@@ -180,8 +179,7 @@ buf_init_chartab(
 		++p;
 		if (VIM_ISDIGIT(*p))
 		    c2 = getdigits(&p);
-		else
-		     if (has_mbyte)
+		else if (has_mbyte)
 		    c2 = mb_ptr2char_adv(&p);
 		else
 		    c2 = *p++;
@@ -753,7 +751,7 @@ vim_strnsize(char_u *s, int len)
 
 #ifdef FEAT_VARTABS
 # define RET_WIN_BUF_CHARTABSIZE(wp, buf, p, col) \
-    if (*(p) == TAB && (!(wp)->w_p_list || lcs_tab1)) \
+    if (*(p) == TAB && (!(wp)->w_p_list || wp->w_lcs_chars.tab1)) \
     { \
 	return tabstop_padding(col, (buf)->b_p_ts, (buf)->b_p_vts_array); \
     } \
@@ -761,7 +759,7 @@ vim_strnsize(char_u *s, int len)
 	return ptr2cells(p);
 #else
 # define RET_WIN_BUF_CHARTABSIZE(wp, buf, p, col) \
-    if (*(p) == TAB && (!(wp)->w_p_list || lcs_tab1)) \
+    if (*(p) == TAB && (!(wp)->w_p_list || wp->w_lcs_chars.tab1)) \
     { \
 	int ts; \
 	ts = (buf)->b_p_ts; \
@@ -832,6 +830,16 @@ win_linetabsize(win_T *wp, char_u *line, colnr_T len)
 vim_isIDc(int c)
 {
     return (c > 0 && c < 0x100 && (g_chartab[c] & CT_ID_CHAR));
+}
+
+/*
+ * Like vim_isIDc() but not using the 'isident' option: letters, numbers and
+ * underscore.
+ */
+    int
+vim_isNormalIDc(int c)
+{
+    return ASCII_ISALNUM(c) || c == '_';
 }
 
 /*
@@ -1153,7 +1161,7 @@ win_nolbr_chartabsize(
 {
     int		n;
 
-    if (*s == TAB && (!wp->w_p_list || lcs_tab1))
+    if (*s == TAB && (!wp->w_p_list || wp->w_lcs_chars.tab1))
     {
 # ifdef FEAT_VARTABS
 	return tabstop_padding(col, wp->w_buffer->b_p_ts,
@@ -1248,7 +1256,7 @@ getvcol(
      * use a simple loop.
      * Also use this when 'list' is set but tabs take their normal size.
      */
-    if ((!wp->w_p_list || lcs_tab1 != NUL)
+    if ((!wp->w_p_list || wp->w_lcs_chars.tab1 != NUL)
 #ifdef FEAT_LINEBREAK
 	    && !wp->w_p_lbr && *get_showbreak_value(wp) == NUL && !wp->w_p_bri
 #endif
@@ -1594,6 +1602,12 @@ vim_isbdigit(int c)
     return (c == '0' || c == '1');
 }
 
+    static int
+vim_isodigit(int c)
+{
+    return (c >= '0' && c <= '7');
+}
+
 /*
  * Vim's own character class functions.  These exist because many library
  * islower()/toupper() etc. do not work properly: they crash when used with
@@ -1831,7 +1845,7 @@ vim_str2nr(
 	    // binary
 	    ptr += 2;
 	else if ((what & STR2NR_OOCT)
-		&& (pre == 'O' || pre == 'o') && vim_isbdigit(ptr[2])
+		&& (pre == 'O' || pre == 'o') && vim_isodigit(ptr[2])
 		&& (maxlen == 0 || maxlen > 2))
 	    // octal with prefix "0o"
 	    ptr += 2;
@@ -1999,7 +2013,8 @@ hex2nr(int c)
     return c - '0';
 }
 
-#if defined(FEAT_TERMRESPONSE) || defined(FEAT_GUI_GTK) || defined(PROTO)
+#if defined(FEAT_TERMRESPONSE) || defined(FEAT_GUI_GTK) \
+        || defined(PROTO) || defined(FEAT_AUTOSHELLDIR)
 /*
  * Convert two hex characters to a byte.
  * Return -1 if one of the characters is not hex.

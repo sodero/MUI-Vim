@@ -944,6 +944,66 @@ func Test_incsearch_search_dump()
   call delete('Xis_search_script')
 endfunc
 
+func Test_hlsearch_dump()
+  CheckOption hlsearch
+  CheckScreendump
+
+  call writefile([
+	\ 'set hlsearch cursorline',
+        \ 'call setline(1, ["xxx", "xxx", "xxx"])',
+	\ '/.*',
+	\ '2',
+	\ ], 'Xhlsearch_script')
+  let buf = RunVimInTerminal('-S Xhlsearch_script', {'rows': 6, 'cols': 50})
+  call VerifyScreenDump(buf, 'Test_hlsearch_1', {})
+
+  call term_sendkeys(buf, "/\\_.*\<CR>")
+  call VerifyScreenDump(buf, 'Test_hlsearch_2', {})
+
+  call StopVimInTerminal(buf)
+  call delete('Xhlsearch_script')
+endfunc
+
+func Test_hlsearch_and_visual()
+  CheckOption hlsearch
+  CheckScreendump
+
+  call writefile([
+	\ 'set hlsearch',
+        \ 'call setline(1, repeat(["xxx yyy zzz"], 3))',
+        \ 'hi Search cterm=bold',
+	\ '/yyy',
+	\ 'call cursor(1, 6)',
+	\ ], 'Xhlvisual_script')
+  let buf = RunVimInTerminal('-S Xhlvisual_script', {'rows': 6, 'cols': 40})
+  call term_sendkeys(buf, "vjj")
+  call VerifyScreenDump(buf, 'Test_hlsearch_visual_1', {})
+  call term_sendkeys(buf, "\<Esc>")
+
+  call StopVimInTerminal(buf)
+  call delete('Xhlvisual_script')
+endfunc
+
+func Test_hlsearch_block_visual_match()
+  CheckScreendump
+
+  let lines =<< trim END
+    set hlsearch
+    call setline(1, ['aa', 'bbbb', 'cccccc'])
+  END
+  call writefile(lines, 'Xhlsearch_block')
+  let buf = RunVimInTerminal('-S Xhlsearch_block', {'rows': 9, 'cols': 60})
+
+  call term_sendkeys(buf, "G\<C-V>$kk\<Esc>")
+  sleep 100m
+  call term_sendkeys(buf, "/\\%V\<CR>")
+  sleep 100m
+  call VerifyScreenDump(buf, 'Test_hlsearch_block_visual_match', {})
+
+  call StopVimInTerminal(buf)
+  call delete('Xhlsearch_block')
+endfunc
+
 func Test_incsearch_substitute()
   CheckOption incsearch
 
@@ -1292,13 +1352,28 @@ func Test_look_behind()
   bwipe!
 endfunc
 
+func Test_search_visual_area_linewise()
+  new
+  call setline(1, ['aa', 'bb', 'cc'])
+  exe "normal 2GV\<Esc>"
+  for engine in [1, 2]
+    exe 'set regexpengine=' .. engine
+    exe "normal gg/\\%'<\<CR>>"
+    call assert_equal([0, 2, 1, 0, 1], getcurpos(), 'engine ' .. engine)
+    exe "normal gg/\\%'>\<CR>"
+    call assert_equal([0, 2, 2, 0, 2], getcurpos(), 'engine ' .. engine)
+  endfor
+
+  bwipe!
+  set regexpengine&
+endfunc
+
 func Test_search_sentence()
   new
   " this used to cause a crash
-  call assert_fails("/\\%')", 'E486:')
-  call assert_fails("/", 'E486:')
   /\%'(
   /
+  bwipe
 endfunc
 
 " Test that there is no crash when there is a last search pattern but no last
@@ -1806,6 +1881,35 @@ func Test_incsearch_highlighting_newline()
   call delete('Xincsearch_nl')
   call test_override("char_avail", 0)
   bw
+endfunc
+
+func Test_incsearch_substitute_dump2()
+  CheckOption incsearch
+  CheckScreendump
+
+  call writefile([
+	\ 'set incsearch hlsearch scrolloff=0',
+	\ 'for n in range(1, 4)',
+	\ '  call setline(n, "foo " . n)',
+	\ 'endfor',
+	\ 'call setline(5, "abc|def")',
+	\ '3',
+	\ ], 'Xis_subst_script2')
+  let buf = RunVimInTerminal('-S Xis_subst_script2', {'rows': 9, 'cols': 70})
+
+  call term_sendkeys(buf, ':%s/\vabc|')
+  sleep 100m
+  call VerifyScreenDump(buf, 'Test_incsearch_sub_01', {})
+  call term_sendkeys(buf, "\<Esc>")
+
+  " The following should not be highlighted
+  call term_sendkeys(buf, ':1,5s/\v|')
+  sleep 100m
+  call VerifyScreenDump(buf, 'Test_incsearch_sub_02', {})
+
+
+  call StopVimInTerminal(buf)
+  call delete('Xis_subst_script2')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

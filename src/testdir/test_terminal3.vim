@@ -101,7 +101,7 @@ func Test_terminal_in_popup()
   let buf = RunVimInTerminal('-S XtermPopup', #{rows: 15})
   call TermWait(buf, 100)
   call term_sendkeys(buf, ":call OpenTerm(0)\<CR>")
-  call TermWait(buf, 100)
+  call TermWait(buf, 500)
   call term_sendkeys(buf, ":\<CR>")
   call TermWait(buf, 100)
   call term_sendkeys(buf, "\<C-W>:echo getwinvar(g:winid, \"&buftype\") win_gettype(g:winid)\<CR>")
@@ -111,7 +111,7 @@ func Test_terminal_in_popup()
   call VerifyScreenDump(buf, 'Test_terminal_popup_2', {})
  
   call term_sendkeys(buf, ":call OpenTerm(1)\<CR>")
-  call TermWait(buf, 150)
+  call TermWait(buf, 500)
   call term_sendkeys(buf, ":set hlsearch\<CR>")
   call TermWait(buf, 100)
   call term_sendkeys(buf, "/edit\<CR>")
@@ -138,7 +138,7 @@ func Test_terminal_in_popup()
 
   call TermWait(buf, 50)
   call term_sendkeys(buf, ":q\<CR>")
-  call TermWait(buf, 150)  " wait for terminal to vanish
+  call TermWait(buf, 250)  " wait for terminal to vanish
 
   call StopVimInTerminal(buf)
   call delete('Xtext')
@@ -301,6 +301,11 @@ func Test_term_func_invalid_arg()
     call assert_fails('let p = term_getansicolors([])', 'E745:')
     call assert_fails('call term_setansicolors([], [])', 'E745:')
   endif
+  let buf = term_start('echo')
+  call assert_fails('call term_setapi(' .. buf .. ', {})', 'E731:')
+  call assert_fails('call term_setkill(' .. buf .. ', {})', 'E731:')
+  call assert_fails('call term_setrestore(' .. buf .. ', {})', 'E731:')
+  exe buf . "bwipe!"
 endfunc
 
 " Test for sending various special keycodes to a terminal
@@ -309,6 +314,7 @@ func Test_term_keycode_translation()
 
   let buf = RunVimInTerminal('', {})
   call term_sendkeys(buf, ":set nocompatible\<CR>")
+  call term_sendkeys(buf, ":set timeoutlen=20\<CR>")
 
   let keys = ["\<F1>", "\<F2>", "\<F3>", "\<F4>", "\<F5>", "\<F6>", "\<F7>",
         \ "\<F8>", "\<F9>", "\<F10>", "\<F11>", "\<F12>", "\<Home>",
@@ -325,7 +331,7 @@ func Test_term_keycode_translation()
   call term_sendkeys(buf, "i")
   for i in range(len(keys))
     call term_sendkeys(buf, "\<C-U>\<C-K>" .. keys[i])
-    call WaitForAssert({-> assert_equal(output[i], term_getline(buf, 1))})
+    call WaitForAssert({-> assert_equal(output[i], term_getline(buf, 1))}, 200)
   endfor
 
   let keypad_keys = ["\<k0>", "\<k1>", "\<k2>", "\<k3>", "\<k4>", "\<k5>",
@@ -340,7 +346,7 @@ func Test_term_keycode_translation()
       continue
     endif
     call term_sendkeys(buf, "\<C-U>" .. keypad_keys[i])
-    call WaitForAssert({-> assert_equal(keypad_output[i], term_getline(buf, 1))})
+    call WaitForAssert({-> assert_equal(keypad_output[i], term_getline(buf, 1))}, 100)
   endfor
 
   call feedkeys("\<C-U>\<kEnter>\<BS>one\<C-W>.two", 'xt')
@@ -467,6 +473,37 @@ func Test_term_mouse()
   set mousetime&
   call delete('Xtest_mouse')
   call delete('Xbuf')
+endfunc
+
+" Test for sync buffer cwd with shell's pwd
+func Test_terminal_sync_shell_dir()
+  CheckUnix
+  " The test always use sh (see src/testdir/unix.vim).
+  " However, BSD's sh doesn't seem to play well with OSC 7 escape sequence.
+  CheckNotBSD
+
+  set asd
+  " , is
+  "  1. a valid character for directory names
+  "  2. a reserved character in url-encoding
+  let chars = ",a"
+  " "," is url-encoded as '%2C'
+  let chars_url = "%2Ca"
+  let tmpfolder = fnamemodify(tempname(),':h').'/'.chars
+  let tmpfolder_url = fnamemodify(tempname(),':h').'/'.chars_url
+  call mkdir(tmpfolder, "p")
+  let buf = Run_shell_in_terminal({})
+  call term_sendkeys(buf, "echo -ne $'\\e\]7;file://".tmpfolder_url."\\a'\<CR>")
+  "call term_sendkeys(buf, "cd ".tmpfolder."\<CR>")
+  call TermWait(buf)
+  if has("mac")
+    let expected = "/private".tmpfolder
+  else
+    let expected = tmpfolder
+  endif
+  call assert_equal(expected, getcwd(winnr()))
+
+  set noasd
 endfunc
 
 " Test for modeless selection in a terminal

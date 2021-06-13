@@ -107,6 +107,8 @@ rettv_dict_set(typval_T *rettv, dict_T *d)
 dict_free_contents(dict_T *d)
 {
     hashtab_free_contents(&d->dv_hashtab);
+    free_type(d->dv_type);
+    d->dv_type = NULL;
 }
 
 /*
@@ -343,12 +345,29 @@ dict_copy(dict_T *orig, int deep, int copyID)
 }
 
 /*
+ * Check for adding a function to g: or s:.
+ * If the name is wrong give an error message and return TRUE.
+ */
+    int
+dict_wrong_func_name(dict_T *d, typval_T *tv, char_u *name)
+{
+    return (d == get_globvar_dict()
+		|| (in_vim9script() && SCRIPT_ID_VALID(current_sctx.sc_sid)
+		   && d == &SCRIPT_ITEM(current_sctx.sc_sid)->sn_vars->sv_dict)
+		|| &d->dv_hashtab == get_funccal_local_ht())
+	    && (tv->v_type == VAR_FUNC || tv->v_type == VAR_PARTIAL)
+	    && var_wrong_func_name(name, TRUE);
+}
+
+/*
  * Add item "item" to Dictionary "d".
  * Returns FAIL when out of memory and when key already exists.
  */
     int
 dict_add(dict_T *d, dictitem_T *item)
 {
+    if (dict_wrong_func_name(d, &item->di_tv, item->di_key))
+	return FAIL;
     return hash_add(&d->dv_hashtab, item->di_key);
 }
 
@@ -943,7 +962,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	if (**arg != ':')
 	{
 	    if (*skipwhite(*arg) == ':')
-		semsg(_(e_no_white_space_allowed_before_str), ":");
+		semsg(_(e_no_white_space_allowed_before_str_str), ":", *arg);
 	    else
 		semsg(_(e_missing_dict_colon), *arg);
 	    clear_tv(&tvkey);
@@ -951,11 +970,13 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	}
 	if (evaluate)
 	{
-	    if (vim9script && check_for_string(&tvkey) == FAIL)
+#ifdef FEAT_FLOAT
+	    if (tvkey.v_type == VAR_FLOAT)
 	    {
-		clear_tv(&tvkey);
-		goto failret;
+		tvkey.vval.v_string = typval_tostring(&tvkey, TRUE);
+		tvkey.v_type = VAR_STRING;
 	    }
+#endif
 	    key = tv_get_string_buf_chk(&tvkey, buf);
 	    if (key == NULL)
 	    {
@@ -966,7 +987,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	}
 	if (vim9script && (*arg)[1] != NUL && !VIM_ISWHITE((*arg)[1]))
 	{
-	    semsg(_(e_white_space_required_after_str), ":");
+	    semsg(_(e_white_space_required_after_str_str), ":", *arg);
 	    clear_tv(&tvkey);
 	    goto failret;
 	}
@@ -1008,7 +1029,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	{
 	    if (vim9script && (*arg)[1] != NUL && !VIM_ISWHITE((*arg)[1]))
 	    {
-		semsg(_(e_white_space_required_after_str), ",");
+		semsg(_(e_white_space_required_after_str_str), ",", *arg);
 		goto failret;
 	    }
 	    *arg = skipwhite(*arg + 1);
@@ -1021,7 +1042,7 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 	if (!had_comma)
 	{
 	    if (**arg == ',')
-		semsg(_(e_no_white_space_allowed_before_str), ",");
+		semsg(_(e_no_white_space_allowed_before_str_str), ",", *arg);
 	    else
 		semsg(_(e_missing_dict_comma), *arg);
 	    goto failret;
@@ -1030,7 +1051,8 @@ eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 
     if (**arg != '}')
     {
-	semsg(_(e_missing_dict_end), *arg);
+	if (evalarg != NULL)
+	    semsg(_(e_missing_dict_end), *arg);
 failret:
 	if (d != NULL)
 	    dict_free(d);
@@ -1057,6 +1079,12 @@ dict_extend(dict_T *d1, dict_T *d2, char_u *action)
     hashitem_T	*hi2;
     int		todo;
     char_u	*arg_errmsg = (char_u *)N_("extend() argument");
+    type_T	*type;
+
+    if (d1->dv_type != NULL && d1->dv_type->tt_member != NULL)
+	type = d1->dv_type->tt_member;
+    else
+	type = NULL;
 
     todo = (int)d2->dv_hashtab.ht_used;
     for (hi2 = d2->dv_hashtab.ht_array; todo > 0; ++hi2)
@@ -1076,6 +1104,12 @@ dict_extend(dict_T *d1, dict_T *d2, char_u *action)
 		if (!valid_varname(hi2->hi_key, TRUE))
 		    break;
 	    }
+
+	    if (type != NULL
+		     && check_typval_arg_type(type, &HI2DI(hi2)->di_tv, 0)
+								       == FAIL)
+		break;
+
 	    if (di1 == NULL)
 	    {
 		di1 = dictitem_copy(HI2DI(hi2));
@@ -1091,6 +1125,8 @@ dict_extend(dict_T *d1, dict_T *d2, char_u *action)
 	    {
 		if (value_check_lock(di1->di_tv.v_lock, arg_errmsg, TRUE)
 			|| var_check_ro(di1->di_flags, arg_errmsg, TRUE))
+		    break;
+		if (dict_wrong_func_name(d1, &HI2DI(hi2)->di_tv, hi2->hi_key))
 		    break;
 		clear_tv(&di1->di_tv);
 		copy_tv(&HI2DI(hi2)->di_tv, &di1->di_tv);

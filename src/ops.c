@@ -9,7 +9,7 @@
 
 /*
  * ops.c: implementation of various operators: op_shift, op_delete, op_tilde,
- *	  op_change, op_yank, do_put, do_join
+ *	  op_change, op_yank, do_join
  */
 
 #include "vim.h"
@@ -78,11 +78,13 @@ get_op_type(int char1, int char2)
 	return OP_NR_ADD;
     if (char1 == 'g' && char2 == Ctrl_X)	// subtract
 	return OP_NR_SUB;
+    if (char1 == 'z' && char2 == 'y')	// OP_YANK
+	return OP_YANK;
     for (i = 0; ; ++i)
     {
 	if (opchars[i][0] == char1 && opchars[i][1] == char2)
 	    break;
-	if (i == (int)(sizeof(opchars) / sizeof(char [3]) - 1))
+	if (i == (int)ARRAY_LENGTH(opchars) - 1)
 	{
 	    internal_error("get_op_type()");
 	    break;
@@ -2383,9 +2385,10 @@ op_addsub(
 #ifdef FEAT_NETBEANS_INTG
 	    if (netbeans_active() && one_change)
 	    {
-		char_u *ptr = ml_get_buf(curbuf, pos.lnum, FALSE);
+		char_u *ptr;
 
 		netbeans_removed(curbuf, pos.lnum, pos.col, (long)length);
+		ptr = ml_get_buf(curbuf, pos.lnum, FALSE);
 		netbeans_inserted(curbuf, pos.lnum, pos.col,
 						&ptr[pos.col], length);
 	    }
@@ -3893,6 +3896,7 @@ do_pending_operator(cmdarg_T *cap, int old_col, int gui_yank)
 #ifdef FEAT_LINEBREAK
 		curwin->w_p_lbr = lbr_saved;
 #endif
+		oap->excl_tr_ws = cap->cmdchar == 'z';
 		(void)op_yank(oap, FALSE, !gui_yank);
 	    }
 	    check_cursor_col();
@@ -3985,12 +3989,13 @@ do_pending_operator(cmdarg_T *cap, int old_col, int gui_yank)
 		op_formatexpr(oap);	// use expression
 	    else
 #endif
+	    {
 		if (*p_fp != NUL || *curbuf->b_p_fp != NUL)
-		op_colon(oap);		// use external command
-	    else
-		op_format(oap, FALSE);	// use internal function
+		    op_colon(oap);		// use external command
+		else
+		    op_format(oap, FALSE);	// use internal function
+	    }
 	    break;
-
 	case OP_FORMAT2:
 	    op_format(oap, TRUE);	// use internal function
 	    break;

@@ -1,4 +1,4 @@
-*testing.txt*	For Vim version 8.2.  Last change: 2020 Sep 06
+*testing.txt*	For Vim version 8.2.  Last change: 2021 Apr 02
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -168,6 +168,7 @@ test_override({name}, {val})				*test_override()*
 			     wait time of up to 3 seconds for messages
 		term_props   reset all terminal properties when the version
 			     string is detected
+		uptime 	     overrules sysinfo.uptime
 		ALL	     clear all overrides ({val} is not used)
 
 		"starting" is to be used when a test should behave like
@@ -242,7 +243,8 @@ test_srand_seed([seed])					*test_srand_seed()*
 assert_beeps({cmd})					*assert_beeps()*
 		Run {cmd} and add an error message to |v:errors| if it does
 		NOT produce a beep or visual bell.
-		Also see |assert_fails()| and |assert-return|.
+		Also see |assert_fails()|, |assert_nobeep()| and
+		|assert-return|.
 
 		Can also be used as a |method|: >
 			GetCmd()->assert_beeps()
@@ -308,8 +310,11 @@ assert_fails({cmd} [, {error} [, {msg} [, {lnum} [, {context}]]]])
 		first reported error: >
 			assert_fails('cmd', ['E987:.*expected bool'])
 <		The second pattern, if present, is matched against the last
-		reported error.  To only match the last error use an empty
-		string for the first error: >
+		reported error.
+		If there is only one error then both patterns must match. This
+		can be used to check that there is only one error.
+		To only match the last error use an empty string for the first
+		error: >
 			assert_fails('cmd', ['', 'E987:'])
 <
 		If {msg} is empty then it is not used.  Do this to get the
@@ -372,6 +377,14 @@ assert_match({pattern}, {actual} [, {msg}])
 
 		Can also be used as a |method|: >
 			getFile()->assert_match('foo.*')
+<
+assert_nobeep({cmd})					*assert_nobeep()*
+		Run {cmd} and add an error message to |v:errors| if it
+		produces a beep or visual bell.
+		Also see |assert_beeps()|.
+
+		Can also be used as a |method|: >
+			GetCmd()->assert_nobeep()
 <
 							*assert_notequal()*
 assert_notequal({expected}, {actual} [, {msg}])

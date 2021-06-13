@@ -1308,7 +1308,7 @@ find_tagfunc_tags(
     int         result = FAIL;
     typval_T	args[4];
     typval_T	rettv;
-    char_u      flagString[3];
+    char_u      flagString[4];
     dict_T	*d;
     taggy_T	*tag = &curwin->w_tagstack[curwin->w_tagstackidx];
 
@@ -1335,9 +1335,10 @@ find_tagfunc_tags(
     args[3].v_type = VAR_UNKNOWN;
 
     vim_snprintf((char *)flagString, sizeof(flagString),
-		 "%s%s",
+		 "%s%s%s",
 		 g_tag_at_cursor      ? "c": "",
-		 flags & TAG_INS_COMP ? "i": "");
+		 flags & TAG_INS_COMP ? "i": "",
+		 flags & TAG_REGEXP   ? "r": "");
 
     save_pos = curwin->w_cursor;
     result = call_vim_function(curbuf->b_p_tfu, 3, args, &rettv);
@@ -3312,7 +3313,7 @@ jumpto_tag(
     int		keep_help)	// keep help flag (FALSE for cscope)
 {
     int		save_secure;
-    int		save_magic_overruled;
+    optmagic_T	save_magic_overruled;
     int		save_p_ws, save_p_scs, save_p_ic;
     linenr_T	save_lnum;
     char_u	*str;
@@ -3505,10 +3506,15 @@ jumpto_tag(
 	++sandbox;
 #endif
 	save_magic_overruled = magic_overruled;
-	magic_overruled = MAGIC_OFF;	// always execute with 'nomagic'
+	magic_overruled = OPTION_MAGIC_OFF;	// always execute with 'nomagic'
 #ifdef FEAT_SEARCH_EXTRA
 	// Save value of no_hlsearch, jumping to a tag is not a real search
 	save_no_hlsearch = no_hlsearch;
+#endif
+#if defined(FEAT_PROP_POPUP) && defined(FEAT_QUICKFIX)
+	// getfile() may have cleared options, apply 'previewpopup' again.
+	if (g_do_tagpreview != 0 && *p_pvp != NUL)
+	    parse_previewpopup(curwin);
 #endif
 
 	/*
@@ -3818,7 +3824,7 @@ find_extra(char_u **pp)
     for (;;)
     {
 	if (VIM_ISDIGIT(*str))
-	    str = skipdigits(str);
+	    str = skipdigits(str + 1);
 	else if (*str == '/' || *str == '?')
 	{
 	    str = skip_regexp(str + 1, *str, FALSE);
@@ -4201,7 +4207,7 @@ tagstack_push_items(win_T *wp, list_T *l)
 	// parse 'from' for the cursor position before the tag jump
 	if ((di = dict_find(itemdict, (char_u *)"from", -1)) == NULL)
 	    continue;
-	if (list2fpos(&di->di_tv, &mark, &fnum, NULL) != OK)
+	if (list2fpos(&di->di_tv, &mark, &fnum, NULL, FALSE) != OK)
 	    continue;
 	if ((tagname =
 		dict_get_string(itemdict, (char_u *)"tagname", TRUE)) == NULL)

@@ -230,6 +230,9 @@ EXTERN int	did_endif INIT(= FALSE);    // just had ":endif"
 EXTERN int	did_emsg;		    // set by emsg() when the message
 					    // is displayed or thrown
 #ifdef FEAT_EVAL
+EXTERN int	did_emsg_silent INIT(= 0);  // incremented by emsg() when
+					    // emsg_silent was set and did_emsg
+					    // is not incremented
 EXTERN int	did_emsg_def;		    // set by emsg() when emsg_silent
 					    // is set before calling a function
 EXTERN int	did_emsg_cumul;		    // cumulative did_emsg, increased
@@ -289,6 +292,14 @@ EXTERN garray_T	exestack INIT5(0, 0, sizeof(estack_T), 50, NULL);
 #define SOURCING_NAME (((estack_T *)exestack.ga_data)[exestack.ga_len - 1].es_name)
 // line number in the message source or zero
 #define SOURCING_LNUM (((estack_T *)exestack.ga_data)[exestack.ga_len - 1].es_lnum)
+
+// Script CTX being sourced or was sourced to define the current function.
+EXTERN sctx_T	current_sctx
+#ifdef FEAT_EVAL
+    INIT4(0, 0, 0, 0);
+#else
+    INIT(= {0});
+#endif
 
 #ifdef FEAT_EVAL
 // whether inside compile_def_function()
@@ -392,9 +403,6 @@ EXTERN int	may_garbage_collect INIT(= FALSE);
 EXTERN int	want_garbage_collect INIT(= FALSE);
 EXTERN int	garbage_collect_at_exit INIT(= FALSE);
 
-// Script CTX being sourced or was sourced to define the current function.
-EXTERN sctx_T	current_sctx INIT4(0, 0, 0, 0);
-
 
 // Commonly used types.
 EXTERN type_T t_unknown INIT6(VAR_UNKNOWN, 0, 0, TTFLAG_STATIC, NULL, NULL);
@@ -403,6 +411,7 @@ EXTERN type_T t_void INIT6(VAR_VOID, 0, 0, TTFLAG_STATIC, NULL, NULL);
 EXTERN type_T t_bool INIT6(VAR_BOOL, 0, 0, TTFLAG_STATIC, NULL, NULL);
 EXTERN type_T t_special INIT6(VAR_SPECIAL, 0, 0, TTFLAG_STATIC, NULL, NULL);
 EXTERN type_T t_number INIT6(VAR_NUMBER, 0, 0, TTFLAG_STATIC, NULL, NULL);
+EXTERN type_T t_number_bool INIT6(VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_BOOL_OK, NULL, NULL);
 EXTERN type_T t_float INIT6(VAR_FLOAT, 0, 0, TTFLAG_STATIC, NULL, NULL);
 EXTERN type_T t_string INIT6(VAR_STRING, 0, 0, TTFLAG_STATIC, NULL, NULL);
 EXTERN type_T t_blob INIT6(VAR_BLOB, 0, 0, TTFLAG_STATIC, NULL, NULL);
@@ -427,6 +436,7 @@ EXTERN type_T t_dict_empty INIT6(VAR_DICT, 0, 0, TTFLAG_STATIC, &t_unknown, NULL
 EXTERN type_T t_list_bool INIT6(VAR_LIST, 0, 0, TTFLAG_STATIC, &t_bool, NULL);
 EXTERN type_T t_list_number INIT6(VAR_LIST, 0, 0, TTFLAG_STATIC, &t_number, NULL);
 EXTERN type_T t_list_string INIT6(VAR_LIST, 0, 0, TTFLAG_STATIC, &t_string, NULL);
+EXTERN type_T t_list_job INIT6(VAR_LIST, 0, 0, TTFLAG_STATIC, &t_job, NULL);
 EXTERN type_T t_list_dict_any INIT6(VAR_LIST, 0, 0, TTFLAG_STATIC, &t_dict_any, NULL);
 
 EXTERN type_T t_dict_bool INIT6(VAR_DICT, 0, 0, TTFLAG_STATIC, &t_bool, NULL);
@@ -730,6 +740,10 @@ EXTERN int	popup_visible INIT(= FALSE);
 
 EXTERN int	text_prop_frozen INIT(= 0);
 #endif
+
+// When set the popup menu will redraw soon using the pum_win_ values. Do not
+// draw over the poup menu area to avoid flicker.
+EXTERN int	pum_will_redraw INIT(= FALSE);
 
 /*
  * The window layout is kept in a tree of frames.  topframe points to the top
@@ -1297,6 +1311,7 @@ EXTERN int  wild_menu_showing INIT(= 0);
 #ifdef MSWIN
 EXTERN char_u	toupper_tab[256];	// table for toupper()
 EXTERN char_u	tolower_tab[256];	// table for tolower()
+EXTERN int	found_register_arg INIT(= FALSE);
 #endif
 
 #ifdef FEAT_LINEBREAK
@@ -1335,26 +1350,16 @@ EXTERN char_u	*homedir INIT(= NULL);
 // directory is not a local directory, globaldir is NULL.
 EXTERN char_u	*globaldir INIT(= NULL);
 
-// Characters from 'listchars' option
-EXTERN int	lcs_eol INIT(= '$');
-EXTERN int	lcs_ext INIT(= NUL);
-EXTERN int	lcs_prec INIT(= NUL);
-EXTERN int	lcs_nbsp INIT(= NUL);
-EXTERN int	lcs_space INIT(= NUL);
-EXTERN int	lcs_tab1 INIT(= NUL);
-EXTERN int	lcs_tab2 INIT(= NUL);
-EXTERN int	lcs_tab3 INIT(= NUL);
-EXTERN int	lcs_trail INIT(= NUL);
-#ifdef FEAT_CONCEAL
-EXTERN int	lcs_conceal INIT(= ' ');
-#endif
-
 // Characters from 'fillchars' option
 EXTERN int	fill_stl INIT(= ' ');
 EXTERN int	fill_stlnc INIT(= ' ');
 EXTERN int	fill_vert INIT(= ' ');
 EXTERN int	fill_fold INIT(= '-');
+EXTERN int	fill_foldopen INIT(= '-');
+EXTERN int	fill_foldclosed INIT(= '+');
+EXTERN int	fill_foldsep INIT(= '|');
 EXTERN int	fill_diff INIT(= '-');
+EXTERN int	fill_eob INIT(= '~');
 
 #ifdef FEAT_FOLDING
 EXTERN int	disable_fold_update INIT(= 0);
@@ -1378,6 +1383,9 @@ EXTERN char_u no_lines_msg[]	INIT(= N_("--No lines in buffer--"));
  */
 EXTERN long	sub_nsubs;	// total number of substitutions
 EXTERN linenr_T	sub_nlines;	// total number of lines changed
+
+// Used when a compiled :substitute has an expression.
+EXTERN struct subs_expr_S	*substitute_instr INIT(= NULL);
 
 // table to store parsed 'wildmode'
 EXTERN char_u	wim_flags[4];
@@ -1608,7 +1616,7 @@ EXTERN char e_duparg2[]		INIT(= N_("E983: Duplicate argument: %s"));
 EXTERN char e_invargval[]	INIT(= N_("E475: Invalid value for argument %s"));
 EXTERN char e_invargNval[]	INIT(= N_("E475: Invalid value for argument %s: %s"));
 #ifdef FEAT_EVAL
-EXTERN char e_invexpr2[]	INIT(= N_("E15: Invalid expression: %s"));
+EXTERN char e_invexpr2[]	INIT(= N_("E15: Invalid expression: \"%s\""));
 #endif
 EXTERN char e_invrange[]	INIT(= N_("E16: Invalid range"));
 #if defined(UNIX) || defined(FEAT_SYN_HL) || defined(FEAT_SPELL)
@@ -1720,7 +1728,6 @@ EXTERN char e_list_end[]	INIT(= N_("E697: Missing end of List ']': %s"));
 EXTERN char e_listdictarg[]	INIT(= N_("E712: Argument of %s must be a List or Dictionary"));
 EXTERN char e_listdictblobarg[]	INIT(= N_("E896: Argument of %s must be a List, Dictionary or Blob"));
 EXTERN char e_modulus[]		INIT(= N_("E804: Cannot use '%' with Float"));
-EXTERN char e_inval_string[]	INIT(= N_("E908: using an invalid value as a String"));
 EXTERN char e_const_option[]	INIT(= N_("E996: Cannot lock an option"));
 EXTERN char e_unknown_option[]	INIT(= N_("E113: Unknown option: %s"));
 EXTERN char e_letunexp[]	INIT(= N_("E18: Unexpected characters in :let"));
@@ -1863,6 +1870,7 @@ EXTERN int  nfa_fail_for_testing INIT(= FALSE);
 EXTERN int  no_query_mouse_for_testing INIT(= FALSE);
 EXTERN int  ui_delay_for_testing INIT(= 0);
 EXTERN int  reset_term_props_on_termresponse INIT(= FALSE);
+EXTERN long override_sysinfo_uptime INIT(= -1);
 
 EXTERN int  in_free_unref_items INIT(= FALSE);
 #endif
@@ -1900,7 +1908,8 @@ EXTERN listitem_T range_list_item;
 // Passed to an eval() function to enable evaluation.
 EXTERN evalarg_T EVALARG_EVALUATE
 # ifdef DO_INIT
-	= {EVAL_EVALUATE, 0, NULL, NULL, NULL, {0, 0, 0, 0, NULL}, NULL, NULL}
+	= {EVAL_EVALUATE, 0, NULL, NULL, NULL, {0, 0, 0, 0, NULL},
+					  {0, 0, 0, 0, NULL}, NULL, NULL, NULL}
 # endif
 	;
 #endif
@@ -1939,7 +1948,6 @@ EXTERN int channel_need_redraw INIT(= FALSE);
 #define FOR_ALL_LIST_ITEMS(l, li) \
     for ((li) = (l)->lv_first; (li) != NULL; (li) = (li)->li_next)
 
-// While executing a regexp and set to MAGIC_ON or MAGIC_OFF this overrules
-// p_magic.  Otherwise set to MAGIC_NOT_SET.
-
-EXTERN magic_T magic_overruled INIT(= MAGIC_NOT_SET);
+// While executing a regexp and set to OPTION_MAGIC_ON or OPTION_MAGIC_OFF this
+// overrules p_magic.  Otherwise set to OPTION_MAGIC_NOT_SET.
+EXTERN optmagic_T magic_overruled INIT(= OPTION_MAGIC_NOT_SET);

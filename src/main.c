@@ -168,6 +168,21 @@ main
 	    break;
 	}
 #endif
+#ifdef MSWIN
+    // Need to find "-register" and "-unregister" before loading any libraries.
+    for (i = 1; i < argc; ++i)
+	if ((STRICMP(argv[i] + 1, "register") == 0
+				    || STRICMP(argv[i] + 1, "unregister") == 0)
+		&& (argv[i][0] == '-' || argv[i][0] == '/'))
+	{
+	    found_register_arg = TRUE;
+	    break;
+	}
+#endif
+
+    /*
+     * Various initialisations shared with tests.
+     */
     common_init(&params);
 
 #ifdef VIMDLL
@@ -252,8 +267,6 @@ main
 
 #ifdef MSWIN
     {
-	extern void set_alist_count(void);
-
 	// Remember the number of entries in the argument list.  If it changes
 	// we don't react on setting 'encoding'.
 	set_alist_count();
@@ -637,7 +650,7 @@ vim_main2(void)
 #endif
 
     /*
-     * When done something that is not allowed or error message call
+     * When done something that is not allowed or given an error message call
      * wait_return.  This must be done before starttermcap(), because it may
      * switch to another screen. It must be done after settmode(TMODE_RAW),
      * because we want to react on a single key stroke.
@@ -1000,6 +1013,19 @@ common_init(mparm_T *paramp)
 is_not_a_term()
 {
     return params.not_a_term;
+}
+
+/*
+ * Return TRUE when the --not-a-term argument was found or the GUI is in use.
+ */
+    static int
+is_not_a_term_or_gui()
+{
+    return params.not_a_term
+#ifdef FEAT_GUI
+			    || gui.in_use
+#endif
+	;
 }
 
 
@@ -1535,9 +1561,7 @@ getout(int exitval)
 #endif
 
     // Position the cursor on the last screen line, below all the text
-#ifdef FEAT_GUI
-    if (!gui.in_use)
-#endif
+    if (!is_not_a_term_or_gui())
 	windgoto((int)Rows - 1, 0);
 
 #if defined(FEAT_EVAL) || defined(FEAT_SYN_HL)
@@ -1643,13 +1667,11 @@ getout(int exitval)
     {
 	// give the user a chance to read the (error) message
 	no_wait_return = FALSE;
-	wait_return(FALSE);
+//	wait_return(FALSE);
     }
 
     // Position the cursor again, the autocommands may have moved it
-#ifdef FEAT_GUI
-    if (!gui.in_use)
-#endif
+    if (!is_not_a_term_or_gui())
 	windgoto((int)Rows - 1, 0);
 
 #ifdef FEAT_JOB_CHANNEL
@@ -1986,6 +2008,9 @@ command_line_scan(mparm_T *parmp)
 		{
 		    Columns = 80;	// need to init Columns
 		    info_message = TRUE; // use mch_msg(), not mch_errmsg()
+#if defined(FEAT_GUI) && !defined(ALWAYS_USE_GUI)
+		    gui.starting = FALSE; // not starting GUI, will exit
+#endif
 		    list_version();
 		    msg_putchar('\n');
 		    msg_didout = FALSE;
@@ -3108,7 +3133,11 @@ source_startup_scripts(mparm_T *parmp)
     if (parmp->use_vimrc != NULL)
     {
 	if (STRCMP(parmp->use_vimrc, "DEFAULTS") == 0)
-	    do_source((char_u *)VIM_DEFAULTS_FILE, FALSE, DOSO_NONE, NULL);
+	{
+	    if (do_source((char_u *)VIM_DEFAULTS_FILE, FALSE, DOSO_NONE, NULL)
+									 != OK)
+		emsg(e_failed_to_source_defaults);
+	}
 	else if (STRCMP(parmp->use_vimrc, "NONE") == 0
 				     || STRCMP(parmp->use_vimrc, "NORC") == 0)
 	{
@@ -3180,7 +3209,9 @@ source_startup_scripts(mparm_T *parmp)
 		&& !has_dash_c_arg)
 	    {
 		// When no .vimrc file was found: source defaults.vim.
-		do_source((char_u *)VIM_DEFAULTS_FILE, FALSE, DOSO_NONE, NULL);
+		if (do_source((char_u *)VIM_DEFAULTS_FILE, FALSE, DOSO_NONE,
+								 NULL) == FAIL)
+		    emsg(e_failed_to_source_defaults);
 	    }
 	}
 
@@ -3276,9 +3307,8 @@ process_env(
     int		is_viminit) // when TRUE, called for VIMINIT
 {
     char_u	*initstr;
-#ifdef FEAT_EVAL
     sctx_T	save_current_sctx;
-#endif
+
     ESTACK_CHECK_DECLARATION
 
     if ((initstr = mch_getenv(env)) != NULL && *initstr != NUL)
@@ -3287,20 +3317,19 @@ process_env(
 	    vimrc_found(NULL, NULL);
 	estack_push(ETYPE_ENV, env, 0);
 	ESTACK_CHECK_SETUP
-#ifdef FEAT_EVAL
 	save_current_sctx = current_sctx;
+	current_sctx.sc_version = 1;
+#ifdef FEAT_EVAL
 	current_sctx.sc_sid = SID_ENV;
 	current_sctx.sc_seq = 0;
 	current_sctx.sc_lnum = 0;
-	current_sctx.sc_version = 1;
 #endif
+
 	do_cmdline_cmd(initstr);
 
 	ESTACK_CHECK_NOW
 	estack_pop();
-#ifdef FEAT_EVAL
 	current_sctx = save_current_sctx;
-#endif
 	return OK;
     }
     return FAIL;
@@ -3411,7 +3440,7 @@ usage(void)
     {
 	mch_msg(_(" vim [arguments] "));
 	mch_msg(_(use[i]));
-	if (i == (sizeof(use) / sizeof(char_u *)) - 1)
+	if (i == ARRAY_LENGTH(use) - 1)
 	    break;
 	mch_msg(_("\n   or:"));
     }
@@ -3548,8 +3577,11 @@ usage(void)
 #endif // FEAT_GUI_X11
 #ifdef FEAT_GUI_GTK
     mch_msg(_("\nArguments recognised by gvim (GTK+ version):\n"));
+    main_msg(_("-background <color>\tUse <color> for the background (also: -bg)"));
+    main_msg(_("-foreground <color>\tUse <color> for normal text (also: -fg)"));
     main_msg(_("-font <font>\t\tUse <font> for normal text (also: -fn)"));
     main_msg(_("-geometry <geom>\tUse <geom> for initial geometry (also: -geom)"));
+    main_msg(_("-iconic\t\tStart Vim iconified"));
     main_msg(_("-reverse\t\tUse reverse video (also: -rv)"));
     main_msg(_("-display <display>\tRun Vim on <display> (also: --display)"));
     main_msg(_("--role <role>\tSet a unique role to identify the main window"));

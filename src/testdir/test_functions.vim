@@ -4,6 +4,7 @@ source shared.vim
 source check.vim
 source term_util.vim
 source screendump.vim
+source vim9.vim
 
 " Must be done first, since the alternate buffer must be unset.
 func Test_00_bufexists()
@@ -124,6 +125,10 @@ func Test_max()
 
   call assert_fails('call max(1)', 'E712:')
   call assert_fails('call max(v:none)', 'E712:')
+
+  " check we only get one error
+  call assert_fails('call max([#{}, [1]])', ['E728:', 'E728:'])
+  call assert_fails('call max(#{a: {}, b: [1]})', ['E728:', 'E728:'])
 endfunc
 
 func Test_min()
@@ -137,6 +142,11 @@ func Test_min()
 
   call assert_fails('call min(1)', 'E712:')
   call assert_fails('call min(v:none)', 'E712:')
+  call assert_fails('call min([1, {}])', 'E728:')
+
+  " check we only get one error
+  call assert_fails('call min([[1], #{}])', ['E745:', 'E745:'])
+  call assert_fails('call min(#{a: [1], b: #{}})', ['E745:', 'E745:'])
 endfunc
 
 func Test_strwidth()
@@ -155,10 +165,12 @@ func Test_strwidth()
     call assert_fails('call strwidth({->0})', 'E729:')
     call assert_fails('call strwidth([])', 'E730:')
     call assert_fails('call strwidth({})', 'E731:')
-    if has('float')
-      call assert_fails('call strwidth(1.2)', 'E806:')
-    endif
   endfor
+
+  if has('float')
+    call assert_equal(3, strwidth(1.2))
+    call CheckDefExecAndScriptFailure(['echo strwidth(1.2)'], 'E806:')
+  endif
 
   set ambiwidth&
 endfunc
@@ -223,7 +235,9 @@ func Test_str2nr()
   call assert_fails('call str2nr([])', 'E730:')
   call assert_fails('call str2nr({->2})', 'E729:')
   if has('float')
-    call assert_fails('call str2nr(1.2)', 'E806:')
+    call assert_equal(1, str2nr(1.2))
+    call CheckDefExecFailure(['echo str2nr(1.2)'], 'E1013:')
+    call CheckScriptFailure(['vim9script', 'echo str2nr(1.2)'], 'E806:')
   endif
   call assert_fails('call str2nr(10, [])', 'E745:')
 endfunc
@@ -484,7 +498,8 @@ func Test_simplify()
   call assert_fails('call simplify([])', 'E730:')
   call assert_fails('call simplify({})', 'E731:')
   if has('float')
-    call assert_fails('call simplify(1.2)', 'E806:')
+    call assert_equal('1.2', simplify(1.2))
+    call CheckDefExecAndScriptFailure(['echo simplify(1.2)'], 'E806:')
   endif
 endfunc
 
@@ -707,6 +722,7 @@ func Test_tr()
   call assert_fails("let s=tr('abcd', 'abcd', 'def')", 'E475:')
   call assert_equal('hEllO', tr('hello', 'eo', 'EO'))
   call assert_equal('hello', tr('hello', 'xy', 'ab'))
+  call assert_fails('call tr("abc", "123", "₁₂")', 'E475:')
   set encoding=utf8
 endfunc
 
@@ -1132,6 +1148,33 @@ func Test_byteidx()
   call assert_fails("call byteidxcomp([], 0)", 'E730:')
 endfunc
 
+" Test for charidx()
+func Test_charidx()
+  let a = 'xáb́y'
+  call assert_equal(0, charidx(a, 0))
+  call assert_equal(1, charidx(a, 3))
+  call assert_equal(2, charidx(a, 4))
+  call assert_equal(3, charidx(a, 7))
+  call assert_equal(-1, charidx(a, 8))
+  call assert_equal(-1, charidx(a, -1))
+  call assert_equal(-1, charidx('', 0))
+  call assert_equal(-1, charidx(test_null_string(), 0))
+
+  " count composing characters
+  call assert_equal(0, charidx(a, 0, 1))
+  call assert_equal(2, charidx(a, 2, 1))
+  call assert_equal(3, charidx(a, 4, 1))
+  call assert_equal(5, charidx(a, 7, 1))
+  call assert_equal(-1, charidx(a, 8, 1))
+  call assert_equal(-1, charidx('', 0, 1))
+
+  call assert_fails('let x = charidx([], 1)', 'E474:')
+  call assert_fails('let x = charidx("abc", [])', 'E474:')
+  call assert_fails('let x = charidx("abc", 1, [])', 'E474:')
+  call assert_fails('let x = charidx("abc", 1, -1)', 'E1023:')
+  call assert_fails('let x = charidx("abc", 1, 2)', 'E1023:')
+endfunc
+
 func Test_count()
   let l = ['a', 'a', 'A', 'b']
   call assert_equal(2, count(l, 'a'))
@@ -1263,7 +1306,13 @@ func Test_Executable()
     " check that the relative path works in /
     lcd /
     call assert_equal(1, executable(catcmd))
-    call assert_equal('/' .. catcmd, catcmd->exepath())
+    let result = catcmd->exepath()
+    " when using chroot looking for sbin/cat can return bin/cat, that is OK
+    if catcmd =~ '\<sbin\>' && result =~ '\<bin\>'
+      call assert_equal('/' .. substitute(catcmd, '\<sbin\>', 'bin', ''), result)
+    else
+      call assert_equal('/' .. catcmd, result)
+    endif
     bwipe
   else
     throw 'Skipped: does not work on this platform'
@@ -1391,6 +1440,14 @@ func Test_input_func()
   delfunc Tcomplete
   call assert_equal('item1 item2 item3', c)
 
+  " Test for using special characters as default input
+  call feedkeys(":let c = input('name? ', \"x\\<BS>y\")\<CR>\<CR>", 'xt')
+  call assert_equal('y', c)
+
+  " Test for using <CR> as default input
+  call feedkeys(":let c = input('name? ', \"\\<CR>\")\<CR>x\<CR>", 'xt')
+  call assert_equal(' x', c)
+
   call assert_fails("call input('F:', '', 'invalid')", 'E180:')
   call assert_fails("call input('F:', '', [])", 'E730:')
 endfunc
@@ -1431,6 +1488,10 @@ func Test_inputlist()
   call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>q", 'tx')
   call assert_equal(0, c)
 
+  " Cancel after inputting a number
+  call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>5q", 'tx')
+  call assert_equal(0, c)
+
   " Use backspace to delete characters in the prompt
   call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>1\<BS>3\<BS>2\<cr>", 'tx')
   call assert_equal(2, c)
@@ -1450,6 +1511,7 @@ endfunc
 
 func Test_balloon_show()
   CheckFeature balloon_eval
+
   " This won't do anything but must not crash either.
   call balloon_show('hi!')
   if !has('gui_running')
@@ -1667,6 +1729,13 @@ endfunc
 func Test_getchar()
   call feedkeys('a', '')
   call assert_equal(char2nr('a'), getchar())
+  call assert_equal(0, getchar(0))
+  call assert_equal(0, getchar(1))
+
+  call feedkeys('a', '')
+  call assert_equal('a', getcharstr())
+  call assert_equal('', getcharstr(0))
+  call assert_equal('', getcharstr(1))
 
   call setline(1, 'xxxx')
   call test_setmouse(1, 3)
@@ -1788,6 +1857,10 @@ func Test_func_exists_on_reload()
   " But redefining in another script is not OK.
   call writefile(['func ExistingFunction()', 'echo "yes"', 'endfunc'], 'Xfuncexists2')
   call assert_fails('source Xfuncexists2', 'E122:')
+
+  " Defining a new function from the cmdline should fail if the function is
+  " already defined
+  call assert_fails('call feedkeys(":func ExistingFunction()\<CR>", "xt")', 'E122:')
 
   delfunc ExistingFunction
   call assert_equal(0, exists('*ExistingFunction'))
@@ -2100,6 +2173,12 @@ func Test_call()
   eval mydict.len->call([], mydict)->assert_equal(4)
   call assert_fails("call call('Mylen', [], 0)", 'E715:')
   call assert_fails('call foo', 'E107:')
+
+  " These once caused a crash.
+  call call(test_null_function(), [])
+  call call(test_null_partial(), [])
+  call assert_fails('call test_null_function()()', 'E1192:')
+  call assert_fails('call test_null_partial()()', 'E117:')
 endfunc
 
 func Test_char2nr()
@@ -2576,6 +2655,7 @@ endfunc
 func Test_glob()
   call assert_equal('', glob(test_null_string()))
   call assert_equal('', globpath(test_null_string(), test_null_string()))
+  call assert_fails("let x = globpath(&rtp, 'syntax/c.vim', [])", 'E745:')
 
   call writefile([], 'Xglob1')
   call writefile([], 'XGLOB2')
@@ -2602,5 +2682,36 @@ func Test_browsedir()
   CheckFeature browse
   call assert_fails('call browsedir("open", [])', 'E730:')
 endfunc
+
+func HasDefault(msg = 'msg')
+  return a:msg
+endfunc
+
+func Test_default_arg_value()
+  call assert_equal('msg', HasDefault())
+endfunc
+
+" Test for gettext()
+func Test_gettext()
+  call assert_fails('call gettext(1)', 'E475:')
+endfunc
+
+func Test_builtin_check()
+  call assert_fails('let g:["trim"] = {x -> " " .. x}', 'E704:')
+  call assert_fails('let g:.trim = {x -> " " .. x}', 'E704:')
+  call assert_fails('let l:["trim"] = {x -> " " .. x}', 'E704:')
+  call assert_fails('let l:.trim = {x -> " " .. x}', 'E704:')
+  let lines =<< trim END
+    vim9script
+    var s:trim = (x) => " " .. x
+  END
+  call CheckScriptFailure(lines, 'E704:')
+
+  call assert_fails('call extend(g:, #{foo: { -> "foo" }})', 'E704:')
+  let g:bar = 123
+  call extend(g:, #{bar: { -> "foo" }}, "keep")
+  call assert_fails('call extend(g:, #{bar: { -> "foo" }}, "force")', 'E704:')
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

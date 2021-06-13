@@ -1996,7 +1996,11 @@ do_mnemonic(Widget w, unsigned int keycode)
  * Callback routine for dialog mnemonic processing.
  */
     static void
-mnemonic_event(Widget w, XtPointer call_data UNUSED, XKeyEvent *event)
+mnemonic_event(
+	Widget	    w,
+	XtPointer   call_data UNUSED,
+	XKeyEvent   *event,
+	Boolean	    *b UNUSED)
 {
     do_mnemonic(w, event->keycode);
 }
@@ -3525,7 +3529,7 @@ find_replace_callback(
 	char_u	*save_cpo = p_cpo;
 
 	// No need to be Vi compatible here.
-	p_cpo = (char_u *)"";
+	p_cpo = empty_option;
 	u_undo(1);
 	p_cpo = save_cpo;
 	gui_update_screen();
@@ -3565,7 +3569,8 @@ find_replace_callback(
 find_replace_keypress(
     Widget		w UNUSED,
     SharedFindReplace	*frdp,
-    XKeyEvent		*event)
+    XKeyEvent		*event,
+    Boolean		*b UNUSED)
 {
     KeySym keysym;
 

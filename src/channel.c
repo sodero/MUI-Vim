@@ -4883,6 +4883,11 @@ f_ch_logfile(typval_T *argvars, typval_T *rettv UNUSED)
     // Don't open a file in restricted mode.
     if (check_restricted() || check_secure())
 	return;
+    if (in_vim9script()
+	    && (check_for_string_arg(argvars, 0) == FAIL
+		|| check_for_string_arg(argvars, 1) == FAIL))
+	return;
+
     fname = tv_get_string(&argvars[0]);
     if (argvars[1].v_type == VAR_STRING)
 	opt = tv_get_string_buf(&argvars[1], buf);
@@ -5008,6 +5013,24 @@ f_ch_status(typval_T *argvars, typval_T *rettv)
     }
 
     rettv->vval.v_string = vim_strsave((char_u *)channel_status(channel, part));
+}
+
+/*
+ * Get a string with information about the channel in "varp" in "buf".
+ * "buf" must be at least NUMBUFLEN long.
+ */
+    char_u *
+channel_to_string_buf(typval_T *varp, char_u *buf)
+{
+    channel_T *channel = varp->vval.v_channel;
+    char      *status = channel_status(channel, -1);
+
+    if (channel == NULL)
+	vim_snprintf((char *)buf, NUMBUFLEN, "channel %s", status);
+    else
+	vim_snprintf((char *)buf, NUMBUFLEN,
+				      "channel %d %s", channel->ch_id, status);
+    return buf;
 }
 
 #endif // FEAT_JOB_CHANNEL

@@ -185,6 +185,7 @@
 #ifdef FEAT_LINEBREAK
 # define PV_LBR		OPT_WIN(WV_LBR)
 #endif
+#define PV_LCS		OPT_BOTH(OPT_WIN(WV_LCS))
 #define PV_NU		OPT_WIN(WV_NU)
 #define PV_RNU		OPT_WIN(WV_RNU)
 #ifdef FEAT_LINEBREAK
@@ -365,6 +366,15 @@ static struct vimoption options[] =
     {"autochdir",  "acd",   P_BOOL|P_VI_DEF,
 #ifdef FEAT_AUTOCHDIR
 			    (char_u *)&p_acd, PV_NONE,
+			    {(char_u *)FALSE, (char_u *)0L}
+#else
+			    (char_u *)NULL, PV_NONE,
+			    {(char_u *)0L, (char_u *)0L}
+#endif
+			    SCTX_INIT},
+    {"autoshelldir",  "asd",   P_BOOL|P_VI_DEF,
+#ifdef FEAT_AUTOSHELLDIR
+			    (char_u *)&p_asd, PV_NONE,
 			    {(char_u *)FALSE, (char_u *)0L}
 #else
 			    (char_u *)NULL, PV_NONE,
@@ -946,13 +956,13 @@ static struct vimoption options[] =
 				    (char_u *)FALSE,
 #endif
 					(char_u *)0L} SCTX_INIT},
-    {"filetype",    "ft",   P_STRING|P_ALLOCED|P_VI_DEF|P_NOGLOB|P_NFNAME,
+    {"filetype",    "ft",   P_STRING|P_EXPAND|P_ALLOCED|P_VI_DEF|P_NOGLOB|P_NFNAME,
 			    (char_u *)&p_ft, PV_FT,
 			    {(char_u *)"", (char_u *)0L}
 			    SCTX_INIT},
     {"fillchars",   "fcs",  P_STRING|P_VI_DEF|P_RALL|P_ONECOMMA|P_NODUP,
 			    (char_u *)&p_fcs, PV_NONE,
-			    {(char_u *)"vert:|,fold:-", (char_u *)0L}
+			    {(char_u *)"vert:|,fold:-,eob:~", (char_u *)0L}
 			    SCTX_INIT},
     {"fixendofline",  "fixeol", P_BOOL|P_VI_DEF|P_RSTAT,
 			    (char_u *)&p_fixeol, PV_FIXEOL,
@@ -1598,7 +1608,7 @@ static struct vimoption options[] =
 			    (char_u *)VAR_WIN, PV_LIST,
 			    {(char_u *)FALSE, (char_u *)0L} SCTX_INIT},
     {"listchars",   "lcs",  P_STRING|P_VI_DEF|P_RALL|P_ONECOMMA|P_NODUP,
-			    (char_u *)&p_lcs, PV_NONE,
+			    (char_u *)&p_lcs, PV_LCS,
 			    {(char_u *)"eol:$", (char_u *)0L} SCTX_INIT},
     {"loadplugins", "lpl",  P_BOOL|P_VI_DEF,
 			    (char_u *)&p_lpl, PV_NONE,
@@ -2957,6 +2967,8 @@ static struct vimoption options[] =
     p_term("t_EC", T_CEC)
     p_term("t_EI", T_CEI)
     p_term("t_fs", T_FS)
+    p_term("t_fd", T_FD)
+    p_term("t_fe", T_FE)
     p_term("t_GP", T_CGP)
     p_term("t_IE", T_CIE)
     p_term("t_IS", T_CIS)
@@ -3021,7 +3033,7 @@ static struct vimoption options[] =
     {NULL, NULL, 0, NULL, PV_NONE, {NULL, NULL} SCTX_INIT}
 };
 
-#define OPTION_COUNT (sizeof(options) / sizeof(struct vimoption))
+#define OPTION_COUNT ARRAY_LENGTH(options)
 
 // The following is needed to make the gen_opt_test.vim script work.
 // {"

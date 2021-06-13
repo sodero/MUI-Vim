@@ -32,7 +32,7 @@ static int	stuff_yank(int, char_u *);
 static void	put_reedit_in_typebuf(int silent);
 static int	put_in_typebuf(char_u *s, int esc, int colon,
 								 int silent);
-static int	yank_copy_line(struct block_def *bd, long y_idx);
+static int	yank_copy_line(struct block_def *bd, long y_idx, int exclude_trailing_space);
 #ifdef FEAT_CLIPBOARD
 static void	copy_yank_reg(yankreg_T *reg);
 #endif
@@ -809,7 +809,14 @@ insert_reg(
 	{
 	    for (i = 0; i < y_current->y_size; ++i)
 	    {
-		stuffescaped(y_current->y_array[i], literally);
+		if (regname == '-')
+		{
+		    AppendCharToRedobuff(Ctrl_R);
+		    AppendCharToRedobuff(regname);
+		    do_put(regname, NULL, BACKWARD, 1L, PUT_CURSEND);
+		}
+		else
+		    stuffescaped(y_current->y_array[i], literally);
 		// Insert a newline between lines and after last line if
 		// y_type is MLINE.
 		if (y_current->y_type == MLINE || i < y_current->y_size - 1)
@@ -1201,20 +1208,20 @@ op_yank(oparg_T *oap, int deleting, int mess)
 	{
 	    case MBLOCK:
 		block_prep(oap, &bd, lnum, FALSE);
-		if (yank_copy_line(&bd, y_idx) == FAIL)
+		if (yank_copy_line(&bd, y_idx, oap->excl_tr_ws) == FAIL)
 		    goto fail;
 		break;
 
 	    case MLINE:
 		if ((y_current->y_array[y_idx] =
-			    vim_strsave(ml_get(lnum))) == NULL)
+					    vim_strsave(ml_get(lnum))) == NULL)
 		    goto fail;
 		break;
 
 	    case MCHAR:
 		{
 		    colnr_T startcol = 0, endcol = MAXCOL;
-		    int is_oneChar = FALSE;
+		    int	    is_oneChar = FALSE;
 		    colnr_T cs, ce;
 
 		    p = ml_get(lnum);
@@ -1275,7 +1282,7 @@ op_yank(oparg_T *oap, int deleting, int mess)
 		    else
 			bd.textlen = endcol - startcol + oap->inclusive;
 		    bd.textstart = p + startcol;
-		    if (yank_copy_line(&bd, y_idx) == FAIL)
+		    if (yank_copy_line(&bd, y_idx, FALSE) == FAIL)
 			goto fail;
 		    break;
 		}
@@ -1395,12 +1402,13 @@ op_yank(oparg_T *oap, int deleting, int mess)
 
 # ifdef FEAT_X11
     // If we were yanking to the '+' register, send result to selection.
-    // Also copy to the '*' register, in case auto-select is off.
+    // Also copy to the '*' register, in case auto-select is off.  But not when
+    // 'clipboard' has "unnamedplus" and not "unnamed".
     if (clip_plus.available
 	    && (curr == &(y_regs[PLUS_REGISTER])
 		|| (!deleting && oap->regname == 0
 		  && ((clip_unnamed | clip_unnamed_saved) &
-		      CLIP_UNNAMED_PLUS))))
+							  CLIP_UNNAMED_PLUS))))
     {
 	if (curr != &(y_regs[PLUS_REGISTER]))
 	    // Copy the text from register 0 to the clipboard register.
@@ -1408,8 +1416,11 @@ op_yank(oparg_T *oap, int deleting, int mess)
 
 	clip_own_selection(&clip_plus);
 	clip_gen_set_selection(&clip_plus);
-	if (!clip_isautosel_star() && !clip_isautosel_plus()
-		&& !did_star && curr == &(y_regs[PLUS_REGISTER]))
+	if (!clip_isautosel_star()
+		&& !clip_isautosel_plus()
+		&& !((clip_unnamed | clip_unnamed_saved) == CLIP_UNNAMED_PLUS)
+		&& !did_star
+		&& curr == &(y_regs[PLUS_REGISTER]))
 	{
 	    copy_yank_reg(&(y_regs[STAR_REGISTER]));
 	    clip_own_selection(&clip_star);
@@ -1432,8 +1443,12 @@ fail:		// free the allocated lines
     return FAIL;
 }
 
+/*
+ * Copy a block range into a register.
+ * If "exclude_trailing_space" is set, do not copy trailing whitespaces.
+ */
     static int
-yank_copy_line(struct block_def *bd, long y_idx)
+yank_copy_line(struct block_def *bd, long y_idx, int exclude_trailing_space)
 {
     char_u	*pnew;
 
@@ -1447,6 +1462,16 @@ yank_copy_line(struct block_def *bd, long y_idx)
     pnew += bd->textlen;
     vim_memset(pnew, ' ', (size_t)bd->endspaces);
     pnew += bd->endspaces;
+    if (exclude_trailing_space)
+    {
+	int s = bd->textlen + bd->endspaces;
+
+	while (VIM_ISWHITE(*(bd->textstart + s - 1)) && s > 0)
+	{
+	    s = s - (*mb_head_off)(bd->textstart, bd->textstart + s - 1) - 1;
+	    pnew--;
+	}
+    }
     *pnew = NUL;
     return OK;
 }
@@ -1486,6 +1511,7 @@ copy_yank_reg(yankreg_T *reg)
  * "flags": PUT_FIXINDENT	make indent look nice
  *	    PUT_CURSEND		leave cursor after end of new text
  *	    PUT_LINE		force linewise put (":put")
+ *	    PUT_BLOCK_INNER     in block mode, do not add trailing spaces
  */
     void
 do_put(
@@ -1783,7 +1809,7 @@ do_put(
 	bd.textcol = 0;
 	for (i = 0; i < y_size; ++i)
 	{
-	    int spaces;
+	    int spaces = 0;
 	    char shortline;
 
 	    bd.startspaces = 0;
@@ -1834,12 +1860,16 @@ do_put(
 
 	    yanklen = (int)STRLEN(y_array[i]);
 
-	    // calculate number of spaces required to fill right side of block
-	    spaces = y_width + 1;
-	    for (j = 0; j < yanklen; j++)
-		spaces -= lbr_chartabsize(NULL, &y_array[i][j], 0);
-	    if (spaces < 0)
-		spaces = 0;
+	    if ((flags & PUT_BLOCK_INNER) == 0)
+	    {
+		// calculate number of spaces required to fill right side of
+		// block
+		spaces = y_width + 1;
+		for (j = 0; j < yanklen; j++)
+		    spaces -= lbr_chartabsize(NULL, &y_array[i][j], 0);
+		if (spaces < 0)
+		    spaces = 0;
+	    }
 
 	    // insert the new text
 	    totlen = count * (yanklen + spaces) + bd.startspaces + bd.endspaces;
@@ -2878,22 +2908,32 @@ str_to_reg(
     {
 	for (ss = (char_u **) str; *ss != NULL; ++ss, ++lnum)
 	{
-	    i = (long)STRLEN(*ss);
-	    pp[lnum] = vim_strnsave(*ss, i);
-	    if (i > maxlen)
-		maxlen = i;
+	    pp[lnum] = vim_strsave(*ss);
+	    if (type == MBLOCK)
+	    {
+		int charlen = mb_string2cells(*ss, -1);
+
+		if (charlen > maxlen)
+		    maxlen = charlen;
+	    }
 	}
     }
     else
     {
 	for (start = 0; start < len + extraline; start += i + 1)
 	{
+	    int charlen = 0;
+
 	    for (i = start; i < len; ++i)	// find the end of the line
+	    {
 		if (str[i] == '\n')
 		    break;
+		if (type == MBLOCK)
+		    charlen += mb_ptr2cells_len(str + i, len - i);
+	    }
 	    i -= start;			// i is now length of line
-	    if (i > maxlen)
-		maxlen = i;
+	    if (charlen > maxlen)
+		maxlen = charlen;
 	    if (append)
 	    {
 		--lnum;
@@ -2908,7 +2948,7 @@ str_to_reg(
 		mch_memmove(s, y_ptr->y_array[lnum], (size_t)extra);
 	    if (append)
 		vim_free(y_ptr->y_array[lnum]);
-	    if (i)
+	    if (i > 0)
 		mch_memmove(s + extra, str + start, (size_t)i);
 	    extra += i;
 	    s[extra] = NUL;

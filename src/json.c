@@ -230,8 +230,8 @@ json_encode_item(garray_T *gap, typval_T *val, int copyID, int options)
 	case VAR_PARTIAL:
 	case VAR_JOB:
 	case VAR_CHANNEL:
-	    // no JSON equivalent TODO: better error
-	    emsg(_(e_invarg));
+	case VAR_INSTR:
+	    semsg(_(e_cannot_json_encode_str), vartype_name(val->v_type));
 	    return FAIL;
 
 	case VAR_BLOB:
@@ -607,7 +607,7 @@ json_decode_item(js_read_T *reader, typval_T *res, int options)
     cur_item = res;
     init_tv(&item);
     if (res != NULL)
-    init_tv(res);
+	init_tv(res);
 
     fill_numbuflen(reader);
     p = reader->js_buf + reader->js_used;
@@ -920,6 +920,15 @@ json_decode_item(js_read_T *reader, typval_T *res, int options)
 	    if (top_item != NULL && top_item->jd_type == JSON_OBJECT_KEY
 		    && cur_item != NULL)
 	    {
+#ifdef FEAT_FLOAT
+		if (cur_item->v_type == VAR_FLOAT)
+		{
+		    // cannot use a float as a key
+		    emsg(_(e_float_as_string));
+		    retval = FAIL;
+		    goto theend;
+		}
+#endif
 		top_item->jd_key = tv_get_string_buf_chk(cur_item, key_buf);
 		if (top_item->jd_key == NULL)
 		{

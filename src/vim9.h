@@ -14,11 +14,15 @@
 typedef enum {
     ISN_EXEC,	    // execute Ex command line isn_arg.string
     ISN_EXECCONCAT, // execute Ex command from isn_arg.number items on stack
+    ISN_EXEC_SPLIT, // execute Ex command from isn_arg.string split at NL
+    ISN_LEGACY_EVAL, // evaluate expression isn_arg.string with legacy syntax.
     ISN_ECHO,	    // echo isn_arg.echo.echo_count items on top of stack
     ISN_EXECUTE,    // execute Ex commands isn_arg.number items on top of stack
     ISN_ECHOMSG,    // echo Ex commands isn_arg.number items on top of stack
     ISN_ECHOERR,    // echo Ex commands isn_arg.number items on top of stack
     ISN_RANGE,	    // compute range from isn_arg.string, push to stack
+    ISN_SUBSTITUTE, // :s command with expression
+    ISN_INSTR,	    // instructions compiled from expression
 
     // get and set variables
     ISN_LOAD,	    // push local variable isn_arg.number
@@ -33,7 +37,7 @@ typedef enum {
     ISN_LOADWDICT,  // push w: dict
     ISN_LOADTDICT,  // push t: dict
     ISN_LOADS,	    // push s: variable isn_arg.loadstore
-    ISN_LOADOUTER,  // push variable from outer scope isn_arg.number
+    ISN_LOADOUTER,  // push variable from outer scope isn_arg.outer
     ISN_LOADSCRIPT, // push script-local variable isn_arg.script.
     ISN_LOADOPT,    // push option isn_arg.string
     ISN_LOADENV,    // push environment variable isn_arg.string
@@ -47,7 +51,7 @@ typedef enum {
     ISN_STOREW,	    // pop into window-local variable isn_arg.string
     ISN_STORET,	    // pop into tab-local variable isn_arg.string
     ISN_STORES,	    // pop into script variable isn_arg.loadstore
-    ISN_STOREOUTER,  // pop variable into outer scope isn_arg.number
+    ISN_STOREOUTER,  // pop variable into outer scope isn_arg.outer
     ISN_STORESCRIPT, // pop into script variable isn_arg.script
     ISN_STOREOPT,    // pop into option isn_arg.string
     ISN_STOREENV,    // pop into environment variable isn_arg.string
@@ -57,9 +61,13 @@ typedef enum {
     ISN_STORENR,    // store number into local variable isn_arg.storenr.stnr_idx
     ISN_STOREINDEX,	// store into list or dictionary, type isn_arg.vartype,
 			// value/index/variable on stack
+    ISN_STORERANGE,	// store into blob,
+			// value/index 1/index 2/variable on stack
 
     ISN_UNLET,		// unlet variable isn_arg.unlet.ul_name
     ISN_UNLETENV,	// unlet environment variable isn_arg.unlet.ul_name
+    ISN_UNLETINDEX,	// unlet item of list or dict
+    ISN_UNLETRANGE,	// unlet items of list
 
     ISN_LOCKCONST,	// lock constant value
 
@@ -83,12 +91,15 @@ typedef enum {
     ISN_PCALL,	    // call partial, use isn_arg.pfunc
     ISN_PCALL_END,  // cleanup after ISN_PCALL with cpf_top set
     ISN_RETURN,	    // return, result is on top of stack
+    ISN_RETURN_ZERO, // Push zero, then return
     ISN_FUNCREF,    // push a function ref to dfunc isn_arg.funcref
     ISN_NEWFUNC,    // create a global function from a lambda function
     ISN_DEF,	    // list functions
 
     // expression operations
     ISN_JUMP,	    // jump if condition is matched isn_arg.jump
+    ISN_JUMP_IF_ARG_SET, // jump if argument is already set, uses
+			 // isn_arg.jumparg
 
     // loop
     ISN_FOR,	    // get next item from a list, uses isn_arg.forloop
@@ -97,18 +108,20 @@ typedef enum {
     ISN_THROW,	    // pop value of stack, store in v:exception
     ISN_PUSHEXC,    // push v:exception
     ISN_CATCH,	    // drop v:exception
+    ISN_FINALLY,    // start of :finally block
     ISN_ENDTRY,	    // take entry off from ec_trystack
+    ISN_TRYCONT,    // handle :continue inside a :try statement
 
     // more expression operations
     ISN_ADDLIST,    // add two lists
     ISN_ADDBLOB,    // add two blobs
 
-    // operation with two arguments; isn_arg.op.op_type is exptype_T
+    // operation with two arguments; isn_arg.op.op_type is exprtype_T
     ISN_OPNR,
     ISN_OPFLOAT,
     ISN_OPANY,
 
-    // comparative operations; isn_arg.op.op_type is exptype_T, op_ic used
+    // comparative operations; isn_arg.op.op_type is exprtype_T, op_ic used
     ISN_COMPAREBOOL,
     ISN_COMPARESPECIAL,
     ISN_COMPARENR,
@@ -127,6 +140,8 @@ typedef enum {
     ISN_LISTAPPEND, // append to a list, like add()
     ISN_LISTINDEX,  // [expr] list index
     ISN_LISTSLICE,  // [expr:expr] list slice
+    ISN_BLOBINDEX,  // [expr] blob index
+    ISN_BLOBSLICE,  // [expr:expr] blob slice
     ISN_ANYINDEX,   // [expr] runtime index
     ISN_ANYSLICE,   // [expr:expr] runtime slice
     ISN_SLICE,	    // drop isn_arg.number items from start of list
@@ -134,24 +149,38 @@ typedef enum {
     ISN_GETITEM,    // push list item, isn_arg.number is the index
     ISN_MEMBER,	    // dict[member]
     ISN_STRINGMEMBER, // dict.member using isn_arg.string
-    ISN_2BOOL,	    // falsy/truthy to bool, invert if isn_arg.number != 0
+    ISN_2BOOL,	    // falsy/truthy to bool, uses isn_arg.tobool
     ISN_COND2BOOL,  // convert value to bool
-    ISN_2STRING,    // convert value to string at isn_arg.number on stack
+    ISN_2STRING,    // convert value to string at isn_arg.tostring on stack
     ISN_2STRING_ANY, // like ISN_2STRING but check type
     ISN_NEGATENR,   // apply "-" to number
 
     ISN_CHECKNR,    // check value can be used as a number
-    ISN_CHECKTYPE,  // check value type is isn_arg.type.tc_type
+    ISN_CHECKTYPE,  // check value type is isn_arg.type.ct_type
     ISN_CHECKLEN,   // check list length is isn_arg.checklen.cl_min_len
+    ISN_SETTYPE,    // set dict type to isn_arg.type.ct_type
 
     ISN_PUT,	    // ":put", uses isn_arg.put
 
     ISN_CMDMOD,	    // set cmdmod
     ISN_CMDMOD_REV, // undo ISN_CMDMOD
 
+    ISN_PROF_START, // start a line for profiling
+    ISN_PROF_END,   // end a line for profiling
+
+    ISN_DEBUG,	    // check for debug breakpoint
+
     ISN_UNPACK,	    // unpack list into items, uses isn_arg.unpack
     ISN_SHUFFLE,    // move item on stack up or down
-    ISN_DROP	    // pop stack and discard value
+    ISN_DROP,	    // pop stack and discard value
+
+    ISN_REDIRSTART, // :redir =>
+    ISN_REDIREND,   // :redir END, isn_arg.number == 1 for append
+
+    ISN_CEXPR_AUCMD, // first part of :cexpr  isn_arg.number is cmdidx
+    ISN_CEXPR_CORE,  // second part of :cexpr, uses isn_arg.cexpr
+
+    ISN_FINISH	    // end marker in list of instructions
 } isntype_T;
 
 
@@ -194,17 +223,35 @@ typedef struct {
     int		jump_where;	    // position to jump to
 } jump_T;
 
+// arguments to ISN_JUMP_IF_ARG_SET
+typedef struct {
+    int		jump_arg_off;	    // argument index, negative
+    int		jump_where;	    // position to jump to
+} jumparg_T;
+
 // arguments to ISN_FOR
 typedef struct {
     int	    for_idx;	    // loop variable index
     int	    for_end;	    // position to jump to after done
 } forloop_T;
 
-// arguments to ISN_TRY
+// indirect arguments to ISN_TRY
 typedef struct {
     int	    try_catch;	    // position to jump to on throw
-    int	    try_finally;    // position to jump to for return
+    int	    try_finally;    // :finally or :endtry position to jump to
+    int	    try_endtry;	    // :endtry position to jump to
+} tryref_T;
+
+// arguments to ISN_TRY
+typedef struct {
+    tryref_T *try_ref;
 } try_T;
+
+// arguments to ISN_TRYCONT
+typedef struct {
+    int	    tct_levels;	    // number of nested try statements
+    int	    tct_where;	    // position to jump to, WHILE or FOR
+} trycont_T;
 
 // arguments to ISN_ECHO
 typedef struct {
@@ -214,14 +261,15 @@ typedef struct {
 
 // arguments to ISN_OPNR, ISN_OPFLOAT, etc.
 typedef struct {
-    exptype_T	op_type;
+    exprtype_T	op_type;
     int		op_ic;	    // TRUE with '#', FALSE with '?', else MAYBE
 } opexpr_T;
 
 // arguments to ISN_CHECKTYPE
 typedef struct {
     type_T	*ct_type;
-    int		ct_off;	    // offset in stack, -1 is bottom
+    int8_T	ct_off;		// offset in stack, -1 is bottom
+    int8_T	ct_arg_idx;	// argument index or zero
 } checktype_T;
 
 // arguments to ISN_STORENR
@@ -244,8 +292,14 @@ typedef struct {
 
 // arguments to ISN_LOADSCRIPT and ISN_STORESCRIPT
 typedef struct {
-    int		script_sid;	// script ID
-    int		script_idx;	// index in sn_var_vals
+    int		sref_sid;	// script ID
+    int		sref_idx;	// index in sn_var_vals
+    int		sref_seq;	// sn_script_seq when compiled
+    type_T	*sref_type;	// type of the variable when compiled
+} scriptref_T;
+
+typedef struct {
+    scriptref_T	*scriptref;
 } script_T;
 
 // arguments to ISN_UNLET
@@ -294,6 +348,42 @@ typedef struct {
     int		unp_semicolon;	// last item gets list of remainder
 } unpack_T;
 
+// arguments to ISN_LOADOUTER and ISN_STOREOUTER
+typedef struct {
+    int		outer_idx;	// index
+    int		outer_depth;	// nesting level, stack frames to go up
+} isn_outer_T;
+
+// arguments to ISN_SUBSTITUTE
+typedef struct {
+    char_u	*subs_cmd;	// :s command
+    isn_T	*subs_instr;	// sequence of instructions
+} subs_T;
+
+// indirect arguments to ISN_TRY
+typedef struct {
+    int		cer_cmdidx;
+    char_u	*cer_cmdline;
+    int		cer_forceit;
+} cexprref_T;
+
+// arguments to ISN_CEXPR_CORE
+typedef struct {
+    cexprref_T *cexpr_ref;
+} cexpr_T;
+
+// arguments to ISN_2STRING and ISN_2STRING_ANY
+typedef struct {
+    int		offset;
+    int		tolerant;
+} tostring_T;
+
+// arguments to ISN_2BOOL
+typedef struct {
+    int		offset;
+    int		invert;
+} tobool_T;
+
 /*
  * Instruction
  */
@@ -312,8 +402,10 @@ struct isn_S {
 	job_T		    *job;
 	partial_T	    *partial;
 	jump_T		    jump;
+	jumparg_T	    jumparg;
 	forloop_T	    forloop;
 	try_T		    try;
+	trycont_T	    trycont;
 	cbfunc_T	    bfunc;
 	cdfunc_T	    dfunc;
 	cpfunc_T	    pfunc;
@@ -333,6 +425,12 @@ struct isn_S {
 	put_T		    put;
 	cmod_T		    cmdmod;
 	unpack_T	    unpack;
+	isn_outer_T	    outer;
+	subs_T		    subs;
+	cexpr_T		    cexpr;
+	isn_T		    *instr;
+	tostring_T	    tostring;
+	tobool_T	    tobool;
     } isn_arg;
 };
 
@@ -341,12 +439,24 @@ struct isn_S {
  */
 struct dfunc_S {
     ufunc_T	*df_ufunc;	    // struct containing most stuff
+    int		df_refcount;	    // how many ufunc_T point to this dfunc_T
     int		df_idx;		    // index in def_functions
     int		df_deleted;	    // if TRUE function was deleted
+    char_u	*df_name;	    // name used for error messages
+    int		df_script_seq;	    // Value of sctx_T sc_seq when the function
+				    // was compiled.
 
     garray_T	df_def_args_isn;    // default argument instructions
+
+    // After compiling "df_instr" and/or "df_instr_prof" is not NULL.
     isn_T	*df_instr;	    // function body to be executed
-    int		df_instr_count;
+    int		df_instr_count;	    // size of "df_instr"
+#ifdef FEAT_PROFILE
+    isn_T	*df_instr_prof;	     // like "df_instr" with profiling
+    int		df_instr_prof_count; // size of "df_instr_prof"
+#endif
+    isn_T	*df_instr_debug;      // like "df_instr" with debugging
+    int		df_instr_debug_count; // size of "df_instr_debug"
 
     int		df_varcount;	    // number of local variables
     int		df_has_closure;	    // one if a closure was created
@@ -355,10 +465,17 @@ struct dfunc_S {
 // Number of entries used by stack frame for a function call.
 // - ec_dfunc_idx:   function index
 // - ec_iidx:        instruction index
-// - ec_outer_stack: stack used for closures  TODO: can we avoid this?
-// - ec_outer_frame: stack frame for closures
+// - ec_instr:       instruction list pointer
+// - ec_outer:	     stack used for closures
+// - funclocal:	     function-local data
 // - ec_frame_idx:   previous frame index
-#define STACK_FRAME_SIZE 5
+#define STACK_FRAME_FUNC_OFF 0
+#define STACK_FRAME_IIDX_OFF 1
+#define STACK_FRAME_INSTR_OFF 2
+#define STACK_FRAME_OUTER_OFF 3
+#define STACK_FRAME_FUNCLOCAL_OFF 4
+#define STACK_FRAME_IDX_OFF 5
+#define STACK_FRAME_SIZE 6
 
 
 #ifdef DEFINE_VIM9_GLOBALS
@@ -375,3 +492,18 @@ extern garray_T def_functions;
 
 // Used for "lnum" when a range is to be taken from the stack and "!" is used.
 #define LNUM_VARIABLE_RANGE_ABOVE -888
+
+// Keep in sync with COMPILE_TYPE()
+#ifdef FEAT_PROFILE
+# define INSTRUCTIONS(dfunc) \
+	(debug_break_level > 0 \
+	    ? (dfunc)->df_instr_debug \
+	    : ((do_profiling == PROF_YES && (dfunc->df_ufunc)->uf_profiling) \
+		? (dfunc)->df_instr_prof \
+		: (dfunc)->df_instr))
+#else
+# define INSTRUCTIONS(dfunc) \
+	(debug_break_level > 0 \
+		? (dfunc)->df_instr_debug \
+		: (dfunc)->df_instr)
+#endif

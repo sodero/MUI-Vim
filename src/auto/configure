@@ -4482,7 +4482,7 @@ with_x_arg="$with_x"
 
 if test -z "$CFLAGS"; then
   CFLAGS="-O"
-  test "$GCC" = yes && CFLAGS="-O2 -fno-strength-reduce -Wall"
+  test "$GCC" = yes && CFLAGS="-O2 -fno-strength-reduce -Wall -Wno-deprecated-declarations"
 fi
 if test "$GCC" = yes; then
     gccversion=`$CC -dumpversion`
@@ -4510,9 +4510,9 @@ if test x"$CLANG_VERSION_STRING" != x"" ; then
   CLANG_VERSION=`expr $CLANG_MAJOR '*' 1000000 '+' $CLANG_MINOR '*' 1000 '+' $CLANG_REVISION`
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CLANG_VERSION" >&5
 $as_echo "$CLANG_VERSION" >&6; }
-          { $as_echo "$as_me:${as_lineno-$LINENO}: checking if clang supports -fno-strength-reduce" >&5
+            { $as_echo "$as_me:${as_lineno-$LINENO}: checking if clang supports -fno-strength-reduce" >&5
 $as_echo_n "checking if clang supports -fno-strength-reduce... " >&6; }
-  if test "$CLANG_VERSION" -ge 500002075 ; then
+  if test "$CLANG_MAJOR" -ge 10 -o "$CLANG_VERSION" -ge 500002075 ; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
     CFLAGS=`echo "$CFLAGS" | sed -e 's/-fno-strength-reduce/ /'`
@@ -5006,9 +5006,9 @@ esac
 fi
 
 if test "$zOSUnix" = "yes"; then
-    QUOTESED="sed -e 's/[\\\\\"]/\\\\\\\\&/g' -e 's/\\\\\\\\\"/\"/' -e 's/\\\\\\\\\";\$\$/\";/'"
+    QUOTESED="sed -e 's/[\\\\\"]/\\\\\\\\&/g' -e 's/\\\\\\\\\"/\"/' -e 's/\\\\\\\\\";\$\$/\";/' -e 's/  */ /g'"
 else
-    QUOTESED="sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";\$\$/\";/'"
+    QUOTESED="sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";\$\$/\";/' -e 's/  */ /g'"
 fi
 
 
@@ -6673,7 +6673,7 @@ if ${vi_cv_var_python3_version+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   vi_cv_var_python3_version=`
-          ${vi_cv_path_python3} -c 'import sys; print(sys.version[:3])'`
+          ${vi_cv_path_python3} -c 'import sys; print("{}.{}".format(sys.version_info.major, sys.version_info.minor))'`
 
 fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $vi_cv_var_python3_version" >&5
@@ -6755,7 +6755,10 @@ else
 
        vi_cv_path_python3_conf=
        config_dir="config-${vi_cv_var_python3_version}${vi_cv_var_python3_abiflags}"
-       d=`${vi_cv_path_python3} -c "import distutils.sysconfig; print(distutils.sysconfig.get_config_var('LIBPL'))"`
+       d=`${vi_cv_path_python3} -c "import sysconfig; print(sysconfig.get_config_var('LIBPL'))" 2> /dev/null`
+       if test "x$d" = "x"; then
+         d=`${vi_cv_path_python3} -c "import distutils.sysconfig; print(distutils.sysconfig.get_config_var('LIBPL'))"`
+       fi
        if test -d "$d" && test -f "$d/config.c"; then
          vi_cv_path_python3_conf="$d"
        else
@@ -7650,6 +7653,9 @@ $as_echo "$rubyhdrdir" >&6; }
 
 	  RUBY_CFLAGS="-DDYNAMIC_RUBY_DLL=\\\"$libruby_soname\\\" $RUBY_CFLAGS"
 	  RUBY_LIBS=
+	fi
+	if test "X$CLANG_VERSION" != "X" -a "$rubyversion" -ge 30; then
+	  RUBY_CFLAGS="$RUBY_CFLAGS -fdeclspec"
 	fi
       else
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: not found; disabling Ruby" >&5
@@ -9259,6 +9265,7 @@ $as_echo "no GUI support" >&6; } ;;
 $as_echo "yes/auto - automatic GUI support" >&6; }
 		gui_auto=yes
 		SKIP_GTK2=
+		SKIP_GTK3=
 		SKIP_GNOME=
 		SKIP_MOTIF=
 		SKIP_ATHENA=
@@ -9520,6 +9527,8 @@ $as_echo "gtk test disabled" >&6; }
   fi
 
   if test "x$PKG_CONFIG" != "xno"; then
+                    save_skip_gtk3=$SKIP_GTK3
+    SKIP_GTK3=YES
 
   if test "X$GTK_CONFIG" != "Xno" -o "X$PKG_CONFIG" != "Xno"; then
   {
@@ -9558,6 +9567,8 @@ $as_echo_n "checking for GTK - version >= $min_gtk_version... " >&6; }
 	     sed 's/\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\3/'`
     }
     else
+                  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for GTK -dev package" >&5
+$as_echo_n "checking for GTK -dev package... " >&6; }
       no_gtk=yes
     fi
 
@@ -9661,6 +9672,8 @@ $as_echo "no" >&6; }
       SKIP_MOTIF=YES
       GUITYPE=GTK
 
+    else
+      SKIP_GTK3=$save_skip_gtk3
     fi
   fi
   if test "x$GUITYPE" = "xGTK"; then
@@ -9773,6 +9786,8 @@ $as_echo "gtk test disabled" >&6; }
   fi
 
   if test "x$PKG_CONFIG" != "xno"; then
+    save_skip_gtk2=$SKIP_GTK2
+    SKIP_GTK2=YES
 
   if test "X$GTK_CONFIG" != "Xno" -o "X$PKG_CONFIG" != "Xno"; then
   {
@@ -9811,6 +9826,8 @@ $as_echo_n "checking for GTK - version >= $min_gtk_version... " >&6; }
 	     sed 's/\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\3/'`
     }
     else
+                  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for GTK -dev package" >&5
+$as_echo_n "checking for GTK -dev package... " >&6; }
       no_gtk=yes
     fi
 
@@ -9917,6 +9934,8 @@ $as_echo "no" >&6; }
 
       $as_echo "#define USE_GTK3 1" >>confdefs.h
 
+    else
+      SKIP_GTK2=$save_skip_gtk2
     fi
   fi
 fi
@@ -12055,6 +12074,7 @@ $as_echo "yes" >&6; }
 else
   as_fn_error $? "NOT FOUND!
       You need to install a terminal library; for example ncurses.
+      On Linux that would be the libncurses-dev package.
       Or specify the name of the library with --with-tlib." "$LINENO" 5
 fi
 rm -f core conftest.err conftest.$ac_objext \
@@ -13902,6 +13922,35 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for sysinfo.uptime" >&5
+$as_echo_n "checking for sysinfo.uptime... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <sys/types.h>
+#include <sys/sysinfo.h>
+int
+main ()
+{
+	struct sysinfo sinfo;
+        long ut;
+
+	(void)sysinfo(&sinfo);
+	ut = sinfo.uptime;
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }; $as_echo "#define HAVE_SYSINFO_UPTIME 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for sysconf" >&5
 $as_echo_n "checking for sysconf... " >&6; }
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -13920,6 +13969,30 @@ _ACEOF
 if ac_fn_c_try_compile "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }; $as_echo "#define HAVE_SYSCONF 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not usable" >&5
+$as_echo "not usable" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _SC_SIGSTKSZ via sysconf()" >&5
+$as_echo_n "checking for _SC_SIGSTKSZ via sysconf()... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <unistd.h>
+int
+main ()
+{
+	(void)sysconf(_SC_SIGSTKSZ);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }; $as_echo "#define HAVE_SYSCONF_SIGSTKSZ 1" >>confdefs.h
 
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: not usable" >&5
@@ -14837,8 +14910,8 @@ $as_echo "no" >&6; }
           { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether we need -D_FORTIFY_SOURCE=1" >&5
 $as_echo_n "checking whether we need -D_FORTIFY_SOURCE=1... " >&6; }
   if test "$gccmajor" -gt "3"; then
-    CFLAGS=`echo "$CFLAGS" | sed -e 's/ *-Wp,-D_FORTIFY_SOURCE=.//g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g' -e 's/$/ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1/'`
-    CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/ *-Wp,-D_FORTIFY_SOURCE=.//g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g'`
+    CFLAGS=`echo "$CFLAGS" | sed -e 's/-D_FORTIFY_SOURCE=.,//g' -e 's/ *-Wp,-D_FORTIFY_SOURCE=. / /g' -e 's/,-D_FORTIFY_SOURCE=. //g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g' -e 's/$/ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1/'`
+    CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/-D_FORTIFY_SOURCE=.,//g' -e 's/ *-Wp,-D_FORTIFY_SOURCE=. / /g' -e 's/,-D_FORTIFY_SOURCE=. //g' -e 's/ *-D_FORTIFY_SOURCE=.//g' -e 's/ *-U_FORTIFY_SOURCE//g'`
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   else
@@ -14867,7 +14940,9 @@ $as_echo_n "checking linker --as-needed support... " >&6; }
 LINK_AS_NEEDED=
 # Check if linker supports --as-needed and --no-as-needed options
 if $CC -Wl,--help 2>/dev/null | grep as-needed > /dev/null; then
-  LDFLAGS=`echo "$LDFLAGS" | sed -e 's/ *-Wl,--as-needed//g' | sed -e 's/$/ -Wl,--as-needed/'`
+  if ! echo "$LDFLAGS" | grep -q -- '-Wl,[^[:space:]]*--as-needed'; then
+    LDFLAGS="$LDFLAGS -Wl,--as-needed"
+  fi
   LINK_AS_NEEDED=yes
 fi
 if test "$LINK_AS_NEEDED" = yes; then
