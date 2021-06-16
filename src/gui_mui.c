@@ -1324,94 +1324,28 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
     // No, something else....
     switch(msg->imsg->Code)
     {
-        case RAWKEY_UP:
-            c = TO_SPECIAL('k', 'u');
-            break;
-
-        case RAWKEY_DOWN:
-            c = TO_SPECIAL('k', 'd');
-            break;
-
-        case RAWKEY_LEFT:
-            c = TO_SPECIAL('k', 'l');
-            break;
-
-        case RAWKEY_RIGHT:
-            c = TO_SPECIAL('k', 'r');
-            break;
-
-        case RAWKEY_F1:
-            c = TO_SPECIAL('k', '1');
-            break;
-
-        case RAWKEY_F2:
-            c = TO_SPECIAL('k', '2');
-            break;
-
-        case RAWKEY_F3:
-            c = TO_SPECIAL('k', '3');
-            break;
-
-        case RAWKEY_F4:
-            c = TO_SPECIAL('k', '4');
-            break;
-
-        case RAWKEY_F5:
-            c = TO_SPECIAL('k', '5');
-            break;
-
-        case RAWKEY_F6:
-            c = TO_SPECIAL('k', '6');
-            break;
-
-        case RAWKEY_F7:
-            c = TO_SPECIAL('k', '7');
-            break;
-
-        case RAWKEY_F8:
-            c = TO_SPECIAL('k', '8');
-            break;
-
-        case RAWKEY_F9:
-            c = TO_SPECIAL('k', '9');
-            break;
-
-        case RAWKEY_F10:
-            c = TO_SPECIAL('k', ';');
-            break;
-
-        case RAWKEY_F11:
-            c = TO_SPECIAL('F', '1');
-            break;
-
-        case RAWKEY_F12:
-            c = TO_SPECIAL('F', '2');
-            break;
-
-        case RAWKEY_HELP:
-            c = TO_SPECIAL('%', '1');
-            break;
-
-        case RAWKEY_INSERT:
-            c = TO_SPECIAL('k', 'I');
-            break;
-
-        case RAWKEY_HOME:
-            c = TO_SPECIAL('k', 'h');
-            break;
-
-        case RAWKEY_END:
-            c = TO_SPECIAL('@', '7');
-            break;
-
-        case RAWKEY_PAGEUP:
-            c = TO_SPECIAL('k', 'P');
-            break;
-
-        case RAWKEY_PAGEDOWN:
-            c = TO_SPECIAL('k', 'N');
-            break;
-
+        case RAWKEY_UP: c = TO_SPECIAL('k', 'u'); break;
+        case RAWKEY_DOWN: c = TO_SPECIAL('k', 'd'); break;
+        case RAWKEY_LEFT: c = TO_SPECIAL('k', 'l'); break;
+        case RAWKEY_RIGHT: c = TO_SPECIAL('k', 'r'); break;
+        case RAWKEY_F1: c = TO_SPECIAL('k', '1'); break;
+        case RAWKEY_F2: c = TO_SPECIAL('k', '2'); break;
+        case RAWKEY_F3: c = TO_SPECIAL('k', '3'); break;
+        case RAWKEY_F4: c = TO_SPECIAL('k', '4'); break;
+        case RAWKEY_F5: c = TO_SPECIAL('k', '5'); break;
+        case RAWKEY_F6: c = TO_SPECIAL('k', '6'); break;
+        case RAWKEY_F7: c = TO_SPECIAL('k', '7'); break;
+        case RAWKEY_F8: c = TO_SPECIAL('k', '8'); break;
+        case RAWKEY_F9: c = TO_SPECIAL('k', '9'); break;
+        case RAWKEY_F10: c = TO_SPECIAL('k', ';'); break;
+        case RAWKEY_F11: c = TO_SPECIAL('F', '1'); break;
+        case RAWKEY_F12: c = TO_SPECIAL('F', '2'); break;
+        case RAWKEY_HELP: c = TO_SPECIAL('%', '1'); break;
+        case RAWKEY_INSERT: c = TO_SPECIAL('k', 'I'); break;
+        case RAWKEY_HOME: c = TO_SPECIAL('k', 'h'); break;
+        case RAWKEY_END: c = TO_SPECIAL('@', '7'); break;
+        case RAWKEY_PAGEUP: c = TO_SPECIAL('k', 'P'); break;
+        case RAWKEY_PAGEDOWN: c = TO_SPECIAL('k', 'N'); break;
         case RAWKEY_NM_WHEEL_DOWN:
             gui_send_mouse_event(MOUSE_5, msg->imsg->MouseX, msg->imsg->MouseY,
                                  FALSE, 0);
@@ -1432,8 +1366,7 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
                                  FALSE, 0);
             return TRUE;
 
-        default:
-            return FALSE;
+        default: return FALSE;
     }
 
     if(unlikely(!c))
@@ -1485,25 +1418,30 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
                               struct MUIP_HandleEvent *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
-    my->state &= ~MUIV_VimCon_State_Idle;
 
     if(likely(msg->imsg->Class == IDCMP_RAWKEY))
     {
-        my->state |= VimConHandleRaw(cls, obj, msg) ? 
-                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+        if(VimConHandleRaw(cls, obj, msg))
+        {
+            my->state |= MUIV_VimCon_State_Yield;
+        }
     }
     else
     if(msg->imsg->Class == IDCMP_MOUSEBUTTONS)
     {
-        my->state |= VimConMouseHandleButton(cls, obj, msg) ? 
-                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+        if(VimConMouseHandleButton(cls, obj, msg))
+        {
+            my->state |= MUIV_VimCon_State_Yield;
+        }
     }
     else
     if(msg->imsg->Class == IDCMP_MOUSEMOVE ||
        msg->imsg->Class == IDCMP_INTUITICKS)
     {
-        my->state |= VimConMouseMove(cls, obj, msg) ? 
-                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+        if(VimConMouseMove(cls, obj, msg))
+        {
+            my->state |= MUIV_VimCon_State_Yield;
+        }
     }
     else
 #ifdef __amigaos4__
@@ -1512,20 +1450,17 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
     {
         struct IntuiWheelData *iwd = (struct IntuiWheelData *)
                msg->imsg->IAddress;
-
         msg->imsg->Code = iwd->WheelY < 0 ? RAWKEY_NM_WHEEL_UP :
                           iwd->WheelY > 0 ? RAWKEY_NM_WHEEL_DOWN :
                           iwd->WheelX < 0 ? RAWKEY_NM_WHEEL_LEFT :
                           iwd->WheelX > 0 ? RAWKEY_NM_WHEEL_RIGHT : 0;
 
-        my->state |= msg->imsg->Code && VimConHandleRaw(cls, obj, msg) ? 
-                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+        if(VimConHandleRaw(cls, obj, msg))
+        {
+            my->state |= MUIV_VimCon_State_Yield;
+        }
     }
-    else
 #endif
-    {
-        my->state |= MUIV_VimCon_State_Idle;
-    }
 
     // Leave unhandeled events to our parent class
     return my->state & MUIV_VimCon_State_Yield ? MUI_EventHandlerRC_Eat :
@@ -1545,7 +1480,7 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
     if(unlikely(!my->bm))
     {
         kmsg(_(e_null));
-        return 0;
+        return r;
     }
 
     // Maybe something less ad hoc?
@@ -1588,7 +1523,8 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         VimConClean(my);
     }
     // Update everything.
-    else if(unlikely(msg->flags & MADF_DRAWOBJECT))
+    else
+    if(unlikely(msg->flags & MADF_DRAWOBJECT))
     {
         if(likely(my->width < _mwidth(obj)))
         {
@@ -1650,7 +1586,7 @@ METHOD(VimCon, Callback, VimMenuPtr)
 //------------------------------------------------------------------------------
 METHOD0(VimCon, Yield)
 {
-    my->state = MUIV_VimCon_State_Yield;
+    my->state |= MUIV_VimCon_State_Yield;
     return TRUE;
 }
 
@@ -1720,7 +1656,6 @@ METHOD0(VimCon, Beep)
 {
     InvertPixelArray(&my->rp, 0, 0, my->width, my->height);
     MUI_Redraw(me, MADF_DRAWOBJECT);
-    Delay(8);
 
     // Postpone terminal reset.
     my->state |= MUIV_VimCon_State_Reset;
@@ -1919,126 +1854,61 @@ DISPATCH(VimCon)
         //----------------------------------------------------------------------
         // BOOPSI
         //----------------------------------------------------------------------
-        case OM_NEW:
-            return VimConNew(cls, obj, (struct opSet *) msg);
-
-        case OM_DISPOSE:
-            return VimConDispose(cls, obj, msg);
+        case OM_NEW: return VimConNew(cls, obj, (struct opSet *) msg);
+        case OM_DISPOSE: return VimConDispose(cls, obj, msg);
         //----------------------------------------------------------------------
         // MUI
         //----------------------------------------------------------------------
         case MUIM_AskMinMax:
             return VimConMinMax(cls, obj, (struct MUIP_AskMinMax *) msg);
-
-        case MUIM_Cleanup:
-            return VimConCleanup(cls, obj, msg);
-
-        case MUIM_Draw:
-            return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
-
+        case MUIM_Cleanup: return VimConCleanup(cls, obj, msg);
+        case MUIM_Draw: return VimConDraw(cls, obj, (struct MUIP_Draw *) msg);
         case MUIM_HandleEvent:
             return VimConHandleEvent(cls, obj, (struct MUIP_HandleEvent *) msg);
-
         case MUIM_Setup:
             return VimConSetup(cls, obj, (struct MUI_RenderInfo *) msg);
-
-        case MUIM_Show:
-            return VimConShow(cls, obj, msg);
+        case MUIM_Show: return VimConShow(cls, obj, msg);
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
-        case M_ID(VimCon, AboutMUI):
-            return M_FN0(VimCon, AboutMUI);
-
-        case M_ID(VimCon, AppMessage):
-            return M_FN(VimCon, AppMessage);
-
-        case M_ID(VimCon, Beep):
-            return M_FN0(VimCon, Beep);
-
-        case M_ID(VimCon, Browse):
-            return M_FN(VimCon, Browse);
-
-        case M_ID(VimCon, Callback):
-            return M_FN(VimCon, Callback);
-
-        case M_ID(VimCon, Copy):
-            return M_FN(VimCon, Copy);
-
-        case M_ID(VimCon, Clear):
-            return M_FN0(VimCon, Clear);
-
-        case M_ID(VimCon, DeleteLines):
-            return M_FN(VimCon, DeleteLines);
-
+        case M_ID(VimCon, AboutMUI): return M_FN0(VimCon, AboutMUI);
+        case M_ID(VimCon, AppMessage): return M_FN(VimCon, AppMessage);
+        case M_ID(VimCon, Beep): return M_FN0(VimCon, Beep);
+        case M_ID(VimCon, Browse): return M_FN(VimCon, Browse);
+        case M_ID(VimCon, Callback): return M_FN(VimCon, Callback);
+        case M_ID(VimCon, Copy): return M_FN(VimCon, Copy);
+        case M_ID(VimCon, Clear): return M_FN0(VimCon, Clear);
+        case M_ID(VimCon, DeleteLines): return M_FN(VimCon, DeleteLines);
         case M_ID(VimCon, DrawHollowCursor):
             return M_FN(VimCon, DrawHollowCursor);
-
-        case M_ID(VimCon, DrawPartCursor):
-            return M_FN(VimCon, DrawPartCursor);
-
-        case M_ID(VimCon, DrawString):
-            return M_FN(VimCon, DrawString);
-
-        case M_ID(VimCon, FillBlock):
-            return M_FN(VimCon, FillBlock);
-
-        case M_ID(VimCon, GetScreenDim):
-            return M_FN(VimCon, GetScreenDim);
-
-        case M_ID(VimCon, Yield):
-            return M_FN0(VimCon, Yield);
-
-        case M_ID(VimCon, GetState):
-            return M_FN0(VimCon, GetState);
-
-        case M_ID(VimCon, IconState):
-            return M_FN(VimCon, IconState);
-
-        case M_ID(VimCon, InvertRect):
-            return M_FN(VimCon, InvertRect);
-
-        case M_ID(VimCon, IsBlinking):
-            return M_FN0(VimCon, IsBlinking);
-
-        case M_ID(VimCon, MUISettings):
-            return M_FN0(VimCon, MUISettings);
-
-        case M_ID(VimCon, Paste):
-            return M_FN(VimCon, Paste);
-
-        case M_ID(VimCon, SetFgColor):
-            return M_FN(VimCon, SetFgColor);
-
-        case M_ID(VimCon, SetBgColor):
-            return M_FN(VimCon, SetBgColor);
-
-        case M_ID(VimCon, SetBlinking):
-            return M_FN(VimCon, SetBlinking);
+        case M_ID(VimCon, DrawPartCursor): return M_FN(VimCon, DrawPartCursor);
+        case M_ID(VimCon, DrawString): return M_FN(VimCon, DrawString);
+        case M_ID(VimCon, FillBlock): return M_FN(VimCon, FillBlock);
+        case M_ID(VimCon, GetScreenDim): return M_FN(VimCon, GetScreenDim);
+        case M_ID(VimCon, Yield): return M_FN0(VimCon, Yield);
+        case M_ID(VimCon, GetState): return M_FN0(VimCon, GetState);
+        case M_ID(VimCon, IconState): return M_FN(VimCon, IconState);
+        case M_ID(VimCon, InvertRect): return M_FN(VimCon, InvertRect);
+        case M_ID(VimCon, IsBlinking): return M_FN0(VimCon, IsBlinking);
+        case M_ID(VimCon, MUISettings): return M_FN0(VimCon, MUISettings);
+        case M_ID(VimCon, Paste): return M_FN(VimCon, Paste);
+        case M_ID(VimCon, SetFgColor): return M_FN(VimCon, SetFgColor);
+        case M_ID(VimCon, SetBgColor): return M_FN(VimCon, SetBgColor);
+        case M_ID(VimCon, SetBlinking): return M_FN(VimCon, SetBlinking);
 #ifdef MUIVIM_FEAT_TIMEOUT
-        case M_ID(VimCon, SetTimeout):
-            return M_FN(VimCon, SetTimeout);
+        case M_ID(VimCon, SetTimeout): return M_FN(VimCon, SetTimeout);
 #endif
-        case M_ID(VimCon, SetTitle):
-            return M_FN(VimCon, SetTitle);
-
-        case M_ID(VimCon, StartBlink):
-            return M_FN0(VimCon, StartBlink);
-
-        case M_ID(VimCon, StopBlink):
-            return M_FN0(VimCon, StopBlink);
-
-        case M_ID(VimCon, Ticker):
-            return M_FN0(VimCon, Ticker);
+        case M_ID(VimCon, SetTitle): return M_FN(VimCon, SetTitle);
+        case M_ID(VimCon, StartBlink): return M_FN0(VimCon, StartBlink);
+        case M_ID(VimCon, StopBlink): return M_FN0(VimCon, StopBlink);
+        case M_ID(VimCon, Ticker): return M_FN0(VimCon, Ticker);
 #ifdef MUIVIM_FEAT_TIMEOUT
-        case M_ID(VimCon, Timeout):
-            return M_FN0(VimCon, Timeout);
+        case M_ID(VimCon, Timeout): return M_FN0(VimCon, Timeout);
 #endif
         //----------------------------------------------------------------------
         // Fallthrough
         //----------------------------------------------------------------------
-        default:
-            return DoSuperMethodA(cls, obj, msg);
+        default: return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -2225,21 +2095,17 @@ DISPATCH(VimToolbar)
         //----------------------------------------------------------------------
         // BOOPSI
         //----------------------------------------------------------------------
-        case OM_NEW:
-            return VimToolbarNew(cls, obj, (struct opSet *) msg);
+        case OM_NEW: return VimToolbarNew(cls, obj, (struct opSet *) msg);
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
-        case M_ID(VimToolbar, AddButton):
-            return M_FN(VimToolbar, AddButton);
-
+        case M_ID(VimToolbar, AddButton): return M_FN(VimToolbar, AddButton);
         case M_ID(VimToolbar, DisableButton):
-            return M_FN(VimToolbar, DisableButton);
+             return M_FN(VimToolbar, DisableButton);
         //----------------------------------------------------------------------
         // Fallthrough
         //----------------------------------------------------------------------
-        default:
-            return DoSuperMethodA(cls, obj, msg);
+        default: return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -2460,25 +2326,15 @@ DISPATCH(VimMenu)
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
-        case M_ID(VimMenu, AddSpacer):
-            return M_FN(VimMenu, AddSpacer);
-
-        case M_ID(VimMenu, AddMenu):
-            return M_FN(VimMenu, AddMenu);
-
-        case M_ID(VimMenu, AddMenuItem):
-            return M_FN(VimMenu, AddMenuItem);
-
-        case M_ID(VimMenu, RemoveMenu):
-            return M_FN(VimMenu, RemoveMenu);
-
-        case M_ID(VimMenu, Grey):
-            return M_FN(VimMenu, Grey);
+        case M_ID(VimMenu, AddSpacer): return M_FN(VimMenu, AddSpacer);
+        case M_ID(VimMenu, AddMenu): return M_FN(VimMenu, AddMenu);
+        case M_ID(VimMenu, AddMenuItem): return M_FN(VimMenu, AddMenuItem);
+        case M_ID(VimMenu, RemoveMenu): return M_FN(VimMenu, RemoveMenu);
+        case M_ID(VimMenu, Grey): return M_FN(VimMenu, Grey);
         //----------------------------------------------------------------------
         // Fallthrough
         //----------------------------------------------------------------------
-        default:
-            return DoSuperMethodA(cls, obj, msg);
+        default: return DoSuperMethodA(cls, obj, msg);
     }
 }
 DISPATCH_END
@@ -2906,31 +2762,17 @@ DISPATCH(VimScrollbar)
         //----------------------------------------------------------------------
         // BOOPSI
         //----------------------------------------------------------------------
-        case OM_NEW:
-            return VimScrollbarNew(cls, obj, (struct opSet *) msg);
-
-        case M_ID(VimScrollbar, Top):
-            return M_FN0(VimScrollbar, Top);
-
-        case M_ID(VimScrollbar, Visible):
-            return M_FN0(VimScrollbar, Visible);
+        case OM_NEW: return VimScrollbarNew(cls, obj, (struct opSet *) msg);
         //----------------------------------------------------------------------
         // Custom
         //----------------------------------------------------------------------
-        case M_ID(VimScrollbar, Drag):
-            return M_FN(VimScrollbar, Drag);
-
-        case M_ID(VimScrollbar, Install):
-            return M_FN0(VimScrollbar, Install);
-
-        case M_ID(VimScrollbar, Uninstall):
-            return M_FN0(VimScrollbar, Uninstall);
-
-        case M_ID(VimScrollbar, Show):
-            return M_FN(VimScrollbar, Show);
-
-        case M_ID(VimScrollbar, Pos):
-            return M_FN(VimScrollbar, Pos);
+        case M_ID(VimScrollbar, Top): return M_FN0(VimScrollbar, Top);
+        case M_ID(VimScrollbar, Visible): return M_FN0(VimScrollbar, Visible);
+        case M_ID(VimScrollbar, Drag): return M_FN(VimScrollbar, Drag);
+        case M_ID(VimScrollbar, Install): return M_FN0(VimScrollbar, Install);
+        case M_ID(VimScrollbar, Uninstall): return M_FN0(VimScrollbar, Uninstall);
+        case M_ID(VimScrollbar, Show): return M_FN(VimScrollbar, Show);
+        case M_ID(VimScrollbar, Pos): return M_FN(VimScrollbar, Pos);
         //----------------------------------------------------------------------
         // Fallthrough
         //----------------------------------------------------------------------
