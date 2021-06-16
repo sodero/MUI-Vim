@@ -168,7 +168,9 @@ CLASS_DEF(VimCon)
 };
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
-#define MUIV_VimCon_State_Timeout    (1 << 2)
+#ifdef MUIVIM_FEAT_TIMEOUT
+# define MUIV_VimCon_State_Timeout    (1 << 2)
+#endif
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
 //------------------------------------------------------------------------------
@@ -384,7 +386,7 @@ METHOD0(VimCon, StartBlink)
     // If not enabled and none of the delays (wait, on, off) are 0 add input
     // handler and increase status / delay index.
     if(likely(!my->block && !my->blink && my->cursor[0] && my->cursor[1] &&
-        my->cursor[2]))
+               my->cursor[2]))
     {
         my->ticker.ihn_Millis = my->cursor[my->blink++];
         DoMethod(_app(me), MUIM_Application_AddInputHandler, &my->ticker);
@@ -760,8 +762,16 @@ METHOD(VimCon, FillBlock, Row1, Col1, Row2, Col2, Color)
     }
 
     // We might be dealing with incomplete characters
-    xs = xs + x > my->width ? my->width - x : xs;
-    ys = ys + y > my->height ? my->height - y : ys;
+    if(xs + x > my->width)
+    {
+        xs = my->width - x;
+    }
+
+    if(ys + y > my->height)
+    {
+        ys = my->height - y;
+    }
+
     FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
     VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
@@ -805,9 +815,8 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
     {
         // Insertion
         ysize += n * my->ydelta;
-        ysrc = msg->Row * my->ydelta;
+        yctop = ysrc = msg->Row * my->ydelta;
         ydst = ysrc - n * my->ydelta;
-        yctop = ysrc;
         ycsiz = - (n * my->ydelta);
         VimConDirty(my, xsrcdst, yctop,  xsrcdst + xsize, ydst + ysize);
     }
@@ -1212,10 +1221,8 @@ MUIDSP int VimConMouseMove(Class *cls, Object *obj,
 {
     struct VimConData *my = INST_DATA(cls,obj);
     static int x = 0, y = 0, tick = FALSE;
-    int out = msg->imsg->MouseX <= my->left ||
-              msg->imsg->MouseX >= my->right ||
-              msg->imsg->MouseY <= my->top ||
-              msg->imsg->MouseY >= my->bottom;
+    int out = msg->imsg->MouseX <= my->left || msg->imsg->MouseX >= my->right ||
+              msg->imsg->MouseY <= my->top || msg->imsg->MouseY >= my->bottom;
 
     // Replace MOUSEMOVE with INTUITICKS when we're outside
     if(unlikely(out))
@@ -1308,7 +1315,6 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
 
     if(w == 1)
     {
-        // If yes, we're done
         add_to_input_buf(b, w);
         return TRUE;
     }
@@ -1427,12 +1433,12 @@ MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
             return TRUE;
 
         default:
-            return TRUE;
+            return FALSE;
     }
 
     if(unlikely(!c))
     {
-        return TRUE;
+        return FALSE;
     }
 
     int m = (msg->imsg->Qualifier & IEQUALIFIER_CONTROL) ? MOD_MASK_CTRL : 0;
@@ -1479,61 +1485,51 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
                               struct MUIP_HandleEvent *msg)
 {
     struct VimConData *my = INST_DATA(cls,obj);
+    my->state &= ~MUIV_VimCon_State_Idle;
 
-    switch(msg->imsg->Class)
+    if(likely(msg->imsg->Class == IDCMP_RAWKEY))
     {
-        case IDCMP_MOUSEMOVE:
-        case IDCMP_INTUITICKS:
-            VimConMouseMove(cls, obj, msg);
-            break;
-
+        my->state |= VimConHandleRaw(cls, obj, msg) ? 
+                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+    }
+    else
+    if(msg->imsg->Class == IDCMP_MOUSEBUTTONS)
+    {
+        my->state |= VimConMouseHandleButton(cls, obj, msg) ? 
+                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+    }
+    else
+    if(msg->imsg->Class == IDCMP_MOUSEMOVE ||
+       msg->imsg->Class == IDCMP_INTUITICKS)
+    {
+        my->state |= VimConMouseMove(cls, obj, msg) ? 
+                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+    }
+    else
 #ifdef __amigaos4__
-        case IDCMP_EXTENDEDMOUSE:
-            if(msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
-            {
-                struct IntuiWheelData *iwd = (struct IntuiWheelData *)
-                       msg->imsg->IAddress;
+    if(msg->imsg->Class == IDCMP_EXTENDEDMOUSE &&
+       msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
+    {
+        struct IntuiWheelData *iwd = (struct IntuiWheelData *)
+               msg->imsg->IAddress;
 
-                if(iwd->WheelY<0)
-                {
-                    msg->imsg->Code=RAWKEY_NM_WHEEL_UP;
-                }
-                else if(iwd->WheelY>0)
-                {
-                    msg->imsg->Code=RAWKEY_NM_WHEEL_DOWN;
-                }
-                else if(iwd->WheelX<0)
-                {
-                    msg->imsg->Code=RAWKEY_NM_WHEEL_LEFT;
-                }
-                else if(iwd->WheelX>0)
-                {
-                    msg->imsg->Code=RAWKEY_NM_WHEEL_RIGHT;
-                }
+        msg->imsg->Code = iwd->WheelY < 0 ? RAWKEY_NM_WHEEL_UP :
+                          iwd->WheelY > 0 ? RAWKEY_NM_WHEEL_DOWN :
+                          iwd->WheelX < 0 ? RAWKEY_NM_WHEEL_LEFT :
+                          iwd->WheelX > 0 ? RAWKEY_NM_WHEEL_RIGHT : 0;
 
-                VimConHandleRaw(cls, obj, msg);
-            }
-            break;
+        my->state |= msg->imsg->Code && VimConHandleRaw(cls, obj, msg) ? 
+                     MUIV_VimCon_State_Yield : MUIV_VimCon_State_Idle;
+    }
+    else
 #endif
-        case IDCMP_RAWKEY:
-            VimConHandleRaw(cls, obj, msg);
-            break;
-
-        case IDCMP_MOUSEBUTTONS:
-            // Fall through unless we eat the button.
-            if(VimConMouseHandleButton(cls, obj, msg))
-            {
-                break;
-            }
-            // FALLTHRU
-
-        default:
-            // Leave the rest to our parent class
-            return DoSuperMethodA(cls, obj, (Msg) msg);
+    {
+        my->state |= MUIV_VimCon_State_Idle;
     }
 
-    my->state |= MUIV_VimCon_State_Yield;
-    return MUI_EventHandlerRC_Eat;
+    // Leave unhandeled events to our parent class
+    return my->state & MUIV_VimCon_State_Yield ? MUI_EventHandlerRC_Eat :
+           DoSuperMethodA(cls, obj, (Msg) msg);
 }
 
 //------------------------------------------------------------------------------
@@ -1730,6 +1726,7 @@ METHOD0(VimCon, Beep)
     my->state |= MUIV_VimCon_State_Reset;
     return TRUE;
 }
+
 //------------------------------------------------------------------------------
 // VimConCopy - Copy data from Vim clipboard to clipboard.device
 // Input:       Clipboard
@@ -2562,7 +2559,7 @@ METHOD(VimScrollbar, Show, Show)
 
     // The bottom scrollbar belongs to the same group as the console. Don't
     // do anything about that one. Just enable / disable the scrollbar.
-    if(my->sb->type == SBAR_BOTTOM)
+    if(unlikely(my->sb->type == SBAR_BOTTOM))
     {
         set(me, MUIA_ShowMe, msg->Show);
         return TRUE;
@@ -2703,8 +2700,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
     size_t ndx = 0;
     Object *chl;
 
-    for(chl = NextObject(&cur); chl && ndx < cnt;
-        chl = NextObject(&cur))
+    for(chl = NextObject(&cur); chl && ndx < cnt; chl = NextObject(&cur))
     {
         scs[ndx++] = chl;
     }
@@ -2784,7 +2780,7 @@ METHOD(VimScrollbar, Pos, Top, Height)
     // Vim likes to update scrollbars even though nothing changed. Bail out if
     // nothing changed since the last invocation.
     if(likely((my->top == msg->Top && my->weight == msg->Height) ||
-       !my->grp || !my->sb))
+              !my->grp || !my->sb))
     {
         return FALSE;
     }
@@ -3000,7 +2996,7 @@ void gui_mch_free_font(GuiFont font)
 int gui_mch_get_winpos(int *x, int *y)
 {
     if(likely(GetAttr(MUIA_Window_TopEdge, _win(Con), (IPTR *) x) &&
-       GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y)))
+              GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y)))
     {
         return OK;
     }
@@ -3854,7 +3850,6 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     // Menu items can be proper menu items or toolbar buttons
     if(unlikely(menu_is_toolbar(p->name) && !menu_is_separator(menu->name)))
     {
-
         (void) DoMethod(Tlb, M_ID(VimToolbar, AddButton), menu, menu->dname,
                         menu->dname);
         return;
