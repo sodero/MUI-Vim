@@ -27,7 +27,7 @@ CFLAGS += \
 	-DFEAT_BROWSE \
 	-DFEAT_TOOLBAR \
 	-DFEAT_HUGE \
-	-DMODIFIED_BY="\"Ola Söder et al.\""
+	-DMODIFIED_BY="Ola\ Söder\ et\ al."
 SRC := \
 	gui.c \
 	gui_mui.c
