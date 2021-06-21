@@ -2339,13 +2339,6 @@ DISPATCH(VimMenu)
 }
 DISPATCH_END
 
-//------------------------------------------------------------------------------
-// Disable scrollbars on AROS. Zune problems.
-//------------------------------------------------------------------------------
-#ifndef __AROS__
-# define MUIVIM_FEAT_SCROLLBAR
-#endif
-
 #ifdef MUIVIM_FEAT_SCROLLBAR
 //------------------------------------------------------------------------------
 // VimScrollbar - MUI custom class handling Vim scrollbars.

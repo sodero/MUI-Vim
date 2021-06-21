@@ -31,6 +31,9 @@ CFLAGS += \
 SRC := \
 	gui.c \
 	gui_mui.c
+ifneq ($(UNM),AROS)
+CFLAGS += -DMUIVIM_FEAT_SCROLLBAR 
+endif
 else
 
 # Vim 'huge' build
@@ -84,7 +87,7 @@ ifeq ($(UNM),MorphOS)
 CFLAGS += -noixemul
 LDFLAGS = -ldebug -noixemul
 else
-CFLAGS += DNO_ARP
+CFLAGS += -DNO_ARP
 endif
 endif
 endif
