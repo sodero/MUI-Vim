@@ -2065,9 +2065,9 @@ MUIDSP IPTR VimToolbarNew(Class *cls, Object *obj, struct opSet *msg)
         { .ti_Tag = MUIA_TheBar_DisStrip, .ti_Data = (IPTR)"tb_dis_strip.png" },
         { .ti_Tag = MUIA_TheBar_SelStrip, .ti_Data = (IPTR)"tb_sel_strip.png" },
         { .ti_Tag = MUIA_TheBar_StripCols, .ti_Data = 19 },
-        { .ti_Tag = MUIA_TheBar_StripRows, .ti_Data = 1 },
-        { .ti_Tag = MUIA_TheBar_StripHSpace, .ti_Data = 0 },
-        { .ti_Tag = MUIA_TheBar_StripVSpace, .ti_Data = 0 },
+        { .ti_Tag = MUIA_TheBar_StripRows, .ti_Data = TRUE },
+        { .ti_Tag = MUIA_TheBar_StripHSpace, .ti_Data = FALSE },
+        { .ti_Tag = MUIA_TheBar_StripVSpace, .ti_Data = FALSE },
         { .ti_Tag = TAG_MORE, .ti_Data = (IPTR) msg->ops_AttrList}
     };
 
