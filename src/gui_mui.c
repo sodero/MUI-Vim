@@ -947,7 +947,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 {
     struct TagItem tags[] =
     {
-        { .ti_Tag = MUIA_Frame, .ti_Data = MUIV_Frame_Text },
+        { .ti_Tag = MUIA_Frame, .ti_Data = MUIV_Frame_None },
         { .ti_Tag = MUIA_InputMode, .ti_Data = MUIV_InputMode_None },
         { .ti_Tag = MUIA_FillArea, .ti_Data = TRUE },
         { .ti_Tag = MUIA_Font, .ti_Data =  MUIV_Font_Fixed },
