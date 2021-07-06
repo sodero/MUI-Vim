@@ -167,7 +167,7 @@ mch_inchar(
     char_u  *buf,
     int	    maxlen,
     long    time,		// milli seconds
-    int	    tb_change_cnt)
+    int	    tb_change_cnt UNUSED)
 {
     int	    len;
     long    utime;
@@ -226,15 +226,19 @@ mch_char_avail(void)
 /*
  * Return amount of memory still available in Kbyte.
  */
+#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
+    long_u
+mch_avail_mem(int special UNUSED)
+{
+    return (long_u)AvailMem(MEMF_ANY) >> 10;
+}
+#else
     long_u
 mch_avail_mem(int special)
 {
-#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-    return (long_u)AvailMem(MEMF_ANY) >> 10;
-#else
     return (long_u)(AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
-#endif
 }
+#endif
 
 /*
  * Waits a specified amount of time, or until input arrives if
@@ -668,7 +672,7 @@ mch_input_isatty(void)
     void
 fname_case(
     char_u	*name,
-    int		len)		// buffer size, ignored here
+    int		len UNUSED)		// buffer size, ignored here
 {
     struct FileInfoBlock    *fib;
     size_t		    flen;
@@ -983,7 +987,7 @@ mch_setperm(char_u *name, long perm)
  * Set hidden flag for "name".
  */
     void
-mch_hide(char_u *name)
+mch_hide(char_u *name UNUSED)
 {
     // can't hide a file
 }
@@ -1031,7 +1035,7 @@ mch_mkdir(char_u *name)
  * Return -1 if unknown.
  */
     int
-mch_can_exe(char_u *name, char_u **path, int use_path)
+mch_can_exe(char_u *name UNUSED, char_u **path UNUSED, int use_path UNUSED)
 {
     // TODO
     return -1;
@@ -1044,7 +1048,7 @@ mch_can_exe(char_u *name, char_u **path, int use_path)
  * NODE_OTHER: non-writable things
  */
     int
-mch_nodetype(char_u *name)
+mch_nodetype(char_u *name UNUSED)
 {
     // TODO
     return NODE_NORMAL;
@@ -1624,7 +1628,7 @@ mch_call_shell(
  * trouble with lattice-c programs.
  */
     void
-mch_breakcheck(int force)
+mch_breakcheck(int force UNUSED)
 {
    if (SetSignal(0L, (long)(SIGBREAKF_CTRL_C|SIGBREAKF_CTRL_D|SIGBREAKF_CTRL_E|SIGBREAKF_CTRL_F)) & SIGBREAKF_CTRL_C)
 	got_int = TRUE;
@@ -1899,7 +1903,7 @@ mch_getenv(char_u *var)
  */
 // ARGSUSED
     int
-mch_setenv(char *var, char *value, int x)
+mch_setenv(char *var, char *value, int x UNUSED)
 {
 #ifdef FEAT_ARP
     if (!dos2)
