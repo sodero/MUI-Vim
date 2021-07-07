@@ -14,10 +14,10 @@ CFLAGS += \
 	-DUSE_TMPNAM \
 	-DNEW_SHELLSIZE \
 	-I proto \
-	-Wno-attributes \
+	-Wall \
+	-Wno-pointer-sign \
 	-Wno-int-conversion \
-	-Wno-incompatible-pointer-types \
-	-Wextra
+	-Wno-deprecated-declarations
 
 # Vim 'huge' build with MUI GUI
 ifeq ($(BUILD),mui)
@@ -32,7 +32,7 @@ SRC := \
 	gui.c \
 	gui_mui.c
 ifneq ($(UNM),AROS)
-CFLAGS += -DMUIVIM_FEAT_SCROLLBAR 
+CFLAGS += -DMUIVIM_FEAT_SCROLLBAR
 endif
 else
 
