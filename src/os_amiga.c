@@ -322,6 +322,7 @@ mch_init(void)
 
 static char **cmd_args;
 
+#ifdef FEAT_GUI
 /*
  * Check if we're started from Workbench.
  */
@@ -329,6 +330,7 @@ static BOOL is_wb_args(char **argv)
 {
     return argv == cmd_args;
 }
+#endif
 
 /*
  * Free Workbench argument list.
