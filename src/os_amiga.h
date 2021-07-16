@@ -238,6 +238,15 @@ typedef long off_t;
 # endif
 #endif
 
+// Use OS4 FIB_* macros on MorphOS and AROS as well.
+#ifndef FIB_IS_FILE
+# define FIB_IS_FILE(FIB)	((FIB)->fib_DirEntryType < 0)
+#endif
+#ifndef FIB_IS_DRAWER
+# define FIB_IS_DRAWER(FIB)	((FIB)->fib_DirEntryType >= 0 && \
+				 (FIB)->fib_DirEntryType != ST_SOFTLINK)
+#endif
+
 #if defined(SASC)
 int setenv(const char *, const char *);
 #endif

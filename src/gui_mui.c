@@ -233,7 +233,7 @@ METHOD(VimCon, AppMessage, Message)
         if(likely(fib))
         {
             // If it's a file, save it in the list.
-            if(likely(Examine(f, fib) && fib->fib_DirEntryType == ST_FILE))
+            if(likely(Examine(f, fib) && FIB_IS_FILE(fib)))
             {
                 NameFromLock(f, (STRPTR) fn, PATH_MAX);
                 fnames[nfiles++] = fn;

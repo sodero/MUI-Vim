@@ -83,8 +83,6 @@ static long dos_packet(struct MsgPort *, long, long);
 #endif
 static int lock2name(BPTR lock, char_u *buf, long   len);
 static void out_num(long n);
-static struct FileInfoBlock *get_fib(char_u *);
-static void free_fib(struct FileInfoBlock *);
 static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
@@ -664,43 +662,13 @@ mch_input_isatty(void)
 }
 
 /*
- * fname_case(): Set the case of the file name, if it already exists.
- *		 This will cause the file name to remain exactly the same
- *		 if the file system ignores, but preserves case.
- */
-//ARGSUSED
-    void
-fname_case(
-    char_u	*name,
-    int		len UNUSED)		// buffer size, ignored here
-{
-    struct FileInfoBlock    *fib;
-    size_t		    flen;
-
-    fib = get_fib(name);
-    if (fib != NULL)
-    {
-	flen = STRLEN(name);
-	// TODO: Check if this fix applies to AmigaOS < 4 too.
-#ifdef __amigaos4__
-	if (fib->fib_DirEntryType == ST_ROOT)
-	    strcat(fib->fib_FileName, ":");
-#endif
-	if (flen == strlen(fib->fib_FileName))	// safety check
-	    mch_memmove(name, fib->fib_FileName, flen);
-	free_fib(fib);
-    }
-}
-
-/*
  * mch_deduplicate_root(): Remove root slash from amiga root since this
  *                         is redundant at best. It will cause problems
- *                         when used in combination with non root assigns. 
+ *                         when used in combination with non root assigns.
  */
 void mch_deduplicate_root(char_u *fname)
 {
-    int i = 1;
-    int j = STRLEN(fname) - 1;
+    int i = 1, j = STRLEN(fname) - 1;
 
     for(i = 1; i < j - 1; ++i)
     {
@@ -721,40 +689,55 @@ void mch_deduplicate_root(char_u *fname)
     static struct FileInfoBlock *
 get_fib(char_u *fname)
 {
-    if(fname)
+    struct FileInfoBlock *fib = (struct FileInfoBlock *)
+    AllocDosObject(DOS_FIB, NULL);
+
+    if(!fname || !fib)
     {
-	mch_deduplicate_root(fname); /* remove root slash */
-        struct FileInfoBlock *fib = (struct FileInfoBlock *)
-	       AllocDosObject(DOS_FIB, NULL);
-	if(fib)
-	{
-            BPTR lock = (BPTR) Lock(fname, ACCESS_READ);
-	    if(lock)
-	    {
-                if(Examine(lock, fib))
-                {
-		    UnLock(lock);
-		    return fib;
-                }
-		else
-		{
-		    UnLock(lock);
-		}
-	    }
-            FreeDosObject(DOS_FIB, fib);
-	}
+	FreeDosObject(DOS_FIB, fib);
+	return NULL;
     }
-    return NULL;
+
+    // Do we really need this?
+    mch_deduplicate_root(fname);
+
+    BPTR lock = Lock(fname, ACCESS_READ);
+
+    if(!lock || !Examine(lock, fib))
+    {
+	FreeDosObject(DOS_FIB, fib);
+	fib = NULL;
+    }
+
+    UnLock(lock);
+    return fib;
 }
 
 /*
- * Free file info block safely.
+ * fname_case(): Set the case of the file name, if it already exists.
+ *		 This will cause the file name to remain exactly the same
+ *		 if the file system ignores, but preserves case.
  */
+//ARGSUSED
     void
-free_fib(struct FileInfoBlock * fib)
+fname_case(
+    char_u	*name,
+    int		len UNUSED)		// buffer size, ignored here
 {
-    if(fib)
+    size_t flen;
+    struct FileInfoBlock *fib = get_fib(name);
+
+    if (fib != NULL)
     {
+	flen = STRLEN(name);
+	// TODO: Check if this fix applies to AmigaOS < 4 too.
+#ifdef __amigaos4__
+	if (fib->fib_DirEntryType == ST_ROOT)
+	    strcat(fib->fib_FileName, ":");
+#endif
+	if (flen == strlen(fib->fib_FileName))	// safety check
+	    mch_memmove(name, fib->fib_FileName, flen);
+
 	FreeDosObject(DOS_FIB, fib);
     }
 }
@@ -770,8 +753,8 @@ mch_settitle(char_u *title, char_u *icon)
 #ifdef FEAT_GUI
     if(gui.in_use)
     {
-       gui_mch_settitle(title, icon);
-       return;
+	gui_mch_settitle(title, icon);
+	return;
     }
 #endif
     if (wb_window != NULL && title != NULL)
@@ -962,15 +945,10 @@ lock2name(BPTR lock, char_u *buf, long len)
     long
 mch_getperm(char_u *name)
 {
-    struct FileInfoBlock    *fib;
-    long		    retval = -1;
+    struct FileInfoBlock *fib = get_fib(name);
+    long retval = fib ? fib->fib_Protection : -1;
 
-    fib = get_fib(name);
-    if (fib != NULL)
-    {
-	retval = fib->fib_Protection;
-	free_fib(fib);
-    }
+    FreeDosObject(DOS_FIB, fib);
     return retval;
 }
 
@@ -1003,15 +981,10 @@ mch_hide(char_u *name UNUSED)
     int
 mch_isdir(char_u *name)
 {
-    struct FileInfoBlock    *fib;
-    int			    retval = FALSE;
+    struct FileInfoBlock *fib = get_fib(name);
+    int retval = (fib && FIB_IS_DRAWER(fib)) ? TRUE : FALSE;
 
-    fib = get_fib(name);
-    if (fib != NULL)
-    {
-	retval = ((fib->fib_DirEntryType >= 0) ? TRUE : FALSE);
-	free_fib(fib);
-    }
+    FreeDosObject(DOS_FIB, fib);
     return retval;
 }
 
@@ -1024,7 +997,8 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock != NULL)
+
+    if (lock != (BPTR)NULL)
     {
 	UnLock(lock);
 	return 0;
@@ -1050,6 +1024,7 @@ mch_can_exe(char_u *name, char_u **path UNUSED, int use_path)
     {
         // Test if file permissions allow execution.
         struct ExamineData *exd = ExamineObjectTags(EX_StringNameInput, name);
+
         exe = (exd && !(exd->Protection & EXDF_NO_EXECUTE)) ? 1 : 0;
         FreeDosObject(DOS_EXAMINEDATA, exd);
     }
@@ -1067,7 +1042,7 @@ mch_can_exe(char_u *name, char_u **path UNUSED, int use_path)
         BPTR cwd = GetCurrentDir();
         struct PathNode *head = DupCmdPathList(NULL);
 
-        // For each path entry, recur to check for executable.
+        // For each entry, recur to check for executable.
         for(struct PathNode *tail = head; !exe && tail;
             tail = (struct PathNode *) BADDR(tail->pn_Next))
         {
