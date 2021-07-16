@@ -1996,7 +1996,9 @@ METHOD(VimToolbar, DisableButton, ID, Grey)
 static void VimMessage(const char *title, const char *msg, const char *fmt)
 {
 #ifdef __amigaos4__
-    struct TagItem tags[] = { ESA_Position, REQPOS_CENTERSCREEN, TAG_DONE };
+    struct TagItem tags[] = {{ .ti_Tag = ESA_Position,
+                               .ti_Data = REQPOS_CENTERSCREEN },
+                             { .ti_Tag = TAG_DONE }};
 #endif
     struct EasyStruct req =
     {
