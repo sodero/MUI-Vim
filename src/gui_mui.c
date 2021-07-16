@@ -169,7 +169,7 @@ CLASS_DEF(VimCon)
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
 #ifdef MUIVIM_FEAT_TIMEOUT
-# define MUIV_VimCon_State_Timeout    (1 << 2)
+# define MUIV_VimCon_State_Timeout   (1 << 2)
 #endif
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)

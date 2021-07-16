@@ -271,7 +271,7 @@ mch_suspend(void)
 mch_init(void)
 {
 #ifdef FEAT_GUI
-    if(gui.starting)
+    if (gui.starting)
     {
         return;
     }
@@ -335,7 +335,7 @@ static BOOL is_wb_args(char **argv)
  */
 static void free_cmd_args(void)
 {
-    if(!cmd_args)
+    if (!cmd_args)
     {
 	return;
     }
@@ -358,14 +358,14 @@ static void free_cmd_args(void)
 int get_cmd_argsA(int argc, char ***argvp)
 {
     struct WBStartup *wb = (struct WBStartup *) *argvp;
-    if(argc || !wb->sm_NumArgs)
+    if (argc || !wb->sm_NumArgs)
     {
 	return argc;
     }
 
     free_cmd_args();
     cmd_args = calloc(wb->sm_NumArgs + 1, sizeof(char *));
-    if(!cmd_args)
+    if (!cmd_args)
     {
 	return 0;
     }
@@ -381,8 +381,8 @@ int get_cmd_argsA(int argc, char ***argvp)
 
 	// If the argument starts with a '-' and there's no such file, just
 	// copy it verbatim. If it's file, copy the absolute path.
-	if(arg[i].wa_Name[0] != '-' &&
-	   lock2name(arg[i].wa_Lock, path, PATH_MAX))
+	if (arg[i].wa_Name[0] != '-' &&
+	    lock2name(arg[i].wa_Lock, path, PATH_MAX))
 	{
 	    AddPart(path, arg[i].wa_Name, PATH_MAX);
 	    cmd_args[i] = strdup(path);
@@ -435,7 +435,7 @@ mch_check_win(int argc, char **argv)
 
 #ifdef FEAT_GUI
     // Enable GUI mode if started from WB.
-    if(is_wb_args(argv))
+    if (is_wb_args(argv))
     {
         gui.starting = TRUE;
         return FAIL;
@@ -672,7 +672,7 @@ void mch_deduplicate_root(char_u *fname)
 
     for(i = 1; i < j - 1; ++i)
     {
-        if(fname[i] == ':' && fname[i + 1] == '/')
+        if (fname[i] == ':' && fname[i + 1] == '/')
         {
             while(++i < j) fname[i] = fname[i + 1];
             fname[i] = 0;
@@ -692,7 +692,7 @@ get_fib(char_u *fname)
     struct FileInfoBlock *fib = (struct FileInfoBlock *)
     AllocDosObject(DOS_FIB, NULL);
 
-    if(!fname || !fib)
+    if (!fname || !fib)
     {
 	FreeDosObject(DOS_FIB, fib);
 	return NULL;
@@ -703,7 +703,7 @@ get_fib(char_u *fname)
 
     BPTR lock = Lock(fname, ACCESS_READ);
 
-    if(!lock || !Examine(lock, fib))
+    if (!lock || !Examine(lock, fib))
     {
 	FreeDosObject(DOS_FIB, fib);
 	fib = NULL;
@@ -751,7 +751,7 @@ fname_case(
 mch_settitle(char_u *title, char_u *icon)
 {
 #ifdef FEAT_GUI
-    if(gui.in_use)
+    if (gui.in_use)
     {
 	gui_mch_settitle(title, icon);
 	return;
@@ -779,7 +779,7 @@ mch_restore_title(int which)
 mch_can_restore_title(void)
 {
 #ifdef FEAT_GUI
-    if(gui.in_use)
+    if (gui.in_use)
     {
 	return TRUE;
     }
@@ -1019,8 +1019,8 @@ mch_can_exe(char_u *name, char_u **path UNUSED, int use_path)
     // Load file sections using elf.library or hunk.library.
     BPTR seg = LoadSeg(name);
 
-    if(seg && GetSegListInfoTags(seg, GSLI_Native, NULL, TAG_DONE) !=
-       GetSegListInfoTags(seg, GSLI_68KHUNK, NULL, TAG_DONE))
+    if (seg && GetSegListInfoTags(seg, GSLI_Native, NULL, TAG_DONE) !=
+        GetSegListInfoTags(seg, GSLI_68KHUNK, NULL, TAG_DONE))
     {
         // Test if file permissions allow execution.
         struct ExamineData *exd = ExamineObjectTags(EX_StringNameInput, name);
@@ -1036,7 +1036,7 @@ mch_can_exe(char_u *name, char_u **path UNUSED, int use_path)
     UnLoadSeg(seg);
 
     // Search for executable in path if applicable.
-    if(!exe && use_path)
+    if (!exe && use_path)
     {
         // Save current working dir.
         BPTR cwd = GetCurrentDir();
@@ -1191,12 +1191,12 @@ int mch_get_shellsize(void)
     }
 #endif
 
-    if(!term_console)
+    if (!term_console)
     {
         return FAIL;
     }
 
-    if(raw_in && raw_out)
+    if (raw_in && raw_out)
     {
         // Save current term mode.
         int old_tmode = cur_tmode;
@@ -1207,16 +1207,16 @@ int mch_get_shellsize(void)
         char ctrl[] = "\x9b""0 q";
 
 	// Write control sequence to term.
-	if(Write(raw_out, ctrl, sizeof(ctrl)) == sizeof(ctrl))
+	if (Write(raw_out, ctrl, sizeof(ctrl)) == sizeof(ctrl))
 	{
             char scan[] = "\x9b""1;1;%d;%d r",
                  answ[sizeof(scan) + 8] = { '\0' };
 
 	    // Read return sequence from input.
-	    if(Read(raw_in, answ, sizeof(answ) - 1) > 0)
+	    if (Read(raw_in, answ, sizeof(answ) - 1) > 0)
 	    {
 		// Parse result and set Vim globals.
-		if(sscanf(answ, scan, &Rows, &Columns) == 2)
+		if (sscanf(answ, scan, &Rows, &Columns) == 2)
 		{
                     // Restore term mode.
                     mch_settmode(old_tmode);
@@ -1247,7 +1247,7 @@ mch_get_shellsize(void)
     }
 #endif
 
-    if(!term_console)
+    if (!term_console)
     {
         return FAIL;
     }
