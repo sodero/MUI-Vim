@@ -795,12 +795,13 @@ mch_restore_title(int which)
     int
 mch_can_restore_title(void)
 {
-    int res = 0;
 #ifdef FEAT_GUI
-    res |= gui.in_use;
+    if(gui.in_use)
+    {
+	return TRUE;
+    }
 #endif
-    res |= (wb_window != NULL);
-    return res;
+    return wb_window != NULL;
 }
 
     int
