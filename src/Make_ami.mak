@@ -26,13 +26,17 @@ CFLAGS += \
 	-DFEAT_GUI_MUI \
 	-DFEAT_BROWSE \
 	-DFEAT_TOOLBAR \
-	-DFEAT_HUGE \
-	-DMODIFIED_BY="Ola\ Söder\ et\ al."
+	-DFEAT_HUGE
 SRC := \
 	gui.c \
 	gui_mui.c
 ifneq ($(UNM),AROS)
 CFLAGS += -DMUIVIM_FEAT_SCROLLBAR
+endif
+ifeq ($(UNM),AmigaOS)
+CFLAGS += -DMODIFIED_BY="Ola\ Söder\ et\ al."
+else
+CFLAGS += -DMODIFIED_BY=\"'Ola Söder et al.'\"
 endif
 else
 
