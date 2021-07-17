@@ -1443,8 +1443,8 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
             my->state |= MUIV_VimCon_State_Yield;
         }
     }
-    else
 #ifdef __amigaos4__
+    else
     if(msg->imsg->Class == IDCMP_EXTENDEDMOUSE &&
        msg->imsg->Code == IMSGCODE_INTUIWHEELDATA)
     {
