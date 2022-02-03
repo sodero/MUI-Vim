@@ -242,14 +242,14 @@ mf_close(memfile_T *mfp, int del_file)
     if (mfp->mf_fd >= 0)
     {
 	if (close(mfp->mf_fd) < 0)
-	    emsg(_(e_swapclose));
+	    emsg(_(e_close_error_on_swap_file));
     }
     if (del_file && mfp->mf_fname != NULL)
 	mch_remove(mfp->mf_fname);
 					    // free entries in used list
     for (hp = mfp->mf_used_first; hp != NULL; hp = nextp)
     {
-	total_mem_used -= hp->bh_page_count * mfp->mf_page_size;
+	total_mem_used -= (long_u)hp->bh_page_count * mfp->mf_page_size;
 	nextp = hp->bh_next;
 	mf_free_bhdr(hp);
     }
@@ -288,7 +288,7 @@ mf_close_file(
     }
 
     if (close(mfp->mf_fd) < 0)			// close the file
-	emsg(_(e_swapclose));
+	emsg(_(e_close_error_on_swap_file));
     mfp->mf_fd = -1;
 
     if (mfp->mf_fname != NULL)
@@ -359,7 +359,7 @@ mf_new(memfile_T *mfp, int negative, int page_count)
 	}
 	else if (hp == NULL)	    // need to allocate memory for this block
 	{
-	    if ((p = alloc(mfp->mf_page_size * page_count)) == NULL)
+	    if ((p = alloc((size_t)mfp->mf_page_size * page_count)) == NULL)
 		return NULL;
 	    hp = mf_rem_free(mfp);
 	    hp->bh_data = p;
@@ -477,7 +477,7 @@ mf_put(
     flags = hp->bh_flags;
 
     if ((flags & BH_LOCKED) == 0)
-	iemsg(_("E293: block was not locked"));
+	iemsg(_(e_block_was_not_locked));
     flags &= ~BH_LOCKED;
     if (dirty)
     {
@@ -683,7 +683,7 @@ mf_ins_used(memfile_T *mfp, bhdr_T *hp)
     else
 	hp->bh_next->bh_prev = hp;
     mfp->mf_used_count += hp->bh_page_count;
-    total_mem_used += hp->bh_page_count * mfp->mf_page_size;
+    total_mem_used += (long_u)hp->bh_page_count * mfp->mf_page_size;
 }
 
 /*
@@ -701,7 +701,7 @@ mf_rem_used(memfile_T *mfp, bhdr_T *hp)
     else
 	hp->bh_prev->bh_next = hp->bh_next;
     mfp->mf_used_count -= hp->bh_page_count;
-    total_mem_used -= hp->bh_page_count * mfp->mf_page_size;
+    total_mem_used -= (long_u)hp->bh_page_count * mfp->mf_page_size;
 }
 
 /*
@@ -779,7 +779,8 @@ mf_release(memfile_T *mfp, int page_count)
     if (hp->bh_page_count != page_count)
     {
 	vim_free(hp->bh_data);
-	if ((hp->bh_data = alloc(mfp->mf_page_size * page_count)) == NULL)
+	if ((hp->bh_data = alloc((size_t)mfp->mf_page_size * page_count))
+								       == NULL)
 	{
 	    vim_free(hp);
 	    return NULL;
@@ -846,7 +847,8 @@ mf_alloc_bhdr(memfile_T *mfp, int page_count)
 
     if ((hp = ALLOC_ONE(bhdr_T)) != NULL)
     {
-	if ((hp->bh_data = alloc(mfp->mf_page_size * page_count)) == NULL)
+	if ((hp->bh_data = alloc((size_t)mfp->mf_page_size * page_count))
+								       == NULL)
 	{
 	    vim_free(hp);	    // not enough memory
 	    return NULL;
@@ -910,12 +912,12 @@ mf_read(memfile_T *mfp, bhdr_T *hp)
     size = page_size * hp->bh_page_count;
     if (vim_lseek(mfp->mf_fd, offset, SEEK_SET) != offset)
     {
-	PERROR(_("E294: Seek error in swap file read"));
+	PERROR(_(e_seek_error_in_swap_file_read));
 	return FAIL;
     }
     if ((unsigned)read_eintr(mfp->mf_fd, hp->bh_data, size) != size)
     {
-	PERROR(_("E295: Read error in swap file"));
+	PERROR(_(e_read_error_in_swap_file));
 	return FAIL;
     }
 
@@ -986,7 +988,7 @@ mf_write(memfile_T *mfp, bhdr_T *hp)
 	    {
 		if (vim_lseek(mfp->mf_fd, offset, SEEK_SET) != offset)
 		{
-		    PERROR(_("E296: Seek error in swap file write"));
+		    PERROR(_(e_seek_error_in_swap_file_write));
 		    return FAIL;
 		}
 		if (mf_write_block(mfp,
@@ -1011,7 +1013,7 @@ mf_write(memfile_T *mfp, bhdr_T *hp)
 		// successful write or when hitting a key. We keep on trying,
 		// in case some space becomes available.
 		if (!did_swapwrite_msg)
-		    emsg(_("E297: Write error in swap file"));
+		    emsg(_(e_write_error_in_swap_file));
 		did_swapwrite_msg = TRUE;
 		return FAIL;
 	    }
@@ -1229,7 +1231,7 @@ mf_do_open(
     if ((flags & O_CREAT) && mch_lstat((char *)mfp->mf_fname, &sb) >= 0)
     {
 	mfp->mf_fd = -1;
-	emsg(_("E300: Swap file already exists (symlink attack?)"));
+	emsg(_(e_swap_file_already_exists_symlink_attack));
     }
     else
 #endif

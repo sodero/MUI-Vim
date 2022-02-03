@@ -2696,7 +2696,7 @@ Multi-byte:
   double-wide character.
 - Overstrike mode for the cmdline replaced only the first byte of a multibyte
   character.
-- The cursor in Replace mode (also in the cmdline) was to small on a
+- The cursor in Replace mode (also in the cmdline) was too small on a
   double-wide character.
 - When a multibyte character contained a 0x80 byte, it didn't work (was using
   a CSI byte instead). (Muraoka Taro)
@@ -3546,7 +3546,7 @@ Added Simplified Chinese translation of the tutor. (Mendel L Chan)
 Added Russian keymap for yawerty keyboard.
 
 Added an explanation of using the vimrc file in the tutor.
-Changed tutor.vim to get the right encoding for the Taiwainese tutor.
+Changed tutor.vim to get the right encoding for the Taiwanese tutor.
 
 Added Russian tutor. (Andrey Kiselev)
 Added Polish tutor. (Mikolaj Machowski)
@@ -5465,7 +5465,7 @@ Files:	    src/fileio.c
 Patch 6.0.267
 Problem:    UTF-8: Although 'isprint' says a character is printable,
 	    utf_char2cells() still considers it unprintable.
-Solution:   Use vim_isprintc() for characters upto 0x100. (Yasuhiro Matsumoto)
+Solution:   Use vim_isprintc() for characters up to 0x100. (Yasuhiro Matsumoto)
 Files:	    src/mbyte.c
 
 Patch 6.0.268 (extra) (depends on patch 6.0.255)
@@ -12232,7 +12232,7 @@ Files:	    Makefile, src/gvim.exe.mnf, src/vim.rc
 
 Patch 6.2.348
 Problem:    Win32: "vim c:\dir\(test)" doesn't work, because the 'isfname'
-	    default value doesn't contain parenthesis.
+	    default value doesn't contain parentheses.
 Solution:   Temporarily add '(' and ')' to 'isfname' when expanding file name
 	    arguments.
 Files:	    src/main.c

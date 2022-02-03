@@ -533,7 +533,14 @@ func Test_geometry()
     [CODE]
     if RunVim([], after, '-f -g -geometry 31x13+41+43')
       let lines = readfile('Xtest_geometry')
-      call assert_equal(['31', '13', '41', '43', '[41, 43]'], lines)
+      " Depending on the GUI library and the windowing system the final size
+      " might be a bit different, allow for some tolerance.  Tuned based on
+      " actual failures.
+      call assert_inrange(31, 35, str2nr(lines[0]))
+      call assert_equal('13', lines[1])
+      call assert_equal('41', lines[2])
+      call assert_equal('43', lines[3])
+      call assert_equal('[41, 43]', lines[4])
     endif
   endif
 
@@ -617,7 +624,7 @@ func Test_invalid_args()
   call assert_equal('More info with: "vim -h"',       out[2])
 
   if has('quickfix')
-    " Detect invalid repeated arguments '-t foo -t foo", '-q foo -q foo'.
+    " Detect invalid repeated arguments '-t foo -t foo', '-q foo -q foo'.
     for opt in ['-t', '-q']
       let out = split(system(GetVimCommand() .. repeat(' ' .. opt .. ' foo', 2)), "\n")
       call assert_equal(1, v:shell_error)
@@ -733,27 +740,6 @@ func Test_read_stdin()
   call delete('Xtestout')
 endfunc
 
-func Test_set_shell()
-  let after =<< trim [CODE]
-    call writefile([&shell], "Xtestout")
-    quit!
-  [CODE]
-
-  if has('win32')
-    let $SHELL = 'C:\with space\cmd.exe'
-    let expected = '"C:\with space\cmd.exe"'
-  else
-    let $SHELL = '/bin/with space/sh'
-    let expected = '/bin/with\ space/sh'
-  endif
-
-  if RunVimPiped([], after, '', '')
-    let lines = readfile('Xtestout')
-    call assert_equal(expected, lines[0])
-  endif
-  call delete('Xtestout')
-endfunc
-
 func Test_progpath()
   " Tests normally run with "./vim" or "../vim", these must have been expanded
   " to a full path.
@@ -835,6 +821,17 @@ func Test_start_with_tabs()
   call StopVimInTerminal(buf)
 endfunc
 
+func Test_start_in_minimal_window()
+  CheckRunVimInTerminal
+
+  let buf = RunVimInTerminal('-c "set nomore"', {'cols': 12, 'rows': 2, 'keep_t_u7': 1})
+  call term_sendkeys(buf, "ahello\<Esc>")
+  call WaitForAssert({-> assert_match('^hello', term_getline(buf, 1))})
+
+  " clean up
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_v_argv()
   " Can't catch the output of gvim.
   CheckNotGui
@@ -884,7 +881,7 @@ func Test_t_arg()
   call writefile(['    first', '    second', '    third'], 'Xfile1')
 
   for t_arg in ['-t second', '-tsecond']
-    if RunVim(before, after, '-t second')
+    if RunVim(before, after, t_arg)
       call assert_equal(['Xfile1:L2C5'], readfile('Xtestout'), t_arg)
       call delete('Xtestout')
     endif
@@ -1300,5 +1297,37 @@ func Test_write_in_vimrc()
   endif
   call delete('Xvimrc')
 endfunc
+
+func Test_echo_true_in_cmd()
+  CheckNotGui
+
+  let lines =<< trim END
+      echo v:true
+      call writefile(['done'], 'Xresult')
+      quit
+  END
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '--cmd "source Xscript"')
+    call assert_equal(['done'], readfile('Xresult'))
+  endif
+  call delete('Xscript')
+  call delete('Xresult')
+endfunc
+
+func Test_rename_buffer_on_startup()
+  CheckUnix
+
+  let lines =<< trim END
+      call writefile(['done'], 'Xresult')
+      qa!
+  END
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], "--clean -e -s --cmd 'file x|new|file x' --cmd 'so Xscript'")
+    call assert_equal(['done'], readfile('Xresult'))
+  endif
+  call delete('Xscript')
+  call delete('Xresult')
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

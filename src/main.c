@@ -254,7 +254,7 @@ main
 		mch_dirname(start_dir, MAXPATHL);
 	    // Temporarily add '(' and ')' to 'isfname'.  These are valid
 	    // filename characters but are excluded from 'isfname' to make
-	    // "gf" work on a file name in parenthesis (e.g.: see vim.h).
+	    // "gf" work on a file name in parentheses (e.g.: see vim.h).
 	    do_cmdline_cmd((char_u *)":set isf+=(,)");
 	    alist_expand(NULL, 0);
 	    do_cmdline_cmd((char_u *)":set isf&");
@@ -282,7 +282,8 @@ main
 	 * Hint: to avoid this when typing a command use a forward slash.
 	 * If the cd fails, it doesn't matter.
 	 */
-	(void)vim_chdirfile(params.fname, "drop");
+	if (vim_chdirfile(params.fname, "drop") == OK)
+	    last_chdir_reason = "drop";
 	if (start_dir != NULL)
 	    mch_dirname(start_dir, MAXPATHL);
     }
@@ -674,7 +675,7 @@ vim_main2(void)
 	scroll_region_reset();		// In case Rows changed
     scroll_start();	// may scroll the screen to the right position
 
-#if defined(FEAT_TITLE) && (defined(UNIX) || defined(VMS) || defined(MACOS_X))
+#if defined(UNIX) || defined(VMS) || defined(MACOS_X)
     term_push_title(SAVE_RESTORE_BOTH);
 #endif
 
@@ -841,7 +842,7 @@ vim_main2(void)
 #if defined(FEAT_GUI)
     // When tab pages were created, may need to update the tab pages line and
     // scrollbars.  This is skipped while creating them.
-    if (first_tabpage->tp_next != NULL)
+    if (gui.in_use && first_tabpage->tp_next != NULL)
     {
 	out_flush();
 	gui_init_which_components(NULL);
@@ -906,9 +907,6 @@ common_init(mparm_T *paramp)
 #ifdef __QNXNTO__
     qnx_init();		// PhAttach() for clipboard, (and gui)
 #endif
-
-    // Init the table of Normal mode commands.
-    init_normal_cmds();
 
     /*
      * Allocate space for the generic buffers (needed for set_init_1() and
@@ -1097,12 +1095,15 @@ state_no_longer_safe(char *reason UNUSED)
     was_safe = FALSE;
 }
 
+#if defined(FEAT_EVAL) || defined(MESSAGE_QUEUE) || defined(PROTO)
     int
 get_was_safe_state(void)
 {
     return was_safe;
 }
+#endif
 
+#if defined(MESSAGE_QUEUE) || defined(PROTO)
 /*
  * Invoked when leaving code that invokes callbacks.  Then trigger
  * SafeStateAgain, if it was safe when starting to wait for a character.
@@ -1143,6 +1144,7 @@ may_trigger_safestateagain(void)
 		  "SafeState: back to waiting, not triggering SafeStateAgain");
 #endif
 }
+#endif
 
 
 /*
@@ -1247,6 +1249,13 @@ main_loop(
 	}
 	else
 	    previous_got_int = FALSE;
+
+#ifdef FEAT_EVAL
+	// At the toplevel there is no exception handling.  Discard any that
+	// may be hanging around (e.g. from "interrupt" at the debug prompt).
+	if (did_throw && !ex_normal_busy)
+	    discard_current_exception();
+#endif
 
 	if (!exmode_active)
 	    msg_scroll = FALSE;
@@ -1401,10 +1410,8 @@ main_loop(
 	    else if (redraw_cmdline || clear_cmdline)
 		showmode();
 	    redraw_statuslines();
-#ifdef FEAT_TITLE
 	    if (need_maketitle)
 		maketitle();
-#endif
 #ifdef FEAT_VIMINFO
 	    curbuf->b_last_used = vim_time();
 #endif
@@ -1667,7 +1674,7 @@ getout(int exitval)
     {
 	// give the user a chance to read the (error) message
 	no_wait_return = FALSE;
-//	wait_return(FALSE);
+	wait_return(FALSE);
     }
 
     // Position the cursor again, the autocommands may have moved it
@@ -2008,7 +2015,7 @@ command_line_scan(mparm_T *parmp)
 		{
 		    Columns = 80;	// need to init Columns
 		    info_message = TRUE; // use mch_msg(), not mch_errmsg()
-#if defined(FEAT_GUI) && !defined(ALWAYS_USE_GUI)
+#if defined(FEAT_GUI) && !defined(ALWAYS_USE_GUI) && !defined(VIMDLL)
 		    gui.starting = FALSE; // not starting GUI, will exit
 #endif
 		    list_version();
@@ -2102,7 +2109,7 @@ command_line_scan(mparm_T *parmp)
 #ifdef FEAT_ARABIC
 		set_option_value((char_u *)"arabic", 1L, NULL, 0);
 #else
-		mch_errmsg(_(e_noarabic));
+		mch_errmsg(_(e_arabic_cannot_be_used_not_enabled_at_compile_time));
 		mch_exit(2);
 #endif
 		break;
@@ -2140,7 +2147,7 @@ command_line_scan(mparm_T *parmp)
 		break;
 
 	    case 'F':		// "-F" was for Farsi mode
-		mch_errmsg(_(e_nofarsi));
+		mch_errmsg(_(e_farsi_support_has_been_removed));
 		mch_exit(2);
 		break;
 
@@ -2158,7 +2165,7 @@ command_line_scan(mparm_T *parmp)
 		p_hkmap = TRUE;
 		set_option_value((char_u *)"rl", 1L, NULL, 0);
 #else
-		mch_errmsg(_(e_nohebrew));
+		mch_errmsg(_(e_hebrew_cannot_be_used_not_enabled_at_compile_time));
 		mch_exit(2);
 #endif
 		break;
@@ -3149,7 +3156,7 @@ source_startup_scripts(mparm_T *parmp)
 	else
 	{
 	    if (do_source(parmp->use_vimrc, FALSE, DOSO_NONE, NULL) != OK)
-		semsg(_("E282: Cannot read from \"%s\""), parmp->use_vimrc);
+		semsg(_(e_cannot_read_from_str_2), parmp->use_vimrc);
 	}
     }
     else if (!silent_mode)
@@ -3289,7 +3296,7 @@ main_start_gui(void)
 #ifdef FEAT_GUI
     gui.starting = TRUE;	// start GUI a bit later
 #else
-    mch_errmsg(_(e_nogvim));
+    mch_errmsg(_(e_gui_cannot_be_used_not_enabled_at_compile_time));
     mch_errmsg("\n");
     mch_exit(2);
 #endif

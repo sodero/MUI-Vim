@@ -1,7 +1,7 @@
 " Vim functions for file type detection
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2020 Aug 17
+" Last Change:	2022 Jan 31
 
 " These functions are moved here from runtime/filetype.vim to make startup
 " faster.
@@ -67,13 +67,32 @@ func dist#ft#FTasmsyntax()
   endif
 endfunc
 
-" Check if one of the first five lines contains "VB_Name".  In that case it is
-" probably a Visual Basic file.  Otherwise it's assumed to be "alt" filetype.
-func dist#ft#FTVB(alt)
-  if getline(1).getline(2).getline(3).getline(4).getline(5) =~? 'VB_Name\|Begin VB\.\(Form\|MDIForm\|UserControl\)'
+let s:ft_visual_basic_content = '\cVB_Name\|Begin VB\.\(Form\|MDIForm\|UserControl\)'
+
+" See FTfrm() for Visual Basic form file detection
+func dist#ft#FTbas()
+  if exists("g:filetype_bas")
+    exe "setf " . g:filetype_bas
+    return
+  endif
+
+  " most frequent FreeBASIC-specific keywords in distro files
+  let fb_keywords = '\c^\s*\%(extern\|var\|enum\|private\|scope\|union\|byref\|operator\|constructor\|delete\|namespace\|public\|property\|with\|destructor\|using\)\>\%(\s*[:=(]\)\@!'
+  let fb_preproc  = '\c^\s*\%(#\a\+\|option\s\+\%(byval\|dynamic\|escape\|\%(no\)\=gosub\|nokeyword\|private\|static\)\>\)'
+  let fb_comment  = "^\\s*/'"
+  " OPTION EXPLICIT, without the leading underscore, is common to many dialects
+  let qb64_preproc = '\c^\s*\%($\a\+\|option\s\+\%(_explicit\|_\=explicitarray\)\>\)'
+
+  let lines = getline(1, min([line("$"), 100]))
+
+  if match(lines, fb_preproc) > -1 || match(lines, fb_comment) > -1 || match(lines, fb_keywords) > -1
+    setf freebasic
+  elseif match(lines, qb64_preproc) > -1
+    setf qb64
+  elseif match(lines, s:ft_visual_basic_content) > -1
     setf vb
   else
-    exe "setf " . a:alt
+    setf basic
   endif
 endfunc
 
@@ -172,6 +191,17 @@ func dist#ft#FTent()
   setf dtd
 endfunc
 
+func dist#ft#ExCheck()
+  let lines = getline(1, min([line("$"), 100]))
+  if exists('g:filetype_euphoria')
+    exe 'setf ' . g:filetype_euphoria
+  elseif match(lines, '^--\|^ifdef\>\|^include\>') > -1
+    setf euphoria3
+  else
+    setf elixir
+  endif
+endfunc
+
 func dist#ft#EuphoriaCheck()
   if exists('g:filetype_euphoria')
     exe 'setf ' . g:filetype_euphoria
@@ -205,6 +235,38 @@ func dist#ft#FTe()
       let n = n + 1
     endwhile
     setf eiffel
+  endif
+endfunc
+
+func dist#ft#FTfrm()
+  if exists("g:filetype_frm")
+    exe "setf " . g:filetype_frm
+    return
+  endif
+
+  let lines = getline(1, min([line("$"), 5]))
+
+  if match(lines, s:ft_visual_basic_content) > -1
+    setf vb
+  else
+    setf form
+  endif
+endfunc
+
+" Distinguish between Forth and F#.
+" Provided by Doug Kearns.
+func dist#ft#FTfs()
+  if exists("g:filetype_fs")
+    exe "setf " . g:filetype_fs
+  else
+    let line = getline(nextnonblank(1))
+    " comments and colon definitions
+    if line =~ '^\s*\.\=( ' || line =~ '^\s*\\G\= ' || line =~ '^\\$'
+	  \ || line =~ '^\s*: \S'
+      setf forth
+    else
+      setf fsharp
+    endif
   endif
 endfunc
 
@@ -253,6 +315,16 @@ func dist#ft#ProtoCheck(default)
 endfunc
 
 func dist#ft#FTm()
+  if exists("g:filetype_m")
+    exe "setf " . g:filetype_m
+    return
+  endif
+
+  " excluding end(for|function|if|switch|while) common to Murphi
+  let octave_block_terminators = '\<end\%(_try_catch\|classdef\|enumeration\|events\|methods\|parfor\|properties\)\>'
+
+  let objc_preprocessor = '^\s*#\s*\%(import\|include\|define\|if\|ifn\=def\|undef\|line\|error\|pragma\)\>'
+
   let n = 1
   let saw_comment = 0 " Whether we've seen a multiline comment leader.
   while n < 100
@@ -263,10 +335,16 @@ func dist#ft#FTm()
       " anything more definitive.
       let saw_comment = 1
     endif
-    if line =~ '^\s*\(#\s*\(include\|import\)\>\|@import\>\|//\)'
+    if line =~ '^\s*//' || line =~ '^\s*@import\>' || line =~ objc_preprocessor
       setf objc
       return
     endif
+    if line =~ '^\s*\%(#\|%!\)' || line =~ '^\s*unwind_protect\>' ||
+	  \ line =~ '\%(^\|;\)\s*' .. octave_block_terminators
+      setf octave
+      return
+    endif
+    " TODO: could be Matlab or Octave
     if line =~ '^\s*%'
       setf matlab
       return
@@ -287,11 +365,8 @@ func dist#ft#FTm()
     " or Murphi based on the comment leader. Assume the former as it is more
     " common.
     setf objc
-  elseif exists("g:filetype_m")
-    " Use user specified default filetype for .m
-    exe "setf " . g:filetype_m
   else
-    " Default is matlab
+    " Default is Matlab
     setf matlab
   endif
 endfunc
@@ -768,6 +843,55 @@ func dist#ft#Redif()
     endif
     let lnum = lnum + 1
   endwhile
+endfunc
+
+" This function is called for all files under */debian/patches/*, make sure not
+" to non-dep3patch files, such as README and other text files.
+func dist#ft#Dep3patch()
+  if expand('%:t') ==# 'series'
+    return
+  endif
+
+  for ln in getline(1, 100)
+    if ln =~# '^\%(Description\|Subject\|Origin\|Bug\|Forwarded\|Author\|From\|Reviewed-by\|Acked-by\|Last-Updated\|Applied-Upstream\):'
+      setf dep3patch
+      return
+    elseif ln =~# '^---'
+      " end of headers found. stop processing
+      return
+    endif
+  endfor
+endfunc
+
+" This function checks the first 15 lines for appearance of 'FoamFile'
+" and then 'object' in a following line.
+" In that case, it's probably an OpenFOAM file
+func dist#ft#FTfoam()
+    let ffile = 0
+    let lnum = 1
+    while lnum <= 15
+      if getline(lnum) =~# '^FoamFile'
+	let ffile = 1
+      elseif ffile == 1 && getline(lnum) =~# '^\s*object'
+	setf foam
+	return
+      endif
+      let lnum = lnum + 1
+    endwhile
+endfunc
+
+" Determine if a *.tf file is TF mud client or terraform
+func dist#ft#FTtf()
+  let numberOfLines = line('$')
+  for i in range(1, numberOfLines)
+    let currentLine = trim(getline(i))
+    let firstCharacter = currentLine[0]
+    if firstCharacter !=? ";" && firstCharacter !=? "/" && firstCharacter !=? ""
+      setf terraform
+      return
+    endif
+  endfor
+  setf tf
 endfunc
 
 

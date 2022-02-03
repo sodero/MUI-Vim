@@ -64,7 +64,6 @@ int mch_access(char *n, int p);
 int mch_open(const char *name, int flags, int mode);
 FILE *mch_fopen(const char *name, const char *mode);
 int mch_copy_file_attribute(char_u *from, char_u *to);
-int myresetstkoflw(void);
 int get_cmd_argsW(char ***argvp);
 void free_cmd_argsW(void);
 void used_file_arg(char *name, int literal, int full_path, int diff_mode);
@@ -83,4 +82,5 @@ int get_conpty_type(void);
 int is_conpty_stable(void);
 int get_conpty_fix_type(void);
 void resize_console_buf(void);
+char * GetWin32Error(void);
 /* vim: set ft=c : */

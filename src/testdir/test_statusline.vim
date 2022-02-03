@@ -196,7 +196,16 @@ func Test_statusline()
   set virtualedit=all
   norm 10|
   call assert_match('^10,-10\s*$', s:get_statusline())
+  set list
+  call assert_match('^10,-10\s*$', s:get_statusline())
   set virtualedit&
+  exe "norm A\<Tab>\<Tab>a\<Esc>"
+  " In list mode a <Tab> is shown as "^I", which is 2-wide.
+  call assert_match('^9,-9\s*$', s:get_statusline())
+  set list&
+  " Now the second <Tab> ends at the 16th screen column.
+  call assert_match('^17,-17\s*$', s:get_statusline())
+  undo
 
   " %w: Preview window flag, text is "[Preview]".
   " %W: Preview window flag, text is ",PRV".
@@ -520,6 +529,16 @@ func Test_statusline_mbyte_fillchar()
   call assert_match('^a\+═\+b═a\+━\+b$', s:get_statusline())
   set statusline& fillchars& laststatus&
   %bw!
+endfunc
+
+" Used to write beyond allocated memory.  This assumes MAXPATHL is 4096 bytes.
+func Test_statusline_verylong_filename()
+  let fname = repeat('x', 4090)
+  exe "new " .. fname
+  set buftype=help
+  set previewwindow
+  redraw
+  bwipe!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

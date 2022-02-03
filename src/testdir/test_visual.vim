@@ -1,6 +1,8 @@
 " Tests for various Visual modes.
 
 source shared.vim
+source check.vim
+source screendump.vim
 
 func Test_block_shift_multibyte()
   " Uses double-wide character.
@@ -663,6 +665,11 @@ func Test_characterwise_visual_mode()
   normal v$rx
   call assert_equal(['x'], getline(1, '$'))
 
+  " replace a character with composing characters
+  call setline(1, "xã̳x")
+  normal gg0lvrb
+  call assert_equal("xbx", getline(1))
+
   bwipe!
 endfunc
 
@@ -806,11 +813,7 @@ func Test_visual_block_mode()
   %d _
   call setline(1, ['aaa', 'bbb', 'ccc'])
   exe "normal $\<C-V>2jA\<Left>x"
-  " BUG: Instead of adding x as the third character in all the three lines,
-  " 'a' is added in the second and third lines at the end. This bug is not
-  " reproducible if this operation is performed manually.
-  "call assert_equal(['aaxa', 'bbxb', 'ccxc'], getline(1, '$'))
-  call assert_equal(['aaxa', 'bbba', 'ccca'], getline(1, '$'))
+  call assert_equal(['aaxa', 'bbxb', 'ccxc'], getline(1, '$'))
   " Repeat the previous test but use 'l' to move the cursor instead of '$'
   call setline(1, ['aaa', 'bbb', 'ccc'])
   exe "normal! gg2l\<C-V>2jA\<Left>x"
@@ -1225,5 +1228,162 @@ func Test_visual_put_in_block_using_zy_and_zp()
   bwipe!
 endfunc
 
+func Test_visual_put_blockedit_zy_and_zp()
+  new
+
+  call setline(1, ['aa', 'bbbbb', 'ccc', '', 'XX', 'GGHHJ', 'RTZU'])
+  exe "normal! gg0\<c-v>2j$zy"
+  norm! 5gg0zP
+  call assert_equal(['aa', 'bbbbb', 'ccc', '', 'aaXX', 'bbbbbGGHHJ', 'cccRTZU'], getline(1, 7))
+  "
+  " now with blockmode editing
+  sil %d
+  :set ve=block
+  call setline(1, ['aa', 'bbbbb', 'ccc', '', 'XX', 'GGHHJ', 'RTZU'])
+  exe "normal! gg0\<c-v>2j$zy"
+  norm! 5gg0zP
+  call assert_equal(['aa', 'bbbbb', 'ccc', '', 'aaXX', 'bbbbbGGHHJ', 'cccRTZU'], getline(1, 7))
+  set ve&vim
+  bw!
+endfunc
+
+func Test_visual_block_yank_zy()
+  new
+  " this was reading before the start of the line
+  exe "norm o\<C-T>\<Esc>\<C-V>zy"
+  bwipe!
+endfunc
+
+func Test_visual_block_with_virtualedit()
+  CheckScreendump
+
+  let lines =<< trim END
+    call setline(1, ['aaaaaa', 'bbbb', 'cc'])
+    set virtualedit=block
+    normal G
+  END
+  call writefile(lines, 'XTest_block')
+
+  let buf = RunVimInTerminal('-S XTest_block', {'rows': 8, 'cols': 50})
+  call term_sendkeys(buf, "\<C-V>gg$")
+  call VerifyScreenDump(buf, 'Test_visual_block_with_virtualedit', {})
+
+  call term_sendkeys(buf, "\<Esc>gg\<C-V>G$")
+  call VerifyScreenDump(buf, 'Test_visual_block_with_virtualedit2', {})
+
+  " clean up
+  call term_sendkeys(buf, "\<Esc>")
+  call StopVimInTerminal(buf)
+  call delete('XTest_block')
+endfunc
+
+func Test_visual_block_ctrl_w_f()
+  " Emtpy block selected in new buffer should not result in an error.
+  au! BufNew foo sil norm f
+  edit foo
+
+  au! BufNew
+endfunc
+
+func Test_visual_block_append_invalid_char()
+  " this was going over the end of the line
+  set isprint=@,161-255
+  new
+  call setline(1, ['	   let xxx', 'xxxxx', 'xxxxxxxxxxx'])
+  exe "normal 0\<C-V>jjA-\<Esc>"
+  call assert_equal(['	-   let xxx', 'xxxxx   -', 'xxxxxxxx-xxx'], getline(1, 3))
+  bwipe!
+  set isprint&
+endfunc
+
+func Test_visual_reselect_with_count()
+  " this was causing an illegal memory access
+  let lines =<< trim END
+
+
+
+      :
+      r<sfile>
+      exe "%norm e3\<c-v>kr\t"
+      :
+
+      :
+  END
+  call writefile(lines, 'XvisualReselect')
+  source XvisualReselect
+
+  bwipe!
+  call delete('XvisualReselect')
+endfunc
+
+func Test_visual_block_insert_round_off()
+  new
+  " The number of characters are tuned to fill a 4096 byte allocated block,
+  " so that valgrind reports going over the end.
+  call setline(1, ['xxxxx', repeat('0', 1350), "\t", repeat('x', 60)])
+  exe "normal gg0\<C-V>GI" .. repeat('0', 1320) .. "\<Esc>"
+  bwipe!
+endfunc
+
+" this was causing an ml_get error
+func Test_visual_exchange_windows()
+  enew!
+  new
+  call setline(1, ['foo', 'bar'])
+  exe "normal G\<C-V>gg\<C-W>\<C-X>OO\<Esc>"
+  bwipe!
+  bwipe!
+endfunc
+
+" this was leaving the end of the Visual area beyond the end of a line
+func Test_visual_ex_copy_line()
+  new
+  call setline(1, ["aaa", "bbbbbbbbbxbb"])
+  /x
+  exe "normal ggvjfxO"
+  t0
+  normal gNU
+  bwipe!
+endfunc
+
+" This was leaving the end of the Visual area beyond the end of a line.
+" Set 'undolevels' to start a new undo block.
+func Test_visual_undo_deletes_last_line()
+  new
+  call setline(1, ["aaa", "ccc", "dyd"])
+  set undolevels=100
+  exe "normal obbbbbbbbbxbb\<Esc>"
+  set undolevels=100
+  /y
+  exe "normal ggvjfxO"
+  undo
+  normal gNU
+
+  bwipe!
+endfunc
+
+func Test_visual_paste()
+  new
+
+  " v_p overwrites unnamed register.
+  call setline(1, ['xxxx'])
+  call setreg('"', 'foo')
+  call setreg('-', 'bar')
+  normal 1Gvp
+  call assert_equal(@", 'x')
+  call assert_equal(@-, 'x')
+
+  if has('clipboard')
+    " v_P does not overwrite unnamed register.
+    call setline(1, ['xxxx'])
+    call setreg('"', 'foo')
+    call setreg('-', 'bar')
+    normal 1GvP
+    call assert_equal(@", 'foo')
+    call assert_equal(@-, 'x')
+  endif
+
+  bwipe!
+endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

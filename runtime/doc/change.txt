@@ -1,4 +1,4 @@
-*change.txt*    For Vim version 8.2.  Last change: 2021 Jun 10
+*change.txt*    For Vim version 8.2.  Last change: 2022 Jan 28
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -259,6 +259,9 @@ Or use "caw" (see |aw|).
 			line.
 			Adding [!] toggles 'autoindent' for the time this
 			command is executed.
+			This command is not supported in |Vim9| script,
+			because it is too easily confused with a variable
+			name.
 
 ==============================================================================
 3. Simple changes					*simple-change*
@@ -780,11 +783,14 @@ For compatibility with Vi these two exceptions are allowed:
 "\/{string}/" and "\?{string}?" do the same as "//{string}/r".
 "\&{string}&" does the same as "//{string}/".
 						*pattern-delimiter* *E146*
-Instead of the '/' which surrounds the pattern and replacement string, you
-can use any other single-byte character, but not an alphanumeric character,
-'\', '"' or '|'.  This is useful if you want to include a '/' in the search
-pattern or replacement string.  Example: >
+Instead of the '/' which surrounds the pattern and replacement string, you can
+use another single-byte character.  This is useful if you want to include a
+'/' in the search pattern or replacement string.  Example: >
 	:s+/+//+
+
+You can use most characters, but not an alphanumeric character, '\', '"' or
+'|'.  In Vim9 script you should not use '#' because it may be recognized as
+the start of a comment.
 
 For the definition of a pattern, see |pattern|.  In Visual block mode, use
 |/\%V| in the pattern to have the substitute work in the block only.
@@ -1170,19 +1176,19 @@ register.  With blockwise selection it also depends on the size of the block
 and whether the corners are on an existing character.  (Implementation detail:
 it actually works by first putting the register after the selection and then
 deleting the selection.)
-The previously selected text is put in the unnamed register.  If you want to
-put the same text into a Visual selection several times you need to use
+With 'p' the previously selected text is put in the unnamed register.  This is
+useful if you want to put that text somewhere else.  But you cannot repeat the
+same change.
+With 'P' the unnamed register is not changed, you can repeat the same change.
+But the deleted text cannot be used.  If you do need it you can use 'p' with
 another register.  E.g., yank the text to copy, Visually select the text to
-replace and use "0p .  You can repeat this as many times as you like, the
+replace and use "0p .  You can repeat this as many times as you like, and the
 unnamed register will be changed each time.
 
 When you use a blockwise Visual mode command and yank only a single line into
 a register, a paste on a visual selected area will paste that single line on
 each of the selected lines (thus replacing the blockwise selected region by a
 block of the pasted line).
-
-Use |zP|/|zp| to paste a blockwise yanked register without appending trailing
-spaces.
 
 							*blockwise-register*
 If you use a blockwise Visual mode command to get the text into the register,
@@ -1193,6 +1199,9 @@ yanked or deleted.  Vim may replace some <Tab> characters with spaces to make
 this happen.  However, if the width of the block is not a multiple of a <Tab>
 width and the text after the inserted block contains <Tab>s, that text may be
 misaligned.
+
+Use |zP|/|zp| to paste a blockwise yanked register without appending trailing
+spaces.
 
 Note that after a characterwise yank command, Vim leaves the cursor on the
 first yanked character that is closest to the start of the buffer.  This means
@@ -1371,6 +1380,9 @@ The next three commands always work on whole lines.
 
 							*:t*
 :t			Synonym for copy.
+			This command is not supported in |Vim9| script,
+			because it is too easily confused with a variable
+			name.
 
 :[range]m[ove] {address}			*:m* *:mo* *:move* *E134*
 			Move the lines given by [range] to below the line
@@ -1668,7 +1680,8 @@ r	Automatically insert the current comment leader after hitting
 	<Enter> in Insert mode.
 							*fo-o*
 o	Automatically insert the current comment leader after hitting 'o' or
-	'O' in Normal mode.
+	'O' in Normal mode.  In case comment is unwanted in a specific place
+	use CTRL-U to quickly delete it. |i_CTRL-U|
 							*fo-q*
 q	Allow formatting of comments with "gq".
 	Note that formatting will not change blank lines or lines containing

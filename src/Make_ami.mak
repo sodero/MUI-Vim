@@ -12,7 +12,6 @@ CFLAGS = -c -O3
 # Common compiler flags
 CFLAGS += \
 	-DUSE_TMPNAM \
-	-DNEW_SHELLSIZE \
 	-I proto \
 	-Wall \
 	-Wno-pointer-sign \
@@ -108,6 +107,7 @@ endif
 
 # Common sources
 SRC += \
+	alloc.c \
 	arabic.c \
 	arglist.c \
 	autocmd.c \
@@ -148,6 +148,7 @@ SRC += \
 	float.c \
 	fold.c \
 	getchar.c \
+	gui_xim.c \
 	hardcopy.c \
 	hashtab.c \
 	help.c \
@@ -191,6 +192,7 @@ SRC += \
 	spell.c \
 	spellfile.c \
 	spellsuggest.c \
+	strings.c \
 	syntax.c \
 	tag.c \
 	term.c \
@@ -207,8 +209,11 @@ SRC += \
 	userfunc.c \
 	version.c \
 	viminfo.c \
+	vim9cmds.c \
 	vim9compile.c \
 	vim9execute.c \
+	vim9expr.c \
+	vim9instr.c \
 	vim9script.c \
 	vim9type.c \
 	window.c \

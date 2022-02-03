@@ -170,6 +170,12 @@ func Test_recover_empty_swap_file()
   call assert_match('Unable to read block 0 from .Xfile1.swp', msg)
   call assert_equal('Xfile1', @%)
   bw!
+
+  " make sure there are no old swap files laying around
+  for f in glob('.sw?', 0, 1)
+    call delete(f)
+  endfor
+
   " :recover from an empty buffer
   call assert_fails('recover', 'E305:')
   call delete('.Xfile1.swp')
@@ -202,10 +208,18 @@ func Test_recover_corrupted_swap_file()
   " Not all fields are written in a system-independent manner.  Detect whether
   " the test is running on a little or big-endian system, so the correct
   " corruption values can be set.
-  let little_endian = b[1008:1015] == 0z33323130.00000000
+  " The B0_MAGIC_LONG field may be 32-bit or 64-bit, depending on the system,
+  " even though the value stored is only 32-bits.  Therefore, need to check
+  " both the high and low 32-bits to compute these values.
+  let little_endian = (b[1008:1011] == 0z33323130) || (b[1012:1015] == 0z33323130)
+  let system_64bit = little_endian ? (b[1012:1015] == 0z00000000) : (b[1008:1011] == 0z00000000)
 
   " clear the B0_MAGIC_LONG field
-  let b[1008:1015] = 0z0000000000000000
+  if system_64bit
+    let b[1008:1015] = 0z00000000.00000000
+  else
+    let b[1008:1011] = 0z00000000
+  endif
   call writefile(b, sn)
   let msg = execute('recover Xfile1')
   call assert_match('the file has been damaged', msg)
@@ -243,7 +257,11 @@ func Test_recover_corrupted_swap_file()
 
   " set the block number in a pointer entry to a negative number
   let b = copy(save_b)
-  let b[4104:4111] = little_endian ? 0z00000000.00000080 : 0z80000000.00000000
+  if system_64bit
+    let b[4104:4111] = little_endian ? 0z00000000.00000080 : 0z80000000.00000000
+  else
+    let b[4104:4107] = little_endian ? 0z00000080 : 0z80000000
+  endif
   call writefile(b, sn)
   call assert_fails('recover Xfile1', 'E312:')
   call assert_equal('Xfile1', @%)
@@ -261,7 +279,11 @@ func Test_recover_corrupted_swap_file()
 
   " set the number of lines in the data block to zero
   let b = copy(save_b)
-  let b[8208:8215] = 0z00000000.00000000
+  if system_64bit
+    let b[8208:8215] = 0z00000000.00000000
+  else
+    let b[8208:8211] = 0z00000000
+  endif
   call writefile(b, sn)
   call assert_fails('recover Xfile1', 'E312:')
   call assert_equal('Xfile1', @%)
@@ -271,7 +293,11 @@ func Test_recover_corrupted_swap_file()
 
   " use an invalid text start for the lines in a data block
   let b = copy(save_b)
-  let b[8216:8219] = 0z00000000
+  if system_64bit
+    let b[8216:8219] = 0z00000000
+  else
+    let b[8212:8215] = 0z00000000
+  endif
   call writefile(b, sn)
   call assert_fails('recover Xfile1', 'E312:')
   call assert_equal('Xfile1', @%)
@@ -335,7 +361,7 @@ func Test_recover_encrypted_swap_file()
 endfunc
 
 " Test for :recover using a unreadable swap file
-func Test_recover_unreadble_swap_file()
+func Test_recover_unreadable_swap_file()
   CheckUnix
   CheckNotRoot
   new Xfile1

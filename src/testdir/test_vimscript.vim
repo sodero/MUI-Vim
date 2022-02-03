@@ -5570,10 +5570,10 @@ func Test_expr_eval_error_msg()
     call T(19, '{(1} + CONT(19)',	'E110',	"Missing ')'")
     call T(20, '("abc"[1) + CONT(20)',	'E111',	"Missing ']'")
     call T(21, '(1 +) + CONT(21)',	'E15',	"Invalid expression")
-    call T(22, '1 2 + CONT(22)',	'E15',	"Invalid expression")
+    call T(22, '1 2 + CONT(22)',	'E488',	"Trailing characters: 2 +")
     call T(23, '(1 ? 2) + CONT(23)',	'E109',	"Missing ':' after '?'")
-    call T(24, '("abc) + CONT(24)',	'E114',	"Missing quote")
-    call T(25, "('abc) + CONT(25)",	'E115',	"Missing quote")
+    call T(24, '("abc) + CONT(24)',	'E114',	"Missing double quote")
+    call T(25, "('abc) + CONT(25)",	'E115',	"Missing single quote")
     call T(26, '& + CONT(26)',		'E112', "Option name missing")
     call T(27, '&asdf + CONT(27)',	'E113', "Unknown option")
 
@@ -5657,7 +5657,12 @@ func Test_throw_multi_error()
           call EXEC(cmd . ' novar #')		" normal plus syntax error
         catch /^Vim\((\a\+)\)\=:/
           Xloop 'e'
-          call assert_match('E488: Trailing characters', v:exception)
+          if cmd =~ 'unlet'
+            " TODO: should get error for 'novar'
+            call assert_match('E488: Trailing characters', v:exception)
+          else
+            call assert_match('E121: Undefined variable: novar', v:exception)
+          endif
         finally
           Xloop 'f'
           call assert_equal("", v:errmsg)

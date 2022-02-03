@@ -164,7 +164,7 @@ mch_write(char_u *p, int len)
 mch_inchar(
     char_u  *buf,
     int	    maxlen,
-    long    time,		// milli seconds
+    long    time,		// milliseconds
     int	    tb_change_cnt UNUSED)
 {
     int	    len;
@@ -744,7 +744,6 @@ fname_case(
     }
 }
 
-#ifdef FEAT_TITLE
 /*
  * set the title of our window
  * icon name is not set
@@ -794,7 +793,6 @@ mch_can_restore_icon(void)
 {
     return FALSE;
 }
-#endif
 
     void
 mch_setmouse(int on UNUSED)
@@ -1112,9 +1110,7 @@ mch_exit(int r)
 	out_flush();
     }
 
-#ifdef FEAT_TITLE
     mch_restore_title(SAVE_RESTORE_BOTH);    // restore window title
-#endif
 
     ml_close_all(TRUE);		    // remove all memfiles
 
@@ -1277,13 +1273,8 @@ mch_get_shellsize(void)
 	OUT_STR("\233t\233u");	// CSI t CSI u
     out_flush();
 
-#ifdef __AROS__
-    if (!Info(raw_out, id)
-		 || (wb_window = (struct Window *) id->id_VolumeNode) == NULL)
-#else
     if (dos_packet(MP(raw_out), (long)ACTION_DISK_INFO, ((ULONG) id) >> 2) == 0
 	    || (wb_window = (struct Window *)id->id_VolumeNode) == NULL)
-#endif
     {
 	// it's not an amiga window, maybe aux device
 	// terminal type should be set
@@ -1451,7 +1442,7 @@ mch_call_shell(
     if (close_win)
     {
 	// if Vim opened a window: Executing a shell may cause crashes
-	emsg(_("E360: Cannot execute shell with -f option"));
+	emsg(_(e_cannot_execute_shell_with_f_option));
 	return -1;
     }
 
@@ -1633,9 +1624,7 @@ mch_call_shell(
 	cur_tmode = TMODE_UNKNOWN;
 	settmode(TMODE_RAW);		// set to raw mode
     }
-#ifdef FEAT_TITLE
     resettitle();
-#endif
     if (term_console)
 	win_resize_on();		// window resize events activated
     return retval;

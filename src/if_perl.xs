@@ -175,11 +175,13 @@ typedef int perl_key;
 #  define load_dll(n) dlopen((n), RTLD_LAZY|RTLD_GLOBAL)
 #  define symbol_from_dll dlsym
 #  define close_dll dlclose
+#  define load_dll_error dlerror
 # else
 #  define PERL_PROC FARPROC
 #  define load_dll vimLoadLib
 #  define symbol_from_dll GetProcAddress
 #  define close_dll FreeLibrary
+#  define load_dll_error GetWin32Error
 # endif
 /*
  * Wrapper defines
@@ -771,7 +773,7 @@ perl_runtime_link_init(char *libname, int verbose)
 	    close_dll(hPerlLib);
 	    hPerlLib = NULL;
 	    if (verbose)
-		semsg((const char *)_(e_loadfunc), perl_funcname_table[i].name);
+		semsg((const char *)_(e_could_not_load_library_function_str), perl_funcname_table[i].name);
 	    return FAIL;
 	}
     }
@@ -1028,7 +1030,6 @@ VIM_init(void)
 #ifdef DYNAMIC_PERL
 static char *e_noperl = N_("Sorry, this command is disabled: the Perl library could not be loaded.");
 #endif
-static char *e_perlsandbox = N_("E299: Perl evaluation forbidden in sandbox without the Safe module");
 
 /*
  * ":perl"
@@ -1082,7 +1083,7 @@ ex_perl(exarg_T *eap)
 	safe = perl_get_sv("VIM::safe", FALSE);
 # ifndef MAKE_TEST  /* avoid a warning for unreachable code */
 	if (safe == NULL || !SvTRUE(safe))
-	    emsg(_(e_perlsandbox));
+	    emsg(_(e_perl_evaluation_forbidden_in_sandbox_without_safe_module));
 	else
 # endif
 	{
@@ -1359,7 +1360,7 @@ do_perleval(char_u *str, typval_T *rettv)
 	    safe = get_sv("VIM::safe", FALSE);
 # ifndef MAKE_TEST  /* avoid a warning for unreachable code */
 	    if (safe == NULL || !SvTRUE(safe))
-		emsg(_(e_perlsandbox));
+		emsg(_(e_perl_evaluation_forbidden_in_sandbox_without_safe_module));
 	    else
 # endif
 	    {
