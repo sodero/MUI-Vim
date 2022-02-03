@@ -1259,10 +1259,6 @@ gui_mch_add_menu_item(vimmenu_T *menu, int idx)
     XmString	label;
     vimmenu_T	*parent = menu->parent;
 
-# ifdef EBCDIC
-    menu->mnemonic = 0;
-# endif
-
 # if (XmVersion <= 1002)
     // Don't add Popup menu items when the popup menu isn't used.
     if (menu_is_child_of_popup(menu) && !mouse_model_popup())
@@ -2768,7 +2764,7 @@ gui_mch_dialog(
     // Create the dialog message.
     // Since LessTif is apparently having problems with the creation of
     // properly localized string, we use LtoR here. The symptom is that the
-    // string sill not show properly in multiple lines as it does in native
+    // string is not shown properly in multiple lines as it does in native
     // Motif.
     label = XmStringCreateLtoR((char *)message, STRING_TAG);
     if (label == NULL)
@@ -3995,7 +3991,7 @@ gui_mch_replace_dialog(exarg_T *eap)
 }
 
 /*
- * Synchronize all gui elements, which are dependant upon the
+ * Synchronize all gui elements, which are dependent upon the
  * main text font used. Those are in esp. the find/replace dialogs.
  * If you don't understand why this should be needed, please try to
  * search for "pi\xea\xb6\xe6" in iso8859-2.

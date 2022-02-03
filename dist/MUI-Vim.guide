@@ -67,6 +67,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2022-02-05@{UB}
+- Update to VIM 8.2.4291.
+
 @{B}2021-07-17@{UB}
 - Update to VIM 8.2.2993.
 - Performance improvements.

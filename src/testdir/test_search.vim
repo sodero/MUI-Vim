@@ -373,9 +373,9 @@ func Test_searchpairpos()
 endfunc
 
 func Test_searchpair_errors()
-  call assert_fails("call searchpair([0], 'middle', 'end', 'bW', 'skip', 99, 100)", 'E730: using List as a String')
-  call assert_fails("call searchpair('start', {-> 0}, 'end', 'bW', 'skip', 99, 100)", 'E729: using Funcref as a String')
-  call assert_fails("call searchpair('start', 'middle', {'one': 1}, 'bW', 'skip', 99, 100)", 'E731: using Dictionary as a String')
+  call assert_fails("call searchpair([0], 'middle', 'end', 'bW', 'skip', 99, 100)", 'E730: Using a List as a String')
+  call assert_fails("call searchpair('start', {-> 0}, 'end', 'bW', 'skip', 99, 100)", 'E729: Using a Funcref as a String')
+  call assert_fails("call searchpair('start', 'middle', {'one': 1}, 'bW', 'skip', 99, 100)", 'E731: Using a Dictionary as a String')
   call assert_fails("call searchpair('start', 'middle', 'end', 'flags', 'skip', 99, 100)", 'E475: Invalid argument: flags')
   call assert_fails("call searchpair('start', 'middle', 'end', 'bW', 'func', -99, 100)", 'E475: Invalid argument: -99')
   call assert_fails("call searchpair('start', 'middle', 'end', 'bW', 'func', 99, -100)", 'E475: Invalid argument: -100')
@@ -384,9 +384,9 @@ func Test_searchpair_errors()
 endfunc
 
 func Test_searchpairpos_errors()
-  call assert_fails("call searchpairpos([0], 'middle', 'end', 'bW', 'skip', 99, 100)", 'E730: using List as a String')
-  call assert_fails("call searchpairpos('start', {-> 0}, 'end', 'bW', 'skip', 99, 100)", 'E729: using Funcref as a String')
-  call assert_fails("call searchpairpos('start', 'middle', {'one': 1}, 'bW', 'skip', 99, 100)", 'E731: using Dictionary as a String')
+  call assert_fails("call searchpairpos([0], 'middle', 'end', 'bW', 'skip', 99, 100)", 'E730: Using a List as a String')
+  call assert_fails("call searchpairpos('start', {-> 0}, 'end', 'bW', 'skip', 99, 100)", 'E729: Using a Funcref as a String')
+  call assert_fails("call searchpairpos('start', 'middle', {'one': 1}, 'bW', 'skip', 99, 100)", 'E731: Using a Dictionary as a String')
   call assert_fails("call searchpairpos('start', 'middle', 'end', 'flags', 'skip', 99, 100)", 'E475: Invalid argument: flags')
   call assert_fails("call searchpairpos('start', 'middle', 'end', 'bW', 'func', -99, 100)", 'E475: Invalid argument: -99')
   call assert_fails("call searchpairpos('start', 'middle', 'end', 'bW', 'func', 99, -100)", 'E475: Invalid argument: -100')
@@ -1682,6 +1682,8 @@ func Test_invalid_regexp()
   call assert_fails("call search('\\(')", 'E54:')
   call assert_fails("call search('\\)')", 'E55:')
   call assert_fails("call search('\\z\\(\\)')", 'E66:')
+  call assert_fails("call search('\\z2')", 'E67:')
+  call assert_fails("call search('\\zx')", 'E867:')
   call assert_fails("call search('\\%[ab')", 'E69:')
   call assert_fails("call search('\\%[]')", 'E70:')
   call assert_fails("call search('\\%9999999999999999999999999999v')", 'E951:')
@@ -1911,5 +1913,97 @@ func Test_incsearch_substitute_dump2()
   call StopVimInTerminal(buf)
   call delete('Xis_subst_script2')
 endfunc
+
+func Test_pattern_is_uppercase_smartcase()
+  new
+  let input=['abc', 'ABC', 'Abc', 'abC']
+  call setline(1, input)
+  call cursor(1,1)
+  " default, matches firstline
+  %s/abc//g
+  call assert_equal(['', 'ABC', 'Abc', 'abC'],
+        \ getline(1, '$'))
+
+  set smartcase ignorecase
+  sil %d
+  call setline(1, input)
+  call cursor(1,1)
+  " with smartcase and incsearch set, matches everything
+  %s/abc//g
+  call assert_equal(['', '', '', ''], getline(1, '$'))
+
+  sil %d
+  call setline(1, input)
+  call cursor(1,1)
+  " with smartcase and incsearch set and found an uppercase letter,
+  " match only that.
+  %s/abC//g
+  call assert_equal(['abc', 'ABC', 'Abc', ''],
+        \ getline(1, '$'))
+
+  sil %d
+  call setline(1, input)
+  call cursor(1,1)
+  exe "norm! vG$\<esc>"
+  " \%V should not be detected as uppercase letter
+  %s/\%Vabc//g
+  call assert_equal(['', '', '', ''], getline(1, '$'))
+
+  call setline(1, input)
+  call cursor(1,1)
+  exe "norm! vG$\<esc>"
+  " \v%V should not be detected as uppercase letter
+  %s/\v%Vabc//g
+  call assert_equal(['', '', '', ''], getline(1, '$'))
+
+  call setline(1, input)
+  call cursor(1,1)
+  exe "norm! vG$\<esc>"
+  " \v%VabC should be detected as uppercase letter
+  %s/\v%VabC//g
+  call assert_equal(['abc', 'ABC', 'Abc', ''],
+        \ getline(1, '$'))
+
+  call setline(1, input)
+  call cursor(1,1)
+  " \Vabc should match everything
+  %s/\Vabc//g
+  call assert_equal(['', '', '', ''], getline(1, '$'))
+
+  call setline(1, input + ['_abc'])
+  " _ matches normally
+  %s/\v_.*//g
+  call assert_equal(['abc', 'ABC', 'Abc', 'abC', ''], getline(1, '$'))
+
+  set smartcase& ignorecase&
+  bw!
+endfunc
+
+func Test_no_last_search_pattern()
+  CheckOption incsearch
+
+  let @/ = ""
+  set incsearch
+  " these were causing a crash
+  call feedkeys("//\<C-G>", 'xt')
+  call feedkeys("//\<C-T>", 'xt')
+  call feedkeys("??\<C-G>", 'xt')
+  call feedkeys("??\<C-T>", 'xt')
+endfunc
+
+func Test_search_with_invalid_range()
+  new
+  let lines =<< trim END
+    /\%.v
+    5/
+    c
+  END
+  call writefile(lines, 'Xrangesearch')
+  source Xrangesearch
+
+  bwipe!
+  call delete('Xrangesearch')
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

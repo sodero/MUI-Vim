@@ -1,8 +1,9 @@
 " Test the :disassemble command, and compilation as a side effect
 
 source check.vim
+import './vim9.vim' as v9
 
-func NotCompiled()
+func s:NotCompiled()
   echo "not"
 endfunc
 
@@ -117,7 +118,7 @@ def Test_disassemble_exec_expr()
         '\d 2STRING stack\[-1\]\_s*' ..
         '\d\+ PUSHS ".txt"\_s*' ..
         '\d\+ EXECCONCAT 4\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -133,7 +134,7 @@ EOF
     assert_match('<SNR>\d*_PyHeredoc.*' ..
           "    python3 << EOF^@      print('hello')^@EOF\\_s*" ..
           '\d EXEC_SPLIT     python3 << EOF^@      print(''hello'')^@EOF\_s*' ..
-          '\d RETURN 0',
+          '\d RETURN void',
           res)
   enddef
 endif
@@ -153,7 +154,7 @@ def Test_disassemble_substitute()
         '\d SUBSTITUTE   :%s/a/\\=expr/&g#c\_s*' ..
         '    0 LOAD $0\_s*' ..
         '    -------------\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -181,7 +182,7 @@ def Test_disassemble_seachpair()
         ' -------------\_s*' ..
         '\d BCALL searchpair(argc 5)\_s*' ..
         '\d DROP\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -209,7 +210,7 @@ def Test_disassemble_redir_var()
         '\d REDIR END\_s*' ..
         '\d CONCAT\_s*' ..
         '\d STORE $0\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -228,7 +229,7 @@ def Test_disassemble_cexpr()
         '\d CEXPR pre cexpr\_s*' ..
         '\d LOAD $0\_s*' ..
         '\d CEXPR core cexpr "cexpr errors"\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -244,7 +245,7 @@ def Test_disassemble_yank_range()
         '\d EXEC   norm! m\[jjm\]\_s*' ..
         '  :''\[,''\]yank\_s*' ..
         '\d EXEC   :''\[,''\]yank\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -258,7 +259,7 @@ def Test_disassemble_put_expr()
         ' :3put ="text"\_s*' ..
         '\d PUSHS "text"\_s*' ..
         '\d PUT = 3\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -272,7 +273,7 @@ def Test_disassemble_put_range()
         ' :$-2put a\_s*' ..
         '\d RANGE $-2\_s*' ..
         '\d PUT a range\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -286,21 +287,35 @@ def s:ScriptFuncPush()
 enddef
 
 def Test_disassemble_push()
-  var res = execute('disass s:ScriptFuncPush')
-  assert_match('<SNR>\d*_ScriptFuncPush.*' ..
-        'localbool = true.*' ..
-        ' PUSH true.*' ..
-        'localspec = v:none.*' ..
-        ' PUSH v:none.*' ..
-        'localblob = 0z1234.*' ..
-        ' PUSHBLOB 0z1234.*',
-        res)
-  if has('float')
-    assert_match('<SNR>\d*_ScriptFuncPush.*' ..
-          'localfloat = 1.234.*' ..
-          ' PUSHF 1.234.*',
-          res)
-  endif
+  mkdir('Xdir/autoload', 'p')
+  var save_rtp = &rtp
+  exe 'set rtp^=' .. getcwd() .. '/Xdir'
+
+  var lines =<< trim END
+      vim9script
+  END
+  writefile(lines, 'Xdir/autoload/autoscript.vim')
+
+  lines =<< trim END
+      vim9script
+      import autoload 'autoscript.vim'
+
+      def s:AutoloadFunc()
+        &operatorfunc = autoscript.Opfunc
+      enddef
+
+      var res = execute('disass s:AutoloadFunc')
+      assert_match('<SNR>\d*_AutoloadFunc.*' ..
+            '&operatorfunc = autoscript.Opfunc\_s*' ..
+            '0 AUTOLOAD autoscript#Opfunc\_s*' ..
+            '1 STOREFUNCOPT &operatorfunc\_s*' ..
+            '2 RETURN void',
+            res)
+  END
+  v9.CheckScriptSuccess(lines)
+
+  delete('Xdir', 'rf')
+  &rtp = save_rtp
 enddef
 
 def s:ScriptFuncStore()
@@ -316,6 +331,7 @@ def s:ScriptFuncStore()
   w:windowvar = 'wv'
   t:tabpagevar = 'tv'
   &tabstop = 8
+  &opfunc = (t) => len(t)
   $ENVVAR = 'ev'
   @z = 'rv'
 enddef
@@ -343,12 +359,17 @@ def Test_disassemble_store()
         ' STOREW w:windowvar.*' ..
         't:tabpagevar = ''tv''.*' ..
         ' STORET t:tabpagevar.*' ..
-        '&tabstop = 8.*' ..
-        ' STOREOPT &tabstop.*' ..
-        '$ENVVAR = ''ev''.*' ..
-        ' STOREENV $ENVVAR.*' ..
+        '&tabstop = 8\_s*' ..
+        '\d\+ PUSHNR 8\_s*' ..
+        '\d\+ STOREOPT &tabstop\_s*' ..
+        '&opfunc = (t) => len(t)\_s*' ..
+        '\d\+ FUNCREF <lambda>\d\+\_s*' ..
+        '\d\+ STOREFUNCOPT &opfunc\_s*' ..
+        '$ENVVAR = ''ev''\_s*' ..
+        '\d\+ PUSHS "ev"\_s*' ..
+        '\d\+ STOREENV $ENVVAR\_s*' ..
         '@z = ''rv''.*' ..
-        ' STOREREG @z.*',
+        '\d\+ STOREREG @z.*',
         res)
 enddef
 
@@ -390,7 +411,7 @@ def Test_disassemble_store_member()
         '\d\+ PUSHNR 1\_s*' ..
         '\d\+ LOAD $2\_s*' ..
         '\d\+ STOREINDEX blob\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -412,8 +433,9 @@ def Test_disassemble_store_index()
         '\d PUSHNR 0\_s*' ..
         '\d LOAD $0\_s*' ..
         '\d MEMBER dd\_s*' ..
-        '\d STOREINDEX any\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ USEDICT\_s*' ..
+        '\d\+ STOREINDEX any\_s*' ..
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -435,20 +457,52 @@ def Test_disassemble_list_assign()
         '\d STORE $1\_s*' ..
         'var l: list<any>\_s*' ..
         '\d NEWLIST size 0\_s*' ..
+        '\d SETTYPE list<any>\_s*' ..
         '\d STORE $2\_s*' ..
         '\[x, y; l\] = g:stringlist\_s*' ..
         '\d LOADG g:stringlist\_s*' ..
         '\d CHECKTYPE list<any> stack\[-1\]\_s*' ..
         '\d CHECKLEN >= 2\_s*' ..
         '\d\+ ITEM 0\_s*' ..
-        '\d\+ CHECKTYPE string stack\[-1\]\_s*' ..
+        '\d\+ CHECKTYPE string stack\[-1\] arg 1\_s*' ..
         '\d\+ STORE $0\_s*' ..
         '\d\+ ITEM 1\_s*' ..
-        '\d\+ CHECKTYPE string stack\[-1\]\_s*' ..
+        '\d\+ CHECKTYPE string stack\[-1\] arg 2\_s*' ..
         '\d\+ STORE $1\_s*' ..
         '\d\+ SLICE 2\_s*' ..
+        '\d\+ SETTYPE list<any>\_s*' ..
         '\d\+ STORE $2\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
+        res)
+enddef
+
+def s:ListAssignWithOp()
+  var a = 2
+  var b = 3
+  [a, b] += [4, 5]
+enddef
+
+def Test_disassemble_list_assign_with_op()
+  var res = execute('disass s:ListAssignWithOp')
+  assert_match('<SNR>\d*_ListAssignWithOp\_s*' ..
+        'var a = 2\_s*' ..
+        '\d STORE 2 in $0\_s*' ..
+        'var b = 3\_s*' ..
+        '\d STORE 3 in $1\_s*' ..
+        '\[a, b\] += \[4, 5\]\_s*' ..
+        '\d\+ PUSHNR 4\_s*' ..
+        '\d\+ PUSHNR 5\_s*' ..
+        '\d\+ NEWLIST size 2\_s*' ..
+        '\d\+ LOAD $0\_s*' ..
+        '\d\+ ITEM 0 with op\_s*' ..
+        '\d\+ OPNR +\_s*' ..
+        '\d\+ STORE $0\_s*' ..
+        '\d\+ LOAD $1\_s*' ..
+        '\d\+ ITEM 1 with op\_s*' ..
+        '\d\+ OPNR +\_s*' ..
+        '\d\+ STORE $1\_s*' ..
+        '\d\+ DROP\_s*' ..
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -476,7 +530,7 @@ def Test_disassemble_list_add()
         '\d\+ CHECKTYPE number stack\[-1\]\_s*' ..
         '\d\+ LISTAPPEND\_s*' ..
         '\d\+ DROP\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -503,7 +557,7 @@ def Test_disassemble_blob_add()
         '\d\+ CHECKTYPE number stack\[-1\]\_s*' ..
         '\d\+ BLOBAPPEND\_s*' ..
         '\d\+ DROP\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -530,7 +584,7 @@ def Test_disassemble_blob_index_slice()
         '\d\+ PUSHNR 2\_s*' ..
         '\d\+ BLOBSLICE\_s*' ..
         '\d\+ ECHO 1\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -553,6 +607,25 @@ def Test_disassemble_unlet()
         '\d UNLET! g:somevar\_s*' ..
         'unlet $SOMEVAR\_s*' ..
         '\d UNLETENV $SOMEVAR\_s*',
+        res)
+enddef
+
+def s:LockLocal()
+  var d = {a: 1}
+  lockvar d.a
+enddef
+
+def Test_disassemble_locl_local()
+  var res = execute('disass s:LockLocal')
+  assert_match('<SNR>\d*_LockLocal\_s*' ..
+        'var d = {a: 1}\_s*' ..
+        '\d PUSHS "a"\_s*' ..
+        '\d PUSHNR 1\_s*' ..
+        '\d NEWDICT size 1\_s*' ..
+        '\d STORE $0\_s*' ..
+        'lockvar d.a\_s*' ..
+        '\d LOAD $0\_s*' ..
+        '\d LOCKUNLOCK lockvar 2 d.a\_s*',
         res)
 enddef
 
@@ -617,22 +690,22 @@ def Test_disassemble_new()
         res)
 enddef
 
-def FuncWithArg(arg: any)
+def s:FuncWithArg(arg: any)
   echo arg
 enddef
 
-func UserFunc()
+func s:UserFunc()
   echo 'nothing'
 endfunc
 
-func UserFuncWithArg(arg)
+func s:UserFuncWithArg(arg)
   echo a:arg
 endfunc
 
 def s:ScriptFuncCall(): string
   changenr()
   char2nr("abc")
-  Test_disassemble_new()
+  g:Test_disassemble_new()
   FuncWithArg(343)
   ScriptFuncNew()
   s:ScriptFuncNew()
@@ -655,12 +728,12 @@ def Test_disassemble_call()
         '\d PUSHS "abc"\_s*' ..
         '\d BCALL char2nr(argc 1)\_s*' ..
         '\d DROP\_s*' ..
-        'Test_disassemble_new()\_s*' ..
+        'g:Test_disassemble_new()\_s*' ..
         '\d DCALL Test_disassemble_new(argc 0)\_s*' ..
         '\d DROP\_s*' ..
         'FuncWithArg(343)\_s*' ..
         '\d\+ PUSHNR 343\_s*' ..
-        '\d\+ DCALL FuncWithArg(argc 1)\_s*' ..
+        '\d\+ DCALL <SNR>\d\+_FuncWithArg(argc 1)\_s*' ..
         '\d\+ DROP\_s*' ..
         'ScriptFuncNew()\_s*' ..
         '\d\+ DCALL <SNR>\d\+_ScriptFuncNew(argc 0)\_s*' ..
@@ -669,11 +742,11 @@ def Test_disassemble_call()
         '\d\+ DCALL <SNR>\d\+_ScriptFuncNew(argc 0)\_s*' ..
         '\d\+ DROP\_s*' ..
         'UserFunc()\_s*' ..
-        '\d\+ UCALL UserFunc(argc 0)\_s*' ..
+        '\d\+ UCALL <80><fd>R\d\+_UserFunc(argc 0)\_s*' ..
         '\d\+ DROP\_s*' ..
         'UserFuncWithArg("foo")\_s*' ..
         '\d\+ PUSHS "foo"\_s*' ..
-        '\d\+ UCALL UserFuncWithArg(argc 1)\_s*' ..
+        '\d\+ UCALL <80><fd>R\d\+_UserFuncWithArg(argc 1)\_s*' ..
         '\d\+ DROP\_s*' ..
         'var FuncRef = function("UserFunc")\_s*' ..
         '\d\+ PUSHS "UserFunc"\_s*' ..
@@ -720,7 +793,7 @@ def Test_disassemble_closure()
         '\d LOAD arg\[-1\]\_s*' ..
         '\d CONCAT\_s*' ..
         '\d STOREOUTER level 1 $0\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 
   res = execute('disass g:Get')
@@ -738,7 +811,7 @@ enddef
 def EchoArg(arg: string): string
   return arg
 enddef
-def RefThis(): func
+def s:RefThis(): func
   return function('EchoArg')
 enddef
 def s:ScriptPCall()
@@ -749,12 +822,12 @@ def Test_disassemble_pcall()
   var res = execute('disass s:ScriptPCall')
   assert_match('<SNR>\d\+_ScriptPCall\_s*' ..
         'RefThis()("text")\_s*' ..
-        '\d DCALL RefThis(argc 0)\_s*' ..
+        '\d DCALL <SNR>\d\+_RefThis(argc 0)\_s*' ..
         '\d PUSHS "text"\_s*' ..
         '\d PCALL top (argc 1)\_s*' ..
         '\d PCALL end\_s*' ..
         '\d DROP\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -814,7 +887,7 @@ def Test_disassemble_call_default()
 enddef
 
 
-def HasEval()
+def s:HasEval()
   if has("eval")
     echo "yes"
   else
@@ -822,7 +895,7 @@ def HasEval()
   endif
 enddef
 
-def HasNothing()
+def s:HasNothing()
   if has("nothing")
     echo "yes"
   else
@@ -830,7 +903,7 @@ def HasNothing()
   endif
 enddef
 
-def HasSomething()
+def s:HasSomething()
   if has("nothing")
     echo "nothing"
   elseif has("something")
@@ -842,7 +915,7 @@ def HasSomething()
   endif
 enddef
 
-def HasGuiRunning()
+def s:HasGuiRunning()
   if has("gui_running")
     echo "yes"
   else
@@ -1012,7 +1085,7 @@ def Test_disassemble_function()
         '\d PUSHS "UserFunc"\_s*' ..
         '\d BCALL funcref(argc 1)\_s*' ..
         '\d STORE $2\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         instr)
 enddef
 
@@ -1039,11 +1112,11 @@ def Test_disassemble_channel()
         'var chan1: channel\_s*' ..
         '\d PUSHCHANNEL 0\_s*' ..
         '\d STORE $2\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         instr)
 enddef
 
-def WithLambda(): string
+def s:WithLambda(): string
   var F = (a) => "X" .. a .. "X"
   return F("x")
 enddef
@@ -1076,7 +1149,7 @@ def Test_disassemble_lambda()
         instr)
 enddef
 
-def LambdaWithType(): number
+def s:LambdaWithType(): number
   var Ref = (a: number) => a + 10
   return Ref(g:value)
 enddef
@@ -1111,7 +1184,7 @@ def Test_disassemble_nested_func()
         'echomsg "inner"\_s*' ..
         'enddef\_s*' ..
         '\d NEWFUNC <lambda>\d\+ Inner\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         instr)
 enddef
 
@@ -1133,11 +1206,11 @@ def Test_disassemble_nested_def_list()
         '\d DEF /Info\_s*' ..
         'def /Info/\_s*' ..
         '\d DEF /Info/\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         instr)
 enddef
 
-def AndOr(arg: any): string
+def s:AndOr(arg: any): string
   if arg == 1 && arg != 2 || arg == 4
     return 'yes'
   endif
@@ -1166,7 +1239,39 @@ def Test_disassemble_and_or()
         instr)
 enddef
 
-def ForLoop(): list<number>
+def s:AndConstant(arg: any): string
+  if true && arg
+    return "yes"
+  endif
+  if false && arg
+    return "never"
+  endif
+  return "no"
+enddef
+
+def Test_disassemble_and_constant()
+  assert_equal("yes", AndConstant(1))
+  assert_equal("no", AndConstant(false))
+  var instr = execute('disassemble AndConstant')
+  assert_match('AndConstant\_s*' ..
+      'if true && arg\_s*' ..
+      '0 LOAD arg\[-1\]\_s*' ..
+      '1 COND2BOOL\_s*' ..
+      '2 JUMP_IF_FALSE -> 5\_s*' ..
+      'return "yes"\_s*' ..
+      '3 PUSHS "yes"\_s*' ..
+      '4 RETURN\_s*' ..
+      'endif\_s*' ..
+      'if false && arg\_s*' ..
+      'return "never"\_s*' ..
+      'endif\_s*' ..
+      'return "no"\_s*' ..
+      '5 PUSHS "no"\_s*' ..
+      '6 RETURN',
+      instr)
+enddef
+
+def s:ForLoop(): list<number>
   var res: list<number>
   for i in range(3)
     res->add(i)
@@ -1199,7 +1304,7 @@ def Test_disassemble_for_loop()
         instr)
 enddef
 
-def ForLoopEval(): string
+def s:ForLoopEval(): string
   var res = ""
   for str in eval('["one", "two"]')
     res ..= str
@@ -1223,7 +1328,7 @@ def Test_disassemble_for_loop_eval()
         'res ..= str\_s*' ..
         '\d\+ LOAD $0\_s*' ..
         '\d\+ LOAD $2\_s*' ..
-        '\d\+ CHECKTYPE string stack\[-1\]\_s*' ..
+        '\d 2STRING_ANY stack\[-1\]\_s*' ..
         '\d\+ CONCAT\_s*' ..
         '\d\+ STORE $0\_s*' ..
         'endfor\_s*' ..
@@ -1235,7 +1340,7 @@ def Test_disassemble_for_loop_eval()
         instr)
 enddef
 
-def ForLoopUnpack()
+def s:ForLoopUnpack()
   for [x1, x2] in [[1, 2], [3, 4]]
     echo x1 x2
   endfor
@@ -1264,11 +1369,11 @@ def Test_disassemble_for_loop_unpack()
         'endfor\_s*' ..
         '\d\+ JUMP -> 8\_s*' ..
         '\d\+ DROP\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         instr)
 enddef
 
-def ForLoopContinue()
+def s:ForLoopContinue()
   for nr in [1, 2]
     try
       echo "ok"
@@ -1321,13 +1426,13 @@ def Test_disassemble_for_loop_continue()
         'endfor\_s*' ..
         '21 JUMP -> 4\_s*' ..
         '\d\+ DROP\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         instr)
 enddef
 
 let g:number = 42
 
-def TypeCast()
+def s:TypeCast()
   var l: list<number> = [23, <number>g:number]
 enddef
 
@@ -1341,11 +1446,11 @@ def Test_disassemble_typecast()
         '\d NEWLIST size 2\_s*' ..
         '\d SETTYPE list<number>\_s*' ..
         '\d STORE $0\_s*' ..
-        '\d RETURN 0\_s*',
+        '\d RETURN void\_s*',
         instr)
 enddef
 
-def Computing()
+def s:Computing()
   var nr = 3
   var nrres = nr + 7
   nrres = nr - 7
@@ -1420,7 +1525,7 @@ def Test_disassemble_computing()
   endif
 enddef
 
-def AddListBlob()
+def s:AddListBlob()
   var reslist = [1, 2] + [3, 4]
   var resblob = 0z1122 + 0z3344
 enddef
@@ -1446,7 +1551,7 @@ def Test_disassemble_add_list_blob()
 enddef
 
 let g:aa = 'aa'
-def ConcatString(): string
+def s:ConcatString(): string
   var res = g:aa .. "bb"
   return res
 enddef
@@ -1464,7 +1569,7 @@ def Test_disassemble_concat()
   assert_equal('aabb', ConcatString())
 enddef
 
-def StringIndex(): string
+def s:StringIndex(): string
   var s = "abcd"
   var res = s[1]
   return res
@@ -1485,7 +1590,7 @@ def Test_disassemble_string_index()
   assert_equal('b', StringIndex())
 enddef
 
-def StringSlice(): string
+def s:StringSlice(): string
   var s = "abcd"
   var res = s[1 : 8]
   return res
@@ -1507,7 +1612,7 @@ def Test_disassemble_string_slice()
   assert_equal('bcd', StringSlice())
 enddef
 
-def ListIndex(): number
+def s:ListIndex(): number
   var l = [1, 2, 3]
   var res = l[1]
   return res
@@ -1531,7 +1636,7 @@ def Test_disassemble_list_index()
   assert_equal(2, ListIndex())
 enddef
 
-def ListSlice(): list<number>
+def s:ListSlice(): list<number>
   var l = [1, 2, 3]
   var res = l[1 : 8]
   return res
@@ -1556,7 +1661,7 @@ def Test_disassemble_list_slice()
   assert_equal([2, 3], ListSlice())
 enddef
 
-def DictMember(): number
+def s:DictMember(): number
   var d = {item: 1}
   var res = d.item
   res = d["item"]
@@ -1574,18 +1679,20 @@ def Test_disassemble_dict_member()
         'var res = d.item\_s*' ..
         '\d\+ LOAD $0\_s*' ..
         '\d\+ MEMBER item\_s*' ..
+        '\d\+ USEDICT\_s*' ..
         '\d\+ STORE $1\_s*' ..
         'res = d\["item"\]\_s*' ..
         '\d\+ LOAD $0\_s*' ..
         '\d\+ PUSHS "item"\_s*' ..
         '\d\+ MEMBER\_s*' ..
+        '\d\+ USEDICT\_s*' ..
         '\d\+ STORE $1\_s*',
         instr)
   assert_equal(1, DictMember())
 enddef
 
 let somelist = [1, 2, 3, 4, 5]
-def AnyIndex(): number
+def s:AnyIndex(): number
   var res = g:somelist[2]
   return res
 enddef
@@ -1606,7 +1713,7 @@ def Test_disassemble_any_index()
   assert_equal(3, AnyIndex())
 enddef
 
-def AnySlice(): list<number>
+def s:AnySlice(): list<number>
   var res = g:somelist[1 : 3]
   return res
 enddef
@@ -1628,31 +1735,33 @@ def Test_disassemble_any_slice()
   assert_equal([2, 3, 4], AnySlice())
 enddef
 
-def NegateNumber(): number
-  var nr = 9
-  var plus = +nr
-  var res = -nr
-  return res
+def s:NegateNumber(): number
+  g:nr = 9
+  var plus = +g:nr
+  var minus = -g:nr
+  return minus
 enddef
 
 def Test_disassemble_negate_number()
   var instr = execute('disassemble NegateNumber')
   assert_match('NegateNumber\_s*' ..
-        'var nr = 9\_s*' ..
-        '\d STORE 9 in $0\_s*' ..
-        'var plus = +nr\_s*' ..
-        '\d LOAD $0\_s*' ..
-        '\d CHECKNR\_s*' ..
-        '\d STORE $1\_s*' ..
-        'var res = -nr\_s*' ..
-        '\d LOAD $0\_s*' ..
+        'g:nr = 9\_s*' ..
+        '\d PUSHNR 9\_s*' ..
+        '\d STOREG g:nr\_s*' ..
+        'var plus = +g:nr\_s*' ..
+        '\d LOADG g:nr\_s*' ..
+        '\d CHECKTYPE number stack\[-1\]\_s*' ..
+        '\d STORE $0\_s*' ..
+        'var minus = -g:nr\_s*' ..
+        '\d LOADG g:nr\_s*' ..
+        '\d CHECKTYPE number stack\[-1\]\_s*' ..
         '\d NEGATENR\_s*' ..
-        '\d STORE $2\_s*',
+        '\d STORE $1\_s*',
         instr)
   assert_equal(-9, NegateNumber())
 enddef
 
-def InvertBool(): bool
+def s:InvertBool(): bool
   var flag = true
   var invert = !flag
   var res = !!flag
@@ -1677,29 +1786,54 @@ def Test_disassemble_invert_bool()
   assert_equal(true, InvertBool())
 enddef
 
-def ReturnBool(): bool
-  var name: bool = 1 && 0 || 1
+def s:ReturnBool(): bool
+  var one = 1
+  var zero = 0
+  var none: number
+  var name: bool = one && zero || one
   return name
 enddef
 
 def Test_disassemble_return_bool()
   var instr = execute('disassemble ReturnBool')
   assert_match('ReturnBool\_s*' ..
-        'var name: bool = 1 && 0 || 1\_s*' ..
-        '0 PUSHNR 1\_s*' ..
-        '1 COND2BOOL\_s*' ..
-        '2 JUMP_IF_COND_FALSE -> 5\_s*' ..
-        '3 PUSHNR 0\_s*' ..
-        '4 COND2BOOL\_s*' ..
-        '5 JUMP_IF_COND_TRUE -> 8\_s*' ..
-        '6 PUSHNR 1\_s*' ..
-        '7 COND2BOOL\_s*' ..
-        '\d STORE $0\_s*' ..
+        'var one = 1\_s*' ..
+        '0 STORE 1 in $0\_s*' ..
+        'var zero = 0\_s*' ..
+        'var none: number\_s*' ..
+        'var name: bool = one && zero || one\_s*' ..
+        '1 LOAD $0\_s*' ..
+        '2 COND2BOOL\_s*' ..
+        '3 JUMP_IF_COND_FALSE -> 6\_s*' ..
+        '4 LOAD $1\_s*' ..
+        '5 COND2BOOL\_s*' ..
+        '6 JUMP_IF_COND_TRUE -> 9\_s*' ..
+        '7 LOAD $0\_s*' ..
+        '8 COND2BOOL\_s*' ..
+        '9 STORE $3\_s*' ..
         'return name\_s*' ..
-        '\d\+ LOAD $0\_s*' ..   
+        '\d\+ LOAD $3\_s*' ..   
         '\d\+ RETURN',
         instr)
   assert_equal(true, InvertBool())
+enddef
+
+def s:AutoInit()
+  var t: number
+  t = 1
+  t = 0
+enddef
+
+def Test_disassemble_auto_init()
+  var instr = execute('disassemble AutoInit')
+  assert_match('AutoInit\_s*' ..
+        'var t: number\_s*' ..
+        't = 1\_s*' ..
+        '\d STORE 1 in $0\_s*' ..
+        't = 0\_s*' ..
+        '\d STORE 0 in $0\_s*' ..
+        '\d\+ RETURN void',
+        instr)
 enddef
 
 def Test_disassemble_compare()
@@ -1828,7 +1962,7 @@ def Test_dsassemble_falsy_op()
       'echo "" ?? "empty string"\_s*' ..
       '\d\+ PUSHS "empty string"\_s*' ..
       '\d\+ ECHO 1\_s*' ..
-      '\d\+ RETURN 0',
+      '\d\+ RETURN void',
       res)
 enddef
 
@@ -1855,7 +1989,7 @@ def Test_disassemble_compare_const()
           'if ' .. substitute(case[0], '[[~]', '\\\0', 'g') .. '.*' ..
           '\d PUSHNR 42.*' ..
           '\d ECHO 1.*' ..
-          '\d RETURN 0',
+          '\d RETURN void',
           instr)
     else
       # condition false, function just returns
@@ -1863,7 +1997,7 @@ def Test_disassemble_compare_const()
           'if ' .. substitute(case[0], '[[~]', '\\\0', 'g') .. '[ \n]*' ..
           'echo 42[ \n]*' ..
           'endif[ \n]*' ..
-          '\d RETURN 0',
+          '\d RETURN void',
           instr)
     endif
 
@@ -1901,12 +2035,32 @@ def Test_disassemble_execute()
         '\d\+ LOAD $1\_s*' ..
         '\d\+ CONCAT\_s*' ..
         '\d\+ EXECUTE 1\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
+        res)
+enddef
+
+def s:OnlyRange()
+  :$
+  :123
+  :'m
+enddef
+
+def Test_disassemble_range_only()
+  var res = execute('disass s:OnlyRange')
+  assert_match('\<SNR>\d*_OnlyRange\_s*' ..
+        ':$\_s*' ..
+        '\d EXECRANGE $\_s*' ..
+        ':123\_s*' ..
+        '\d EXECRANGE 123\_s*' ..
+        ':''m\_s*' ..
+        '\d EXECRANGE ''m\_s*' ..
+        '\d\+ RETURN void',
         res)
 enddef
 
 def s:Echomsg()
   echomsg 'some' 'message'
+  echoconsole 'nothing'
   echoerr 'went' .. 'wrong'
 enddef
 
@@ -1917,10 +2071,13 @@ def Test_disassemble_echomsg()
         '\d PUSHS "some"\_s*' ..
         '\d PUSHS "message"\_s*' ..
         '\d ECHOMSG 2\_s*' ..
+        "echoconsole 'nothing'\\_s*" ..
+        '\d PUSHS "nothing"\_s*' ..
+        '\d ECHOCONSOLE 1\_s*' ..
         "echoerr 'went' .. 'wrong'\\_s*" ..
         '\d PUSHS "wentwrong"\_s*' ..
         '\d ECHOERR 1\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -2029,7 +2186,7 @@ def Test_shuffle()
         '\d SHUFFLE 2 up 1\_s*' ..
         '\d BCALL append(argc 2)\_s*' ..
         '\d DROP\_s*' ..
-        '\d RETURN 0',
+        '\d RETURN void',
         res)
 enddef
 
@@ -2052,7 +2209,7 @@ def Test_silent()
         '\d PUSHS "error"\_s*' ..
         '\d ECHOERR 1\_s*' ..
         '\d CMDMOD_REV\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -2081,7 +2238,7 @@ def Test_silent_if()
         '\d\+ CMDMOD_REV\_s*' ..
         '\d\+ JUMP_IF_FALSE -> \d\+\_s*' ..
         'endif\_s*' ..
-        '\d\+ RETURN 0',
+        '\d\+ RETURN void',
         res)
 enddef
 
@@ -2104,7 +2261,7 @@ def Test_silent_for()
         'endfor\_s*' ..
         '\d JUMP -> 5\_s*' ..
         '8 DROP\_s*' ..
-        '\d RETURN 0\_s*',
+        '\d RETURN void\_s*',
         res)
 enddef
 
@@ -2125,7 +2282,7 @@ def Test_silent_while()
 
         'endwhile\_s*' ..
         '\d JUMP -> 0\_s*' ..
-        '6 RETURN 0\_s*',
+        '6 RETURN void\_s*',
          res)
 enddef
 
@@ -2145,7 +2302,10 @@ def Test_silent_return()
 enddef
 
 def s:Profiled(): string
+  # comment
   echo "profiled"
+  # comment
+  var some = "some text"
   return "done"
 enddef
 
@@ -2155,30 +2315,204 @@ def Test_profiled()
   endif
   var res = execute('disass profile s:Profiled')
   assert_match('<SNR>\d*_Profiled\_s*' ..
+        '# comment\_s*' ..
         'echo "profiled"\_s*' ..
-        '\d PROFILE START line 1\_s*' ..
+        '\d PROFILE START line 2\_s*' ..
         '\d PUSHS "profiled"\_s*' ..
         '\d ECHO 1\_s*' ..
+        '# comment\_s*' ..
+        'var some = "some text"\_s*' ..
+        '\d PROFILE END\_s*' ..
+        '\d PROFILE START line 4\_s*' ..
+        '\d PUSHS "some text"\_s*' ..
+        '\d STORE $0\_s*' ..
         'return "done"\_s*' ..
         '\d PROFILE END\_s*' ..
-        '\d PROFILE START line 2\_s*' ..
+        '\d PROFILE START line 5\_s*' ..
         '\d PUSHS "done"\_s*' ..
-        '\d RETURN\_s*' ..
-        '\d PROFILE END',
+        '\d\+ RETURN\_s*' ..
+        '\d\+ PROFILE END',
         res)
 enddef
 
 def Test_debugged()
   var res = execute('disass debug s:Profiled')
   assert_match('<SNR>\d*_Profiled\_s*' ..
+        '# comment\_s*' ..
         'echo "profiled"\_s*' ..
-        '\d DEBUG line 1\_s*' ..
+        '\d DEBUG line 1-2 varcount 0\_s*' ..
         '\d PUSHS "profiled"\_s*' ..
         '\d ECHO 1\_s*' ..
+        '# comment\_s*' ..
+        'var some = "some text"\_s*' ..
+        '\d DEBUG line 3-4 varcount 0\_s*' ..
+        '\d PUSHS "some text"\_s*' ..
+        '\d STORE $0\_s*' ..
         'return "done"\_s*' ..
-        '\d DEBUG line 2\_s*' ..
+        '\d DEBUG line 5-5 varcount 1\_s*' ..
         '\d PUSHS "done"\_s*' ..
         '\d RETURN\_s*',
+        res)
+enddef
+
+def s:ElseifConstant()
+  if g:value
+    echo "one"
+  elseif true
+    echo "true"
+  elseif false
+    echo "false"
+  endif
+  if 0
+    echo "yes"
+  elseif 0
+    echo "no"
+  endif
+enddef
+
+def Test_debug_elseif_constant()
+  var res = execute('disass debug s:ElseifConstant')
+  assert_match('<SNR>\d*_ElseifConstant\_s*' ..
+          'if g:value\_s*' ..
+          '0 DEBUG line 1-1 varcount 0\_s*' ..
+          '1 LOADG g:value\_s*' ..
+          '2 COND2BOOL\_s*' ..
+          '3 JUMP_IF_FALSE -> 8\_s*' ..
+          'echo "one"\_s*' ..
+          '4 DEBUG line 2-2 varcount 0\_s*' ..
+          '5 PUSHS "one"\_s*' ..
+          '6 ECHO 1\_s*' ..
+          'elseif true\_s*' ..
+          '7 JUMP -> 12\_s*' ..
+          '8 DEBUG line 3-3 varcount 0\_s*' ..
+          'echo "true"\_s*' ..
+          '9 DEBUG line 4-4 varcount 0\_s*' ..
+          '10 PUSHS "true"\_s*' ..
+          '11 ECHO 1\_s*' ..
+          'elseif false\_s*' ..
+          'echo "false"\_s*' ..
+          'endif\_s*' ..
+          'if 0\_s*' ..
+          '12 DEBUG line 8-8 varcount 0\_s*' ..
+          'echo "yes"\_s*' ..
+          'elseif 0\_s*' ..
+          '13 DEBUG line 11-10 varcount 0\_s*' ..
+          'echo "no"\_s*' ..
+          'endif\_s*' ..
+          '14 RETURN void*',
+        res)
+enddef
+
+def s:DebugElseif()
+  var b = false
+  if b
+    eval 1 + 0
+  silent elseif !b
+    eval 2 + 0
+  endif
+enddef
+
+def Test_debug_elseif()
+  var res = execute('disass debug s:DebugElseif')
+  assert_match('<SNR>\d*_DebugElseif\_s*' ..
+          'var b = false\_s*' ..
+          '0 DEBUG line 1-1 varcount 0\_s*' ..
+          '1 PUSH false\_s*' ..
+          '2 STORE $0\_s*' ..
+
+          'if b\_s*' ..
+          '3 DEBUG line 2-2 varcount 1\_s*' ..
+          '4 LOAD $0\_s*' ..
+          '5 JUMP_IF_FALSE -> 10\_s*' ..
+
+          'eval 1 + 0\_s*' ..
+          '6 DEBUG line 3-3 varcount 1\_s*' ..
+          '7 PUSHNR 1\_s*' ..
+          '8 DROP\_s*' ..
+
+          'silent elseif !b\_s*' ..
+          '9 JUMP -> 20\_s*' ..
+          '10 CMDMOD silent\_s*' ..
+          '11 DEBUG line 4-4 varcount 1\_s*' ..
+          '12 LOAD $0\_s*' ..
+          '13 INVERT -1 (!val)\_s*' ..
+          '14 CMDMOD_REV\_s*' ..
+          '15 JUMP_IF_FALSE -> 20\_s*' ..
+
+          'eval 2 + 0\_s*' ..
+          '16 DEBUG line 5-5 varcount 1\_s*' ..
+          '17 PUSHNR 2\_s*' ..
+          '18 DROP\_s*' ..
+
+          'endif\_s*' ..
+          '19 DEBUG line 6-6 varcount 1\_s*' ..
+          '20 RETURN void*',
+        res)
+enddef
+
+def s:DebugFor()
+  echo "hello"
+  for a in [0]
+    echo a
+  endfor
+enddef
+
+def Test_debug_for()
+  var res = execute('disass debug s:DebugFor')
+  assert_match('<SNR>\d*_DebugFor\_s*' ..
+          'echo "hello"\_s*' ..
+          '0 DEBUG line 1-1 varcount 0\_s*' ..
+          '1 PUSHS "hello"\_s*' ..
+          '2 ECHO 1\_s*' ..
+
+          'for a in \[0\]\_s*' ..
+          '3 DEBUG line 2-2 varcount 0\_s*' ..
+          '4 STORE -1 in $0\_s*' ..
+          '5 PUSHNR 0\_s*' ..
+          '6 NEWLIST size 1\_s*' ..
+          '7 DEBUG line 2-2 varcount 2\_s*' ..
+          '8 FOR $0 -> 15\_s*' ..
+          '9 STORE $1\_s*' ..
+
+          'echo a\_s*' ..
+          '10 DEBUG line 3-3 varcount 2\_s*' ..
+          '11 LOAD $1\_s*' ..
+          '12 ECHO 1\_s*' ..
+
+          'endfor\_s*' ..
+          '13 DEBUG line 4-4 varcount 2\_s*' ..
+          '14 JUMP -> 7\_s*' ..
+          '15 DROP\_s*' ..
+          '16 RETURN void*',
+        res)
+enddef
+
+func s:Legacy() dict
+  echo 'legacy'
+endfunc
+
+def s:UseMember()
+  var d = {func: Legacy}
+  var v = d.func()
+enddef
+
+def Test_disassemble_dict_stack()
+  var res = execute('disass s:UseMember')
+  assert_match('<SNR>\d*_UseMember\_s*' ..
+          'var d = {func: Legacy}\_s*' ..
+          '\d PUSHS "func"\_s*' ..
+          '\d PUSHFUNC "<80><fd>R\d\+_Legacy"\_s*' ..
+          '\d NEWDICT size 1\_s*' ..
+          '\d STORE $0\_s*' ..
+
+          'var v = d.func()\_s*' ..
+          '\d LOAD $0\_s*' ..
+          '\d MEMBER func\_s*' ..
+          '\d PCALL top (argc 0)\_s*' ..
+          '\d PCALL end\_s*' ..
+          '\d CLEARDICT\_s*' ..
+          '\d\+ STORE $1\_s*' ..
+          '\d\+ RETURN void*',
         res)
 enddef
 
@@ -2193,6 +2527,55 @@ def Test_disassemble_nextcmd()
         'echohl ErrorMsg | echom v:exception | echohl NONE',
         res)
 enddef
+
+def Test_disassemble_after_reload()
+    var lines =<< trim END
+        vim9script
+        if exists('g:ThisFunc')
+          finish
+        endif
+        var name: any
+        def g:ThisFunc(): number
+          g:name = name
+          return 0
+        enddef
+        def g:ThatFunc(): number
+          name = g:name
+          return 0
+        enddef
+    END
+    lines->writefile('Xreload.vim')
+
+    source Xreload.vim
+    g:ThisFunc()
+    g:ThatFunc()
+
+    source Xreload.vim
+    var res = execute('disass g:ThisFunc')
+    assert_match('ThisFunc\_s*' ..
+          'g:name = name\_s*' ..
+          '\d LOADSCRIPT \[deleted\] from .*/Xreload.vim\_s*' ..
+          '\d STOREG g:name\_s*' ..
+          'return 0\_s*' ..
+          '\d PUSHNR 0\_s*' ..
+          '\d RETURN\_s*',
+          res)
+
+    res = execute('disass g:ThatFunc')
+    assert_match('ThatFunc\_s*' ..
+          'name = g:name\_s*' ..
+          '\d LOADG g:name\_s*' ..
+          '\d STORESCRIPT \[deleted\] in .*/Xreload.vim\_s*' ..
+          'return 0\_s*' ..
+          '\d PUSHNR 0\_s*' ..
+          '\d RETURN\_s*',
+          res)
+
+    delete('Xreload.vim')
+    delfunc g:ThisFunc
+    delfunc g:ThatFunc
+enddef
+
 
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

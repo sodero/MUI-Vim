@@ -190,6 +190,18 @@ if s:line1 =~# "^#!"
   elseif s:name =~# 'fennel\>'
     set ft=fennel
 
+    " MikroTik RouterOS script
+  elseif s:name =~# 'rsc\>'
+    set ft=routeros
+
+    " Fish shell
+  elseif s:name =~# 'fish\>'
+    set ft=fish
+
+    " Gforth
+  elseif s:name =~# 'gforth\>'
+    set ft=forth
+
   endif
   unlet s:name
 
@@ -377,7 +389,7 @@ else
     set ft=scheme
 
   " Git output
-  elseif s:line1 =~# '^\(commit\|tree\|object\) \x\{40\}\>\|^tag \S\+$'
+  elseif s:line1 =~# '^\(commit\|tree\|object\) \x\{40,\}\>\|^tag \S\+$'
     set ft=git
 
    " Gprof (gnu profiler)
@@ -394,6 +406,16 @@ else
   " YAML
   elseif s:line1 =~# '^%YAML'
     set ft=yaml
+
+  " MikroTik RouterOS script
+  elseif s:line1 =~# '^#.*by RouterOS.*$'
+    set ft=routeros
+
+  " Sed scripts
+  " #ncomment is allowed but most likely a false positive so require a space
+  " before any trailing comment text
+  elseif s:line1 =~# '^#n\%($\|\s\)'
+    set ft=sed
 
   " CVS diff
   else

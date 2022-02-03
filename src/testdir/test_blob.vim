@@ -1,6 +1,6 @@
 " Tests for the Blob types
 
-source vim9.vim
+import './vim9.vim' as v9
 
 func TearDown()
   " Run garbage collection after every test
@@ -37,8 +37,9 @@ func Test_blob_create()
       call assert_fails('VAR b = 0z001122.')
       call assert_fails('call get("", 1)', 'E896:')
       call assert_equal(0, len(test_null_blob()))
+      call assert_equal(0z, copy(test_null_blob()))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 " assignment to a blob
@@ -74,49 +75,49 @@ func Test_blob_assign()
       VAR m = deepcopy(l)
       LET m[0] = 0z34	#" E742 or E741 should not occur.
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b[2 : 3] = 0z112233
   END
-  call CheckLegacyAndVim9Failure(lines, 'E972:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E972:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b[2 : 3] = 0z11
   END
-  call CheckLegacyAndVim9Failure(lines, 'E972:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E972:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b[3 : 2] = 0z
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b ..= 0z33
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1019:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1019:', 'E734:'])
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b ..= "xx"
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1019:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1019:', 'E734:'])
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b += "xx"
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       LET b[1 : 1] ..= 0z55
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1183:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1183:', 'E734:'])
 endfunc
 
 func Test_blob_get_range()
@@ -132,7 +133,7 @@ func Test_blob_get_range()
       call assert_equal(0z, b[5 : 6])
       call assert_equal(0z0011, b[-10 : 1])
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   " legacy script white space
   let b = 0z0011223344
@@ -157,19 +158,19 @@ func Test_blob_get()
       call assert_equal(0x44, b[4])
       call assert_equal(0x44, b[-1])
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       VAR b = 0z0011223344
       echo b[5]
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0z0011223344
       echo b[-8]
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 endfunc
 
 func Test_blob_to_string()
@@ -183,7 +184,7 @@ func Test_blob_to_string()
       call assert_equal('0z', string(b))
       call assert_equal('0z', string(test_null_blob()))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 func Test_blob_compare()
@@ -210,54 +211,54 @@ func Test_blob_compare()
       call assert_false(b1 is b2)
       call assert_true(b1 isnot b2)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       VAR b1 = 0z0011
       echo b1 == 9
   END
-  call CheckLegacyAndVim9Failure(lines, ['E977:', 'E1072', 'E1072'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E977:', 'E1072', 'E1072'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       echo b1 != 9
   END
-  call CheckLegacyAndVim9Failure(lines, ['E977:', 'E1072', 'E1072'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E977:', 'E1072', 'E1072'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       VAR b2 = 0z1100
       VAR x = b1 > b2
   END
-  call CheckLegacyAndVim9Failure(lines, ['E978:', 'E1072:', 'E1072:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E978:', 'E1072:', 'E1072:'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       VAR b2 = 0z1100
       VAR x = b1 < b2
   END
-  call CheckLegacyAndVim9Failure(lines, ['E978:', 'E1072:', 'E1072:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E978:', 'E1072:', 'E1072:'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       VAR b2 = 0z1100
       VAR x = b1 - b2
   END
-  call CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       VAR b2 = 0z1100
       VAR x = b1 / b2
   END
-  call CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
 
   let lines =<< trim END
       VAR b1 = 0z0011
       VAR b2 = 0z1100
       VAR x = b1 * b2
   END
-  call CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E974:', 'E1036:', 'E974:'])
 endfunc
 
 func Test_blob_index_assign()
@@ -267,19 +268,19 @@ func Test_blob_index_assign()
       LET b[2] = 0x22
       call assert_equal(0z001122, b)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       VAR b = 0z00
       LET b[2] = 0x33
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0z00
       LET b[-2] = 0x33
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 endfunc
 
 func Test_blob_for_loop()
@@ -312,7 +313,7 @@ func Test_blob_for_loop()
       endfor
       call assert_equal(5, i)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 func Test_blob_concatenate()
@@ -324,19 +325,19 @@ func Test_blob_concatenate()
       LET b = 0zDEAD + 0zBEEF
       call assert_equal(0zDEADBEEF, b)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       VAR b = 0z0011
       LET b += "a"
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
 
   let lines =<< trim END
       VAR b = 0z0011
       LET b += 88
   END
-  call CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E734:', 'E1012:', 'E734:'])
 endfunc
 
 func Test_blob_add()
@@ -345,7 +346,7 @@ func Test_blob_add()
       call add(b, 0x22)
       call assert_equal(0z001122, b)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   " Only works in legacy script
   let b = 0z0011
@@ -357,18 +358,26 @@ func Test_blob_add()
       VAR b = 0z0011
       call add(b, [9])
   END
-  call CheckLegacyAndVim9Failure(lines, ['E745:', 'E1012:', 'E745:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E745:', 'E1012:', 'E1210:'])
 
   let lines =<< trim END
       VAR b = 0z0011
       call add("", 0x01)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E897:')
+  call v9.CheckLegacyAndVim9Failure(lines, ['E897:', 'E1013:', 'E1226:'])
 
   let lines =<< trim END
       add(test_null_blob(), 0x22)
   END
-  call CheckDefExecAndScriptFailure(lines, 'E1131:')
+  call v9.CheckDefExecAndScriptFailure(lines, 'E1131:')
+
+  let lines =<< trim END
+      let b = 0zDEADBEEF
+      lockvar b
+      call add(b, 0)
+      unlockvar b
+  END
+  call v9.CheckScriptFailure(lines, 'E741:')
 endfunc
 
 func Test_blob_empty()
@@ -402,50 +411,52 @@ func Test_blob_func_remove()
       call assert_equal(0zADBE, remove(b, 1, 2))
       call assert_equal(0zDEEF, b)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   " Test invalid cases
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call remove(b, 5)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call remove(b, 1, 5)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call remove(b, 3, 2)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
-
-  let lines =<< trim END
-      VAR b = 0zDEADBEEF
-      call remove(1, 0)
-  END
-  call CheckLegacyAndVim9Failure(lines, 'E896:')
-
-  let lines =<< trim END
-      VAR b = 0zDEADBEEF
-      call remove(b, b)
-  END
-  call CheckLegacyAndVim9Failure(lines, 'E974:')
-
-  let lines =<< trim END
-      VAR b = 0zDEADBEEF
-      call remove(b, 1, [])
-  END
-  call CheckLegacyAndVim9Failure(lines, 'E745:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call remove(test_null_blob(), 1, 2)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E979:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E979:')
+
+  let lines =<< trim END
+      let b = 0zDEADBEEF
+      lockvar b
+      call remove(b, 0)
+      unlockvar b
+  END
+  call v9.CheckScriptFailure(lines, 'E741:')
+
+  " can only check at script level, not in a :def function
+  let lines =<< trim END
+      vim9script
+      var b = 0zDEADBEEF
+      lockvar b
+      remove(b, 0)
+  END
+  call v9.CheckScriptFailure(lines, 'E741:')
+
+  call assert_fails('echo remove(0z1020, [])', 'E745:')
+  call assert_fails('echo remove(0z1020, 0, [])', 'E745:')
 endfunc
 
 func Test_blob_read_write()
@@ -456,7 +467,7 @@ func Test_blob_read_write()
       call assert_equal(b, br)
       call delete('Xblob')
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   " This was crashing when calling readfile() with a directory.
   call assert_fails("call readfile('.', 'B')", 'E17: "." is a directory')
@@ -474,7 +485,8 @@ func Test_blob_filter()
       call assert_equal(0z01030103, filter(0z010203010203, 'v:val != 0x02'))
       call assert_equal(0zADEF, filter(0zDEADBEEF, 'v:key % 2'))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
+  call assert_fails('echo filter(0z10, "a10")', 'E121:')
 endfunc
 
 " map() item in blob
@@ -484,12 +496,13 @@ func Test_blob_map()
       call assert_equal(0z00010203, map(0zDEADBEEF, 'v:key'))
       call assert_equal(0zDEAEC0F2, map(0zDEADBEEF, 'v:key + v:val'))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   let lines =<< trim END
       call map(0z00, '[9]')
   END
-  call CheckLegacyAndVim9Failure(lines, 'E978:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E978:')
+  call assert_fails('echo map(0z10, "a10")', 'E121:')
 endfunc
 
 func Test_blob_index()
@@ -503,17 +516,7 @@ func Test_blob_index()
       call assert_equal(0, index(0z11110111, 0x11, -10))
       call assert_equal(-1, index(test_null_blob(), 1))
   END
-  call CheckLegacyAndVim9Success(lines)
-
-  let lines =<< trim END
-      echo index(0z11110111, 0x11, [])
-  END
-  call CheckLegacyAndVim9Failure(lines, 'E745:')
-
-  let lines =<< trim END
-      call index("asdf", 0)
-  END
-  call CheckLegacyAndVim9Failure(lines, 'E897:')
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 func Test_blob_insert()
@@ -526,7 +529,7 @@ func Test_blob_insert()
       call insert(b, 0x33, 2)
       call assert_equal(0zDEAD33BEEF, b)
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 
   " only works in legacy script
   call assert_equal(0, insert(test_null_blob(), 0x33))
@@ -535,42 +538,58 @@ func Test_blob_insert()
       VAR b = 0zDEADBEEF
       call insert(b, -1)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E475:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E475:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call insert(b, 257)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E475:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E475:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call insert(b, 0, [9])
   END
-  call CheckLegacyAndVim9Failure(lines, ['E745:', 'E1013:', 'E745:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E745:', 'E1013:', 'E1210:'])
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call insert(b, 0, -20)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E475:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E475:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call insert(b, 0, 20)
   END
-  call CheckLegacyAndVim9Failure(lines, 'E475:')
+  call v9.CheckLegacyAndVim9Failure(lines, 'E475:')
 
   let lines =<< trim END
       VAR b = 0zDEADBEEF
       call insert(b, [])
   END
-  call CheckLegacyAndVim9Failure(lines, ['E745:', 'E1013:', 'E745:'])
+  call v9.CheckLegacyAndVim9Failure(lines, ['E745:', 'E1013:', 'E1210:'])
 
   let lines =<< trim END
       insert(test_null_blob(), 0x33)
   END
-  call CheckDefExecAndScriptFailure(lines, 'E1131:')
+  call v9.CheckDefExecAndScriptFailure(lines, 'E1131:')
+
+  let lines =<< trim END
+      let b = 0zDEADBEEF
+      lockvar b
+      call insert(b, 3)
+      unlockvar b
+  END
+  call v9.CheckScriptFailure(lines, 'E741:')
+
+  let lines =<< trim END
+      vim9script
+      var b = 0zDEADBEEF
+      lockvar b
+      insert(b, 3)
+  END
+  call v9.CheckScriptFailure(lines, 'E741:')
 endfunc
 
 func Test_blob_reverse()
@@ -581,7 +600,7 @@ func Test_blob_reverse()
       call assert_equal(0zDE, reverse(0zDE))
       call assert_equal(0z, reverse(test_null_blob()))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 func Test_blob_json_encode()
@@ -589,7 +608,7 @@ func Test_blob_json_encode()
       call assert_equal('[222,173,190,239]', json_encode(0zDEADBEEF))
       call assert_equal('[]', json_encode(0z))
   END
-  call CheckLegacyAndVim9Success(lines)
+  call v9.CheckLegacyAndVim9Success(lines)
 endfunc
 
 func Test_blob_lock()
@@ -599,7 +618,7 @@ func Test_blob_lock()
       unlockvar b
       let b = 0z44
   END
-  call CheckScriptSuccess(lines)
+  call v9.CheckScriptSuccess(lines)
 
   let lines =<< trim END
       vim9script
@@ -608,14 +627,14 @@ func Test_blob_lock()
       unlockvar b
       b = 0z44
   END
-  call CheckScriptSuccess(lines)
+  call v9.CheckScriptSuccess(lines)
 
   let lines =<< trim END
       let b = 0z112233
       lockvar b
       let b = 0z44
   END
-  call CheckScriptFailure(lines, 'E741:')
+  call v9.CheckScriptFailure(lines, 'E741:')
 
   let lines =<< trim END
       vim9script
@@ -623,14 +642,64 @@ func Test_blob_lock()
       lockvar b
       b = 0z44
   END
-  call CheckScriptFailure(lines, 'E741:')
+  call v9.CheckScriptFailure(lines, 'E741:')
 endfunc
 
 func Test_blob_sort()
   if has('float')
-    call CheckLegacyAndVim9Failure(['call sort([1.0, 0z11], "f")'], 'E975:')
+    call v9.CheckLegacyAndVim9Failure(['call sort([1.0, 0z11], "f")'], 'E975:')
   endif
-  call CheckLegacyAndVim9Failure(['call sort([11, 0z11], "N")'], 'E974:')
+  call v9.CheckLegacyAndVim9Failure(['call sort([11, 0z11], "N")'], 'E974:')
+endfunc
+
+" Tests for the blob2list() function
+func Test_blob2list()
+  call assert_fails('let v = blob2list(10)', 'E1238: Blob required for argument 1')
+  eval 0zFFFF->blob2list()->assert_equal([255, 255])
+  let tests = [[0z0102, [1, 2]],
+        \ [0z00, [0]],
+        \ [0z, []],
+        \ [0z00000000, [0, 0, 0, 0]],
+        \ [0zAABB.CCDD, [170, 187, 204, 221]]]
+  for t in tests
+    call assert_equal(t[0]->blob2list(), t[1])
+  endfor
+  exe 'let v = 0z' .. repeat('000102030405060708090A0B0C0D0E0F', 64)
+  call assert_equal(1024, blob2list(v)->len())
+  call assert_equal([4, 8, 15], [v[100], v[1000], v[1023]])
+  call assert_equal([], blob2list(test_null_blob()))
+endfunc
+
+" Tests for the list2blob() function
+func Test_list2blob()
+  call assert_fails('let b = list2blob(0z10)', 'E1211: List required for argument 1')
+  let tests = [[[1, 2], 0z0102],
+        \ [[0], 0z00],
+        \ [[], 0z],
+        \ [[0, 0, 0, 0], 0z00000000],
+        \ [[255, 255], 0zFFFF],
+        \ [[170, 187, 204, 221], 0zAABB.CCDD],
+        \ ]
+  for t in tests
+    call assert_equal(t[1], t[0]->list2blob())
+  endfor
+  call assert_fails('let b = list2blob([1, []])', 'E745:')
+  call assert_fails('let b = list2blob([-1])', 'E1239:')
+  call assert_fails('let b = list2blob([256])', 'E1239:')
+  let b = range(16)->repeat(64)->list2blob()
+  call assert_equal(1024, b->len())
+  call assert_equal([4, 8, 15], [b[100], b[1000], b[1023]])
+
+  call assert_equal(0z, list2blob(test_null_list()))
+  call assert_equal(0z00010203, list2blob(range(4)))
+endfunc
+
+" The following used to cause an out-of-bounds memory access
+func Test_blob2string()
+  let v = '0z' .. repeat('01010101.', 444)
+  let v ..= '01'
+  exe 'let b = ' .. v
+  call assert_equal(v, string(b))
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

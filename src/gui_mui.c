@@ -189,7 +189,7 @@ METHOD(VimCon, AppMessage, Message)
 
     if(unlikely(!fnames))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return 0;
     }
 
@@ -222,7 +222,7 @@ METHOD(VimCon, AppMessage, Message)
                 free(fnames[nfiles]);
             }
 
-            kmsg(_(e_outofmem));
+            kmsg(_(e_out_of_memory));
             break;
         }
 
@@ -290,7 +290,7 @@ METHOD(VimCon, AppMessage, Message)
         else
         {
             // Shrinkage failed.
-            kmsg(_(e_outofmem));
+            kmsg(_(e_out_of_memory));
         }
     }
     else
@@ -429,7 +429,7 @@ METHOD(VimCon, Browse, Title, Drawer)
                                   ASLFR_InitialDrawer, msg->Drawer, TAG_DONE);
     if(unlikely(!req))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -471,7 +471,7 @@ METHOD(VimCon, GetScreenDim, WidthPtr, HeightPtr)
 {
     if(unlikely(!my->bm))
     {
-        kmsg(_(e_null));
+        kmsg(_(e_null_argument));
         return 0;
     }
 
@@ -507,7 +507,7 @@ METHOD0(VimCon, Ticker)
     // Only on (2) or off (1) here.
     if(unlikely(my->blink < 1 || my->blink > 2))
     {
-        kmsg(_(e_internal));
+        kmsg(_(e_interrupted));
         return FALSE;
     }
 
@@ -958,7 +958,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(unlikely(!obj))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -966,7 +966,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(unlikely(!s))
     {
-        kmsg(_(e_null));
+        kmsg(_(e_null_argument));
         CoerceMethod(cls, obj, OM_DISPOSE);
         return (IPTR) NULL;
     }
@@ -990,7 +990,7 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(unlikely(!my->bm))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         CoerceMethod(cls, obj, OM_DISPOSE);
         return (IPTR) NULL;
     }
@@ -1049,7 +1049,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     // Setup parent class
     if(unlikely(!DoSuperMethodA(cls, obj, (Msg) msg)))
     {
-        kmsg(_(e_internal));
+        kmsg(_(e_out_of_memory));
         return FALSE;
     }
 
@@ -1479,7 +1479,7 @@ MUIDSP IPTR VimConMinMax(Class *cls, Object *obj, struct MUIP_AskMinMax *msg)
 
     if(unlikely(!my->bm))
     {
-        kmsg(_(e_null));
+        kmsg(_(e_null_argument));
         return r;
     }
 
@@ -1628,7 +1628,7 @@ METHOD0(VimCon, GetState)
     }
 #endif
 
-    kmsg(_(e_internal));
+    kmsg(_(e_interrupted));
     return MUIV_VimCon_State_Unknown;
 }
 
@@ -1694,7 +1694,7 @@ METHOD(VimCon, Copy, Clipboard)
 
     if(unlikely(!iffh))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         vim_free(data);
         return 0;
     }
@@ -1755,7 +1755,7 @@ METHOD(VimCon, Paste, Clipboard)
 
     if(unlikely(!iffh))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return 0;
     }
 
@@ -1796,7 +1796,7 @@ METHOD(VimCon, Paste, Clipboard)
 
                 if(unlikely(!data))
                 {
-                    kmsg(_(e_outofmem));
+                    kmsg(_(e_out_of_memory));
                     break;
                 }
 
@@ -1809,7 +1809,7 @@ METHOD(VimCon, Paste, Clipboard)
 
                     if(unlikely(!next))
                     {
-                        kmsg(_(e_outofmem));
+                        kmsg(_(e_out_of_memory));
                         stat = IFFERR_NOMEM;
                         break;
                     }
@@ -1952,7 +1952,7 @@ METHOD(VimToolbar, AddButton, ID, Label, Help)
     }
 
     // Could not find a match.
-    kmsg(_(e_internal));
+    kmsg(_(e_interrupted));
     return FALSE;
 }
 
@@ -2229,7 +2229,7 @@ METHOD(VimMenu, AddSpacer, ParentID)
                               TAG_END);
     if(unlikely(!i))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -2261,7 +2261,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
                               MUIA_UserData, msg->ID, TAG_END);
     if(unlikely(!i))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -2303,7 +2303,7 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
                               MUIA_UserData, msg->ID, TAG_END);
     if(unlikely(!i))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -2540,7 +2540,7 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
 
     if(unlikely(!scs))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return NULL;
     }
 
@@ -2580,7 +2580,7 @@ MUIDSP void VimScrollbarSort(Object *grp)
 
     if(unlikely(!scs))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return;
     }
 
@@ -2727,7 +2727,7 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
 
     if(unlikely(!obj))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return (IPTR) NULL;
     }
 
@@ -2878,7 +2878,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
                             MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
     if(unlikely(!obj))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         return;
     }
 
@@ -3375,7 +3375,7 @@ int gui_mch_init(void)
     if(unlikely(!VimConClass || !VimMenuClass))
 #endif
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         getout(1);
     }
 
@@ -3461,7 +3461,7 @@ int gui_mch_init(void)
 
     if(unlikely(!App))
     {
-        kmsg(_(e_outofmem));
+        kmsg(_(e_out_of_memory));
         getout(1);
     }
 
@@ -3674,7 +3674,7 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index)
     // Menu items must have parents
     if(unlikely(!p))
     {
-        kmsg(_(e_null));
+        kmsg(_(e_null_argument));
         return;
     }
 
