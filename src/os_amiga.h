@@ -38,7 +38,9 @@
 # define HAVE_TERMCAP
 # define OSPEED_EXTERN
 # define UP_BC_PC_EXTERN
-#endif // HAVE_CONFIG_H
+# define HAVE_GETTIMEOFDAY
+# define HAVE_SYS_TIME_H
+#endif // !HAVE_CONFIG_H
 
 #ifndef	DFLT_ERRORFILE
 # define DFLT_ERRORFILE		"AztecC.Err"	// Should this change?
