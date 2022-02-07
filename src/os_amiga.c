@@ -1694,7 +1694,7 @@ mch_expandpath(
     LONG		Result;
     char_u		*starbuf, *sp, *dp;
     int			start_len;
-    int			matches;
+    int			matches = 0;
 #ifdef __amigaos4__
     struct TagItem	AnchorTags[] = {
 	{ADO_Strlen, ANCHOR_BUF_SIZE},
