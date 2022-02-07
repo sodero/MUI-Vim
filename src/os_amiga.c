@@ -24,7 +24,6 @@
 
 #ifndef LATTICE
 # include <exec/exec.h>
-# include <libraries/dos.h>
 # include <intuition/intuition.h>
 #endif
 
@@ -32,15 +31,7 @@
 # define KPrintF DebugPrintF
 #endif
 
-// XXX These are included from os_amiga.h
-// #include <proto/exec.h>
-// #include <proto/dos.h>
-// #include <proto/intuition.h>
-
-#include <exec/memory.h>
-#include <libraries/dosextens.h>
 #include <workbench/startup.h>
-
 #include <dos/dostags.h>	    // for 2.0 functions
 #include <dos/dosasl.h>
 
