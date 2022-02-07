@@ -72,22 +72,6 @@ struct KeymapIFace *IKeymap = NULL;
 do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 
 //------------------------------------------------------------------------------
-// Misc
-//------------------------------------------------------------------------------
-#ifdef __has_builtin
-# if __has_builtin (__builtin_expect)
-#  define likely(X) __builtin_expect((X), 1)
-#  define unlikely(X) __builtin_expect((X), 0)
-# endif
-#endif
-#ifndef likely
-# define likely(X) X
-#endif
-#ifndef unlikely
-# define unlikely(X) X
-#endif
-
-//------------------------------------------------------------------------------
 // Macros - MUI
 //------------------------------------------------------------------------------
 #ifdef __MORPHOS__
@@ -2437,11 +2421,10 @@ METHOD(VimScrollbar, Show, Show)
     get(my->grp, MUIA_Group_ChildList, &lst);
 
     IPTR enable = FALSE;
-    struct Node *cur = lst->lh_Head;
-    Object *chl;
+    Object *cur = (Object *) lst->lh_Head;
 
     // The group shall be hidden if all scrollbars are hidden.
-    for(chl = NextObject(&cur); chl && !enable; chl = NextObject(&cur))
+    for(Object *chl = NextObject(&cur); chl && !enable; chl = NextObject(&cur))
     {
         enable = DoMethod(chl, M_ID(VimScrollbar, Visible));
     }
@@ -2466,11 +2449,11 @@ MUIDSP IPTR VimScrollbarSortNeeded(Object *grp)
 {
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
-    struct Node *cur = lst->lh_Head;
-    IPTR top = 0;
-    Object *chl;
 
-    for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    Object *cur = (Object *) lst->lh_Head;
+    IPTR top = 0;
+
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
         IPTR stop = DoMethod(chl, M_ID(VimScrollbar, Top));
 
@@ -2496,11 +2479,10 @@ MUIDSP size_t VimScrollbarCount(Object *grp)
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
 
-    struct Node *cur = lst->lh_Head;
+    Object *cur = (Object *) lst->lh_Head;
     IPTR cnt = 0;
-    Object *chl;
 
-    for(chl = NextObject(&cur); chl; chl = NextObject(&cur))
+    for(Object *chl = NextObject(&cur); chl; chl = NextObject(&cur))
     {
         cnt++;
     }
@@ -2547,11 +2529,11 @@ MUIDSP Object **VimScrollbarGroupCopy(Object *grp, size_t cnt)
     struct List *lst = NULL;
     get(grp, MUIA_Group_ChildList, &lst);
 
-    struct Node *cur = lst->lh_Head;
+    Object *cur = (Object *) lst->lh_Head;
     size_t ndx = 0;
-    Object *chl;
 
-    for(chl = NextObject(&cur); chl && ndx < cnt; chl = NextObject(&cur))
+    for(Object *chl = NextObject(&cur); chl && ndx < cnt;
+        chl = NextObject(&cur))
     {
         scs[ndx++] = chl;
     }
