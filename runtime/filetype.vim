@@ -1550,6 +1550,9 @@ au BufNewFile,BufRead *.r,*.R				call dist#ft#FTr()
 " Remind
 au BufNewFile,BufRead .reminders,*.remind,*.rem		setf remind
 
+" ReScript
+au BufNewFile,BufRead *.res,*.resi			setf rescript
+
 " Resolv.conf
 au BufNewFile,BufRead resolv.conf		setf resolv
 

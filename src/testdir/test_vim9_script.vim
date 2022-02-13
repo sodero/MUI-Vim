@@ -69,7 +69,10 @@ def Test_delfunction()
       'func CheckMe()',
       '  return 123',
       'endfunc',
-      'assert_equal(123, s:CheckMe())',
+      'func DoTest()',
+      '  call assert_equal(123, s:CheckMe())',
+      'endfunc',
+      'DoTest()',
       ])
 
   # Check function in script namespace cannot be deleted
@@ -178,11 +181,55 @@ def Test_wrong_type()
   v9.CheckDefFailure(['var Ref: string', 'var res = Ref()'], 'E1085:')
 enddef
 
+def Test_script_namespace()
+  # defining a function or variable with s: is not allowed
+  var lines =<< trim END
+      vim9script
+      def s:Function()
+      enddef
+  END
+  v9.CheckScriptFailure(lines, 'E1268:')
+
+  for decl in ['var', 'const', 'final']
+    lines =<< trim END
+        vim9script
+        var s:var = 'var'
+    END
+    v9.CheckScriptFailure([
+        'vim9script',
+        decl .. ' s:var = "var"',
+        ], 'E1268:')
+  endfor
+
+  # Calling a function or using a variable with s: is not allowed at script
+  # level
+  lines =<< trim END
+      vim9script
+      def Function()
+      enddef
+      s:Function()
+  END
+  v9.CheckScriptFailure(lines, 'E1268:')
+  lines =<< trim END
+      vim9script
+      def Function()
+      enddef
+      call s:Function()
+  END
+  v9.CheckScriptFailure(lines, 'E1268:')
+  lines =<< trim END
+      vim9script
+      var var = 'var'
+      echo s:var
+  END
+  v9.CheckScriptFailure(lines, 'E1268:')
+enddef
+
 def Test_script_wrong_type()
   var lines =<< trim END
       vim9script
-      var s:dict: dict<string>
-      s:dict['a'] = ['x']
+      var dict: dict<string>
+      dict['a'] = ['x']
   END
   v9.CheckScriptFailure(lines, 'E1012: Type mismatch; expected string but got list<string>', 3)
 enddef
@@ -1057,6 +1104,18 @@ def Test_try_catch_skipped()
   assert_match("NEWLIST size 0\n", instr)
 enddef
 
+def Test_throw_line_number()
+  def Func()
+    eval 1 + 1
+    eval 2 + 2
+    throw 'exception'
+  enddef
+  try
+    Func()
+  catch /exception/
+    assert_match('line 3', v:throwpoint)
+  endtry
+enddef
 
 
 def Test_throw_vimscript()
@@ -1227,6 +1286,12 @@ def Test_vim9script_fails()
   v9.CheckScriptFailure(['vim9script', 'const str = "asdf"', 'str = "xxx"'], 'E46:')
 
   assert_fails('vim9script', 'E1038:')
+  v9.CheckDefFailure(['vim9script'], 'E1038:')
+
+  # no error when skipping
+  if has('nothing')
+    vim9script
+  endif
 enddef
 
 def Test_script_var_shadows_function()
@@ -1578,6 +1643,14 @@ def Test_if_const_expr()
   if false | echo burp 234 'asd' | endif
   if false
     burp
+  endif
+
+  if 0
+    if 1
+      echo nothing
+    elseif 1
+      echo still nothing
+    endif
   endif
 
   # expression with line breaks skipped

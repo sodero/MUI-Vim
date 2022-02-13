@@ -629,10 +629,10 @@ eval_expr(char_u *arg, exarg_T *eap)
  */
     static char_u *
 deref_function_name(
-	    char_u **arg,
-	    char_u **tofree,
-	    evalarg_T *evalarg,
-	    int verbose)
+	    char_u	**arg,
+	    char_u	**tofree,
+	    evalarg_T	*evalarg,
+	    int		verbose)
 {
     typval_T	ref;
     char_u	*name = *arg;
@@ -865,6 +865,7 @@ get_lval(
     hashtab_T	*ht = NULL;
     int		quiet = flags & GLV_QUIET;
     int		writing;
+    int		vim9script = in_vim9script();
 
     // Clear everything in "lp".
     CLEAR_POINTER(lp);
@@ -876,6 +877,14 @@ get_lval(
 	lp->ll_name_end = find_name_end(name, NULL, NULL,
 						      FNE_INCL_BR | fne_flags);
 	return lp->ll_name_end;
+    }
+
+    // Cannot use "s:var" at the Vim9 script level.  "s: type" is OK.
+    if (vim9script && at_script_level()
+		  && name[0] == 's' && name[1] == ':' && !VIM_ISWHITE(name[2]))
+    {
+	semsg(_(e_cannot_use_s_colon_in_vim9_script_str), name);
+	return NULL;
     }
 
     // Find the end of the name.
@@ -910,7 +919,7 @@ get_lval(
     {
 	lp->ll_name = name;
 
-	if (in_vim9script())
+	if (vim9script)
 	{
 	    // "a: type" is declaring variable "a" with a type, not "a:".
 	    if (p == name + 2 && p[-1] == ':')
@@ -975,7 +984,7 @@ get_lval(
 	    cc = *p;
 	    *p = NUL;
 	    if (find_exported(import->imp_sid, lp->ll_name, &ufunc, &type,
-							     NULL, TRUE) == -1)
+						       NULL, NULL, TRUE) == -1)
 	    {
 		*p = cc;
 		return NULL;
@@ -988,7 +997,7 @@ get_lval(
     if ((*p != '[' && *p != '.'))
 	return p;
 
-    if (in_vim9script() && lval_root != NULL)
+    if (vim9script && lval_root != NULL)
     {
 	// using local variable
 	lp->ll_tv = lval_root;
@@ -1010,7 +1019,7 @@ get_lval(
 	lp->ll_tv = &v->di_tv;
     }
 
-    if (in_vim9script() && (flags & GLV_NO_DECL) == 0)
+    if (vim9script && (flags & GLV_NO_DECL) == 0)
     {
 	if (!quiet)
 	    semsg(_(e_variable_already_declared), lp->ll_name);
@@ -1053,7 +1062,7 @@ get_lval(
 	    return NULL;
 	}
 
-	if (in_vim9script() && lp->ll_valtype == NULL
+	if (vim9script && lp->ll_valtype == NULL
 		&& v != NULL
 		&& lp->ll_tv == &v->di_tv
 		&& ht != NULL && ht == get_script_local_ht())
@@ -2604,7 +2613,7 @@ eval2(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 		*arg = eval_next_line(evalarg_used);
 	    else
 	    {
-		if (evaluate && in_vim9script() && !VIM_ISWHITE(p[-1]))
+		if (evaluate && vim9script && !VIM_ISWHITE(p[-1]))
 		{
 		    error_white_both(p, 2);
 		    clear_tv(rettv);
@@ -2616,7 +2625,7 @@ eval2(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	    /*
 	     * Get the second variable.
 	     */
-	    if (evaluate && in_vim9script() && !IS_WHITE_OR_NUL((*arg)[2]))
+	    if (evaluate && vim9script && !IS_WHITE_OR_NUL((*arg)[2]))
 	    {
 		error_white_both(*arg, 2);
 		clear_tv(rettv);
@@ -2742,7 +2751,7 @@ eval3(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	    /*
 	     * Get the second variable.
 	     */
-	    if (evaluate && in_vim9script() && !IS_WHITE_OR_NUL((*arg)[2]))
+	    if (evaluate && vim9script && !IS_WHITE_OR_NUL((*arg)[2]))
 	    {
 		error_white_both(*arg, 2);
 		clear_tv(rettv);
@@ -2955,7 +2964,7 @@ eval_addlist(typval_T *tv1, typval_T *tv2)
 
 /*
  * Handle fourth level expression:
- *	+	number addition
+ *	+	number addition, concatenation of list or blob
  *	-	number subtraction
  *	.	string concatenation (if script version is 1)
  *	..	string concatenation
@@ -3519,7 +3528,8 @@ eval7(
     char_u	*start_leader, *end_leader;
     int		ret = OK;
     char_u	*alias;
-    static	int recurse = 0;
+    static int	recurse = 0;
+    int		vim9script = in_vim9script();
 
     /*
      * Initialise variable so that clear_tv() can't mistake this for a
@@ -3531,7 +3541,7 @@ eval7(
      * Skip '!', '-' and '+' characters.  They are handled later.
      */
     start_leader = *arg;
-    if (eval_leader(arg, in_vim9script()) == FAIL)
+    if (eval_leader(arg, vim9script) == FAIL)
 	return FAIL;
     end_leader = *arg;
 
@@ -3606,7 +3616,7 @@ eval7(
     /*
      * Dictionary: #{key: val, key: val}
      */
-    case '#':	if (in_vim9script())
+    case '#':	if (vim9script)
 		{
 		    ret = vim9_bad_comment(*arg) ? FAIL : NOTDONE;
 		}
@@ -3623,10 +3633,10 @@ eval7(
      * Lambda: {arg, arg -> expr}
      * Dictionary: {'key': val, 'key': val}
      */
-    case '{':	if (in_vim9script())
+    case '{':	if (vim9script)
 		    ret = NOTDONE;
 		else
-		    ret = get_lambda_tv(arg, rettv, in_vim9script(), evalarg);
+		    ret = get_lambda_tv(arg, rettv, vim9script, evalarg);
 		if (ret == NOTDONE)
 		    ret = eval_dict(arg, rettv, evalarg, FALSE);
 		break;
@@ -3649,9 +3659,9 @@ eval7(
     case '@':	++*arg;
 		if (evaluate)
 		{
-		    if (in_vim9script() && IS_WHITE_OR_NUL(**arg))
+		    if (vim9script && IS_WHITE_OR_NUL(**arg))
 			semsg(_(e_syntax_error_at_str), *arg);
-		    else if (in_vim9script() && !valid_yank_reg(**arg, FALSE))
+		    else if (vim9script && !valid_yank_reg(**arg, FALSE))
 			emsg_invreg(**arg);
 		    else
 		    {
@@ -3669,7 +3679,7 @@ eval7(
      * or lambda: (arg) => expr
      */
     case '(':	ret = NOTDONE;
-		if (in_vim9script())
+		if (vim9script)
 		{
 		    ret = get_lambda_tv(arg, rettv, TRUE, evalarg);
 		    if (ret == OK && evaluate)
@@ -3727,12 +3737,18 @@ eval7(
 	{
 	    int	    flags = evalarg == NULL ? 0 : evalarg->eval_flags;
 
-	    if (evaluate && in_vim9script() && len == 1 && *s == '_')
+	    if (evaluate && vim9script && len == 1 && *s == '_')
 	    {
 		emsg(_(e_cannot_use_underscore_here));
 		ret = FAIL;
 	    }
-	    else if ((in_vim9script() ? **arg : *skipwhite(*arg)) == '(')
+	    else if (evaluate && vim9script && len > 2
+						 && s[0] == 's' && s[1] == ':')
+	    {
+		semsg(_(e_cannot_use_s_colon_in_vim9_script_str), s);
+		ret = FAIL;
+	    }
+	    else if ((vim9script ? **arg : *skipwhite(*arg)) == '(')
 	    {
 		// "name(..."  recursive!
 		*arg = skipwhite(*arg);
@@ -3743,21 +3759,19 @@ eval7(
 	    else if (evaluate)
 	    {
 		// get the value of "true", "false" or a variable
-		if (len == 4 && in_vim9script() && STRNCMP(s, "true", 4) == 0)
+		if (len == 4 && vim9script && STRNCMP(s, "true", 4) == 0)
 		{
 		    rettv->v_type = VAR_BOOL;
 		    rettv->vval.v_number = VVAL_TRUE;
 		    ret = OK;
 		}
-		else if (len == 5 && in_vim9script()
-						&& STRNCMP(s, "false", 5) == 0)
+		else if (len == 5 && vim9script && STRNCMP(s, "false", 5) == 0)
 		{
 		    rettv->v_type = VAR_BOOL;
 		    rettv->vval.v_number = VVAL_FALSE;
 		    ret = OK;
 		}
-		else if (len == 4 && in_vim9script()
-						&& STRNCMP(s, "null", 4) == 0)
+		else if (len == 4 && vim9script && STRNCMP(s, "null", 4) == 0)
 		{
 		    rettv->v_type = VAR_SPECIAL;
 		    rettv->vval.v_number = VVAL_NULL;
@@ -3812,6 +3826,7 @@ eval7_leader(
     int		error = FALSE;
     varnumber_T val = 0;
     vartype_T	type = rettv->v_type;
+    int		vim9script = in_vim9script();
 #ifdef FEAT_FLOAT
     float_T	    f = 0.0;
 
@@ -3822,7 +3837,7 @@ eval7_leader(
     {
 	while (VIM_ISWHITE(end_leader[-1]))
 	    --end_leader;
-	if (in_vim9script() && end_leader[-1] == '!')
+	if (vim9script && end_leader[-1] == '!')
 	    val = tv2bool(rettv);
 	else
 	    val = tv_get_number_chk(rettv, &error);
@@ -3847,7 +3862,7 @@ eval7_leader(
 #ifdef FEAT_FLOAT
 		if (rettv->v_type == VAR_FLOAT)
 		{
-		    if (in_vim9script())
+		    if (vim9script)
 		    {
 			rettv->v_type = VAR_BOOL;
 			val = f == 0.0 ? VVAL_TRUE : VVAL_FALSE;
@@ -3885,7 +3900,7 @@ eval7_leader(
 #endif
 	{
 	    clear_tv(rettv);
-	    if (in_vim9script())
+	    if (vim9script)
 		rettv->v_type = type;
 	    else
 		rettv->v_type = VAR_NUMBER;
@@ -4137,7 +4152,7 @@ eval_index(
     int		range = FALSE;
     char_u	*key = NULL;
     int		keylen = -1;
-    int		vim9 = in_vim9script();
+    int		vim9script = in_vim9script();
 
     if (check_can_index(rettv, evaluate, verbose) == FAIL)
 	return FAIL;
@@ -4168,7 +4183,7 @@ eval_index(
 	    empty1 = TRUE;
 	else if (eval1(arg, &var1, evalarg) == FAIL)	// recursive!
 	    return FAIL;
-	else if (vim9 && **arg == ':')
+	else if (vim9script && **arg == ':')
 	{
 	    semsg(_(e_white_space_required_before_and_after_str_at_str),
 								    ":", *arg);
@@ -4181,14 +4196,14 @@ eval_index(
 
 #ifdef FEAT_FLOAT
 	    // allow for indexing with float
-	    if (vim9 && rettv->v_type == VAR_DICT
+	    if (vim9script && rettv->v_type == VAR_DICT
 						   && var1.v_type == VAR_FLOAT)
 	    {
 		var1.vval.v_string = typval_tostring(&var1, TRUE);
 		var1.v_type = VAR_STRING;
 	    }
 #endif
-	    if (vim9 && rettv->v_type == VAR_LIST)
+	    if (vim9script && rettv->v_type == VAR_LIST)
 		tv_get_number_chk(&var1, &error);
 	    else
 		error = tv_get_string_chk(&var1) == NULL;
@@ -4208,7 +4223,7 @@ eval_index(
 	{
 	    range = TRUE;
 	    ++*arg;
-	    if (vim9 && !IS_WHITE_OR_NUL(**arg) && **arg != ']')
+	    if (vim9script && !IS_WHITE_OR_NUL(**arg) && **arg != ']')
 	    {
 		semsg(_(e_white_space_required_before_and_after_str_at_str),
 								":", *arg - 1);
@@ -4525,6 +4540,9 @@ partial_free(partial_T *pt)
 
     // "out_up" is no longer used, decrement refcount on partial that owns it.
     partial_unref(pt->pt_outer.out_up_partial);
+
+    // Using pt_outer from another partial.
+    partial_unref(pt->pt_outer_partial);
 
     // Decrease the reference count for the context of a closure.  If down
     // to the minimum it may be time to free it.
@@ -6053,7 +6071,7 @@ handle_subscript(
 	    **arg = NUL;
 
 	    idx = find_exported(rettv->vval.v_number, exp_name, &ufunc, &type,
-						  evalarg->eval_cctx, verbose);
+			    evalarg->eval_cctx, evalarg->eval_cstack, verbose);
 	    **arg = cc;
 
 	    if (idx < 0 && ufunc == NULL)
@@ -6488,8 +6506,16 @@ ex_execute(exarg_T *eap)
 		did_emsg = save_did_emsg;
 	}
 	else if (eap->cmdidx == CMD_execute)
+	{
+	    int save_sticky_cmdmod_flags = sticky_cmdmod_flags;
+
+	    // "legacy exe cmd" and "vim9cmd exe cmd" applies to "cmd".
+	    sticky_cmdmod_flags = cmdmod.cmod_flags
+						& (CMOD_LEGACY | CMOD_VIM9CMD);
 	    do_cmdline((char_u *)ga.ga_data,
 		       eap->getline, eap->cookie, DOCMD_NOWAIT|DOCMD_VERBOSE);
+	    sticky_cmdmod_flags = save_sticky_cmdmod_flags;
+	}
     }
 
     ga_clear(&ga);

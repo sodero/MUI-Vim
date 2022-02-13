@@ -245,13 +245,16 @@
 // Mark unused function arguments with UNUSED, so that gcc -Wunused-parameter
 // can be used to check for mistakes.
 #ifndef UNUSED
-# if defined __has_attribute
-#  if __has_attribute(unused)
-#   define UNUSED __attribute__((unused))
-#  else
-#   define UNUSED
-#  endif
+# if defined(HAVE_ATTRIBUTE_UNUSED) || defined(__MINGW32__)
+#  define UNUSED __attribute__((unused))
 # else
+#  if defined __has_attribute
+#   if __has_attribute(unused)
+#    define UNUSED __attribute__((unused))
+#   endif
+#  endif
+# endif
+# ifndef UNUSED
 #  define UNUSED
 # endif
 #endif
@@ -820,6 +823,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define WILD_ALL		6
 #define WILD_LONGEST		7
 #define WILD_ALL_KEEP		8
+#define WILD_CANCEL		9
+#define WILD_APPLY		10
 
 #define WILD_LIST_NOTFOUND	    0x01
 #define WILD_HOME_REPLACE	    0x02
@@ -1313,6 +1318,7 @@ enum auto_event
     EVENT_CURSORMOVEDI,		// cursor was moved in Insert mode
     EVENT_DIFFUPDATED,		// after diffs were updated
     EVENT_DIRCHANGED,		// after user changed directory
+    EVENT_DIRCHANGEDPRE,	// before directory changes
     EVENT_ENCODINGCHANGED,	// after changing the 'encoding' option
     EVENT_EXITPRE,		// before exiting
     EVENT_FILEAPPENDCMD,	// append to a file using command
@@ -1587,10 +1593,10 @@ typedef UINT32_TYPEDEF UINT32_T;
 #endif
 
 /*
- * EMX doesn't have a global way of making open() use binary I/O.
+ * Cygwin doesn't have a global way of making open() use binary I/O.
  * Use O_BINARY for all open() calls.
  */
-#if defined(__CYGWIN32__)
+#ifdef __CYGWIN__
 # define O_EXTRA    O_BINARY
 #else
 # define O_EXTRA    0
@@ -1741,7 +1747,9 @@ typedef unsigned short disptick_T;	// display tick type
 # define MAXCOL (0x3fffffffL)		// maximum column number, 30 bits
 # define MAXLNUM (0x3fffffffL)		// maximum (invalid) line number
 #else
-# define MAXCOL  INT_MAX		// maximum column number
+  // MAXCOL used to be INT_MAX, but with 64 bit ints that results in running
+  // out of memory when trying to allocate a very long line.
+# define MAXCOL  0x7fffffffL		// maximum column number
 # define MAXLNUM LONG_MAX		// maximum (invalid) line number
 #endif
 

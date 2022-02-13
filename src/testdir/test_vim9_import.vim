@@ -500,7 +500,16 @@ def Test_import_fails()
   v9.CheckScriptFailure(lines, 'E1262:')
 
   delete('Xthat.vim')
- 
+
+  lines =<< trim END
+      vim9script
+      export var item = 'hello'
+      import './Xyourself.vim'
+  END
+  writefile(lines, 'Xyourself.vim')
+  assert_fails('source Xyourself.vim', 'E1088:')
+  delete('Xyourself.vim')
+
   mkdir('Ximport')
 
   writefile(['vim9script'], 'Ximport/.vim')
@@ -1115,7 +1124,7 @@ def Test_vim9_reload_noclear()
   lines =<< trim END
     vim9script noclear
     g:loadCount += 1
-    var s:reloaded = 'init'
+    var reloaded = 'init'
     import './XExportReload' as exp
 
     def Again(): string
@@ -1124,13 +1133,13 @@ def Test_vim9_reload_noclear()
 
     exp.TheFunc()
 
-    if exists('s:loaded') | finish | endif
-    var s:loaded = true
+    if exists('loaded') | finish | endif
+    var loaded = true
 
-    var s:notReloaded = 'yes'
-    s:reloaded = 'first'
+    var notReloaded = 'yes'
+    reloaded = 'first'
     def g:Values(): list<string>
-      return [s:reloaded, s:notReloaded, Again(), Once(), exp.exported]
+      return [reloaded, notReloaded, Again(), Once(), exp.exported]
     enddef
 
     def Once(): string
@@ -1886,6 +1895,10 @@ def Test_vim9script_autoload_call()
       assert_equal('other', g:result)
 
       assert_equal('arg', call('another.RetArg', ['arg']))
+
+      verbose function another.Getother
+      # should we disallow this?
+      verbose function another#Getother
   END
   v9.CheckScriptSuccess(lines)
 

@@ -49,6 +49,18 @@
 # endif
 #endif
 
+/*
+ * for Amiga Dos 2.0x we use Flush
+ */
+#ifdef AMIGA
+# ifdef FEAT_ARP
+extern int dos2;			// this is in os_amiga.c
+# endif
+# ifdef SASC
+#  include <ios1.h>			// for chkufb()
+# endif
+#endif
+
 #define MEMFILE_PAGE_SIZE 4096		// default page size
 
 static long_u	total_mem_used = 0;	// total memory used for memfiles

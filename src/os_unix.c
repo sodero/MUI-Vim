@@ -44,15 +44,13 @@ static int selinux_enabled = -1;
 #endif
 
 #ifdef __CYGWIN__
-# ifndef MSWIN
-#  include <cygwin/version.h>
-#  include <sys/cygwin.h>	// for cygwin_conv_to_posix_path() and/or
+# include <cygwin/version.h>
+# include <sys/cygwin.h>	// for cygwin_conv_to_posix_path() and/or
 				// for cygwin_conv_path()
-#  ifdef FEAT_CYGWIN_WIN32_CLIPBOARD
-#   define WIN32_LEAN_AND_MEAN
-#   include <windows.h>
-#   include "winclip.pro"
-#  endif
+# ifdef FEAT_CYGWIN_WIN32_CLIPBOARD
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include "winclip.pro"
 # endif
 #endif
 
@@ -6343,7 +6341,7 @@ select_eintr:
 	FD_ZERO(&wfds);
 	FD_ZERO(&efds);
 	FD_SET(fd, &rfds);
-# if !defined(__QNX__) && !defined(__CYGWIN32__)
+# ifndef __QNX__
 	// For QNX select() always returns 1 if this is set.  Why?
 	FD_SET(fd, &efds);
 # endif

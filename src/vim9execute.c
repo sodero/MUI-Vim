@@ -235,6 +235,23 @@ dict_stack_clear(int len)
 }
 
 /*
+ * Get a pointer to useful "pt_outer" of "pt".
+ */
+    static outer_T *
+get_pt_outer(partial_T *pt)
+{
+    partial_T *ptref = pt->pt_outer_partial;
+
+    if (ptref == NULL)
+	return &pt->pt_outer;
+
+    // partial using partial (recursively)
+    while (ptref->pt_outer_partial != NULL)
+	ptref = ptref->pt_outer_partial;
+    return &ptref->pt_outer;
+}
+
+/*
  * Call compiled function "cdf_idx" from compiled code.
  * This adds a stack frame and sets the instruction pointer to the start of the
  * called function.
@@ -421,13 +438,13 @@ call_dfunc(
 	    return FAIL;
 	if (pt != NULL)
 	{
-	    ref->or_outer = &pt->pt_outer;
+	    ref->or_outer = get_pt_outer(pt);
 	    ++pt->pt_refcount;
 	    ref->or_partial = pt;
 	}
 	else if (ufunc->uf_partial != NULL)
 	{
-	    ref->or_outer = &ufunc->uf_partial->pt_outer;
+	    ref->or_outer = get_pt_outer(ufunc->uf_partial);
 	    ++ufunc->uf_partial->pt_refcount;
 	    ref->or_partial = ufunc->uf_partial;
 	}
@@ -1694,7 +1711,7 @@ handle_debug(isn_T *iptr, ectx_T *ectx)
 }
 
 /*
- * Store a value in a list or dict variable.
+ * Store a value in a list, dict or blob variable.
  * Returns OK, FAIL or NOTDONE (uncatchable error).
  */
     static int
@@ -3809,6 +3826,7 @@ exec_instructions(ectx_T *ectx)
 			}
 		    }
 
+		    SOURCING_LNUM = iptr->isn_lnum;
 		    if (throw_exception(tv->vval.v_string, ET_USER, NULL)
 								       == FAIL)
 		    {
@@ -4617,7 +4635,12 @@ exec_instructions(ectx_T *ectx)
 			// :put! above cursor
 			dir = BACKWARD;
 		    else if (lnum >= 0)
-			curwin->w_cursor.lnum = iptr->isn_arg.put.put_lnum;
+		    {
+			curwin->w_cursor.lnum = lnum;
+			if (lnum == 0)
+			    // check_cursor() below will move to line 1
+			    dir = BACKWARD;
+		    }
 
 		    if (regname == '=')
 		    {
@@ -5081,16 +5104,22 @@ call_def_function(
 		goto failed_early;
 	    if (partial != NULL)
 	    {
-		if (partial->pt_outer.out_stack == NULL && current_ectx != NULL)
+		outer_T *outer = get_pt_outer(partial);
+
+		if (outer->out_stack == NULL)
 		{
-		    if (current_ectx->ec_outer_ref != NULL
-			    && current_ectx->ec_outer_ref->or_outer != NULL)
-			ectx.ec_outer_ref->or_outer =
+		    if (current_ectx != NULL)
+		    {
+			if (current_ectx->ec_outer_ref != NULL
+			       && current_ectx->ec_outer_ref->or_outer != NULL)
+			    ectx.ec_outer_ref->or_outer =
 					  current_ectx->ec_outer_ref->or_outer;
+		    }
+		    // Should there be an error here?
 		}
 		else
 		{
-		    ectx.ec_outer_ref->or_outer = &partial->pt_outer;
+		    ectx.ec_outer_ref->or_outer = outer;
 		    ++partial->pt_refcount;
 		    ectx.ec_outer_ref->or_partial = partial;
 		}

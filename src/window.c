@@ -766,7 +766,7 @@ cmd_with_count(
 }
 
 /*
- * If "split_disallowed" is set given an error and return FAIL.
+ * If "split_disallowed" is set give an error and return FAIL.
  * Otherwise return OK.
  */
     static int
@@ -1414,10 +1414,6 @@ win_init(win_T *newp, win_T *oldp, int flags UNUSED)
 #endif
 
     win_init_some(newp, oldp);
-
-#ifdef FEAT_SYN_HL
-    check_colorcolumn(newp);
-#endif
 #ifdef FEAT_TERMINAL
     term_update_wincolor(newp);
 #endif

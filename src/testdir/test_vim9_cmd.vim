@@ -83,6 +83,57 @@ def Test_vim9cmd()
   v9.CheckScriptSuccess(lines)
 enddef
 
+def Test_cmdmod_execute()
+  # "legacy" applies not only to the "exe" argument but also to the commands
+  var lines =<< trim END
+      vim9script
+
+      b:undo = 'let g:undone = 1 | let g:undtwo = 2'
+      legacy exe b:undo
+      assert_equal(1, g:undone)
+      assert_equal(2, g:undtwo)
+  END
+  v9.CheckScriptSuccess(lines)
+
+  # same for "vim9cmd" modifier
+  lines =<< trim END
+      let b:undo = 'g:undone = 11 | g:undtwo = 22'
+      vim9cmd exe b:undo
+      call assert_equal(11, g:undone)
+      call assert_equal(22, g:undtwo)
+  END
+  v9.CheckScriptSuccess(lines)
+  unlet b:undo
+  unlet g:undone
+  unlet g:undtwo
+
+  # "legacy" does not apply to a loaded script
+  lines =<< trim END
+      vim9script
+      export var exported = 'x'
+  END
+  writefile(lines, 'Xvim9import.vim')
+  lines =<< trim END
+      legacy exe "import './Xvim9import.vim'"
+  END
+  v9.CheckScriptSuccess(lines)
+  delete('Xvim9import.vim')
+
+  # "legacy" does not aply to a called function
+  lines =<< trim END
+      vim9script
+
+      def g:TheFunc()
+        if exists('something')
+          echo 'yes'
+        endif
+      enddef
+      legacy exe 'call g:TheFunc()'
+  END
+  v9.CheckScriptSuccess(lines)
+  delfunc g:TheFunc
+enddef
+
 def Test_edit_wildcards()
   var filename = 'Xtest'
   edit `=filename`
@@ -1156,7 +1207,13 @@ def Test_put_command()
   :2put =['a', 'b', 'c']
   assert_equal(['ppp', 'a', 'b', 'c', 'above'], getline(2, 6))
 
+  :0put ='first'
+  assert_equal('first', getline(1))
+  :1put! ='first again'
+  assert_equal('first again', getline(1))
+
   # compute range at runtime
+  :%del
   setline(1, range(1, 8))
   @a = 'aaa'
   :$-2put a
@@ -1449,7 +1506,7 @@ def Test_lockvar()
     ex = v:exception
   endtry
   assert_match('E1121:', ex)
-  unlockvar d.a
+  unlockvar d['a']
   d.a = 7
   assert_equal({a: 7, b: 5}, d)
 
@@ -1610,7 +1667,7 @@ def Test_redir_to_var()
         redir > Xfile
       redir END
   END
-  v9.CheckDefFailure(lines, 'E1185:')
+  v9.CheckDefFailure(lines, 'E1092:')
 
   lines =<< trim END
       var text: number
@@ -1675,7 +1732,12 @@ def Test_var_not_cmd()
   lines =<< trim END
       s:notexist:repl
   END
-  v9.CheckDefAndScriptFailure(lines, ['E488: Trailing characters: :repl', 'E121: Undefined variable: s:notexist'], 1)
+  v9.CheckDefAndScriptFailure(lines, ['E488: Trailing characters: :repl', 'E1268:'], 1)
+
+  lines =<< trim END
+      notexist:repl
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E476:', 'E492:'], 1)
 
   lines =<< trim END
       s-pat-repl
