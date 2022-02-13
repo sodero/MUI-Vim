@@ -599,7 +599,7 @@ mf_sync(memfile_T *mfp, int flags)
 	    status = FAIL;
 #endif
 #ifdef AMIGA
-# if defined(__amigaos4__)
+# if defined(__AROS__) || defined(__amigaos4__)
 	if (vim_fsync(mfp->mf_fd) != 0)
 	    status = FAIL;
 # else

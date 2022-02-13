@@ -1104,12 +1104,12 @@ add_b0_fenc(
 # include <sys/sysinfo.h>
 #endif
 
+#if defined(UNIX) || defined(MSWIN)
 /*
  * Return TRUE if the process with number "b0p->b0_pid" is still running.
  * "swap_fname" is the name of the swap file, if it's from before a reboot then
  * the result is FALSE;
  */
-#if defined(UNIX) || defined(MSWIN)
     static int
 swapfile_process_running(ZERO_BL *b0p, char_u *swap_fname UNUSED)
 {
