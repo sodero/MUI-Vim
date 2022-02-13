@@ -3253,9 +3253,9 @@ nv_clear(cmdarg_T *cap)
 {
     if (!checkclearop(cap->oap))
     {
-#if defined(__AROS__) || defined(__amigaos4__) || defined(__MORPHOS__)
+#if defined(__AROS__) || defined(__MORPHOS__)
 	/*
-	 * AROS, AmigaOS4, MorphOS don't seem to have an easy way to detect
+	 * AROS and MorphOS don't seem to have an easy way to detect
 	 * window resizing, so we cheat and make the user detect it manually
 	 * with CTRL-L instead
 	 */
