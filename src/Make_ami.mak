@@ -7,7 +7,8 @@ LD = $(CC)
 UNM ?= $(shell uname)
 DEBUG ?= no
 BUILD ?= mui
-CFLAGS = -c -O3
+CFLAGS = -c -O3 -DMODIFIED_BY=\"'Ola Söder et al.'\"
+SHELL = sh
 
 # Common compiler flags
 CFLAGS += \
@@ -31,11 +32,6 @@ SRC := \
 	gui_mui.c
 ifneq ($(UNM),AROS)
 CFLAGS += -DMUIVIM_FEAT_SCROLLBAR
-endif
-ifeq ($(UNM),AmigaOS)
-CFLAGS += -DMODIFIED_BY="Ola\ Söder\ et\ al."
-else
-CFLAGS += -DMODIFIED_BY=\"'Ola Söder et al.'\"
 endif
 else
 
