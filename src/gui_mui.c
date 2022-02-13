@@ -3534,7 +3534,7 @@ void gui_mch_exit(int rc)
         get(App, MUIA_Application_DiskObject, &icon);
 
         // Close window and destroy app
-        set(_win(App), MUIA_Window_Open, FALSE);
+        set(_win(Con), MUIA_Window_Open, FALSE);
         MUI_DisposeObject(App);
 
         // Free icon resources, MUI won't do this
