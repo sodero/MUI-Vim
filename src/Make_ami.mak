@@ -84,7 +84,8 @@ LDFLAGS = -mcrt=clib2 -lauto -lm -lnet
 CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__ -mcrt=clib2
 else
 ifeq ($(UNM),AROS)
-LDFLAGS = -DHAVE_FSYNC -ldebug
+CFLAGS += -DHAVE_FSYNC
+LDFLAGS = -ldebug
 else
 ifeq ($(UNM),MorphOS)
 CFLAGS += -noixemul
