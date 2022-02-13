@@ -541,8 +541,11 @@ mch_check_win(int argc, char **argv)
      * we use a pointer to the current task instead. This should be a
      * shared structure and thus globally unique.
      */
+#if !defined(__amigaos4__) && !defined(__AROS__) && !defined(__MORPHOS__)
     sprintf((char *)buf1, "t:nc%p", FindTask(0));
-
+#else
+    sprintf((char *)buf1, "t:nc%ld", (long)buf1);
+#endif
     if ((fh = Open((UBYTE *)buf1, (long)MODE_NEWFILE)) == (BPTR)NULL)
     {
 	mch_errmsg(_("Cannot create "));
@@ -819,7 +822,7 @@ mch_get_host_name(char_u *s, int len)
 #if !defined(__AROS__)
     gethostname(s, len);
 #else
-    STRNCPY(s, "Amiga", len - 1);
+    vim_strncpy(s, "Amiga", len - 1);
 #endif
 }
 
@@ -834,9 +837,9 @@ mch_get_pid(void)
 #elif defined(__AROS__) || defined(__MORPHOS__)
     // This is as close to a pid as we can come. We could use CLI numbers also,
     // but then we would have two different types of process identifiers.
-    return((long) FindTask(NULL));
+    return((long)FindTask(0));
 #else
-    return (long) 0;
+    return (long)0;
 #endif
 }
 
@@ -988,8 +991,7 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-
-    if (lock != (BPTR)NULL)
+    if (lock != NULL)
     {
 	UnLock(lock);
 	return 0;
@@ -1226,6 +1228,10 @@ int mch_get_shellsize(void)
     return FAIL;
 }
 #else
+/*
+ * Try to get the real window size,
+ * return FAIL for failure, OK otherwise
+ */
     int
 mch_get_shellsize(void)
 {
