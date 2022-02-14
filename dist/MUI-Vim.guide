@@ -67,6 +67,10 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2022-02-14@{UB}
+- Update to VIM 8.2.4370.
+- Crash upon exit on AROS fixed.
+
 @{B}2022-02-05@{UB}
 - Update to VIM 8.2.4291.
 
