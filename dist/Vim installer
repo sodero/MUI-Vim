@@ -49,7 +49,7 @@
     )
     ; else
     (
-        (set #welcome_str "Welcome to the Vim installer")
+        (set #welcome_str_p "Welcome to the Vim installer")
         (set #destination_str_p "Please choose a location for installing Vim.\nA drawer called \"Vim\" will be created there.")
         (set #destination_str_h "")
         (set #copy_str_p "Copying executables and runtime data...")
