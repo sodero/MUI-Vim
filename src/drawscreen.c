@@ -580,7 +580,6 @@ redraw_custom_statusline(win_T *wp)
 {
     static int	    entered = FALSE;
     int		    saved_did_emsg = did_emsg;
-    int		    saved_KeyTyped = KeyTyped;
 
     // When called recursively return.  This can happen when the statusline
     // contains an expression that triggers a redraw.
@@ -601,9 +600,6 @@ redraw_custom_statusline(win_T *wp)
     }
     did_emsg |= saved_did_emsg;
     entered = FALSE;
-
-    // A user function may reset KeyTyped, restore it.
-    KeyTyped = saved_KeyTyped;
 }
 #endif
 
@@ -1125,10 +1121,10 @@ fold_line(
 # define RL_MEMSET(p, v, l) \
     do { \
 	if (wp->w_p_rl) \
-	    for (ri = 0; ri < l; ++ri) \
+	    for (ri = 0; ri < (l); ++ri) \
 	       ScreenAttrs[off + (wp->w_width - (p) - (l)) + ri] = v; \
 	 else \
-	    for (ri = 0; ri < l; ++ri) \
+	    for (ri = 0; ri < (l); ++ri) \
 	       ScreenAttrs[off + (p) + ri] = v; \
     } while (0)
 #else

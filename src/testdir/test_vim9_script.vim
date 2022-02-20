@@ -52,6 +52,15 @@ def Test_range_only()
 
   bwipe!
 
+  lines =<< trim END
+      set cpo+=-
+      :1,999
+  END
+  v9.CheckDefExecAndScriptFailure(lines, 'E16:', 2)
+  set cpo&vim
+
+  v9.CheckDefExecAndScriptFailure([":'x"], 'E20:', 1)
+
   # won't generate anything
   if false
     :123
@@ -1726,6 +1735,9 @@ def Test_execute_cmd()
   v9.CheckDefFailure(['execute xxx'], 'E1001:', 1)
   v9.CheckDefExecFailure(['execute "tabnext " .. 8'], 'E475:', 1)
   v9.CheckDefFailure(['execute "cmd"# comment'], 'E488:', 1)
+  if has('channel')
+    v9.CheckDefExecFailure(['execute test_null_channel()'], 'E908:', 1)
+  endif
 enddef
 
 def Test_execute_cmd_vimscript()
@@ -3071,13 +3083,21 @@ def Test_forward_declaration()
   delete('Xforward')
 enddef
 
-def Test_declare_script_in_func()
+def Test_declare_script_var_in_func()
   var lines =<< trim END
       vim9script
       func Declare()
         let s:local = 123
       endfunc
       Declare()
+  END
+  v9.CheckScriptFailure(lines, 'E1269:')
+enddef
+        
+def Test_lock_script_var()
+  var lines =<< trim END
+      vim9script
+      var local = 123
       assert_equal(123, local)
 
       var error: string

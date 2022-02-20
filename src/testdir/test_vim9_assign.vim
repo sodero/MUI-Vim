@@ -350,6 +350,11 @@ def Test_assign_unpack()
     assert_equal(1, v1)
     assert_equal(2, v2)
 
+    var _x: number
+    [_x, v2] = [6, 7]
+    assert_equal(6, _x)
+    assert_equal(7, v2)
+
     var reslist = []
     for text in ['aaa {bbb} ccc', 'ddd {eee} fff']
       var before: string
@@ -538,6 +543,13 @@ def Test_assign_index()
   d3.one.two.three = 123
   assert_equal({one: {two: {three: 123}}}, d3)
 
+  # blob
+  var bl: blob = 0z11223344
+  bl[0] = 0x77
+  assert_equal(0z77223344, bl)
+  bl[-2] = 0x66
+  assert_equal(0z77226644, bl)
+
   # should not read the next line when generating "a.b"
   var a = {}
   a.b = {}
@@ -586,6 +598,24 @@ def Test_assign_index()
       dl.one = {}
   END
   v9.CheckDefFailure(lines, 'E1012: Type mismatch; expected list<number> but got dict<unknown>', 2)
+
+  lines =<< trim END
+      g:l = [1, 2]
+      g:l['x'] = 3
+  END
+  v9.CheckDefExecAndScriptFailure(lines, ['E39:', 'E1030:'], 2)
+
+  lines =<< trim END
+    var bl: blob = test_null_blob()
+    bl[1] = 8
+  END
+  v9.CheckDefExecAndScriptFailure(lines, ['E1184:', 'E979:'], 2)
+
+  lines =<< trim END
+    g:bl = 'not a blob'
+    g:bl[1 : 2] = 8
+  END
+  v9.CheckDefExecAndScriptFailure(lines, ['E897:', 'E689:'], 2)
 enddef
 
 def Test_init_in_for_loop()
@@ -817,6 +847,9 @@ def Test_assignment_list()
   assert_equal(['sdf', 'asdf', 'end'], list3)
 
   v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'll[-4] = 6'], 'E684:')
+  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[8 : 9]'], 'E684:')
+  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[1 : -9]'], 'E684:')
+  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[2 : 1]'], 'E684:')
 
   # type becomes list<any>
   var somelist = rand() > 0 ? [1, 2, 3] : ['a', 'b', 'c']
@@ -1196,6 +1229,22 @@ def Test_assignment_default()
   assert_equal(5678, nr)
 enddef
 
+def Test_script_var_default()
+  var lines =<< trim END
+      vim9script
+      var l: list<number>
+      var bl: blob
+      var d: dict<number>
+      def Echo()
+        assert_equal([], l)
+        assert_equal(0z, bl)
+        assert_equal({}, d)
+      enddef
+      Echo()
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
+
 let s:scriptvar = 'init'
 
 def Test_assignment_var_list()
@@ -1354,7 +1403,8 @@ def Test_assignment_failure()
   v9.CheckDefFailure(['var null = 1'], 'E1034:')
   v9.CheckDefFailure(['var this = 1'], 'E1034:')
 
-  v9.CheckDefFailure(['[a; b; c] = g:list'], 'E452:')
+  v9.CheckDefFailure(['[a; b; c] = g:list'], 'E1001:')
+  v9.CheckDefFailure(['var [a; b; c] = g:list'], 'E1080:')
   v9.CheckDefExecFailure(['var a: number',
                        '[a] = test_null_list()'], 'E1093:')
   v9.CheckDefExecFailure(['var a: number',
@@ -1481,6 +1531,7 @@ def Test_assign_dict()
 
   v9.CheckDefFailure(["var d: dict<number> = {a: '', b: true}"], 'E1012: Type mismatch; expected dict<number> but got dict<any>', 1)
   v9.CheckDefFailure(["var d: dict<dict<number>> = {x: {a: '', b: true}}"], 'E1012: Type mismatch; expected dict<dict<number>> but got dict<dict<any>>', 1)
+  v9.CheckDefFailure(["var d = {x: 1}", "d[1 : 2] = {y: 2}"], 'E1165: Cannot use a range with an assignment: d[1 : 2] =', 2)
 enddef
 
 def Test_assign_dict_unknown_type()
@@ -1879,6 +1930,19 @@ def Test_var_declaration_fails()
   v9.CheckDefFailure(['const foo: number'], 'E1021:')
 enddef
 
+def Test_var_declaration_inferred()
+  # check that type is set on the list so that extend() fails
+  var lines =<< trim END
+      vim9script
+      def GetList(): list<number>
+        var l = [1, 2, 3]
+        return l
+      enddef
+      echo GetList()->extend(['x'])
+  END
+  v9.CheckScriptFailure(lines, 'E1013:', 6)
+enddef
+
 def Test_script_local_in_legacy()
   # OK to define script-local later but before compiling
   var lines =<< trim END
@@ -2016,9 +2080,10 @@ def Test_unlet()
     ], 'E1081:', 2)
 
   # dict unlet
-  var dd = {a: 1, b: 2, c: 3}
+  var dd = {a: 1, b: 2, c: 3, 4: 4}
   unlet dd['a']
   unlet dd.c
+  unlet dd[4]
   assert_equal({b: 2}, dd)
 
   # list unlet
@@ -2038,6 +2103,13 @@ def Test_unlet()
   ll = [1, 2, 3, 4]
   unlet ll[-2 : -1]
   assert_equal([1, 2], ll)
+
+  g:nrdict = {1: 1, 2: 2}
+  g:idx = 1
+  unlet g:nrdict[g:idx]
+  assert_equal({2: 2}, g:nrdict)
+  unlet g:nrdict
+  unlet g:idx
 
   v9.CheckDefFailure([
     'var ll = [1, 2]',
@@ -2062,6 +2134,25 @@ def Test_unlet()
     'var ll = [1, 2]',
     'unlet ll[0: 1]',
     ], 'E1004:', 2)
+
+  v9.CheckDefExecFailure([
+    'g:ll = [1, 2]',
+    'g:idx = "x"',
+    'unlet g:ll[g:idx]',
+    ], 'E1029: Expected number but got string', 3)
+
+  v9.CheckDefExecFailure([
+    'g:ll = [1, 2, 3]',
+    'g:idx = "x"',
+    'unlet g:ll[g:idx : 2]',
+    ], 'E1029: Expected number but got string', 3)
+
+  v9.CheckDefExecFailure([
+    'g:ll = [1, 2, 3]',
+    'g:idx = "x"',
+    'unlet g:ll[0 : g:idx]',
+    ], 'E1029: Expected number but got string', 3)
+
   # command recognized as assignment when skipping, should not give an error
   v9.CheckScriptSuccess([
     'vim9script',
@@ -2107,6 +2198,15 @@ def Test_unlet()
     'var dd = {a: 1}',
     'unlet dd[g:alist]',
     ], 'E1105:', 2)
+
+  v9.CheckDefExecFailure([
+    'g:dd = {"a": 1, 2: 2}'
+    'unlet g:dd[0z11]',
+    ], 'E1029:', 2)
+  v9.CheckDefExecFailure([
+    'g:str = "a string"'
+    'unlet g:str[0]',
+    ], 'E1148: Cannot index a string', 2)
 
   # can compile unlet before variable exists
   g:someDict = {key: 'val'}

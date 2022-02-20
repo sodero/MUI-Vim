@@ -1133,6 +1133,16 @@ def Test_useless_command_modifier()
       silent endtry
   END
   v9.CheckDefAndScriptFailure(lines, 'E1176:', 3)
+
+  lines =<< trim END
+      leftabove
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E1082:', 1)
+
+  lines =<< trim END
+      leftabove # comment
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E1082:', 1)
 enddef
 
 def Test_eval_command()
@@ -1345,6 +1355,13 @@ def Test_command_not_recognized()
   v9.CheckDefFailure(lines, 'E1146:', 1)
 
   lines =<< trim END
+    if 0
+      d.key = 'asdf'
+    endif
+  END
+  v9.CheckDefSuccess(lines)
+
+  lines =<< trim END
     d['key'] = 'asdf'
   END
   v9.CheckDefFailure(lines, 'E1146:', 1)
@@ -1512,6 +1529,17 @@ def Test_lockvar()
 
   var lines =<< trim END
       vim9script
+      g:bl = 0z1122
+      lockvar g:bl
+      def Tryit()
+        g:bl[1] = 99
+      enddef
+      Tryit()
+  END
+  v9.CheckScriptFailure(lines, 'E741:', 1)
+
+  lines =<< trim END
+      vim9script
       var theList = [1, 2, 3]
       def SetList()
         theList[1] = 22
@@ -1522,6 +1550,28 @@ def Test_lockvar()
       SetList()
   END
   v9.CheckScriptFailure(lines, 'E1119', 4)
+
+  lines =<< trim END
+      vim9script
+      var theList = [1, 2, 3]
+      def AddToList()
+        lockvar theList
+        theList += [4]
+      enddef
+      AddToList()
+  END
+  v9.CheckScriptFailure(lines, 'E741', 2)
+
+  lines =<< trim END
+      vim9script
+      var theList = [1, 2, 3]
+      def AddToList()
+        lockvar theList
+        add(theList, 4)
+      enddef
+      AddToList()
+  END
+  v9.CheckScriptFailure(lines, 'E741', 2)
 
   lines =<< trim END
       var theList = [1, 2, 3]
@@ -1611,6 +1661,11 @@ def Test_substitute_expr()
   s/text/\=['aaa', 'bbb', 'ccc']/
   assert_equal(['some aaa', 'bbb', 'ccc', ' here'], getline(1, '$'))
   bwipe!
+
+  # inside "if 0" substitute is ignored
+  if 0
+    s/a/\=nothing/ and | some more
+  endif
 enddef
 
 def Test_redir_to_var()
@@ -1652,6 +1707,12 @@ def Test_redir_to_var()
     redir => notexist
   END
   v9.CheckDefFailure(lines, 'E1089:')
+
+  lines =<< trim END
+    var text: string
+    redir => text
+  END
+  v9.CheckDefFailure(lines, 'E1185:')
 
   lines =<< trim END
     var ls = 'asdf'

@@ -2788,10 +2788,14 @@ EXTERN char e_missing_argument_type_for_str[]
 	INIT(= N_("E1077: Missing argument type for %s"));
 // E1078 unused
 // E1079 unused
-// E1080 unused
+EXTERN char e_invalid_assignment[]
+	INIT(= N_("E1080: Invalid assignment"));
 EXTERN char e_cannot_unlet_str[]
 	INIT(= N_("E1081: Cannot unlet %s"));
-// E1082 unused
+#endif
+EXTERN char e_command_modifier_without_command[]
+	INIT(= N_("E1082: Command modifier without command"));
+#ifdef FEAT_EVAL
 EXTERN char e_missing_backtick[]
 	INIT(= N_("E1083: Missing backtick"));
 EXTERN char e_cannot_delete_vim9_script_function_str[]
@@ -3006,8 +3010,7 @@ EXTERN char e_variable_arguments_type_must_be_list_str[]
 	INIT(= N_("E1180: Variable arguments type must be a list: %s"));
 EXTERN char e_cannot_use_underscore_here[]
 	INIT(= N_("E1181: Cannot use an underscore here"));
-EXTERN char e_blob_required[]
-	INIT(= N_("E1182: Blob required"));
+// E1182 unused
 EXTERN char e_cannot_use_range_with_assignment_operator_str[]
 	INIT(= N_("E1183: Cannot use a range with an assignment operator: %s"));
 #endif
@@ -3234,4 +3237,6 @@ EXTERN char e_function_name_must_start_with_capital_str[]
 	INIT(= N_("E1267: Function name must start with a capital: %s"));
 EXTERN char e_cannot_use_s_colon_in_vim9_script_str[]
 	INIT(= N_("E1268: Cannot use s: in Vim9 script: %s"));
+EXTERN char e_cannot_create_vim9_script_variable_in_function_str[]
+	INIT(= N_("E1269: Cannot create a Vim9 script variable in a function: %s"));
 #endif
