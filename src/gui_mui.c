@@ -830,12 +830,13 @@ METHOD(VimCon, SetFgColor, Color)
         { .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
         { .ti_Tag = TAG_END, .ti_Data = 0 }
     };
-
+#ifndef __AROS__
+    // For some unknown reason this shortcut doesn't work on Aros.
     if(likely((msg->Color|ALPHA_MASK) == tags[0].ti_Data))
     {
         return FALSE;
     }
-
+#endif
     tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
@@ -853,12 +854,13 @@ METHOD(VimCon, SetBgColor, Color)
         { .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
         { .ti_Tag = TAG_END, .ti_Data = 0 }
     };
-
+#ifndef __AROS__
+    // For some unknown reason this shortcut doesn't work on Aros.
     if(unlikely((msg->Color|ALPHA_MASK) == tags[0].ti_Data))
     {
         return FALSE;
     }
-
+#endif
     tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
