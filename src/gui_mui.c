@@ -113,10 +113,10 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
 //------------------------------------------------------------------------------
 #define METHOD(C, F, ...) struct MUIP_ ## C ## _ ## F { STACKED IPTR MethodID, \
 __VA_ARGS__;}; enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ }; \
-MUIDSP IPTR C ## F(Object *me, struct MUIP_ ## C ## _ ## F *msg, \
-struct C ## Data *my)
+MUIDSP IPTR C ## F(Object *me UNUSED, struct MUIP_ ## C ## _ ## F *msg, \
+struct C ## Data *my UNUSED)
 #define METHOD0(C, F, ...) enum { MUIM_ ## C ## _ ## F = TAG_USER + __LINE__ };\
-MUIDSP IPTR C ## F(Object *me, struct C ## Data *my)
+MUIDSP IPTR C ## F(Object *me UNUSED, struct C ## Data *my UNUSED)
 
 //------------------------------------------------------------------------------
 // MUI Class method dispatch
@@ -231,56 +231,56 @@ METHOD(VimCon, AppMessage, Message)
     }
 
     // Don't do anything if all we get is garbage.
-    if(likely(nfiles > 0))
+    if(unlikely(nfiles <= 0))
     {
-        // Transpose and cap mouse coordinates.
-        int x = m->am_MouseX - my->left;
-        int y = m->am_MouseY - my->top;
+        // Nothing to pass over to Vim.
+        free(fnames);
 
-        x = x > 0 ? x : 0;
-        y = y > 0 ? y : 0;
-        x = x >= my->width ? my->width - 1 : x;
-        y = y >= my->height ? my->height - 1 : y;
+        CurrentDir(owd);
+        return 0;
+    }
 
-        // There was something among the arguments that we could not acquire a
-        // read lock for. Shrink list of files before handing it over to Vim.
-        if(unlikely(nfiles < m->am_NumArgs))
+    // Transpose and cap mouse coordinates.
+    int x = m->am_MouseX - my->left;
+    int y = m->am_MouseY - my->top;
+
+    x = x > 0 ? x : 0;
+    y = y > 0 ? y : 0;
+    x = x >= my->width ? my->width - 1 : x;
+    y = y >= my->height ? my->height - 1 : y;
+
+    // There was something among the arguments that we could not acquire a read
+    // lock for. Shrink list before handing it over to Vim.
+    if(unlikely(nfiles < m->am_NumArgs))
+    {
+        char_u **shrunk = calloc(nfiles, sizeof(char_u *));
+
+        if(likely(shrunk))
         {
-            char_u **shrunk = calloc(nfiles, sizeof(char_u *));
-
-            if(likely(shrunk))
+            // Copy old contents to new list.
+            for(arg = 0; arg < nfiles; ++arg)
             {
-                // Copy old contents to new list.
-                for(arg = 0; arg < nfiles; ++arg)
-                {
-                    shrunk[arg] = fnames[arg];
-                }
+                shrunk[arg] = fnames[arg];
             }
-
-            // Replace old list with new list.
-            free(fnames);
-            fnames = shrunk;
         }
 
-        // The shrunk allocation could have failed.
-        if(likely(fnames))
-        {
-            // Vim will sometimes try to interact with the user when handling
-            // the file drop. Activate the window to save one annoying mouse
-            // click if that's the case.
-            set(_win(me), MUIA_Window_Activate, TRUE);
-            gui_handle_drop(x, y, 0, fnames, nfiles);
-        }
-        else
-        {
-            // Shrinkage failed.
-            kmsg(_(e_out_of_memory));
-        }
+        // Replace old list with new list.
+        free(fnames);
+        fnames = shrunk;
+    }
+
+    // The shrunk allocation could have failed.
+    if(likely(fnames))
+    {
+        // Vim will sometimes try to interact with the user when handling drops.
+        // Activate window to save one annoying mouse click.
+        set(_win(me), MUIA_Window_Activate, TRUE);
+        gui_handle_drop(x, y, 0, fnames, nfiles);
     }
     else
     {
-        // Nothing to pass over to Vim we need to free this ourselves.
-        free(fnames);
+        // Shrinkage failed.
+        kmsg(_(e_out_of_memory));
     }
 
     // Go back to where we started and show whatever was read.
@@ -952,49 +952,8 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
         return (IPTR) NULL;
     }
 
-    struct Screen *s = LockPubScreen(NULL);
-
-    if(unlikely(!s))
-    {
-        kmsg(_(e_null_argument));
-        CoerceMethod(cls, obj, OM_DISPOSE);
-        return (IPTR) NULL;
-    }
-
     struct VimConData *my = INST_DATA(cls,obj);
-
-    my->bm = (struct BitMap *) AllocBitMap
-        (GetBitMapAttr(s->RastPort.BitMap, BMA_WIDTH),
-        GetBitMapAttr(s->RastPort.BitMap, BMA_HEIGHT),
-        GetBitMapAttr(s->RastPort.BitMap, BMA_DEPTH),
-#ifndef __MORPHOS__
-        BMF_CLEAR,
-        s->RastPort.BitMap
-#else
-        BMF_CLEAR | BMF_REQUESTVMEM,
-        NULL
-#endif
-        );
-
-    UnlockPubScreen(NULL, s);
-
-    if(unlikely(!my->bm))
-    {
-        kmsg(_(e_out_of_memory));
-        CoerceMethod(cls, obj, OM_DISPOSE);
-        return (IPTR) NULL;
-    }
-
-    // Initial RP settings
-    InitRastPort(&my->rp);
-    my->rp.BitMap = my->bm;
-    SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2,
-#ifndef __amigaos4__
-        RPTAG_PenMode, FALSE,
-#endif
-        RPTAG_FgColor, 0, RPTAG_BgColor, 0, TAG_DONE);
-
-    // Static settings
+    my->bm = NULL;
     my->cursor[0] = 700;
     my->cursor[1] = 250;
     my->cursor[2] = 400;
@@ -1028,22 +987,51 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
 }
 
 //------------------------------------------------------------------------------
-// VimConSetup - Overloading MUIM_Setup
-// Input:        See MUI docs
-// Return:       See MUI docs
+// VimConSetupBitmap - Allocate and initialize bitmap related settings.
+// Input:              -
+// Return:             TRUE on success, FALSE otherwise
 //------------------------------------------------------------------------------
-MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
+MUIDSP IPTR VimConSetupBitmap(Class *cls, Object *obj)
 {
-    // Setup parent class
-    if(unlikely(!DoSuperMethodA(cls, obj, (Msg) msg)))
+    struct Screen *scr = LockPubScreen(NULL);
+
+    if(unlikely(!scr))
     {
-        kmsg(_(e_out_of_memory));
+        kmsg(_(e_null_argument));
         return FALSE;
     }
 
     struct VimConData *my = INST_DATA(cls,obj);
 
-    // Font might have changed
+    my->bm = (struct BitMap *) AllocBitMap
+        (GetBitMapAttr(scr->RastPort.BitMap, BMA_WIDTH),
+        GetBitMapAttr(scr->RastPort.BitMap, BMA_HEIGHT),
+        GetBitMapAttr(scr->RastPort.BitMap, BMA_DEPTH),
+#ifndef __MORPHOS__
+        BMF_CLEAR,
+        scr->RastPort.BitMap
+#else
+        BMF_CLEAR | BMF_REQUESTVMEM,
+        NULL
+#endif
+        );
+
+    UnlockPubScreen(NULL, scr);
+
+    if(unlikely(!my->bm))
+    {
+        kmsg(_(e_out_of_memory));
+        return FALSE;
+    }
+
+    // Initial RP settings
+    InitRastPort(&my->rp);
+    my->rp.BitMap = my->bm;
+    SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2,
+#ifndef __amigaos4__
+        RPTAG_PenMode, FALSE,
+#endif
+        RPTAG_FgColor, 0, RPTAG_BgColor, 0, TAG_DONE);
     SetFont(&my->rp, _font(obj));
 
     // Make room for smearing, no overlap allowed
@@ -1063,6 +1051,31 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     my->xdelta = my->rp.TxWidth + my->rp.TxSpacing;
     my->ydelta = my->rp.TxHeight;
     my->space = my->rp.TxSpacing;
+    return TRUE;
+}
+
+//------------------------------------------------------------------------------
+// VimConSetup - Overloading MUIM_Setup
+// Input:        See MUI docs
+// Return:       See MUI docs
+//------------------------------------------------------------------------------
+MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
+{
+    // Setup parent class
+    if(unlikely(!DoSuperMethodA(cls, obj, (Msg) msg)))
+    {
+        kmsg(_(e_out_of_memory));
+        return FALSE;
+    }
+
+    struct VimConData *my = INST_DATA(cls,obj);
+
+    if(unlikely(!VimConSetupBitmap(cls, obj)))
+    {
+        return FALSE;
+    }
+
+    // Set Vim globals.
     gui.char_width = my->xdelta;
     gui.char_height = my->ydelta;
     gui.scrollbar_width = gui.scrollbar_height = 0;
@@ -1080,7 +1093,7 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     }
 #endif
 
-    // Clear Vim communication blocker.
+    // Clear Vim blocker
     my->block = FALSE;
 
     // Install blink handler if previously present
@@ -1090,25 +1103,6 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
     }
 
     return TRUE;
-}
-
-//------------------------------------------------------------------------------
-// VimConDispose - Overloading OM_DISPOSE
-// Input:          See BOOPSI docs
-// Return:         See BOOPSI docs
-//------------------------------------------------------------------------------
-MUIDSP IPTR VimConDispose(Class *cls, Object *obj, Msg msg)
-{
-    struct VimConData *my = INST_DATA(cls,obj);
-
-    if(likely(my->bm))
-    {
-        WaitBlit();
-        FreeBitMap(my->bm);
-        my->bm = NULL;
-    }
-
-    return DoSuperMethodA(cls, obj, msg);
 }
 
 //------------------------------------------------------------------------------
@@ -1135,6 +1129,13 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
 
     // Input handler for keys and mouse is always present
     DoMethod(_win(obj), MUIM_Window_RemEventHandler, &my->event);
+
+    // Free off screen buffer
+    if(likely(my->bm))
+    {
+        FreeBitMap(my->bm);
+        my->bm = NULL;
+    }
 
     // Let the superclass do its part
     return (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
@@ -1287,8 +1288,7 @@ MUIDSP int VimConMouseHandleButton(Class *cls, Object *obj,
 // Input:            IDCMP RAW event message
 // Return:           TRUE
 //------------------------------------------------------------------------------
-MUIDSP int VimConHandleRaw(Class *cls, Object *obj,
-    struct MUIP_HandleEvent *msg)
+MUIDSP int VimConHandleRaw(struct MUIP_HandleEvent *msg)
 {
     static TEXT b[4];
     static char_u s[6];
@@ -1408,7 +1408,7 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
 
     if(likely(msg->imsg->Class == IDCMP_RAWKEY))
     {
-        if(VimConHandleRaw(cls, obj, msg))
+        if(VimConHandleRaw(msg))
         {
             my->state |= MUIV_VimCon_State_Yield;
         }
@@ -1443,7 +1443,7 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
             iwd->WheelX < 0 ? RAWKEY_NM_WHEEL_LEFT :
             iwd->WheelX > 0 ? RAWKEY_NM_WHEEL_RIGHT : 0;
 
-        if(VimConHandleRaw(cls, obj, msg))
+        if(VimConHandleRaw(msg))
         {
             my->state |= MUIV_VimCon_State_Yield;
         }
@@ -1627,12 +1627,11 @@ METHOD0(VimCon, GetState)
 //------------------------------------------------------------------------------
 MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 {
-    IPTR r = (IPTR) DoSuperMethodA(cls, obj, msg);
-    struct VimConData *my = INST_DATA(cls,obj);
-
     // Let Vim know the console size.
+    struct VimConData *my = INST_DATA(cls,obj);
     my->state |= MUIV_VimCon_State_Reset;
-    return r;
+
+    return DoSuperMethodA(cls, obj, msg);
 }
 
 //------------------------------------------------------------------------------
@@ -1843,7 +1842,6 @@ DISPATCH(VimCon)
         // BOOPSI
         //----------------------------------------------------------------------
         case OM_NEW: return VimConNew(cls, obj, (struct opSet *) msg);
-        case OM_DISPOSE: return VimConDispose(cls, obj, msg);
         //----------------------------------------------------------------------
         // MUI
         //----------------------------------------------------------------------
@@ -2794,29 +2792,24 @@ void gui_mch_set_foreground()
 //------------------------------------------------------------------------------
 // gui_mch_get_font - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-GuiFont gui_mch_get_font(char_u *vim_font_name, int report_error)
+GuiFont gui_mch_get_font(char_u *vim_font_name UNUSED, int report_error UNUSED)
 {
-    (void) vim_font_name;
-    (void) report_error;
     return (GuiFont) NULL;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_get_fontname - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-char_u *gui_mch_get_fontname(GuiFont font, char_u *name)
+char_u *gui_mch_get_fontname(GuiFont font UNUSED, char_u *name UNUSED)
 {
-    (void) font;
-    (void) name;
     return NULL;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_free_font - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-void gui_mch_free_font(GuiFont font)
+void gui_mch_free_font(GuiFont font UNUSED)
 {
-    (void) font;
 }
 
 //------------------------------------------------------------------------------
@@ -2836,36 +2829,35 @@ int gui_mch_get_winpos(int *x, int *y)
 //------------------------------------------------------------------------------
 // gui_mch_set_winpos - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_set_winpos(int x, int y)
+void gui_mch_set_winpos(int x UNUSED, int y UNUSED)
 {
-    (void) x;
-    (void) y;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_enable_scrollbar
 //------------------------------------------------------------------------------
+#ifdef MUIVIM_FEAT_SCROLLBAR
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
-#ifdef MUIVIM_FEAT_SCROLLBAR
     if(unlikely(!sb || !sb->id))
     {
         return;
     }
 
     (void) DoMethod(sb->id, M_ID(VimScrollbar, Show), flag ? TRUE : FALSE);
-#else
-    (void) sb;
-    (void) flag;
-#endif
 }
+#else
+void gui_mch_enable_scrollbar(scrollbar_T *sb UNUSED, int flag UNUSED)
+{
+}
+#endif
 
 //------------------------------------------------------------------------------
 // gui_mch_create_scrollbar
 //------------------------------------------------------------------------------
-void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
-{
 #ifdef MUIVIM_FEAT_SCROLLBAR
+void gui_mch_create_scrollbar(scrollbar_T *sb, int orient UNUSED)
+{
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
         MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
 
@@ -2876,18 +2868,19 @@ void gui_mch_create_scrollbar(scrollbar_T *sb, int orient)
     }
 
     (void) DoMethod(obj, M_ID(VimScrollbar, Install));
-#else
-    (void) sb;
-    (void) orient;
-#endif
 }
+#else
+void gui_mch_create_scrollbar(scrollbar_T *sb UNUSED, int orient UNUSED)
+{
+}
+#endif
 
 //------------------------------------------------------------------------------
 // gui_mch_set_scrollbar_thumb
 //------------------------------------------------------------------------------
+#ifdef MUIVIM_FEAT_SCROLLBAR
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
-#ifdef MUIVIM_FEAT_SCROLLBAR
     if(unlikely(!sb->id))
     {
         return;
@@ -2895,34 +2888,34 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 
     SetAttrs(sb->id, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
         MUIA_Prop_First, val, TAG_DONE);
-#else
-    (void) sb;
-    (void) val;
-    (void) size;
-    (void) max;
-#endif
 }
+#else
+void gui_mch_set_scrollbar_thumb(scrollbar_T *sb UNUSED, int val UNUSED,
+    int size UNUSED, int max UNUSED)
+{
+}
+#endif
 
 //------------------------------------------------------------------------------
 // gui_mch_set_scrollbar_pos
 //------------------------------------------------------------------------------
-void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x, int y, int w, int h)
-{
 #ifdef MUIVIM_FEAT_SCROLLBAR
+void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x UNUSED, int y,
+    int w UNUSED, int h)
+{
     if(unlikely(!sb->id || !h))
     {
         return;
     }
 
     (void) DoMethod(sb->id, M_ID(VimScrollbar, Pos), (IPTR) y, (IPTR) h);
-#else
-    (void) sb;
-    (void) x;
-    (void) y;
-    (void) w;
-    (void) h;
-#endif
 }
+#else
+void gui_mch_set_scrollbar_pos(scrollbar_T *sb UNUSED, int x UNUSED,
+    int y UNUSED, int w UNUSED, int h UNUSED)
+{
+}
+#endif
 
 //------------------------------------------------------------------------------
 // gui_mch_get_scrollbar_xpadding
@@ -3076,10 +3069,8 @@ void gui_mch_getmouse(int *x, int *y)
 //------------------------------------------------------------------------------
 // gui_mch_setmouse - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_setmouse(int x, int y)
+void gui_mch_setmouse(int x UNUSED, int y UNUSED)
 {
-    (void) x;
-    (void) y;
 }
 
 //------------------------------------------------------------------------------
@@ -3103,14 +3094,16 @@ void gui_mch_update(void)
 // Returns OK if a character was found to be available within the given time,
 // or FAIL otherwise.
 //------------------------------------------------------------------------------
-int gui_mch_wait_for_chars(int wtime)
-{
 #ifdef MUIVIM_FEAT_TIMEOUT
+int gui_mch_wait_for_chars(int wtime)
     // Don't enable timeouts for now, it might cause problems in the MUI message
     // loop. Passing the control over to Vim at any time is not safe.
     #warning Timeout support will cause MUI message loop problems
     (void) DoMethod(Con, M_ID(VimCon, SetTimeout), wtime > 0 ? wtime : 0);
+#else
+int gui_mch_wait_for_chars(int wtime UNUSED)
 #endif
+{
     // Assume that we're idling.
     int state = MUIV_VimCon_State_Idle;
 
@@ -3184,17 +3177,15 @@ void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 //------------------------------------------------------------------------------
 // gui_mch_enable_menu - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_enable_menu(int flag)
+void gui_mch_enable_menu(int flag UNUSED)
 {
-    (void) flag;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_toggle_tearoff - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_toggle_tearoffs(int enable)
+void gui_mch_toggle_tearoffs(int enable UNUSED)
 {
-    (void) enable;
 }
 
 //------------------------------------------------------------------------------
@@ -3216,16 +3207,10 @@ void gui_mch_beep(void)
 //------------------------------------------------------------------------------
 // gui_mch_set_shellsize - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_set_shellsize(int width, int height, int min_width, int min_height,
-    int base_width, int base_height, int direction)
+void gui_mch_set_shellsize(int width UNUSED, int height UNUSED,
+    int min_width UNUSED, int min_height UNUSED, int base_width UNUSED,
+    int base_height UNUSED, int direction UNUSED)
 {
-    (void) width;
-    (void) height;
-    (void) min_width;
-    (void) min_height;
-    (void) base_width;
-    (void) base_height;
-    (void) direction;
 }
 
 //------------------------------------------------------------------------------
@@ -3260,9 +3245,8 @@ void gui_mch_insert_lines(int row, int num_lines)
 //------------------------------------------------------------------------------
 // gui_mch_set_font - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-void gui_mch_set_font(GuiFont font)
+void gui_mch_set_font(GuiFont font UNUSED)
 {
-    (void) font;
 }
 
 //------------------------------------------------------------------------------
@@ -3277,21 +3261,17 @@ void gui_mch_clear_all()
 //------------------------------------------------------------------------------
 // gui_mch_flash
 //------------------------------------------------------------------------------
-void gui_mch_flash(int msec)
+void gui_mch_flash(int msec UNUSED)
 {
-    (void) msec;
     (void) DoMethod(Con, M_ID(VimCon, Beep));
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_set_menu_pos - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-void gui_mch_set_menu_pos(int x, int y, int w, int h)
+void gui_mch_set_menu_pos(int x UNUSED, int y UNUSED, int w UNUSED,
+    int h UNUSED)
 {
-    (void) x;
-    (void) y;
-    (void) w;
-    (void) h;
 }
 
 #ifdef __amigaos4__
@@ -3491,7 +3471,7 @@ int gui_mch_init(void)
 //------------------------------------------------------------------------------
 // gui_mch_prepare
 //------------------------------------------------------------------------------
-void gui_mch_prepare(int *argc, char **argv)
+void gui_mch_prepare(int *argc UNUSED, char **argv UNUSED)
 {
 }
 
@@ -3522,20 +3502,16 @@ int gui_mch_open(void)
 //------------------------------------------------------------------------------
 // gui_mch_init_font - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-int gui_mch_init_font(char_u *vim_font_name, int fontset)
+int gui_mch_init_font(char_u *vim_font_name UNUSED, int fontset UNUSED)
 {
-    (void) vim_font_name;
-    (void) fontset;
     return OK;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_exit
 //------------------------------------------------------------------------------
-void gui_mch_exit(int rc)
+void gui_mch_exit(int rc UNUSED)
 {
-    (void) rc;
-
     if(likely(App))
     {
         // Save icon pointer
@@ -3600,9 +3576,8 @@ void gui_mch_exit(int rc)
 //------------------------------------------------------------------------------
 // gui_mch_draw_hollow_cursor
 //------------------------------------------------------------------------------
-void gui_mch_draw_hollow_cursor(guicolor_T color)
+void gui_mch_draw_hollow_cursor(guicolor_T color UNUSED)
 {
-    (void) color;
     (void) DoMethod(Con, M_ID(VimCon, DrawHollowCursor), gui.row, gui.col,
         gui.norm_pixel);
 }
@@ -3610,9 +3585,8 @@ void gui_mch_draw_hollow_cursor(guicolor_T color)
 //------------------------------------------------------------------------------
 // gui_mch_draw_part_cursor
 //------------------------------------------------------------------------------
-void gui_mch_draw_part_cursor(int w, int h, guicolor_T color)
+void gui_mch_draw_part_cursor(int w, int h, guicolor_T color UNUSED)
 {
-    (void) color;
     (void) DoMethod(Con, M_ID(VimCon, DrawPartCursor), gui.row, gui.col, w, h,
         gui.norm_pixel);
 }
@@ -3620,12 +3594,9 @@ void gui_mch_draw_part_cursor(int w, int h, guicolor_T color)
 //------------------------------------------------------------------------------
 // gui_mch_set_text_area_pos - Not supported (let MUI handle this)
 //------------------------------------------------------------------------------
-void gui_mch_set_text_area_pos(int x, int y, int w, int h)
+void gui_mch_set_text_area_pos(int x UNUSED, int y UNUSED, int w UNUSED,
+    int h UNUSED)
 {
-    (void) x;
-    (void) y;
-    (void) w;
-    (void) h;
 }
 
 //------------------------------------------------------------------------------
@@ -3639,10 +3610,8 @@ void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 //------------------------------------------------------------------------------
 // gui_mch_add_menu
 //------------------------------------------------------------------------------
-void gui_mch_add_menu(vimmenu_T *menu, int index)
+void gui_mch_add_menu(vimmenu_T *menu, int index UNUSED)
 {
-    (void) index;
-
     if(unlikely(menu_is_popup(menu->name) || menu_is_toolbar(menu->name)))
     {
         return;
@@ -3657,9 +3626,8 @@ void gui_mch_add_menu(vimmenu_T *menu, int index)
 //                         in the same way we need some code for demuxing
 //                         and discarding.
 //------------------------------------------------------------------------------
-void gui_mch_add_menu_item(vimmenu_T *menu, int index)
+void gui_mch_add_menu_item(vimmenu_T *menu, int index UNUSED)
 {
-    (void) index;
     vimmenu_T *p = menu->parent;
 
     // Menu items must have parents
@@ -3722,10 +3690,8 @@ void gui_mch_menu_grey(vimmenu_T *menu, int grey)
 //------------------------------------------------------------------------------
 // gui_mch_menu_hidden - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_menu_hidden(vimmenu_T *menu, int hidden)
+void gui_mch_menu_hidden(vimmenu_T *menu UNUSED, int hidden UNUSED)
 {
-    (void) menu;
-    (void) hidden;
 }
 
 //------------------------------------------------------------------------------
@@ -3738,17 +3704,15 @@ void gui_mch_draw_menubar(void)
 //------------------------------------------------------------------------------
 // gui_mch_show_popupmenu - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_show_popupmenu(vimmenu_T *menu)
+void gui_mch_show_popupmenu(vimmenu_T *menu UNUSED)
 {
-    (void) menu;
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_mousehide - Not supported
 //------------------------------------------------------------------------------
-void gui_mch_mousehide(int hide)
+void gui_mch_mousehide(int hide UNUSED)
 {
-    (void) hide;
 }
 
 //------------------------------------------------------------------------------
@@ -3770,9 +3734,8 @@ void gui_mch_new_colors(void)
 //------------------------------------------------------------------------------
 // gui_mch_haskey - Not supported
 //------------------------------------------------------------------------------
-int gui_mch_haskey(char_u *name)
+int gui_mch_haskey(char_u *name UNUSED)
 {
-    (void) name;
     return OK;
 }
 
@@ -3798,44 +3761,40 @@ void gui_mch_invert_rectangle(int row, int col, int nr, int nc)
 //------------------------------------------------------------------------------
 // clip_mch_own_selection - Not supported
 //------------------------------------------------------------------------------
-int clip_mch_own_selection(Clipboard_T *cbd)
+int clip_mch_own_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) cbd;
     return OK;
 }
 
 //------------------------------------------------------------------------------
 // clip_mch_lose_selection - Not supported
 //------------------------------------------------------------------------------
-void clip_mch_lose_selection(Clipboard_T *cbd)
+void clip_mch_lose_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) cbd;
 }
 
 //------------------------------------------------------------------------------
 // clip_mch_request_selection
 //------------------------------------------------------------------------------
-void clip_mch_request_selection(Clipboard_T *cbd)
+void clip_mch_request_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) cbd;
     (void) DoMethod(Con, M_ID(VimCon, Paste), cbd);
 }
 
 //------------------------------------------------------------------------------
 // clip_mch_set_selection
 //------------------------------------------------------------------------------
-void clip_mch_set_selection(Clipboard_T *cbd)
+void clip_mch_set_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) cbd;
     (void) DoMethod(Con, M_ID(VimCon, Copy), cbd);
 }
 
 //------------------------------------------------------------------------------
 // gui_mch_destroy_scrollbar - Not supported
 //------------------------------------------------------------------------------
+#ifdef MUIVIM_FEAT_SCROLLBAR
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
-#ifdef MUIVIM_FEAT_SCROLLBAR
     if(unlikely(!sb || !sb->id || !DoMethod(sb->id, M_ID(VimScrollbar,
         Uninstall))))
     {
@@ -3847,10 +3806,12 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 
     // Safety measure.
     sb->id = NULL;
-#else
-    (void) sb;
-#endif
 }
+#else
+void gui_mch_destroy_scrollbar(scrollbar_T *sb UNUSED)
+{
+}
+#endif
 
 //------------------------------------------------------------------------------
 // gui_mch_browse - Put up a file requester.
@@ -3862,13 +3823,9 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 // initdir          initial directory, NULL for current dir
 // filter           not used (file name filter)
 //------------------------------------------------------------------------------
-char_u *gui_mch_browse(int saving, char_u *title, char_u *dflt, char_u *ext,
-    char_u *initdir, char_u *filter )
+char_u *gui_mch_browse(int saving UNUSED, char_u *title, char_u *dflt UNUSED,
+    char_u *ext UNUSED, char_u *initdir, char_u *filter UNUSED)
 {
-    (void) saving;
-    (void) filter;
-    (void) dflt;
-    (void) ext;
     return (char_u *) DoMethod(Con, M_ID(VimCon, Browse), title, initdir);
 }
 
@@ -3891,9 +3848,8 @@ void gui_mch_start_blink(void)
 //------------------------------------------------------------------------------
 // gui_mch_stop_blink
 //------------------------------------------------------------------------------
-void gui_mch_stop_blink(int FIXME)
+void gui_mch_stop_blink(int FIXME UNUSED)
 {
-    (void) FIXME;
     (void) DoMethod(Con, M_ID(VimCon, StopBlink));
 }
 
@@ -3916,8 +3872,7 @@ int gui_mch_is_blink_off(void)
 //------------------------------------------------------------------------------
 // gui_mch_settitle
 //------------------------------------------------------------------------------
-void gui_mch_settitle(char_u *title, char_u *icon)
+void gui_mch_settitle(char_u *title, char_u *icon UNUSED)
 {
-    (void) icon;
     (void) DoMethod(Con, M_ID(VimCon, SetTitle), title);
 }
