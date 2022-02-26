@@ -1451,7 +1451,7 @@ MUIDSP IPTR VimConHandleEvent(Class *cls, Object *obj,
 #endif
 
     // Leave unhandeled events to our parent class
-    return my->state & MUIV_VimCon_State_Yield ? MUI_EventHandlerRC_Eat :
+    return (my->state & MUIV_VimCon_State_Yield) ? MUI_EventHandlerRC_Eat :
         DoSuperMethodA(cls, obj, (Msg) msg);
 }
 
@@ -1926,7 +1926,7 @@ METHOD(VimToolbar, AddButton, ID, Label, Help)
         if(unlikely(b->help && !strcmp((const char *) msg->Label, b->help)))
         {
             DoMethod(me, MUIM_TheBar_Notify, (IPTR) b->ID, MUIA_Pressed, FALSE,
-                     Con, 2, M_ID(VimCon, Callback), (IPTR) msg->ID);
+                Con, 2, M_ID(VimCon, Callback), (IPTR) msg->ID);
 
             // Save the Vim menu item pointer as the parent class of the button.
             // Used to translate from menu item to MUI button ID.
@@ -2190,8 +2190,9 @@ METHOD(VimMenu, RemoveMenu, ID)
         return FALSE;
     }
 
-    // FIXME: Are we leaking m?
+    // Free menu item.
     DoMethod(me, MUIM_Family_Remove, m);
+    MUI_DisposeObject(m);
     return TRUE;
 }
 
@@ -2817,13 +2818,13 @@ void gui_mch_free_font(GuiFont font UNUSED)
 //------------------------------------------------------------------------------
 int gui_mch_get_winpos(int *x, int *y)
 {
-    if(likely(GetAttr(MUIA_Window_TopEdge, _win(Con), (IPTR *) x) &&
-        GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y)))
+    if(unlikely(!GetAttr(MUIA_Window_TopEdge, _win(Con), (IPTR *) x) ||
+        !GetAttr(MUIA_Window_LeftEdge, _win(Con), (IPTR *) y)))
     {
-        return OK;
+        return FAIL;
     }
 
-    return FAIL;
+    return OK;
 }
 
 //------------------------------------------------------------------------------
@@ -3279,7 +3280,7 @@ static int gui_os4_init(void)
 {
     if(unlikely(!(MUIMasterBase = OpenLibrary("muimaster.library", 19))))
     {
-        fprintf(stderr, "Failed to open muimaster.library.\n");
+        VimMessage("Error", "Failed to open muimaster.library.", "OK");
         return FALSE;
     }
 
@@ -3288,7 +3289,7 @@ static int gui_os4_init(void)
 
     if(unlikely(!(CyberGfxBase = OpenLibrary("cybergraphics.library", 40))))
     {
-        fprintf(stderr, "Failed to open cybergraphics.library.\n");
+        VimMessage("Error", "Failed to open cybergraphics.library.", "OK");
         return FALSE;
     }
 
@@ -3297,7 +3298,7 @@ static int gui_os4_init(void)
 
     if(unlikely(!(KeymapBase = OpenLibrary("keymap.library", 50))))
     {
-        fprintf(stderr, "Failed to open keymap.library.\n");
+        VimMessage("Error", "Failed to open keymap.library.", "OK");
         return FALSE;
     }
 
