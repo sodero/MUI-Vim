@@ -940,7 +940,7 @@ lock2name(BPTR lock, char_u *buf, long len)
 mch_getperm(char_u *name)
 {
     struct FileInfoBlock *fib = get_fib(name);
-    long retval = fib ? fib->fib_Protection : -1;
+    long retval = fib ? (long) fib->fib_Protection : -1;
 
     FreeDosObject(DOS_FIB, fib);
     return retval;
@@ -991,7 +991,7 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock != NULL)
+    if (lock)
     {
 	UnLock(lock);
 	return 0;

@@ -15,6 +15,7 @@ CFLAGS += \
 	-DUSE_TMPNAM \
 	-I proto \
 	-Wall \
+	-Wextra \
 	-Wno-pointer-sign \
 	-Wno-int-conversion \
 	-Wno-deprecated-declarations
