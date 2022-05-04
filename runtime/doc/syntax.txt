@@ -1,4 +1,4 @@
-*syntax.txt*	For Vim version 8.2.  Last change: 2022 Feb 06
+*syntax.txt*	For Vim version 8.2.  Last change: 2022 Apr 24
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -215,7 +215,7 @@ A syntax group name doesn't specify any color or attributes itself.
 
 The name for a highlight or syntax group must consist of ASCII letters, digits
 and the underscore.  As a regexp: "[a-zA-Z0-9_]*".  However, Vim does not give
-an error when using other characters.  The maxium length of a group name is
+an error when using other characters.  The maximum length of a group name is
 about 200 bytes.  *E1249*
 
 To be able to allow each user to pick their favorite set of colors, there must
@@ -653,7 +653,7 @@ evaluate to get a unique string to append to each ID used in a given document,
 so that the full IDs will be unique even when combined with other content in a
 larger HTML document. Example, to append _ and the buffer number to each ID: >
 
-	:let g:html_id_expr = '"_".bufnr("%")'
+	:let g:html_id_expr = '"_" .. bufnr("%")'
 <
 To append a string "_mystring" to the end of each ID: >
 
@@ -2197,6 +2197,15 @@ $VIMRUNTIME/syntax/syntax.vim).
   mv_finance	 mv_logic	mv_powseries
 
 
+MARKDOWN						*ft-markdown-syntax*
+
+If you have long regions there might be wrong highlighting.  At the cost of
+slowing down displaying, you can have the engine look further back to sync on
+the start of a region, for example 500 lines: >
+
+	:let g:markdown_minlines = 500
+
+
 MATHEMATICA		*mma.vim* *ft-mma-syntax* *ft-mathematica-syntax*
 
 Empty *.m files will automatically be presumed to be Matlab files unless you
@@ -3607,8 +3616,8 @@ Do you want to draw with the mouse?  Try the following: >
    :function! GetPixel()
    :   let c = getline(".")[col(".") - 1]
    :   echo c
-   :   exe "noremap <LeftMouse> <LeftMouse>r".c
-   :   exe "noremap <LeftDrag>	<LeftMouse>r".c
+   :   exe "noremap <LeftMouse> <LeftMouse>r" .. c
+   :   exe "noremap <LeftDrag>	<LeftMouse>r" .. c
    :endfunction
    :noremap <RightMouse> <LeftMouse>:call GetPixel()<CR>
    :set guicursor=n:hor20	   " to see the color beneath the cursor
@@ -4452,7 +4461,7 @@ Leading context			*:syn-lc* *:syn-leading* *:syn-context*
 
 Note: This is an obsolete feature, only included for backwards compatibility
 with previous Vim versions.  It's now recommended to use the |/\@<=| construct
-in the pattern.
+in the pattern.  You can also often use |/\zs|.
 
 The "lc" offset specifies leading context -- a part of the pattern that must
 be present, but is not considered part of the match.  An offset of "lc=n" will
@@ -4898,7 +4907,7 @@ in their own color.
 :hi[ghlight] {group-name}
 			List one highlight group.
 
-						*highlight-clear*
+						*highlight-clear* *:hi-clear*
 :hi[ghlight] clear	Reset all highlighting to the defaults.  Removes all
 			highlighting for groups added by the user!
 			Uses the current value of 'background' to decide which
@@ -4961,7 +4970,7 @@ the same syntax file on all terminals, and use the optimal highlighting.
 					*inverse* *italic* *standout*
 					*nocombine* *strikethrough*
 term={attr-list}			*attr-list* *highlight-term* *E418*
-	attr-list is a comma separated list (without spaces) of the
+	attr-list is a comma-separated list (without spaces) of the
 	following items (in any order):
 		bold
 		underline
@@ -5145,7 +5154,7 @@ font={font-name}					*highlight-font*
 	When setting the font for the "Normal" group, this becomes the default
 	font (until the 'guifont' option is changed; the last one set is
 	used).
-	The following only works with Motif and Athena, not with other GUIs:
+	The following only works with Motif, not with other GUIs:
 	When setting the font for the "Menu" group, the menus will be changed.
 	When setting the font for the "Tooltip" group, the tooltips will be
 	changed.
@@ -5318,6 +5327,8 @@ QuickFixLine	Current |quickfix| item in the quickfix window.
 							*hl-Search*
 Search		Last search pattern highlighting (see 'hlsearch').
 		Also used for similar items that need to stand out.
+							*hl-CurSearch*
+CurSearch	Current match for the last search pattern (see 'hlsearch').
 							*hl-SpecialKey*
 SpecialKey	Meta and special keys listed with ":map", also for text used
 		to show unprintable characters in the text, 'listchars'.
@@ -5382,7 +5393,7 @@ Menu		Current font, background and foreground colors of the menus.
 		Also used for the toolbar.
 		Applicable highlight arguments: font, guibg, guifg.
 
-		NOTE: For Motif and Athena the font argument actually
+		NOTE: For Motif the font argument actually
 		specifies a fontset at all times, no matter if 'guifontset' is
 		empty, and as such it is tied to the current |:language| when
 		set.
@@ -5396,7 +5407,7 @@ Scrollbar	Current background and foreground of the main window's
 Tooltip		Current font, background and foreground of the tooltips.
 		Applicable highlight arguments: font, guibg, guifg.
 
-		NOTE: For Motif and Athena the font argument actually
+		NOTE: For Motif the font argument actually
 		specifies a fontset at all times, no matter if 'guifontset' is
 		empty, and as such it is tied to the current |:language| when
 		set.
@@ -5553,11 +5564,12 @@ WARNING: The longer the tags file, the slower this will be, and the more
 memory Vim will consume.
 
 Only highlighting typedefs, unions and structs can be done too.  For this you
-must use Exuberant ctags (found at http://ctags.sf.net).
+must use Universal Ctags (found at https://ctags.io) or Exuberant ctags (found
+at http://ctags.sf.net).
 
 Put these lines in your Makefile:
 
-# Make a highlight file for types.  Requires Exuberant ctags and awk
+# Make a highlight file for types.  Requires Universal/Exuberant ctags and awk
 types: types.vim
 types.vim: *.[ch]
 	ctags --c-kinds=gstu -o- *.[ch] |\
@@ -5567,9 +5579,9 @@ types.vim: *.[ch]
 And put these lines in your .vimrc: >
 
    " load the types.vim highlighting file, if it exists
-   autocmd BufRead,BufNewFile *.[ch] let fname = expand('<afile>:p:h') . '/types.vim'
+   autocmd BufRead,BufNewFile *.[ch] let fname = expand('<afile>:p:h') .. '/types.vim'
    autocmd BufRead,BufNewFile *.[ch] if filereadable(fname)
-   autocmd BufRead,BufNewFile *.[ch]   exe 'so ' . fname
+   autocmd BufRead,BufNewFile *.[ch]   exe 'so ' .. fname
    autocmd BufRead,BufNewFile *.[ch] endif
 
 ==============================================================================

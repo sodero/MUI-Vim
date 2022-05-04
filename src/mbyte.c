@@ -84,6 +84,11 @@
 #  define WIN32_LEAN_AND_MEAN
 # endif
 # if defined(FEAT_GUI) || defined(FEAT_XCLIPBOARD)
+#  ifdef __CYGWIN__
+    // ControlMask from <X11/X.h> (included in "vim.h") is conflicting with
+    // <w32api/windows.h> (included in <X11/Xwindows.h>).
+#   undef ControlMask
+#  endif
 #  include <X11/Xwindows.h>
 #  define WINBYTE wBYTE
 # else
@@ -318,6 +323,7 @@ enc_alias_table[] =
 {
     {"ansi",		IDX_LATIN_1},
     {"iso-8859-1",	IDX_LATIN_1},
+    {"iso-8859",	IDX_LATIN_1},
     {"latin2",		IDX_ISO_2},
     {"latin3",		IDX_ISO_3},
     {"latin4",		IDX_ISO_4},
@@ -4523,7 +4529,7 @@ enc_canonize(char_u *enc)
 	}
 
 	// "iso-8859n" -> "iso-8859-n"
-	if (STRNCMP(p, "iso-8859", 8) == 0 && p[8] != '-')
+	if (STRNCMP(p, "iso-8859", 8) == 0 && isdigit(p[8]))
 	{
 	    STRMOVE(p + 9, p + 8);
 	    p[8] = '-';

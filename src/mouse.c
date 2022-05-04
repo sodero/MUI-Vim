@@ -115,7 +115,7 @@ find_end_of_word(pos_T *pos)
 }
 
 #if defined(FEAT_GUI_MOTIF) || defined(FEAT_GUI_GTK) \
-	    || defined(FEAT_GUI_ATHENA) || defined(FEAT_GUI_MSWIN) \
+	    || defined(FEAT_GUI_MSWIN) \
 	    || defined(FEAT_GUI_PHOTON) \
 	    || defined(FEAT_TERM_POPUP_MENU)
 # define USE_POPUP_SETPOS
@@ -261,7 +261,10 @@ do_mouse(
 	{
 	    // If the next character is the same mouse event then use that
 	    // one. Speeds up dragging the status line.
-	    if (vpeekc() != NUL)
+	    // Note: Since characters added to the stuff buffer in the code
+	    // below need to come before the next character, do not do this
+	    // when the current character was stuffed.
+	    if (!KeyStuffed && vpeekc() != NUL)
 	    {
 		int nc;
 		int save_mouse_row = mouse_row;
@@ -539,7 +542,7 @@ do_mouse(
 		    // menu on the button down event.
 		    return FALSE;
 #  endif
-#  if defined(FEAT_GUI_ATHENA) || defined(FEAT_GUI_MSWIN) || defined(FEAT_GUI_HAIKU)
+#  if defined(FEAT_GUI_MSWIN) || defined(FEAT_GUI_HAIKU)
 		if (is_click || is_drag)
 		    // Ignore right button down and drag mouse events.  Windows
 		    // only shows the popup menu on the button up event.
@@ -1124,6 +1127,7 @@ ins_mousescroll(int dir)
 	}
 #endif
 	did_scroll = TRUE;
+	may_trigger_winscrolled();
     }
 
     curwin->w_redr_status = TRUE;
@@ -2084,6 +2088,7 @@ nv_mousescroll(cmdarg_T *cap)
     if (curwin != old_curwin && curwin->w_p_cul)
 	redraw_for_cursorline(curwin);
 # endif
+    may_trigger_winscrolled();
 
     curwin->w_redr_status = TRUE;
 
@@ -3031,7 +3036,7 @@ mouse_find_win(int *rowp, int *colp, mouse_find_T popup UNUSED)
 }
 
 #if defined(NEED_VCOL2COL) || defined(FEAT_BEVAL) || defined(FEAT_PROP_POPUP) \
-	|| defined(PROTO)
+	|| defined(FEAT_EVAL) || defined(PROTO)
 /*
  * Convert a virtual (screen) column to a character column.
  * The first column is one.
@@ -3065,7 +3070,7 @@ f_getmousepos(typval_T *argvars UNUSED, typval_T *rettv)
     varnumber_T winid = 0;
     varnumber_T winrow = 0;
     varnumber_T wincol = 0;
-    linenr_T	line = 0;
+    linenr_T	lnum = 0;
     varnumber_T column = 0;
 
     if (rettv_dict_alloc(rettv) != OK)
@@ -3099,17 +3104,8 @@ f_getmousepos(typval_T *argvars UNUSED, typval_T *rettv)
 	    col -= left_off;
 	    if (row >= 0 && row < wp->w_height && col >= 0 && col < wp->w_width)
 	    {
-		char_u	*p;
-		int	count;
-
-		mouse_comp_pos(wp, &row, &col, &line, NULL);
-
-		// limit to text length plus one
-		p = ml_get_buf(wp->w_buffer, line, FALSE);
-		count = (int)STRLEN(p);
-		if (col > count)
-		    col = count;
-
+		(void)mouse_comp_pos(wp, &row, &col, &lnum, NULL);
+		col = vcol2col(wp, lnum, col);
 		column = col + 1;
 	    }
 	}
@@ -3117,7 +3113,7 @@ f_getmousepos(typval_T *argvars UNUSED, typval_T *rettv)
     dict_add_number(d, "winid", winid);
     dict_add_number(d, "winrow", winrow);
     dict_add_number(d, "wincol", wincol);
-    dict_add_number(d, "line", (varnumber_T)line);
+    dict_add_number(d, "line", (varnumber_T)lnum);
     dict_add_number(d, "column", column);
 }
 #endif

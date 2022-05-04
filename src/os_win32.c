@@ -2237,7 +2237,11 @@ executable_exists(char *name, char_u **path, int use_path, int use_pathext)
 		retval = FALSE;
 		goto theend;
 	    }
-	    STRCPY(pathbuf, ".;");
+
+	    if (mch_getenv("NoDefaultCurrentDirectoryInExePath") == NULL)
+		STRCPY(pathbuf, ".;");
+	    else
+		*pathbuf = NUL;
 	    STRCAT(pathbuf, p);
 	}
     }
@@ -2411,7 +2415,8 @@ mch_init_g(void)
      * Otherwise the default "findstr /n" is used.
      */
     if (!executable_exists("findstr.exe", NULL, TRUE, FALSE))
-	set_option_value((char_u *)"grepprg", 0, (char_u *)"grep -n", 0);
+	set_option_value_give_err((char_u *)"grepprg",
+						    0, (char_u *)"grep -n", 0);
 
 # ifdef FEAT_CLIPBOARD
     win_clip_init();
@@ -4767,6 +4772,9 @@ mch_call_shell(
     int		tmode = cur_tmode;
     WCHAR	szShellTitle[512];
 
+#ifdef FEAT_JOB_CHANNEL
+    ch_log(NULL, "executing shell command: %s", cmd);
+#endif
     // Change the title to reflect that we are in a subshell.
     if (GetConsoleTitleW(szShellTitle, ARRAY_LENGTH(szShellTitle) - 4) > 0)
     {

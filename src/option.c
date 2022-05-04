@@ -198,16 +198,14 @@ set_init_1(int clean_arg)
 	if (options[opt_idx].def_val[VI_DEFAULT] == (char_u *)0L)
 #endif
 	{
-#ifdef HAVE_AVAIL_MEM
+#if defined(HAVE_AVAIL_MEM)
 	    // Use amount of memory available at this moment.
 	    n = (mch_avail_mem(FALSE) >> 1);
-#else
-# ifdef HAVE_TOTAL_MEM
+#elif defined(HAVE_TOTAL_MEM)
 	    // Use amount of memory available to Vim.
 	    n = (mch_total_mem(FALSE) >> 1);
-# else
+#else
 	    n = (0x7fffffff >> 11);
-# endif
 #endif
 	    options[opt_idx].def_val[VI_DEFAULT] = (char_u *)n;
 	    opt_idx = findoption((char_u *)"maxmem");
@@ -266,21 +264,18 @@ set_init_1(int clean_arg)
     }
 #endif
 
-#if defined(FEAT_POSTSCRIPT) && (defined(MSWIN) || defined(VMS) || defined(MAC) || defined(hpux))
+#if defined(FEAT_POSTSCRIPT) && \
+	(defined(MSWIN) || defined(VMS) || defined(MAC) || defined(hpux))
     // Set print encoding on platforms that don't default to latin1
     set_string_default("penc",
 # if defined(MSWIN)
 		       (char_u *)"cp1252"
-# else
-#  ifdef VMS
+# elif defined(VMS)
 		       (char_u *)"dec-mcs"
-#  else
-#   ifdef MAC
+# elif defined(MAC)
 		       (char_u *)"mac-roman"
-#   else // HPUX
+# else // HPUX
 		       (char_u *)"hp-roman8"
-#   endif
-#  endif
 # endif
 		       );
 #endif
@@ -290,13 +285,11 @@ set_init_1(int clean_arg)
     set_string_default("pexpr",
 # if defined(MSWIN)
 	    (char_u *)"system('copy' . ' ' . v:fname_in . (&printdevice == '' ? ' LPT1:' : (' \"' . &printdevice . '\"'))) . delete(v:fname_in)"
-# else
-#  ifdef VMS
+# elif defined(VMS)
 	    (char_u *)"system('print/delete' . (&printdevice == '' ? '' : ' /queue=' . &printdevice) . ' ' . v:fname_in)"
 
-#  else
+# else
 	    (char_u *)"system('lpr' . (&printdevice == '' ? '' : ' -P' . &printdevice) . ' ' . v:fname_in) . delete(v:fname_in) + v:shell_error"
-#  endif
 # endif
 	    );
 #endif
@@ -338,7 +331,7 @@ set_init_1(int clean_arg)
 
 #ifdef FEAT_GUI
     if (found_reverse_arg)
-	set_option_value((char_u *)"bg", 0L, (char_u *)"dark", 0);
+	set_option_value_give_err((char_u *)"bg", 0L, (char_u *)"dark", 0);
 #endif
 
     curbuf->b_p_initialized = TRUE;
@@ -396,7 +389,7 @@ set_init_1(int clean_arg)
     // NOTE: mlterm's author is being asked to 'set' a variable
     //       instead of an environment variable due to inheritance.
     if (mch_getenv((char_u *)"MLTERM") != NULL)
-	set_option_value((char_u *)"tbidi", 1L, NULL, 0);
+	set_option_value_give_err((char_u *)"tbidi", 1L, NULL, 0);
 #endif
 
     didset_options2();
@@ -430,11 +423,9 @@ set_init_1(int clean_arg)
 	    vim_setenv((char_u *)"LANG", (char_u *)buf);
 	}
     }
-# else
-#  ifdef MACOS_CONVERT
+# elif defined(MACOS_CONVERT)
     // Moved to os_mac_conv.c to avoid dependency problems.
     mac_lang_init();
-#  endif
 # endif
 
 # ifdef MSWIN
@@ -1415,7 +1406,7 @@ do_set(
 				  && vim_strchr((char_u *)"!&<", *arg) != NULL)
 		    errmsg = e_no_white_space_allowed_between_option_and;
 		else
-		    errmsg = N_(e_unknown_option);
+		    errmsg = e_unknown_option;
 		goto skip;
 	    }
 
@@ -1428,7 +1419,7 @@ do_set(
 		    if (vim_strchr((char_u *)"=:!&<", nextchar) == NULL
 			    && (!(options[opt_idx].flags & P_BOOL)
 				|| nextchar == '?'))
-			errmsg = N_(e_option_not_supported);
+			errmsg = e_option_not_supported;
 		    goto skip;
 		}
 
@@ -1466,12 +1457,12 @@ do_set(
 	    {
 		if (flags & (P_SECURE | P_NO_ML))
 		{
-		    errmsg = N_(e_not_allowed_in_modeline);
+		    errmsg = e_not_allowed_in_modeline;
 		    goto skip;
 		}
 		if ((flags & P_MLE) && !p_mle)
 		{
-		    errmsg = N_(e_not_allowed_in_modeline_when_modelineexpr_is_off);
+		    errmsg = e_not_allowed_in_modeline_when_modelineexpr_is_off;
 		    goto skip;
 		}
 #ifdef FEAT_DIFF
@@ -1567,7 +1558,7 @@ do_set(
 		    p = find_termcode(key_name);
 		    if (p == NULL)
 		    {
-			errmsg = N_(e_key_code_not_set);
+			errmsg = e_key_code_not_set;
 			goto skip;
 		    }
 		    else
@@ -1691,13 +1682,13 @@ do_set(
 			    if (i == 0 || (arg[i] != NUL
 						      && !VIM_ISWHITE(arg[i])))
 			    {
-				errmsg = N_(e_number_required_after_equal);
+				errmsg = e_number_required_after_equal;
 				goto skip;
 			    }
 			}
 			else
 			{
-			    errmsg = N_(e_number_required_after_equal);
+			    errmsg = e_number_required_after_equal;
 			    goto skip;
 			}
 
@@ -2149,7 +2140,7 @@ do_set(
 			if (nextchar == '&')
 			{
 			    if (add_termcap_entry(key_name, TRUE) == FAIL)
-				errmsg = N_(e_not_found_in_termcap);
+				errmsg = e_not_found_in_termcap;
 			}
 			else
 			{
@@ -2733,6 +2724,7 @@ set_bool_option(
 #if defined(FEAT_EVAL)
     int		old_global_value = 0;
 #endif
+    char	*errmsg = NULL;
 
     // Disallow changing some options from secure mode
     if ((secure
@@ -2780,11 +2772,6 @@ set_bool_option(
     else if ((int *)varp == &p_lnr)
 	// 'langnoremap' -> !'langremap'
 	p_lrm = !p_lnr;
-#endif
-
-#ifdef FEAT_SYN_HL
-    else if ((int *)varp == &curwin->w_p_cul && !value && old_value)
-	reset_cursorline();
 #endif
 
 #ifdef FEAT_PERSISTENT_UNDO
@@ -2852,7 +2839,7 @@ set_bool_option(
 		      && curbuf->b_term != NULL && !term_is_finished(curbuf))))
 	{
 	    curbuf->b_p_ma = FALSE;
-	    return N_(e_cannot_make_terminal_with_running_job_modifiable);
+	    return e_cannot_make_terminal_with_running_job_modifiable;
 	}
 # endif
 	redraw_titles();
@@ -2980,7 +2967,7 @@ set_bool_option(
 		if (win->w_p_pvw && win != curwin)
 		{
 		    curwin->w_p_pvw = FALSE;
-		    return N_(e_preview_window_already_exists);
+		    return e_preview_window_already_exists;
 		}
 	}
     }
@@ -3135,12 +3122,7 @@ set_bool_option(
     else if ((int *)varp == &curwin->w_p_spell)
     {
 	if (curwin->w_p_spell)
-	{
-	    char	*errmsg = did_set_spelllang(curwin);
-
-	    if (errmsg != NULL)
-		emsg(_(errmsg));
-	}
+	    errmsg = did_set_spelllang(curwin);
     }
 #endif
 
@@ -3187,8 +3169,8 @@ set_bool_option(
 
 # ifdef FEAT_KEYMAP
 	    // Force-set the necessary keymap for arabic
-	    set_option_value((char_u *)"keymap", 0L, (char_u *)"arabic",
-								   OPT_LOCAL);
+	    errmsg = set_option_value((char_u *)"keymap",
+					    0L, (char_u *)"arabic", OPT_LOCAL);
 # endif
 	}
 	else
@@ -3253,7 +3235,7 @@ set_bool_option(
 	    !has_vtp_working())
 	{
 	    p_tgc = 0;
-	    return N_(e_24_bit_colors_are_not_supported_on_this_environment);
+	    return e_24_bit_colors_are_not_supported_on_this_environment;
 	}
 	if (is_term_win32())
 	    swap_tcap();
@@ -3301,7 +3283,7 @@ set_bool_option(
     if ((opt_flags & OPT_NO_REDRAW) == 0)
 	check_redraw(options[opt_idx].flags);
 
-    return NULL;
+    return errmsg;
 }
 
 /*
@@ -4343,7 +4325,7 @@ is_crypt_key_option(int opt_idx)
  * Set the value of option "name".
  * Use "string" for string options, use "number" for other options.
  *
- * Returns NULL on success or error message on error.
+ * Returns NULL on success or an untranslated error message on error.
  */
     char *
 set_option_value(
@@ -4398,40 +4380,54 @@ set_option_value(
 #endif
 	if (flags & P_STRING)
 	    return set_string_option(opt_idx, string, opt_flags);
-	else
+
+	varp = get_varp_scope(&(options[opt_idx]), opt_flags);
+	if (varp != NULL)	// hidden option is not changed
 	{
-	    varp = get_varp_scope(&(options[opt_idx]), opt_flags);
-	    if (varp != NULL)	// hidden option is not changed
+	    if (number == 0 && string != NULL)
 	    {
-		if (number == 0 && string != NULL)
+		int idx;
+
+		// Either we are given a string or we are setting option
+		// to zero.
+		for (idx = 0; string[idx] == '0'; ++idx)
+		    ;
+		if (string[idx] != NUL || idx == 0)
 		{
-		    int idx;
+		    // There's another character after zeros or the string
+		    // is empty.  In both cases, we are trying to set a
+		    // num option using a string.
+		    semsg(_(e_number_required_after_str_equal_str),
+								 name, string);
+		    return NULL;     // do nothing as we hit an error
 
-		    // Either we are given a string or we are setting option
-		    // to zero.
-		    for (idx = 0; string[idx] == '0'; ++idx)
-			;
-		    if (string[idx] != NUL || idx == 0)
-		    {
-			// There's another character after zeros or the string
-			// is empty.  In both cases, we are trying to set a
-			// num option using a string.
-			semsg(_(e_number_required_after_str_equal_str),
-								name, string);
-			return NULL;     // do nothing as we hit an error
-
-		    }
 		}
-		if (flags & P_NUM)
-		    return set_num_option(opt_idx, varp, number,
-							  NULL, 0, opt_flags);
-		else
-		    return set_bool_option(opt_idx, varp, (int)number,
-								   opt_flags);
 	    }
+	    if (flags & P_NUM)
+		return set_num_option(opt_idx, varp, number,
+							   NULL, 0, opt_flags);
+	    else
+		return set_bool_option(opt_idx, varp, (int)number, opt_flags);
 	}
+
     }
     return NULL;
+}
+
+/*
+ * Call set_option_value() and when an error is returned report it.
+ */
+    void
+set_option_value_give_err(
+    char_u	*name,
+    long	number,
+    char_u	*string,
+    int		opt_flags)	// OPT_LOCAL or 0 (both)
+{
+    char *errmsg = set_option_value(name, number, string, opt_flags);
+
+    if (errmsg != NULL)
+	emsg(_(errmsg));
 }
 
 /*
@@ -4478,6 +4474,16 @@ get_encoding_default(void)
 	return options[i].def_val[VI_DEFAULT];
     return (char_u *)NULL;
 }
+
+#if defined(FEAT_QUICKFIX) || defined(PROTO)
+    int
+is_option_allocated(char *name)
+{
+    int idx = findoption((char_u *)name);
+
+    return idx >= 0 && (options[idx].flags & P_ALLOCED);
+}
+#endif
 
 /*
  * Translate a string like "t_xx", "<t_xx>" or "<S-Tab>" to a key number.
@@ -5455,6 +5461,7 @@ get_varp(struct vimoption *p)
 	case PV_CIN:	return (char_u *)&(curbuf->b_p_cin);
 	case PV_CINK:	return (char_u *)&(curbuf->b_p_cink);
 	case PV_CINO:	return (char_u *)&(curbuf->b_p_cino);
+	case PV_CINSD:	return (char_u *)&(curbuf->b_p_cinsd);
 #endif
 #if defined(FEAT_SMARTINDENT) || defined(FEAT_CINDENT)
 	case PV_CINW:	return (char_u *)&(curbuf->b_p_cinw);
@@ -6026,6 +6033,8 @@ buf_copy_options(buf_T *buf, int flags)
 	    COPY_OPT_SCTX(buf, BV_CINK);
 	    buf->b_p_cino = vim_strsave(p_cino);
 	    COPY_OPT_SCTX(buf, BV_CINO);
+	    buf->b_p_cinsd = vim_strsave(p_cinsd);
+	    COPY_OPT_SCTX(buf, BV_CINSD);
 #endif
 	    // Don't copy 'filetype', it must be detected
 	    buf->b_p_ft = empty_option;
@@ -6439,12 +6448,70 @@ set_context_in_set_cmd(
     }
 }
 
+/*
+ * Returns TRUE if 'str' either matches 'regmatch' or fuzzy matches 'pat'.
+ *
+ * If 'test_only' is TRUE and 'fuzzy' is FALSE and if 'str' matches the regular
+ * expression 'regmatch', then returns TRUE.  Otherwise returns FALSE.
+ *
+ * If 'test_only' is FALSE and 'fuzzy' is FALSE and if 'str' matches the
+ * regular expression 'regmatch', then stores the match in matches[idx] and
+ * returns TRUE.
+ *
+ * If 'test_only' is TRUE and 'fuzzy' is TRUE and if 'str' fuzzy matches
+ * 'fuzzystr', then returns TRUE. Otherwise returns FALSE.
+ *
+ * If 'test_only' is FALSE and 'fuzzy' is TRUE and if 'str' fuzzy matches
+ * 'fuzzystr', then stores the match details in fuzmatch[idx] and returns TRUE.
+ */
+    static int
+match_str(
+	char_u		*str,
+	regmatch_T	*regmatch,
+	char_u		**matches,
+	int		idx,
+	int		test_only,
+	int		fuzzy,
+	char_u		*fuzzystr,
+	fuzmatch_str_T  *fuzmatch)
+{
+    if (!fuzzy)
+    {
+	if (vim_regexec(regmatch, str, (colnr_T)0))
+	{
+	    if (!test_only)
+		matches[idx] = vim_strsave(str);
+	    return TRUE;
+	}
+    }
+    else
+    {
+	int score;
+
+	score = fuzzy_match_str(str, fuzzystr);
+	if (score != 0)
+	{
+	    if (!test_only)
+	    {
+		fuzmatch[idx].idx = idx;
+		fuzmatch[idx].str = vim_strsave(str);
+		fuzmatch[idx].score = score;
+	    }
+
+	    return TRUE;
+	}
+    }
+
+    return FALSE;
+}
+
     int
 ExpandSettings(
     expand_T	*xp,
     regmatch_T	*regmatch,
-    int		*num_file,
-    char_u	***file)
+    char_u	*fuzzystr,
+    int		*numMatches,
+    char_u	***matches)
 {
     int		num_normal = 0;	    // Nr of matching non-term-code settings
     int		num_term = 0;	    // Nr of matching terminal code settings
@@ -6457,6 +6524,10 @@ ExpandSettings(
     char_u	name_buf[MAX_KEY_NAME_LEN];
     static char *(names[]) = {"all", "termcap"};
     int		ic = regmatch->rm_ic;	// remember the ignore-case flag
+    int		fuzzy;
+    fuzmatch_str_T  *fuzmatch = NULL;
+
+    fuzzy = cmdline_fuzzy_complete(fuzzystr);
 
     // do this loop twice:
     // loop == 0: count the number of matching options
@@ -6467,13 +6538,16 @@ ExpandSettings(
 	if (xp->xp_context != EXPAND_BOOL_SETTINGS)
 	{
 	    for (match = 0; match < (int)ARRAY_LENGTH(names); ++match)
-		if (vim_regexec(regmatch, (char_u *)names[match], (colnr_T)0))
+	    {
+		if (match_str((char_u *)names[match], regmatch, *matches,
+			    count, (loop == 0), fuzzy, fuzzystr, fuzmatch))
 		{
 		    if (loop == 0)
 			num_normal++;
 		    else
-			(*file)[count++] = vim_strsave((char_u *)names[match]);
+			count++;
 		}
+	    }
 	}
 	for (opt_idx = 0; (str = (char_u *)options[opt_idx].fullname) != NULL;
 								    opt_idx++)
@@ -6486,28 +6560,9 @@ ExpandSettings(
 	    is_term_opt = istermoption_idx(opt_idx);
 	    if (is_term_opt && num_normal > 0)
 		continue;
-	    match = FALSE;
-	    if (vim_regexec(regmatch, str, (colnr_T)0)
-		    || (options[opt_idx].shortname != NULL
-			&& vim_regexec(regmatch,
-			   (char_u *)options[opt_idx].shortname, (colnr_T)0)))
-		match = TRUE;
-	    else if (is_term_opt)
-	    {
-		name_buf[0] = '<';
-		name_buf[1] = 't';
-		name_buf[2] = '_';
-		name_buf[3] = str[2];
-		name_buf[4] = str[3];
-		name_buf[5] = '>';
-		name_buf[6] = NUL;
-		if (vim_regexec(regmatch, name_buf, (colnr_T)0))
-		{
-		    match = TRUE;
-		    str = name_buf;
-		}
-	    }
-	    if (match)
+
+	    if (match_str(str, regmatch, *matches, count, (loop == 0),
+						fuzzy, fuzzystr, fuzmatch))
 	    {
 		if (loop == 0)
 		{
@@ -6517,9 +6572,46 @@ ExpandSettings(
 			num_normal++;
 		}
 		else
-		    (*file)[count++] = vim_strsave(str);
+		    count++;
+	    }
+	    else if (!fuzzy && options[opt_idx].shortname != NULL
+			&& vim_regexec(regmatch,
+                             (char_u *)options[opt_idx].shortname, (colnr_T)0))
+	    {
+		// Compare against the abbreviated option name (for regular
+		// expression match). Fuzzy matching (previous if) already
+		// matches against both the expanded and abbreviated names.
+		if (loop == 0)
+		{
+		    if (is_term_opt)
+			num_term++;
+		    else
+			num_normal++;
+		}
+		else
+		    (*matches)[count++] = vim_strsave(str);
+	    }
+	    else if (is_term_opt)
+	    {
+		name_buf[0] = '<';
+		name_buf[1] = 't';
+		name_buf[2] = '_';
+		name_buf[3] = str[2];
+		name_buf[4] = str[3];
+		name_buf[5] = '>';
+		name_buf[6] = NUL;
+
+		if (match_str(name_buf, regmatch, *matches, count, (loop == 0),
+			    fuzzy, fuzzystr, fuzmatch))
+		{
+		    if (loop == 0)
+			num_term++;
+		    else
+			count++;
+		}
 	    }
 	}
+
 	/*
 	 * Check terminal key codes, these are not in the option table
 	 */
@@ -6536,9 +6628,14 @@ ExpandSettings(
 		name_buf[3] = str[1];
 		name_buf[4] = NUL;
 
-		match = FALSE;
-		if (vim_regexec(regmatch, name_buf, (colnr_T)0))
-		    match = TRUE;
+		if (match_str(name_buf, regmatch, *matches, count,
+					(loop == 0), fuzzy, fuzzystr, fuzmatch))
+		{
+		    if (loop == 0)
+			num_term++;
+		    else
+			count++;
+		}
 		else
 		{
 		    name_buf[0] = '<';
@@ -6549,15 +6646,15 @@ ExpandSettings(
 		    name_buf[5] = '>';
 		    name_buf[6] = NUL;
 
-		    if (vim_regexec(regmatch, name_buf, (colnr_T)0))
-			match = TRUE;
-		}
-		if (match)
-		{
-		    if (loop == 0)
-			num_term++;
-		    else
-			(*file)[count++] = vim_strsave(name_buf);
+		    if (match_str(name_buf, regmatch, *matches, count,
+					    (loop == 0), fuzzy, fuzzystr,
+					    fuzmatch))
+		    {
+			if (loop == 0)
+			    num_term++;
+			else
+			    count++;
+		    }
 		}
 	    }
 
@@ -6571,31 +6668,49 @@ ExpandSettings(
 		STRCPY(name_buf + 1, str);
 		STRCAT(name_buf, ">");
 
-		if (vim_regexec(regmatch, name_buf, (colnr_T)0))
+		if (match_str(name_buf, regmatch, *matches, count, (loop == 0),
+			    fuzzy, fuzzystr, fuzmatch))
 		{
 		    if (loop == 0)
 			num_term++;
 		    else
-			(*file)[count++] = vim_strsave(name_buf);
+			count++;
 		}
 	    }
 	}
 	if (loop == 0)
 	{
 	    if (num_normal > 0)
-		*num_file = num_normal;
+		*numMatches = num_normal;
 	    else if (num_term > 0)
-		*num_file = num_term;
+		*numMatches = num_term;
 	    else
 		return OK;
-	    *file = ALLOC_MULT(char_u *, *num_file);
-	    if (*file == NULL)
+	    if (!fuzzy)
 	    {
-		*file = (char_u **)"";
-		return FAIL;
+		*matches = ALLOC_MULT(char_u *, *numMatches);
+		if (*matches == NULL)
+		{
+		    *matches = (char_u **)"";
+		    return FAIL;
+		}
+	    }
+	    else
+	    {
+		fuzmatch = ALLOC_MULT(fuzmatch_str_T, *numMatches);
+		if (fuzmatch == NULL)
+		{
+		    *matches = (char_u **)"";
+		    return FAIL;
+		}
 	    }
 	}
     }
+
+    if (fuzzy &&
+	fuzzymatches_to_strmatches(fuzmatch, matches, count, FALSE) == FAIL)
+	return FAIL;
+
     return OK;
 }
 
@@ -7078,6 +7193,7 @@ get_bkc_value(buf_T *buf)
     return buf->b_bkc_flags ? buf->b_bkc_flags : bkc_flags;
 }
 
+#if defined(FEAT_LINEBREAK) || defined(PROTO)
 /*
  * Get the local or global value of 'formatlistpat'.
  */
@@ -7088,6 +7204,7 @@ get_flp_value(buf_T *buf)
 	return p_flp;
     return buf->b_p_flp;
 }
+#endif
 
 /*
  * Get the local or global value of the 'virtualedit' flags.

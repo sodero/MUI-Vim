@@ -1472,9 +1472,9 @@ win_update(win_T *wp)
 #ifdef FEAT_SYN_HL
     // remember what happened to the previous line, to know if
     // check_visual_highlight() can be used
-#define DID_NONE 1	// didn't update a line
-#define DID_LINE 2	// updated a normal line
-#define DID_FOLD 3	// updated a folded line
+# define DID_NONE 1	// didn't update a line
+# define DID_LINE 2	// updated a normal line
+# define DID_FOLD 3	// updated a folded line
     int		did_update = DID_NONE;
     linenr_T	syntax_last_parsed = 0;		// last parsed text line
 #endif
@@ -1739,7 +1739,7 @@ win_update(win_T *wp)
 	if (mod_top != 0
 		&& wp->w_topline == mod_top
 		&& (!wp->w_lines[0].wl_valid
-		    || wp->w_topline <= wp->w_lines[0].wl_lnum))
+		    || wp->w_topline == wp->w_lines[0].wl_lnum))
 	{
 	    // w_topline is the first changed line and window is not scrolled,
 	    // the scrolling from changed lines will be done further down.
@@ -1956,9 +1956,8 @@ win_update(win_T *wp)
 
 	if (VIsual_active)
 	{
-	    if (VIsual_active
-		    && (VIsual_mode != wp->w_old_visual_mode
-			|| type == INVERTED_ALL))
+	    if (VIsual_mode != wp->w_old_visual_mode
+		|| type == INVERTED_ALL)
 	    {
 		// If the type of Visual selection changed, redraw the whole
 		// selection.  Also when the ownership of the X selection is
@@ -2252,8 +2251,8 @@ win_update(win_T *wp)
 #endif
 				))))
 #ifdef FEAT_SYN_HL
-		|| (wp->w_p_cul && (lnum == wp->w_cursor.lnum
-					     || lnum == wp->w_last_cursorline))
+		|| (wp->w_p_cul && lnum == wp->w_cursor.lnum)
+		|| lnum == wp->w_last_cursorline
 #endif
 				)
 	{
@@ -2517,11 +2516,11 @@ win_update(win_T *wp)
 	}
 	else
 	{
-	    if (wp->w_p_rnu)
+	    if (wp->w_p_rnu && wp->w_last_cursor_lnum_rnu != wp->w_cursor.lnum)
 	    {
 #ifdef FEAT_FOLDING
-		// 'relativenumber' set: The text doesn't need to be drawn, but
-		// the number column nearly always does.
+		// 'relativenumber' set and the cursor moved vertically: The
+		// text doesn't need to be drawn, but the number column does.
 		fold_count = foldedCount(wp, lnum, &win_foldinfo);
 		if (fold_count != 0)
 		    fold_line(wp, fold_count, &win_foldinfo, lnum, row);
@@ -2557,6 +2556,13 @@ win_update(win_T *wp)
     }
 
     // End of loop over all window lines.
+
+#ifdef FEAT_SYN_HL
+    // Now that the window has been redrawn with the old and new cursor line,
+    // update w_last_cursorline.
+    wp->w_last_cursorline = wp->w_p_cul ? wp->w_cursor.lnum : 0;
+#endif
+    wp->w_last_cursor_lnum_rnu = wp->w_p_rnu ? wp->w_cursor.lnum : 0;
 
 #ifdef FEAT_VTP
     // Rewrite the character at the end of the screen line.
@@ -2620,8 +2626,8 @@ win_update(win_T *wp)
 	    int scr_row = W_WINROW(wp) + wp->w_height - 1;
 
 	    // Last line isn't finished: Display "@@@" in the last screen line.
-	    screen_puts_len((char_u *)"@@", 2, scr_row, wp->w_wincol,
-							      HL_ATTR(HLF_AT));
+	    screen_puts_len((char_u *)"@@", wp->w_width > 2 ? 2 : wp->w_width,
+				       scr_row, wp->w_wincol, HL_ATTR(HLF_AT));
 	    screen_fill(scr_row, scr_row + 1,
 		    (int)wp->w_wincol + 2, (int)W_ENDCOL(wp),
 		    '@', ' ', HL_ATTR(HLF_AT));
@@ -2630,10 +2636,13 @@ win_update(win_T *wp)
 	}
 	else if (dy_flags & DY_LASTLINE)	// 'display' has "lastline"
 	{
+	    int start_col = (int)W_ENDCOL(wp) - 3;
+
 	    // Last line isn't finished: Display "@@@" at the end.
 	    screen_fill(W_WINROW(wp) + wp->w_height - 1,
 		    W_WINROW(wp) + wp->w_height,
-		    (int)W_ENDCOL(wp) - 3, (int)W_ENDCOL(wp),
+		    start_col < wp->w_wincol ? wp->w_wincol : start_col,
+		    (int)W_ENDCOL(wp),
 		    '@', '@', HL_ATTR(HLF_AT));
 	    set_empty_rows(wp, srow);
 	    wp->w_botline = lnum;
@@ -3080,6 +3089,9 @@ redraw_after_callback(int call_update_screen, int do_message)
     }
     else if (State & (NORMAL | INSERT | TERMINAL))
     {
+	update_topline();
+	validate_cursor();
+
 	// keep the command line if possible
 	update_screen(VALID_NO_UPDATE);
 	setcursor();

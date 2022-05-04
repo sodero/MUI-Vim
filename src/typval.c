@@ -360,6 +360,20 @@ tv_get_float(typval_T *varp)
 #endif
 
 /*
+ * Give an error and return FAIL unless "args[idx]" is unknown
+ */
+    int
+check_for_unknown_arg(typval_T *args, int idx)
+{
+    if (args[idx].v_type != VAR_UNKNOWN)
+    {
+	semsg(_(e_too_many_arguments), idx + 1);
+	return FAIL;
+    }
+    return OK;
+}
+
+/*
  * Give an error and return FAIL unless "args[idx]" is a string.
  */
     int
@@ -1169,6 +1183,21 @@ typval_compare(
 	// it means TRUE.
 	n1 = (type == EXPR_ISNOT);
     }
+    else if (((tv1->v_type == VAR_SPECIAL && tv1->vval.v_number == VVAL_NULL)
+		|| (tv2->v_type == VAR_SPECIAL
+					   && tv2->vval.v_number == VVAL_NULL))
+	    && tv1->v_type != tv2->v_type
+	    && (type == EXPR_EQUAL || type == EXPR_NEQUAL))
+    {
+	n1 = typval_compare_null(tv1, tv2);
+	if (n1 == MAYBE)
+	{
+	    clear_tv(tv1);
+	    return FAIL;
+	}
+	if (type == EXPR_NEQUAL)
+	    n1 = !n1;
+    }
     else if (tv1->v_type == VAR_BLOB || tv2->v_type == VAR_BLOB)
     {
 	if (typval_compare_blob(tv1, tv2, type, &res) == FAIL)
@@ -1299,6 +1328,19 @@ typval_compare(
 		return FAIL;
 	}
     }
+#ifdef FEAT_JOB_CHANNEL
+    else if (tv1->v_type == tv2->v_type
+	    && (tv1->v_type == VAR_CHANNEL || tv1->v_type == VAR_JOB)
+	    && (type == EXPR_NEQUAL || type == EXPR_EQUAL))
+    {
+	if (tv1->v_type == VAR_CHANNEL)
+	    n1 = tv1->vval.v_channel == tv2->vval.v_channel;
+	else
+	    n1 = tv1->vval.v_job == tv2->vval.v_job;
+	if (type == EXPR_NEQUAL)
+	    n1 = !n1;
+    }
+#endif
     else
     {
 	if (typval_compare_string(tv1, tv2, type, ic, &res) == FAIL)
@@ -1363,6 +1405,48 @@ typval_compare_list(
     }
     *res = val;
     return OK;
+}
+
+/*
+ * Compare v:null with another type.  Return TRUE if the value is NULL.
+ */
+    int
+typval_compare_null(typval_T *tv1, typval_T *tv2)
+{
+    if ((tv1->v_type == VAR_SPECIAL && tv1->vval.v_number == VVAL_NULL)
+	    || (tv2->v_type == VAR_SPECIAL && tv2->vval.v_number == VVAL_NULL))
+    {
+	typval_T	*tv = tv1->v_type == VAR_SPECIAL ? tv2 : tv1;
+
+	switch (tv->v_type)
+	{
+	    case VAR_BLOB: return tv->vval.v_blob == NULL;
+#ifdef FEAT_JOB_CHANNEL
+	    case VAR_CHANNEL: return tv->vval.v_channel == NULL;
+#endif
+	    case VAR_DICT: return tv->vval.v_dict == NULL;
+	    case VAR_FUNC: return tv->vval.v_string == NULL;
+#ifdef FEAT_JOB_CHANNEL
+	    case VAR_JOB: return tv->vval.v_job == NULL;
+#endif
+	    case VAR_LIST: return tv->vval.v_list == NULL;
+	    case VAR_PARTIAL: return tv->vval.v_partial == NULL;
+	    case VAR_STRING: return tv->vval.v_string == NULL;
+
+	    case VAR_NUMBER: if (!in_vim9script())
+				 return tv->vval.v_number == 0;
+			     break;
+#ifdef FEAT_FLOAT
+	    case VAR_FLOAT: if (!in_vim9script())
+				 return tv->vval.v_float == 0.0;
+			     break;
+#endif
+	    default: break;
+	}
+    }
+    // although comparing null with number, float or bool is not very useful
+    // we won't give an error
+    return FALSE;
 }
 
 /*
@@ -1523,9 +1607,23 @@ typval_compare_string(
 	i = ic ? MB_STRICMP(s1, s2) : STRCMP(s1, s2);
     switch (type)
     {
-	case EXPR_IS:
+	case EXPR_IS:	    if (in_vim9script())
+			    {
+				// Really check it is the same string, not just
+				// the same value.
+				val = tv1->vval.v_string == tv2->vval.v_string;
+				break;
+			    }
+			    // FALLTHROUGH
 	case EXPR_EQUAL:    val = (i == 0); break;
-	case EXPR_ISNOT:
+	case EXPR_ISNOT:    if (in_vim9script())
+			    {
+				// Really check it is not the same string, not
+				// just a different value.
+				val = tv1->vval.v_string != tv2->vval.v_string;
+				break;
+			    }
+			    // FALLTHROUGH
 	case EXPR_NEQUAL:   val = (i != 0); break;
 	case EXPR_GREATER:  val = (i > 0); break;
 	case EXPR_GEQUAL:   val = (i >= 0); break;
@@ -1985,11 +2083,10 @@ eval_string(char_u **arg, typval_T *rettv, int evaluate)
 	{
 	    ++p;
 	    // A "\<x>" form occupies at least 4 characters, and produces up
-	    // to 21 characters (3 * 6 for the char and 3 for a modifier):
-	    // reserve space for 18 extra.
-	    // Each byte in the char could be encoded as K_SPECIAL K_EXTRA x.
+	    // to 9 characters (6 for the char and 3 for a modifier):
+	    // reserve space for 5 extra.
 	    if (*p == '<')
-		extra += 18;
+		extra += 5;
 	}
     }
 
@@ -2084,7 +2181,7 @@ eval_string(char_u **arg, typval_T *rettv, int evaluate)
 
 			      if (p[1] != '*')
 				  flags |= FSK_SIMPLIFY;
-			      extra = trans_special(&p, end, flags, NULL);
+			      extra = trans_special(&p, end, flags, FALSE, NULL);
 			      if (extra != 0)
 			      {
 				  end += extra;

@@ -5976,7 +5976,7 @@ mkspell(
 	}
 	if (mch_isdir(wfname))
 	{
-	    semsg(_(e_src_is_directory), wfname);
+	    semsg(_(e_str_is_directory), wfname);
 	    goto theend;
 	}
 
@@ -6256,6 +6256,8 @@ spell_add_word(
 	    {
 		fpos = fpos_next;
 		fpos_next = ftell(fd);
+		if (fpos_next < 0)
+		    break;  // should never happen
 		if (STRNCMP(word, line, len) == 0
 			&& (line[len] == '/' || line[len] < ' '))
 		{
@@ -6412,7 +6414,8 @@ init_spellfile(void)
 			fname != NULL
 			  && strstr((char *)gettail(fname), ".ascii.") != NULL
 				       ? (char_u *)"ascii" : spell_enc());
-		set_option_value((char_u *)"spellfile", 0L, buf, OPT_LOCAL);
+		set_option_value_give_err((char_u *)"spellfile",
+							   0L, buf, OPT_LOCAL);
 		break;
 	    }
 	    aspath = FALSE;

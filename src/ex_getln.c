@@ -1606,6 +1606,7 @@ getcmdline_int(
     cmdline_info_T save_ccline;
     int		did_save_ccline = FALSE;
     int		cmdline_type;
+    int		wild_type;
 
     if (ccline.cmdbuff != NULL)
     {
@@ -1713,7 +1714,7 @@ getcmdline_int(
     trigger_cmd_autocmd(cmdline_type, EVENT_CMDLINEENTER);
 #ifdef FEAT_EVAL
     if (!debug_mode)
-	trigger_modechanged();
+	may_trigger_modechanged();
 #endif
 
     init_history();
@@ -1757,6 +1758,7 @@ getcmdline_int(
     for (;;)
     {
 	int trigger_cmdlinechanged = TRUE;
+	int end_wildmenu;
 
 	redir_off = TRUE;	// Don't redirect the typed command.
 				// Repeated, because a ":redir" inside
@@ -1866,10 +1868,7 @@ getcmdline_int(
 	    // text.
 	    if (c == Ctrl_E || c == Ctrl_Y)
 	    {
-		int	wild_type;
-
 		wild_type = (c == Ctrl_E) ? WILD_CANCEL : WILD_APPLY;
-
 		if (nextwild(&xpc, wild_type, WILD_NO_BEEP,
 							firstc != '@') == FAIL)
 		    break;
@@ -1878,10 +1877,21 @@ getcmdline_int(
 	}
 #endif
 
+	// The wildmenu is cleared if the pressed key is not used for
+	// navigating the wild menu (i.e. the key is not 'wildchar' or
+	// 'wildcharm' or Ctrl-N or Ctrl-P or Ctrl-A or Ctrl-L).
+	// If the popup menu is displayed, then PageDown and PageUp keys are
+	// also used to navigate the menu.
+	end_wildmenu = (!(c == p_wc && KeyTyped) && c != p_wcm
+		&& c != Ctrl_N && c != Ctrl_P && c != Ctrl_A && c != Ctrl_L);
+#ifdef FEAT_WILDMENU
+	end_wildmenu = end_wildmenu && (!cmdline_pum_active() ||
+			    (c != K_PAGEDOWN && c != K_PAGEUP
+			     && c != K_KPAGEDOWN && c != K_KPAGEUP));
+#endif
+
 	// free expanded names when finished walking through matches
-	if (!(c == p_wc && KeyTyped) && c != p_wcm
-		&& c != Ctrl_N && c != Ctrl_P && c != Ctrl_A
-		&& c != Ctrl_L)
+	if (end_wildmenu)
 	{
 #ifdef FEAT_WILDMENU
 	    if (cmdline_pum_active())
@@ -2292,8 +2302,8 @@ getcmdline_int(
 	case Ctrl_P:	    // previous match
 		if (xpc.xp_numfiles > 0)
 		{
-		    if (nextwild(&xpc, (c == Ctrl_P) ? WILD_PREV : WILD_NEXT,
-						    0, firstc != '@') == FAIL)
+		    wild_type = (c == Ctrl_P) ? WILD_PREV : WILD_NEXT;
+		    if (nextwild(&xpc, wild_type, 0, firstc != '@') == FAIL)
 			break;
 		    goto cmdline_not_changed;
 		}
@@ -2306,12 +2316,30 @@ getcmdline_int(
 	case K_KPAGEUP:
 	case K_PAGEDOWN:
 	case K_KPAGEDOWN:
-		res = cmdline_browse_history(c, firstc, &lookfor, histype,
-			&hiscnt, &xpc);
-		if (res == CMDLINE_CHANGED)
-		    goto cmdline_changed;
-		else if (res == GOTO_NORMAL_MODE)
-		    goto returncmd;
+#ifdef FEAT_WILDMENU
+		if (cmdline_pum_active()
+			&& (c == K_PAGEUP || c == K_PAGEDOWN ||
+			    c == K_KPAGEUP || c == K_KPAGEDOWN))
+		{
+		    // If the popup menu is displayed, then PageUp and PageDown
+		    // are used to scroll the menu.
+		    wild_type = WILD_PAGEUP;
+		    if (c == K_PAGEDOWN || c == K_KPAGEDOWN)
+			wild_type = WILD_PAGEDOWN;
+		    if (nextwild(&xpc, wild_type, 0, firstc != '@') == FAIL)
+			break;
+		    goto cmdline_not_changed;
+		}
+		else
+#endif
+		{
+		    res = cmdline_browse_history(c, firstc, &lookfor, histype,
+			    &hiscnt, &xpc);
+		    if (res == CMDLINE_CHANGED)
+			goto cmdline_changed;
+		    else if (res == GOTO_NORMAL_MODE)
+			goto returncmd;
+		}
 		goto cmdline_not_changed;
 
 #ifdef FEAT_SEARCH_EXTRA
@@ -2527,7 +2555,7 @@ returncmd:
 
 #ifdef FEAT_EVAL
     if (!debug_mode)
-	trigger_modechanged();
+	may_trigger_modechanged();
 #endif
 
 #ifdef HAVE_INPUT_METHOD
@@ -4339,7 +4367,8 @@ open_cmdwin(void)
     apply_autocmds(EVENT_BUFFILEPRE, NULL, NULL, FALSE, curbuf);
     (void)setfname(curbuf, (char_u *)_("[Command Line]"), NULL, TRUE);
     apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, FALSE, curbuf);
-    set_option_value((char_u *)"bt", 0L, (char_u *)"nofile", OPT_LOCAL);
+    set_option_value_give_err((char_u *)"bt",
+					    0L, (char_u *)"nofile", OPT_LOCAL);
     curbuf->b_p_ma = TRUE;
 #ifdef FEAT_FOLDING
     curwin->w_p_fen = FALSE;
@@ -4364,7 +4393,8 @@ open_cmdwin(void)
 	    add_map((char_u *)"<buffer> <Tab> <C-X><C-V>", INSERT);
 	    add_map((char_u *)"<buffer> <Tab> a<C-X><C-V>", NORMAL);
 	}
-	set_option_value((char_u *)"ft", 0L, (char_u *)"vim", OPT_LOCAL);
+	set_option_value_give_err((char_u *)"ft",
+					       0L, (char_u *)"vim", OPT_LOCAL);
     }
     --curbuf_lock;
 
@@ -4575,7 +4605,7 @@ script_get(exarg_T *eap UNUSED, char_u *cmd UNUSED)
 	return NULL;
     cmd += 2;
 
-    l = heredoc_get(eap, cmd, TRUE);
+    l = heredoc_get(eap, cmd, TRUE, FALSE);
     if (l == NULL)
 	return NULL;
 
@@ -4672,7 +4702,7 @@ get_user_input(
 	    {
 		char_u	*xp_name;
 		int	xp_namelen;
-		long	argt;
+		long	argt = 0;
 
 		// input() with a third argument: completion
 		rettv->vval.v_string = NULL;

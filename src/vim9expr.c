@@ -272,7 +272,7 @@ compile_load_scriptvar(
 	char_u	*p = skipwhite(*end);
 	char_u	*exp_name;
 	int	cc;
-	ufunc_T	*ufunc;
+	ufunc_T	*ufunc = NULL;
 	type_T	*type;
 	int	done = FALSE;
 	int	res = OK;
@@ -298,26 +298,53 @@ compile_load_scriptvar(
 	*p = NUL;
 
 	si = SCRIPT_ITEM(import->imp_sid);
-	if (si->sn_autoload_prefix != NULL
-					&& si->sn_state == SN_STATE_NOT_LOADED)
-	{
-	    char_u  *auto_name = concat_str(si->sn_autoload_prefix, exp_name);
+	if (si->sn_import_autoload && si->sn_state == SN_STATE_NOT_LOADED)
+	    // "import autoload './dir/script.vim'" or
+	    // "import autoload './autoload/script.vim'" - load script first
+	    res = generate_SOURCE(cctx, import->imp_sid);
 
-	    // autoload script must be loaded later, access by the autoload
-	    // name.  If a '(' follows it must be a function.  Otherwise we
-	    // don't know, it can be "script.Func".
-	    if (cc == '(' || paren_follows_after_expr)
-		res = generate_PUSHFUNC(cctx, auto_name, &t_func_any);
-	    else
-		res = generate_AUTOLOAD(cctx, auto_name, &t_any);
-	    vim_free(auto_name);
-	    done = TRUE;
-	}
-	else
+	if (res == OK)
 	{
-	    idx = find_exported(import->imp_sid, exp_name, &ufunc, &type,
-							    cctx, NULL, TRUE);
+	    if (si->sn_autoload_prefix != NULL
+					&& si->sn_state == SN_STATE_NOT_LOADED)
+	    {
+		char_u  *auto_name =
+				  concat_str(si->sn_autoload_prefix, exp_name);
+
+		// autoload script must be loaded later, access by the autoload
+		// name.  If a '(' follows it must be a function.  Otherwise we
+		// don't know, it can be "script.Func".
+		if (cc == '(' || paren_follows_after_expr)
+		    res = generate_PUSHFUNC(cctx, auto_name, &t_func_any);
+		else
+		    res = generate_AUTOLOAD(cctx, auto_name, &t_any);
+		vim_free(auto_name);
+		done = TRUE;
+	    }
+	    else if (si->sn_import_autoload
+					&& si->sn_state == SN_STATE_NOT_LOADED)
+	    {
+		// If a '(' follows it must be a function.  Otherwise we don't
+		// know, it can be "script.Func".
+		if (cc == '(' || paren_follows_after_expr)
+		{
+		    char_u sid_name[MAX_FUNC_NAME_LEN];
+
+		    func_name_with_sid(exp_name, import->imp_sid, sid_name);
+		    res = generate_PUSHFUNC(cctx, sid_name, &t_func_any);
+		}
+		else
+		    res = generate_OLDSCRIPT(cctx, ISN_LOADEXPORT, exp_name,
+						      import->imp_sid, &t_any);
+		done = TRUE;
+	    }
+	    else
+	    {
+		idx = find_exported(import->imp_sid, exp_name, &ufunc, &type,
+							     cctx, NULL, TRUE);
+	    }
 	}
+
 	*p = cc;
 	*end = p;
 	if (done)
@@ -355,15 +382,16 @@ compile_load_scriptvar(
 generate_funcref(cctx_T *cctx, char_u *name, int has_g_prefix)
 {
     ufunc_T *ufunc = find_func(name, FALSE);
+    compiletype_T compile_type;
 
     // Reject a global non-autoload function found without the "g:" prefix.
     if (ufunc == NULL || (!has_g_prefix && func_requires_g_prefix(ufunc)))
 	return FAIL;
 
     // Need to compile any default values to get the argument types.
-    if (func_needs_compiling(ufunc, COMPILE_TYPE(ufunc))
-	    && compile_def_function(ufunc, TRUE, COMPILE_TYPE(ufunc), NULL)
-								       == FAIL)
+    compile_type = get_compile_type(ufunc);
+    if (func_needs_compiling(ufunc, compile_type)
+	      && compile_def_function(ufunc, TRUE, compile_type, NULL) == FAIL)
 	return FAIL;
     return generate_PUSHFUNC(cctx, ufunc->uf_name, ufunc->uf_func_type);
 }
@@ -422,8 +450,15 @@ compile_load(
 	    {
 		case 'v': res = generate_LOADV(cctx, name, error);
 			  break;
-		case 's': if (is_expr && ASCII_ISUPPER(*name)
-				       && find_func(name, FALSE) != NULL)
+		case 's': if (current_script_is_vim9())
+			  {
+			      semsg(_(e_cannot_use_s_colon_in_vim9_script_str),
+									 *arg);
+			      vim_free(name);
+			      return FAIL;
+			  }
+			  if (is_expr && ASCII_ISUPPER(*name)
+					     && find_func(name, FALSE) != NULL)
 			      res = generate_funcref(cctx, name, FALSE);
 			  else
 			      res = compile_load_scriptvar(cctx, name,
@@ -663,7 +698,7 @@ compile_call(
     char_u	*name = *arg;
     char_u	*p;
     int		argcount = argcount_init;
-    char_u	namebuf[100];
+    char_u	namebuf[MAX_FUNC_NAME_LEN];
     char_u	fname_buf[FLEN_FIXED + 1];
     char_u	*tofree = NULL;
     int		error = FCERR_NONE;
@@ -689,13 +724,16 @@ compile_call(
     }
 
     // We can evaluate "has('name')" at compile time.
+    // We can evaluate "len('string')" at compile time.
     // We always evaluate "exists_compiled()" at compile time.
-    if ((varlen == 3 && STRNCMP(*arg, "has", 3) == 0)
+    if ((varlen == 3
+	     && (STRNCMP(*arg, "has", 3) == 0 || STRNCMP(*arg, "len", 3) == 0))
 	    || (varlen == 15 && STRNCMP(*arg, "exists_compiled", 6) == 0))
     {
 	char_u	    *s = skipwhite(*arg + varlen + 1);
 	typval_T    argvars[2];
 	int	    is_has = **arg == 'h';
+	int	    is_len = **arg == 'l';
 
 	argvars[0].v_type = VAR_UNKNOWN;
 	if (*s == '"')
@@ -715,6 +753,8 @@ compile_call(
 	    tv->vval.v_number = 0;
 	    if (is_has)
 		f_has(argvars, tv);
+	    else if (is_len)
+		f_len(argvars, tv);
 	    else
 		f_exists(argvars, tv);
 	    clear_tv(&argvars[0]);
@@ -722,7 +762,7 @@ compile_call(
 	    return OK;
 	}
 	clear_tv(&argvars[0]);
-	if (!is_has)
+	if (!is_has && !is_len)
 	{
 	    emsg(_(e_argument_of_exists_compiled_must_be_literal_string));
 	    return FAIL;
@@ -783,7 +823,7 @@ compile_call(
 		res = generate_BCALL(cctx, idx, argcount, argcount_init == 1);
 	}
 	else
-	    semsg(_(e_unknown_function_str), namebuf);
+	    emsg_funcname(e_unknown_function_str, namebuf);
 	goto theend;
     }
 
@@ -808,7 +848,7 @@ compile_call(
 			  && vim_strchr(ufunc->uf_name, AUTOLOAD_CHAR) == NULL)
 	    {
 		// A function name without g: prefix must be found locally.
-		semsg(_(e_unknown_function_str), namebuf);
+		emsg_funcname(e_unknown_function_str, namebuf);
 		goto theend;
 	    }
 	}
@@ -839,7 +879,7 @@ compile_call(
     if (has_g_namespace || is_autoload)
 	res = generate_UCALL(cctx, name, argcount);
     else
-	semsg(_(e_unknown_function_str), namebuf);
+	emsg_funcname(e_unknown_function_str, namebuf);
 
 theend:
     vim_free(tofree);
@@ -950,7 +990,7 @@ compile_list(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
     *arg = p;
 
     ppconst->pp_is_const = is_all_const;
-    return generate_NEWLIST(cctx, count);
+    return generate_NEWLIST(cctx, count, FALSE);
 }
 
 /*
@@ -1000,6 +1040,16 @@ compile_lambda(char_u **arg, cctx_T *cctx)
        )
 	compile_def_function(ufunc, FALSE, CT_NONE, cctx);
 
+    // if the outer function is not compiled for debugging or profiling, this
+    // one might be
+    if (cctx->ctx_compile_type == CT_NONE)
+    {
+	compiletype_T compile_type = get_compile_type(ufunc);
+
+	if (compile_type != CT_NONE)
+	    compile_def_function(ufunc, FALSE, compile_type, cctx);
+    }
+
     // The last entry in evalarg.eval_tofree_ga is a copy of the last line and
     // "*arg" may point into it.  Point into the original line to avoid a
     // dangling pointer.
@@ -1022,7 +1072,7 @@ compile_lambda(char_u **arg, cctx_T *cctx)
 	// The function reference count will be 1.  When the ISN_FUNCREF
 	// instruction is deleted the reference count is decremented and the
 	// function is freed.
-	return generate_FUNCREF(cctx, ufunc);
+	return generate_FUNCREF(cctx, ufunc, NULL);
     }
 
     func_ptr_unref(ufunc);
@@ -1228,7 +1278,7 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 
     dict_unref(d);
     ppconst->pp_is_const = is_all_const;
-    return generate_NEWDICT(cctx, count);
+    return generate_NEWDICT(cctx, count, FALSE);
 
 failret:
     if (*arg == NULL)
@@ -2100,14 +2150,20 @@ compile_expr8(
 		    break;
 
 	/*
-	 * "null" constant
+	 * "null" or "null_*" constant
 	 */
-	case 'n':   if (STRNCMP(*arg, "null", 4) == 0
-						   && !eval_isnamec((*arg)[4]))
+	case 'n':   if (STRNCMP(*arg, "null", 4) == 0)
 		    {
-			*arg += 4;
-			rettv->v_type = VAR_SPECIAL;
-			rettv->vval.v_number = VVAL_NULL;
+			char_u  *p = *arg + 4;
+			int	len;
+
+			for (len = 0; eval_isnamec(p[len]); ++len)
+			    ;
+			ret = handle_predefined(*arg, len + 4, rettv);
+			if (ret == FAIL)
+			    ret = NOTDONE;
+			else
+			    *arg += len + 4;
 		    }
 		    else
 			ret = NOTDONE;
@@ -2457,7 +2513,8 @@ compile_expr5(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 		if (may_generate_2STRING(-2, FALSE, cctx) == FAIL
 			|| may_generate_2STRING(-1, FALSE, cctx) == FAIL)
 		    return FAIL;
-		generate_instr_drop(cctx, ISN_CONCAT, 1);
+		if (generate_CONCAT(cctx, 2) == FAIL)
+		    return FAIL;
 	    }
 	    else
 		generate_two_op(cctx, op);

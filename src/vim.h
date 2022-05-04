@@ -116,7 +116,6 @@
 
 #if defined(FEAT_GUI_MOTIF) \
     || defined(FEAT_GUI_GTK) \
-    || defined(FEAT_GUI_ATHENA) \
     || defined(FEAT_GUI_HAIKU) \
     || defined(FEAT_GUI_MSWIN) \
     || defined(FEAT_GUI_PHOTON)
@@ -189,9 +188,6 @@
 # endif
 # ifdef FEAT_GUI_MOTIF
 #  undef FEAT_GUI_MOTIF
-# endif
-# ifdef FEAT_GUI_ATHENA
-#  undef FEAT_GUI_ATHENA
 # endif
 # ifdef FEAT_GUI_GTK
 #  undef FEAT_GUI_GTK
@@ -809,6 +805,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define EXPAND_ARGLIST		48
 #define EXPAND_DIFF_BUFFERS	49
 #define EXPAND_DISASSEMBLE	50
+#define EXPAND_BREAKPOINT	51
+#define EXPAND_SCRIPTNAMES	52
 
 // Values for exmode_active (0 is no exmode)
 #define EXMODE_NORMAL		1
@@ -825,6 +823,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define WILD_ALL_KEEP		8
 #define WILD_CANCEL		9
 #define WILD_APPLY		10
+#define WILD_PAGEUP		11
+#define WILD_PAGEDOWN		12
 
 #define WILD_LIST_NOTFOUND	    0x01
 #define WILD_HOME_REPLACE	    0x02
@@ -868,9 +868,9 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define FINDFILE_DIR	1	// only directories
 #define FINDFILE_BOTH	2	// files and directories
 
-#define W_ENDCOL(wp)	(wp->w_wincol + wp->w_width)
+#define W_ENDCOL(wp)	((wp)->w_wincol + (wp)->w_width)
 #ifdef FEAT_MENU
-# define W_WINROW(wp)	(wp->w_winrow + wp->w_winbar_height)
+# define W_WINROW(wp)	((wp)->w_winrow + (wp)->w_winbar_height)
 #else
 # define W_WINROW(wp)	(wp->w_winrow)
 #endif
@@ -891,7 +891,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 # define SST_MAX_ENTRIES 1000	// maximal size for state stack array
 # define SST_FIX_STATES	 7	// size of sst_stack[].
 # define SST_DIST	 16	// normal distance between entries
-# define SST_INVALID	(synstate_T *)-1	// invalid syn_state pointer
+# define SST_INVALID	((synstate_T *)-1)	// invalid syn_state pointer
 
 # define HL_CONTAINED	0x01	// not used on toplevel
 # define HL_TRANSP	0x02	// has no highlighting
@@ -953,7 +953,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define GETFILE_ERROR	    1	// normal error
 #define GETFILE_NOT_WRITTEN 2	// "not written" error
 #define GETFILE_SAME_FILE   0	// success, same file
-#define GETFILE_OPEN_OTHER -1	// success, opened another file
+#define GETFILE_OPEN_OTHER (-1)	// success, opened another file
 #define GETFILE_UNUSED	    8
 #define GETFILE_SUCCESS(x)  ((x) <= 0)
 
@@ -975,9 +975,9 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 // Values for "noremap" argument of ins_typebuf().  Also used for
 // map->m_noremap and menu->noremap[].
 #define REMAP_YES	0	// allow remapping
-#define REMAP_NONE	-1	// no remapping
-#define REMAP_SCRIPT	-2	// remap script-local mappings only
-#define REMAP_SKIP	-3	// no remapping for first char
+#define REMAP_NONE	(-1)	// no remapping
+#define REMAP_SCRIPT	(-2)	// remap script-local mappings only
+#define REMAP_SKIP	(-3)	// no remapping for first char
 
 // Values for mch_call_shell() second argument
 #define SHELL_FILTER	1	// filtering text
@@ -1073,7 +1073,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 
 // for lnum argument in do_ecmd()
 #define ECMD_LASTL	(linenr_T)0	// use last position in loaded file
-#define ECMD_LAST	(linenr_T)-1	// use last position in all files
+#define ECMD_LAST	((linenr_T)-1)	// use last position in all files
 #define ECMD_ONE	(linenr_T)1	// use first line
 
 // flags for do_cmdline()
@@ -1258,6 +1258,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define SEA_DIALOG	1	// use dialog when possible
 #define SEA_QUIT	2	// quit editing the file
 #define SEA_RECOVER	3	// recover the file
+#define SEA_READONLY	4	// no dialog, mark buffer as read-only
 
 /*
  * Minimal size for block 0 of a swap file.
@@ -1269,13 +1270,13 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define MAX_SWAP_PAGE_SIZE 50000
 
 // Special values for current_sctx.sc_sid.
-#define SID_MODELINE	-1	// when using a modeline
-#define SID_CMDARG	-2	// for "--cmd" argument
-#define SID_CARG	-3	// for "-c" argument
-#define SID_ENV		-4	// for sourcing environment variable
-#define SID_ERROR	-5	// option was reset because of an error
-#define SID_NONE	-6	// don't set scriptID
-#define SID_WINLAYOUT	-7	// changing window size
+#define SID_MODELINE	(-1)	// when using a modeline
+#define SID_CMDARG	(-2)	// for "--cmd" argument
+#define SID_CARG	(-3)	// for "-c" argument
+#define SID_ENV		(-4)	// for sourcing environment variable
+#define SID_ERROR	(-5)	// option was reset because of an error
+#define SID_NONE	(-6)	// don't set scriptID
+#define SID_WINLAYOUT	(-7)	// changing window size
 
 /*
  * Events for autocommands.
@@ -1393,6 +1394,7 @@ enum auto_event
     EVENT_WINCLOSED,		// after closing a window
     EVENT_VIMSUSPEND,		// before Vim is suspended
     EVENT_VIMRESUME,		// after Vim is resumed
+    EVENT_WINSCROLLED,		// after Vim window was scrolled
 
     NUM_EVENTS			// MUST be the last one
 };
@@ -1416,6 +1418,7 @@ typedef enum
     , HLF_H	    // obsolete, ignored
     , HLF_I	    // incremental search
     , HLF_L	    // last search string
+    , HLF_LC	    // last search string under cursor
     , HLF_M	    // "--More--" message
     , HLF_CM	    // Mode (e.g., "-- INSERT --")
     , HLF_N	    // line number for ":number" and ":#" commands
@@ -1463,7 +1466,7 @@ typedef enum
 
 // The HL_FLAGS must be in the same order as the HLF_ enums!
 // When changing this also adjust the default for 'highlight'.
-#define HL_FLAGS {'8', '~', '@', 'd', 'e', 'h', 'i', 'l', 'm', 'M', \
+#define HL_FLAGS {'8', '~', '@', 'd', 'e', 'h', 'i', 'l', 'y', 'm', 'M', \
 		  'n', 'a', 'b', 'N', 'G', 'O', 'r', 's', 'S', 'c', 't', 'v', 'V', \
 		  'w', 'W', 'f', 'F', 'A', 'C', 'D', 'T', '-', '>', \
 		  'B', 'P', 'R', 'L', \
@@ -1575,6 +1578,9 @@ typedef UINT32_TYPEDEF UINT32_T;
  */
 #define MAXMAPLEN   50
 
+// maximum length of a function name, including SID and NUL
+#define MAX_FUNC_NAME_LEN   200
+
 // Size in bytes of the hash used in the undo file.
 #define UNDO_HASH_SIZE 32
 
@@ -1616,8 +1622,10 @@ typedef UINT32_TYPEDEF UINT32_T;
 // Allocate memory for one type and cast the returned pointer to have the
 // compiler check the types.
 #define ALLOC_ONE(type)  (type *)alloc(sizeof(type))
+#define ALLOC_ONE_ID(type, id)  (type *)alloc_id(sizeof(type), id)
 #define ALLOC_MULT(type, count)  (type *)alloc(sizeof(type) * (count))
 #define ALLOC_CLEAR_ONE(type)  (type *)alloc_clear(sizeof(type))
+#define ALLOC_CLEAR_ONE_ID(type, id)  (type *)alloc_clear_id(sizeof(type), id)
 #define ALLOC_CLEAR_MULT(type, count)  (type *)alloc_clear(sizeof(type) * (count))
 #define LALLOC_CLEAR_ONE(type)  (type *)lalloc_clear(sizeof(type), FALSE)
 #define LALLOC_CLEAR_MULT(type, count)  (type *)lalloc_clear(sizeof(type) * (count), FALSE)
@@ -1725,7 +1733,7 @@ void *vim_memset(void *, int, size_t);
 // Prefer using emsgf(), because perror() may send the output to the wrong
 // destination and mess up the screen.
 #ifdef HAVE_STRERROR
-# define PERROR(msg)		    (void)semsg("%s: %s", (char *)msg, strerror(errno))
+# define PERROR(msg)		    (void)semsg("%s: %s", (char *)(msg), strerror(errno))
 #else
 # define PERROR(msg)		    do_perror(msg)
 #endif
@@ -1844,20 +1852,6 @@ typedef enum {
     CT_DEBUG	    // use df_instr_debug, overrules CT_PROFILE
 } compiletype_T;
 
-// Keep in sync with INSTRUCTIONS().
-#ifdef FEAT_PROFILE
-# define COMPILE_TYPE(ufunc) (debug_break_level > 0 \
-	|| may_break_in_function(ufunc) \
-		? CT_DEBUG \
-		: do_profiling == PROF_YES && (ufunc)->uf_profiling \
-			? CT_PROFILE : CT_NONE)
-#else
-# define COMPILE_TYPE(ufunc) debug_break_level > 0 \
-	|| may_break_in_function(ufunc) \
-		? CT_DEBUG \
-		: CT_NONE
-#endif
-
 /*
  * When compiling with 32 bit Perl time_t is 32 bits in the Perl code but 64
  * bits elsewhere.  That causes memory corruption.  Define time_T and use it
@@ -1937,7 +1931,7 @@ typedef int sock_T;
     (((unsigned)((code) & 0xC0) >> 6) + 1)
 
 #define SET_NUM_MOUSE_CLICKS(code, num) \
-    (code) = ((code) & 0x3f) | ((((num) - 1) & 3) << 6)
+    ((code) = ((code) & 0x3f) | ((((num) - 1) & 3) << 6))
 
 // Added to mouse column for GUI when 'mousefocus' wants to give focus to a
 // window by simulating a click on its status line.  We could use up to 128 *
@@ -2234,7 +2228,8 @@ typedef enum {
 typedef enum {
     ESTACK_NONE,
     ESTACK_SFILE,
-    ESTACK_STACK
+    ESTACK_STACK,
+    ESTACK_SCRIPT,
 } estack_arg_T;
 
 // Flags for assignment functions.
@@ -2245,6 +2240,7 @@ typedef enum {
 #define ASSIGN_UNPACK	0x10  // using [a, b] = list
 #define ASSIGN_NO_MEMBER_TYPE 0x20 // use "any" for list and dict member type
 #define ASSIGN_FOR_LOOP 0x40 // assigning to loop variable
+#define ASSIGN_INIT	0x80 // not assigning a value, just a declaration
 
 #include "ex_cmds.h"	    // Ex command defines
 #include "spell.h"	    // spell checking stuff
@@ -2531,8 +2527,8 @@ typedef enum {
 #endif
 
 // values for vim_handle_signal() that are not a signal
-#define SIGNAL_BLOCK	-1
-#define SIGNAL_UNBLOCK  -2
+#define SIGNAL_BLOCK	(-1)
+#define SIGNAL_UNBLOCK  (-2)
 #if !defined(UNIX) && !defined(VMS)
 # define vim_handle_signal(x) 0
 #endif
@@ -2544,8 +2540,8 @@ typedef enum {
 
 // behavior for bad character, "++bad=" argument
 #define BAD_REPLACE	'?'	// replace it with '?' (default)
-#define BAD_KEEP	-1	// leave it
-#define BAD_DROP	-2	// erase it
+#define BAD_KEEP	(-1)	// leave it
+#define BAD_DROP	(-2)	// erase it
 
 // last argument for do_source()
 #define DOSO_NONE	0
@@ -2568,11 +2564,11 @@ typedef enum {
 // direction for nv_mousescroll() and ins_mousescroll()
 #define MSCR_DOWN	0	// DOWN must be FALSE
 #define MSCR_UP		1
-#define MSCR_LEFT	-1
-#define MSCR_RIGHT	-2
+#define MSCR_LEFT	(-1)
+#define MSCR_RIGHT	(-2)
 
-#define KEYLEN_PART_KEY -1	// keylen value for incomplete key-code
-#define KEYLEN_PART_MAP -2	// keylen value for incomplete mapping
+#define KEYLEN_PART_KEY (-1)	// keylen value for incomplete key-code
+#define KEYLEN_PART_MAP (-2)	// keylen value for incomplete mapping
 #define KEYLEN_REMOVED  9999	// keylen value for removed sequence
 
 // Return values from win32_fileinfo().
@@ -2644,6 +2640,7 @@ typedef enum {
 #define TFN_NO_DECL	0x20	// only used for GLV_NO_DECL
 #define TFN_COMPILING	0x40	// only used for GLV_COMPILING
 #define TFN_NEW_FUNC	0x80	// defining a new function
+#define TFN_ASSIGN_WITH_OP	0x100	// only for GLV_ASSIGN_WITH_OP
 
 // Values for get_lval() flags argument:
 #define GLV_QUIET	TFN_QUIET	// no error messages
@@ -2651,6 +2648,7 @@ typedef enum {
 #define GLV_READ_ONLY	TFN_READ_ONLY	// will not change the var
 #define GLV_NO_DECL	TFN_NO_DECL	// assignment without :var or :let
 #define GLV_COMPILING	TFN_COMPILING	// variable may be defined later
+#define GLV_ASSIGN_WITH_OP TFN_ASSIGN_WITH_OP // assignment with operator
 
 #define DO_NOT_FREE_CNT 99999	// refcount for dict or list that should not
 				// be freed.
@@ -2732,8 +2730,8 @@ typedef enum {
 
 #if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)
 # define ELAPSED_TIMEVAL
-# define ELAPSED_INIT(v) gettimeofday(&v, NULL)
-# define ELAPSED_FUNC(v) elapsed(&v)
+# define ELAPSED_INIT(v) gettimeofday(&(v), NULL)
+# define ELAPSED_FUNC(v) elapsed(&(v))
 typedef struct timeval elapsed_T;
 long elapsed(struct timeval *start_tv);
 #elif defined(MSWIN)
@@ -2750,8 +2748,8 @@ long elapsed(DWORD start_tick);
 #endif
 
 // Replacement for nchar used by nv_replace().
-#define REPLACE_CR_NCHAR    -1
-#define REPLACE_NL_NCHAR    -2
+#define REPLACE_CR_NCHAR    (-1)
+#define REPLACE_NL_NCHAR    (-2)
 
 // flags for term_start()
 #define TERM_START_NOJOB	1

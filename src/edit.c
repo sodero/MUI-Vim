@@ -284,7 +284,7 @@ edit(
     else
 	State = INSERT;
 
-    trigger_modechanged();
+    may_trigger_modechanged();
     stop_insert_mode = FALSE;
 
 #ifdef FEAT_CONCEAL
@@ -293,11 +293,9 @@ edit(
     conceal_check_cursor_line(cursor_line_was_concealed);
 #endif
 
-    /*
-     * Need to recompute the cursor position, it might move when the cursor is
-     * on a TAB or special character.
-     */
-    curs_columns(TRUE);
+    // need to position cursor again when on a TAB
+    if (gchar_cursor() == TAB)
+	curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL);
 
     /*
      * Enable langmap or IME, indicated by 'iminsert'.
@@ -450,7 +448,7 @@ edit(
 	if (update_Insstart_orig)
 	    Insstart_orig = Insstart;
 
-	if (stop_insert_mode && !pum_visible())
+	if (stop_insert_mode && !ins_compl_active())
 	{
 	    // ":stopinsert" used or 'insertmode' reset
 	    count = 0;
@@ -1295,6 +1293,9 @@ docomplete:
 	    disable_fold_update--;
 #endif
 	    compl_busy = FALSE;
+#ifdef FEAT_SMARTINDENT
+	    can_si = TRUE; // allow smartindenting
+#endif
 	    break;
 
 	case Ctrl_Y:	// copy from previous line or scroll down
@@ -1525,6 +1526,9 @@ ins_redraw(int ready)	    // not busy with something
 	    u_save(curwin->w_cursor.lnum,
 					(linenr_T)(curwin->w_cursor.lnum + 1));
     }
+
+    if (ready)
+	may_trigger_winscrolled();
 
     // Trigger SafeState if nothing is pending.
     may_trigger_safestate(ready
@@ -1895,7 +1899,11 @@ get_literal(int noReduceKeys)
      * vi-compatible (maybe there should be an option for it?) -- webb
      */
     if (gui.in_use)
+    {
 	++allow_keys;
+	if (noReduceKeys)
+	    ++no_reduce_keys;
+    }
 #endif
 #ifdef USE_ON_FLY_SCROLL
     dont_scroll = TRUE;		// disallow scrolling here
@@ -1988,7 +1996,11 @@ get_literal(int noReduceKeys)
     --no_mapping;
 #ifdef FEAT_GUI
     if (gui.in_use)
+    {
 	--allow_keys;
+	if (noReduceKeys)
+	    --no_reduce_keys;
+    }
 #endif
     if (nc)
     {
@@ -3146,21 +3158,20 @@ mb_replace_pop_ins(int cc)
 		replace_push(c);
 		break;
 	    }
+
+	    buf[0] = c;
+	    for (i = 1; i < n; ++i)
+		buf[i] = replace_pop();
+	    if (utf_iscomposing(utf_ptr2char(buf)))
+		ins_bytes_len(buf, n);
 	    else
 	    {
-		buf[0] = c;
-		for (i = 1; i < n; ++i)
-		    buf[i] = replace_pop();
-		if (utf_iscomposing(utf_ptr2char(buf)))
-		    ins_bytes_len(buf, n);
-		else
-		{
-		    // Not a composing char, put it back.
-		    for (i = n - 1; i >= 0; --i)
-			replace_push(buf[i]);
-		    break;
-		}
+		// Not a composing char, put it back.
+		for (i = n - 1; i >= 0; --i)
+		    replace_push(buf[i]);
+		break;
 	    }
+
 	}
 }
 
@@ -3698,9 +3709,10 @@ ins_esc(
 #endif
 
     State = NORMAL;
-    trigger_modechanged();
-    // need to position cursor again (e.g. when on a TAB )
-    changed_cline_bef_curs();
+    may_trigger_modechanged();
+    // need to position cursor again when on a TAB
+    if (gchar_cursor() == TAB)
+	curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL);
 
     setmouse();
 #ifdef CURSOR_SHAPE
@@ -3834,7 +3846,7 @@ ins_insert(int replaceState)
 	State = INSERT | (State & LANGMAP);
     else
 	State = replaceState | (State & LANGMAP);
-    trigger_modechanged();
+    may_trigger_modechanged();
     AppendCharToRedobuff(K_INS);
     showmode();
 #ifdef CURSOR_SHAPE
@@ -4403,7 +4415,7 @@ bracketed_paste(paste_mode_T mode, int drop, garray_T *gap)
     if (!p_paste)
 	// Also have the side effects of setting 'paste' to make it work much
 	// faster.
-	set_option_value((char_u *)"paste", TRUE, NULL, 0);
+	set_option_value_give_err((char_u *)"paste", TRUE, NULL, 0);
 
     for (;;)
     {
@@ -4478,7 +4490,7 @@ bracketed_paste(paste_mode_T mode, int drop, garray_T *gap)
     --no_mapping;
     allow_keys = save_allow_keys;
     if (!save_paste)
-	set_option_value((char_u *)"paste", FALSE, NULL, 0);
+	set_option_value_give_err((char_u *)"paste", FALSE, NULL, 0);
 
     return ret_char;
 }

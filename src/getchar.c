@@ -1419,6 +1419,14 @@ static int old_char = -1;	// character put back by vungetc()
 static int old_mod_mask;	// mod_mask for ungotten character
 static int old_mouse_row;	// mouse_row related to old_char
 static int old_mouse_col;	// mouse_col related to old_char
+static int old_KeyStuffed;	// whether old_char was stuffed
+
+static int can_get_old_char(void)
+{
+    // If the old character was not stuffed and characters have been added to
+    // the stuff buffer, need to first get the stuffed characters instead.
+    return old_char != -1 && (old_KeyStuffed || stuff_empty());
+}
 
 /*
  * Save all three kinds of typeahead, so that the user must type at a prompt.
@@ -1629,7 +1637,11 @@ merge_modifyOtherKeys(int c_arg, int *modifiers)
     if (*modifiers & MOD_MASK_CTRL)
     {
 	if ((c >= '`' && c <= 0x7f) || (c >= '@' && c <= '_'))
+	{
 	    c &= 0x1f;
+	    if (c == NUL)
+		c = K_ZERO;
+	}
 	else if (c == '6')
 	    // CTRL-6 is equivalent to CTRL-^
 	    c = 0x1e;
@@ -1687,7 +1699,7 @@ vgetc(void)
      * If a character was put back with vungetc, it was already processed.
      * Return it directly.
      */
-    if (old_char != -1)
+    if (can_get_old_char())
     {
 	c = old_char;
 	old_char = -1;
@@ -1697,10 +1709,16 @@ vgetc(void)
     }
     else
     {
+	// number of characters recorded from the last vgetc() call
+	static int	last_vgetc_recorded_len = 0;
+
 	mod_mask = 0;
 	vgetc_mod_mask = 0;
 	vgetc_char = 0;
-	last_recorded_len = 0;
+
+	// last_recorded_len can be larger than last_vgetc_recorded_len
+	// if peeking records more
+	last_recorded_len -= last_vgetc_recorded_len;
 
 	for (;;)		// this is done twice if there are modifiers
 	{
@@ -1902,6 +1920,8 @@ vgetc(void)
 
 	    break;
 	}
+
+	last_vgetc_recorded_len = last_recorded_len;
     }
 
 #ifdef FEAT_EVAL
@@ -1987,7 +2007,7 @@ plain_vgetc(void)
     int
 vpeekc(void)
 {
-    if (old_char != -1)
+    if (can_get_old_char())
 	return old_char;
     return vgetorpeek(FALSE);
 }
@@ -2103,7 +2123,7 @@ getchar_common(typval_T *argvars, typval_T *rettv)
     set_vim_var_nr(VV_MOUSE_COL, 0);
 
     rettv->vval.v_number = n;
-    if (IS_SPECIAL(n) || mod_mask != 0)
+    if (n != 0 && (IS_SPECIAL(n) || mod_mask != 0))
     {
 	char_u		temp[10];   // modifier: 3, mbyte-char: 6, NUL: 1
 	int		i = 0;
@@ -2322,20 +2342,21 @@ typedef enum {
 
 /*
  * Check if the bytes at the start of the typeahead buffer are a character used
- * in CTRL-X mode.  This includes the form with a CTRL modifier.
+ * in Insert mode completion.  This includes the form with a CTRL modifier.
  */
     static int
-at_ctrl_x_key(void)
+at_ins_compl_key(void)
 {
     char_u  *p = typebuf.tb_buf + typebuf.tb_off;
     int	    c = *p;
 
     if (typebuf.tb_len > 3
-	    && c == K_SPECIAL
+	    && (c == K_SPECIAL || c == CSI)  // CSI is used by the GUI
 	    && p[1] == KS_MODIFIER
 	    && (p[2] & MOD_MASK_CTRL))
 	c = p[3] & 0x1f;
-    return vim_is_ctrl_x_key(c);
+    return (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
+		|| (compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
 }
 
 /*
@@ -2343,7 +2364,7 @@ at_ctrl_x_key(void)
  * into just a key, apply that.
  * Check from typebuf.tb_buf[typebuf.tb_off] to typebuf.tb_buf[typebuf.tb_off
  * + "max_offset"].
- * Return the length of the replaced bytes, zero if nothing changed.
+ * Return the length of the replaced bytes, 0 if nothing changed, -1 for error.
  */
     static int
 check_simplify_modifier(int max_offset)
@@ -2377,18 +2398,26 @@ check_simplify_modifier(int max_offset)
 		    vgetc_char = c;
 		    vgetc_mod_mask = tp[2];
 		}
-		len = mb_char2bytes(new_c, new_string);
+		if (IS_SPECIAL(new_c))
+		{
+		    new_string[0] = K_SPECIAL;
+		    new_string[1] = K_SECOND(new_c);
+		    new_string[2] = K_THIRD(new_c);
+		    len = 3;
+		}
+		else
+		    len = mb_char2bytes(new_c, new_string);
 		if (modifier == 0)
 		{
 		    if (put_string_in_typebuf(offset, 4, new_string, len,
-							   NULL, 0, 0) == FAIL)
+							NULL, 0, NULL) == FAIL)
 		    return -1;
 		}
 		else
 		{
 		    tp[2] = modifier;
 		    if (put_string_in_typebuf(offset + 3, 1, new_string, len,
-							   NULL, 0, 0) == FAIL)
+							NULL, 0, NULL) == FAIL)
 		    return -1;
 		}
 		return len;
@@ -2404,6 +2433,7 @@ check_simplify_modifier(int max_offset)
  * - When nothing mapped and typeahead has a character: return map_result_get.
  * - When there is no match yet, return map_result_nomatch, need to get more
  *   typeahead.
+ * - On failure (out of memory) return map_result_fail.
  */
     static int
 handle_mapping(
@@ -2416,6 +2446,7 @@ handle_mapping(
     mapblock_T	*mp_match;
     int		mp_match_len = 0;
     int		max_mlen = 0;
+    int		want_termcode = 0;  // 1 if termcode expected after max_mlen
     int		tb_c1;
     int		mlen;
 #ifdef FEAT_LANGMAP
@@ -2424,6 +2455,13 @@ handle_mapping(
     int		keylen = *keylenp;
     int		i;
     int		local_State = get_real_state();
+    int		is_plug_map = FALSE;
+
+    // If typehead starts with <Plug> then remap, even for a "noremap" mapping.
+    if (typebuf.tb_buf[typebuf.tb_off] == K_SPECIAL
+	    && typebuf.tb_buf[typebuf.tb_off + 1] == KS_EXTRA
+	    && typebuf.tb_buf[typebuf.tb_off + 2] == KE_PLUG)
+	is_plug_map = TRUE;
 
     /*
      * Check for a mappable key sequence.
@@ -2441,7 +2479,7 @@ handle_mapping(
     tb_c1 = typebuf.tb_buf[typebuf.tb_off];
     if (no_mapping == 0 && is_maphash_valid()
 	    && (no_zero_mapping == 0 || tb_c1 != '0')
-	    && (typebuf.tb_maplen == 0
+	    && (typebuf.tb_maplen == 0 || is_plug_map
 		|| (p_remap
 		    && (typebuf.tb_noremap[typebuf.tb_off]
 				    & (RM_NONE|RM_ABBR)) == 0))
@@ -2449,9 +2487,7 @@ handle_mapping(
 	    && !(State == HITRETURN && (tb_c1 == CAR || tb_c1 == ' '))
 	    && State != ASKMORE
 	    && State != CONFIRM
-	    && !((ctrl_x_mode_not_default() && at_ctrl_x_key())
-		    || (compl_status_local()
-			&& (tb_c1 == Ctrl_N || tb_c1 == Ctrl_P))))
+	    && !at_ins_compl_key())
     {
 #ifdef FEAT_GUI
 	if (gui.in_use && tb_c1 == CSI && typebuf.tb_len >= 2
@@ -2562,7 +2598,7 @@ handle_mapping(
 		    for (n = mlen; --n >= 0; )
 			if (*s++ & (RM_NONE|RM_ABBR))
 			    break;
-		    if (n >= 0)
+		    if (!is_plug_map && n >= 0)
 			continue;
 
 		    if (keylen > typebuf.tb_len)
@@ -2584,14 +2620,21 @@ handle_mapping(
 		}
 		else
 		    // No match; may have to check for termcode at next
-		    // character.
+		    // character.  If the first character that didn't match is
+		    // K_SPECIAL then check for a termcode.  This isn't perfect
+		    // but should work in most cases.
 		    if (max_mlen < mlen)
+		    {
 			max_mlen = mlen;
+			want_termcode = mp->m_keys[mlen] == K_SPECIAL;
+		    }
+		    else if (max_mlen == mlen && mp->m_keys[mlen] == K_SPECIAL)
+			want_termcode = 1;
 	    }
 	}
 
 	// If no partly match found, use the longest full match.
-	if (keylen != KEYLEN_PART_MAP)
+	if (keylen != KEYLEN_PART_MAP && mp_match != NULL)
 	{
 	    mp = mp_match;
 	    keylen = mp_match_len;
@@ -2614,7 +2657,8 @@ handle_mapping(
 						     mlen - typebuf.tb_maplen);
 
 	    del_typebuf(mlen, 0); // remove the chars
-	    set_option_value((char_u *)"paste", (long)!p_paste, NULL, 0);
+	    set_option_value_give_err((char_u *)"paste",
+						      (long)!p_paste, NULL, 0);
 	    if (!(State & INSERT))
 	    {
 		msg_col = 0;
@@ -2636,7 +2680,12 @@ handle_mapping(
 	    max_mlen = mlen + 1;
     }
 
-    if ((mp == NULL || max_mlen >= mp_match_len) && keylen != KEYLEN_PART_MAP)
+    // May check for a terminal code when there is no mapping or only a partial
+    // mapping.  Also check if there is a full mapping with <Esc>, unless timed
+    // out, since that is nearly always a partial match with a terminal code.
+    if ((mp == NULL || max_mlen + want_termcode > mp_match_len
+		    || (mp_match_len == 1 && *mp->m_keys == ESC && !*timedout))
+	    && keylen != KEYLEN_PART_MAP)
     {
 	int	save_keylen = keylen;
 
@@ -2649,23 +2698,30 @@ handle_mapping(
 	 * - and not an ESC sequence, not in insert mode or p_ek is on,
 	 * - and when not timed out,
 	 */
-	if ((no_mapping == 0 || allow_keys != 0)
-		&& (typebuf.tb_maplen == 0
+	if (no_mapping == 0 || allow_keys != 0)
+	{
+	    if ((typebuf.tb_maplen == 0
 		    || (p_remap && typebuf.tb_noremap[
 						    typebuf.tb_off] == RM_YES))
 		&& !*timedout)
-	{
-	    keylen = check_termcode(max_mlen + 1, NULL, 0, NULL);
+		keylen = check_termcode(max_mlen + 1, NULL, 0, NULL);
+	    else
+		keylen = 0;
 
 	    // If no termcode matched but 'pastetoggle' matched partially
 	    // it's like an incomplete key sequence.
-	    if (keylen == 0 && save_keylen == KEYLEN_PART_KEY)
+	    if (keylen == 0 && save_keylen == KEYLEN_PART_KEY && !*timedout)
 		keylen = KEYLEN_PART_KEY;
 
 	    // If no termcode matched, try to include the modifier into the
 	    // key.  This is for when modifyOtherKeys is working.
 	    if (keylen == 0 && !no_reduce_keys)
+	    {
 		keylen = check_simplify_modifier(max_mlen + 1);
+		if (keylen < 0)
+		    // ins_typebuf() failed
+		    return map_result_fail;
+	    }
 
 	    // When getting a partial match, but the last characters were not
 	    // typed, don't wait for a typed character to complete the
@@ -2922,6 +2978,8 @@ handle_mapping(
 
 /*
  * unget one character (can only be done once!)
+ * If the character was stuffed, vgetc() will get it next time it is called.
+ * Otherwise vgetc() will only get it when the stuff buffer is empty.
  */
     void
 vungetc(int c)
@@ -2930,6 +2988,28 @@ vungetc(int c)
     old_mod_mask = mod_mask;
     old_mouse_row = mouse_row;
     old_mouse_col = mouse_col;
+    old_KeyStuffed = KeyStuffed;
+}
+
+/*
+ * When peeking and not getting a character, reg_executing cannot be cleared
+ * yet, so set a flag to clear it later.
+ */
+    static void
+check_end_reg_executing(int advance)
+{
+    if (reg_executing != 0 && (typebuf.tb_maplen == 0
+						|| pending_end_reg_executing))
+    {
+	if (advance)
+	{
+	    reg_executing = 0;
+	    pending_end_reg_executing = FALSE;
+	}
+	else
+	    pending_end_reg_executing = TRUE;
+    }
+
 }
 
 /*
@@ -2995,8 +3075,7 @@ vgetorpeek(int advance)
 
     init_typebuf();
     start_stuff();
-    if (advance && typebuf.tb_maplen == 0)
-	reg_executing = 0;
+    check_end_reg_executing(advance);
     do
     {
 /*
@@ -3037,6 +3116,7 @@ vgetorpeek(int advance)
 #ifdef FEAT_CMDL_INFO
 		int	showcmd_idx;
 #endif
+		check_end_reg_executing(advance);
 		/*
 		 * ui_breakcheck() is slow, don't use it too often when
 		 * inside a mapping.  But call it each time for typed
@@ -3600,7 +3680,7 @@ inchar(
 	    for (;;)
 	    {
 		len = ui_inchar(dum, DUM_LEN, 0L, 0);
-		if (len == 0 || (len == 1 && dum[0] == 3))
+		if (len == 0 || (len == 1 && dum[0] == Ctrl_C))
 		    break;
 	    }
 	    return retesc;

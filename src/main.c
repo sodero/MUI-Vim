@@ -145,15 +145,23 @@ main
     atexit(vim_mem_profile_dump);
 #endif
 
-#ifdef STARTUPTIME
-    // Need to find "--startuptime" before actually parsing arguments.
+#if defined(STARTUPTIME) || defined(FEAT_JOB_CHANNEL)
+    // Need to find "--startuptime" and "--log" before actually parsing
+    // arguments.
     for (i = 1; i < argc - 1; ++i)
-	if (STRICMP(argv[i], "--startuptime") == 0)
+    {
+# ifdef STARTUPTIME
+	if (STRICMP(argv[i], "--startuptime") == 0 && time_fd == NULL)
 	{
 	    time_fd = mch_fopen(argv[i + 1], "a");
 	    TIME_MSG("--- VIM STARTING ---");
-	    break;
 	}
+# endif
+# ifdef FEAT_JOB_CHANNEL
+	if (STRICMP(argv[i], "--log") == 0)
+	    ch_logfile((char_u *)(argv[i + 1]), (char_u *)"a");
+# endif
+    }
 #endif
     starttime = time(NULL);
 
@@ -1343,6 +1351,14 @@ main_loop(
 		curbuf->b_last_changedtick = CHANGEDTICK(curbuf);
 	    }
 
+	    // Ensure curwin->w_topline and curwin->w_leftcol are up to date
+	    // before triggering a WinScrolled autocommand.
+	    update_topline();
+	    validate_cursor();
+
+	    if (!finish_op)
+		may_trigger_winscrolled();
+
 	    // If nothing is pending and we are going to wait for the user to
 	    // type a character, trigger SafeState.
 	    may_trigger_safestate(!op_pending() && restart_edit == 0);
@@ -1391,15 +1407,6 @@ main_loop(
 	    update_topline();
 	    validate_cursor();
 
-#ifdef FEAT_SYN_HL
-	    // Might need to update for 'cursorline'.
-	    // When 'cursorlineopt' is "screenline" need to redraw always.
-	    if (curwin->w_p_cul
-		    && (curwin->w_last_cursorline != curwin->w_cursor.lnum
-			|| (curwin->w_p_culopt_flags & CULOPT_SCRLINE))
-		    && !char_avail())
-		redraw_later(VALID);
-#endif
 	    if (VIsual_active)
 		update_curbuf(INVERTED); // update inverted part
 	    else if (must_redraw)
@@ -2005,6 +2012,8 @@ command_line_scan(mparm_T *parmp)
 				// "--version" give version message
 				// "--clean" clean context
 				// "--literal" take files literally
+				// "--startuptime fname" write timing info
+				// "--log fname" start logging early
 				// "--nofork" don't fork
 				// "--not-a-term" don't warn for not a term
 				// "--ttyfail" exit if not a term
@@ -2031,7 +2040,8 @@ command_line_scan(mparm_T *parmp)
 		    use_gvimrc = (char_u *)"NONE";
 #endif
 		    parmp->clean = TRUE;
-		    set_option_value((char_u *)"vif", 0L, (char_u *)"NONE", 0);
+		    set_option_value_give_err((char_u *)"vif",
+						      0L, (char_u *)"NONE", 0);
 		}
 		else if (STRNICMP(argv[0] + argv_idx, "literal", 7) == 0)
 		{
@@ -2060,6 +2070,11 @@ command_line_scan(mparm_T *parmp)
 		{
 		    want_argument = TRUE;
 		    argv_idx += 11;
+		}
+		else if (STRNICMP(argv[0] + argv_idx, "log", 3) == 0)
+		{
+		    want_argument = TRUE;
+		    argv_idx += 3;
 		}
 #ifdef FEAT_CLIENTSERVER
 		else if (STRNICMP(argv[0] + argv_idx, "serverlist", 10) == 0)
@@ -2108,7 +2123,7 @@ command_line_scan(mparm_T *parmp)
 
 	    case 'A':		// "-A" start in Arabic mode
 #ifdef FEAT_ARABIC
-		set_option_value((char_u *)"arabic", 1L, NULL, 0);
+		set_option_value_give_err((char_u *)"arabic", 1L, NULL, 0);
 #else
 		mch_errmsg(_(e_arabic_cannot_be_used_not_enabled_at_compile_time));
 		mch_exit(2);
@@ -2164,7 +2179,7 @@ command_line_scan(mparm_T *parmp)
 	    case 'H':		// "-H" start in Hebrew mode: rl + hkmap set
 #ifdef FEAT_RIGHTLEFT
 		p_hkmap = TRUE;
-		set_option_value((char_u *)"rl", 1L, NULL, 0);
+		set_option_value_give_err((char_u *)"rl", 1L, NULL, 0);
 #else
 		mch_errmsg(_(e_hebrew_cannot_be_used_not_enabled_at_compile_time));
 		mch_exit(2);
@@ -2173,7 +2188,7 @@ command_line_scan(mparm_T *parmp)
 
 	    case 'l':		// "-l" lisp mode, 'lisp' and 'showmatch' on
 #ifdef FEAT_LISP
-		set_option_value((char_u *)"lisp", 1L, NULL, 0);
+		set_option_value_give_err((char_u *)"lisp", 1L, NULL, 0);
 		p_sm = TRUE;
 #endif
 		break;
@@ -2309,8 +2324,8 @@ command_line_scan(mparm_T *parmp)
 		p_verbose = get_number_arg((char_u *)argv[0], &argv_idx, 10);
 		if (argv[0][argv_idx] != NUL)
 		{
-		    set_option_value((char_u *)"verbosefile", 0L,
-					     (char_u *)argv[0] + argv_idx, 0);
+		    set_option_value_give_err((char_u *)"verbosefile",
+					  0L, (char_u *)argv[0] + argv_idx, 0);
 		    argv_idx = (int)STRLEN(argv[0]);
 		}
 		break;
@@ -2327,7 +2342,7 @@ command_line_scan(mparm_T *parmp)
 		if (vim_isdigit(((char_u *)argv[0])[argv_idx]))
 		{
 		    n = get_number_arg((char_u *)argv[0], &argv_idx, 10);
-		    set_option_value((char_u *)"window", n, NULL, 0);
+		    set_option_value_give_err((char_u *)"window", n, NULL, 0);
 		    break;
 		}
 		want_argument = TRUE;
@@ -2443,6 +2458,7 @@ command_line_scan(mparm_T *parmp)
 							    (char_u *)argv[0];
 		    }
 		    // "--startuptime <file>" already handled
+		    // "--log <file>" already handled
 		    break;
 
 	    //	case 'd':   -d {device} is handled in mch_check_win() for the
@@ -2455,7 +2471,8 @@ command_line_scan(mparm_T *parmp)
 #endif
 
 		case 'i':	// "-i {viminfo}" use for viminfo
-		    set_option_value((char_u *)"vif", 0L, (char_u *)argv[0], 0);
+		    set_option_value_give_err((char_u *)"vif",
+						     0L, (char_u *)argv[0], 0);
 		    break;
 
 		case 's':	// "-s {scriptin}" read from script file
@@ -2514,7 +2531,8 @@ scripterror:
 		    {
 			argv_idx = 0;
 			n = get_number_arg((char_u *)argv[0], &argv_idx, 10);
-			set_option_value((char_u *)"window", n, NULL, 0);
+			set_option_value_give_err((char_u *)"window",
+								   n, NULL, 0);
 			argv_idx = -1;
 			break;
 		    }
@@ -2959,7 +2977,8 @@ edit_buffers(
 
 		    p_shm_save = vim_strsave(p_shm);
 		    vim_snprintf(buf, 100, "F%s", p_shm);
-		    set_option_value((char_u *)"shm", 0L, (char_u *)buf, 0);
+		    set_option_value_give_err((char_u *)"shm",
+							 0L, (char_u *)buf, 0);
 		}
 	    }
 	    else
@@ -3008,7 +3027,7 @@ edit_buffers(
 
     if (p_shm_save != NULL)
     {
-	set_option_value((char_u *)"shm", 0L, p_shm_save, 0);
+	set_option_value_give_err((char_u *)"shm", 0L, p_shm_save, 0);
 	vim_free(p_shm_save);
     }
 
@@ -3547,6 +3566,9 @@ usage(void)
 #ifdef STARTUPTIME
     main_msg(_("--startuptime <file>\tWrite startup timing messages to <file>"));
 #endif
+#ifdef FEAT_JOB_CHANNEL
+    main_msg(_("--log <file>\tStart logging to <file> early"));
+#endif
 #ifdef FEAT_VIMINFO
     main_msg(_("-i <viminfo>\t\tUse <viminfo> instead of .viminfo"));
 #endif
@@ -3557,14 +3579,6 @@ usage(void)
 #ifdef FEAT_GUI_X11
 # ifdef FEAT_GUI_MOTIF
     mch_msg(_("\nArguments recognised by gvim (Motif version):\n"));
-# else
-#  ifdef FEAT_GUI_ATHENA
-#   ifdef FEAT_GUI_NEXTAW
-    mch_msg(_("\nArguments recognised by gvim (neXtaw version):\n"));
-#   else
-    mch_msg(_("\nArguments recognised by gvim (Athena version):\n"));
-#   endif
-#  endif
 # endif
     main_msg(_("-display <display>\tRun Vim on <display>"));
     main_msg(_("-iconic\t\tStart Vim iconified"));
@@ -3576,9 +3590,6 @@ usage(void)
     main_msg(_("-geometry <geom>\tUse <geom> for initial geometry (also: -geom)"));
     main_msg(_("-borderwidth <width>\tUse a border width of <width> (also: -bw)"));
     main_msg(_("-scrollbarwidth <width>  Use a scrollbar width of <width> (also: -sw)"));
-# ifdef FEAT_GUI_ATHENA
-    main_msg(_("-menuheight <height>\tUse a menu bar height of <height> (also: -mh)"));
-# endif
     main_msg(_("-reverse\t\tUse reverse video (also: -rv)"));
     main_msg(_("+reverse\t\tDon't use reverse video (also: +rv)"));
     main_msg(_("-xrm <resource>\tSet the specified resource"));

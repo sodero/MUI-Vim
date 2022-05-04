@@ -8,6 +8,7 @@ source check.vim
 CheckOption breakindent
 
 source view_util.vim
+source screendump.vim
 
 let s:input ="\tabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
 
@@ -730,7 +731,7 @@ func Test_breakindent20_list()
 	\ "shall make no law   ",
 	\ ]
   call s:compare_lines(expect, lines)
-  " set mininum indent
+  " set minimum indent
   setl briopt=min:5
   redraw!
   let lines = s:screen_lines2(1, 6, 20)
@@ -847,6 +848,27 @@ func Test_window_resize_with_linebreak()
   redraw!
   call assert_equal(["    >>aaa^@\"a:"], ScreenLines(2, 14))
   %bw!
+endfunc
+
+func Test_cursor_position_with_showbreak()
+  CheckScreendump
+
+  let lines =<< trim END
+      vim9script
+      &signcolumn = 'yes'
+      &showbreak = '+ '
+      var leftcol: number = win_getid()->getwininfo()->get(0, {})->get('textoff')
+      repeat('x', &columns - leftcol - 1)->setline(1)
+      'second line'->setline(2)
+  END
+  call writefile(lines, 'XscriptShowbreak')
+  let buf = RunVimInTerminal('-S XscriptShowbreak', #{rows: 6})
+
+  call term_sendkeys(buf, "AX")
+  call VerifyScreenDump(buf, 'Test_cursor_position_with_showbreak', {})
+
+  call StopVimInTerminal(buf)
+  call delete('XscriptShowbreak')
 endfunc
 
 func Test_no_spurious_match()

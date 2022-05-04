@@ -1,6 +1,7 @@
 " Test using builtin functions in the Vim9 script language.
 
 source check.vim
+source screendump.vim
 import './vim9.vim' as v9
 
 " Test for passing too many or too few arguments to builtin functions
@@ -122,13 +123,13 @@ def Test_add_blob()
   END
   v9.CheckDefExecFailure(lines, 'E1131:', 2)
 
-  # Getting variable with NULL blob allocates a new blob at script level
+  # Getting variable with NULL blob fails
   lines =<< trim END
       vim9script
       var b: blob = test_null_blob()
       add(b, 123)
   END
-  v9.CheckScriptSuccess(lines)
+  v9.CheckScriptFailure(lines, 'E1131:', 3)
 enddef
 
 def Test_add_list()
@@ -153,13 +154,21 @@ def Test_add_list()
   END
   v9.CheckDefExecFailure(lines, 'E1130:', 2)
 
-  # Getting variable with NULL list allocates a new list at script level
+  # Getting an uninitialized variable allocates a new list at script level
+  lines =<< trim END
+      vim9script
+      var l: list<number>
+      add(l, 123)
+  END
+  v9.CheckScriptSuccess(lines)
+
+  # Adding to a variable set to a NULL list fails
   lines =<< trim END
       vim9script
       var l: list<number> = test_null_list()
       add(l, 123)
   END
-  v9.CheckScriptSuccess(lines)
+  v9.CheckScriptFailure(lines, 'E1130:', 3)
 
   lines =<< trim END
       vim9script
@@ -371,9 +380,16 @@ def Test_bufname()
   assert_fails('bufname([])', 'E1220:')
 enddef
 
+let s:bufnr_res = 0
+
 def Test_bufnr()
   var buf = bufnr()
   bufnr('%')->assert_equal(buf)
+
+  # check the lock is not taken over through the stack
+  const nr = 10
+  bufnr_res = bufnr()
+  bufnr_res = 12345
 
   buf = bufnr('Xdummy', true)
   buf->assert_notequal(-1)
@@ -426,6 +442,21 @@ def Test_call_call()
   var l = [3, 2, 1]
   call('reverse', [l])
   l->assert_equal([1, 2, 3])
+
+  var lines =<< trim END
+      vim9script
+      def Outer()
+        def g:Inner()
+          g:done = 'Inner'
+        enddef
+        call(g:Inner, [])
+      enddef
+      Outer()
+      assert_equal('Inner', g:done)
+      unlet g:done
+  END
+  v9.CheckScriptSuccess(lines)
+  delfunc g:Inner
 
   v9.CheckDefExecAndScriptFailure(['call(123, [2])'], 'E1256: String or function required for argument 1')
   v9.CheckDefExecAndScriptFailure(['call(true, [2])'], 'E1256: String or function required for argument 1')
@@ -998,6 +1029,7 @@ def Test_expandcmd()
   expandcmd('')->assert_equal('')
 
   v9.CheckDefAndScriptFailure(['expandcmd([1])'], ['E1013: Argument 1: type mismatch, expected string but got list<number>', 'E1174: String required for argument 1'])
+  v9.CheckDefAndScriptFailure(['expandcmd("abc", [])'], ['E1013: Argument 2: type mismatch, expected dict<any> but got list<unknown>', 'E1206: Dictionary required for argument 2'])
 enddef
 
 def Test_extend_arg_types()
@@ -1241,56 +1273,79 @@ def Test_float_funcs_args()
 
   # acos()
   v9.CheckDefAndScriptFailure(['acos("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('1.570796', string(acos(0.0)))
   # asin()
   v9.CheckDefAndScriptFailure(['asin("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(asin(0.0)))
   # atan()
   v9.CheckDefAndScriptFailure(['atan("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(atan(0.0)))
   # atan2()
   v9.CheckDefAndScriptFailure(['atan2("a", 1.1)'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('-2.356194', string(atan2(-1, -1)))
   v9.CheckDefAndScriptFailure(['atan2(1.2, "a")'], ['E1013: Argument 2: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 2'])
   v9.CheckDefAndScriptFailure(['atan2(1.2)'], ['E119:', 'E119:'])
   # ceil()
   v9.CheckDefAndScriptFailure(['ceil("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('2.0', string(ceil(2.0)))
   # cos()
   v9.CheckDefAndScriptFailure(['cos("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('1.0', string(cos(0.0)))
   # cosh()
   v9.CheckDefAndScriptFailure(['cosh("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('1.0', string(cosh(0.0)))
   # exp()
   v9.CheckDefAndScriptFailure(['exp("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('1.0', string(exp(0.0)))
   # float2nr()
   v9.CheckDefAndScriptFailure(['float2nr("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal(1, float2nr(1.234))
   # floor()
   v9.CheckDefAndScriptFailure(['floor("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('2.0', string(floor(2.0)))
   # fmod()
   v9.CheckDefAndScriptFailure(['fmod(1.1, "a")'], ['E1013: Argument 2: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 2'])
   v9.CheckDefAndScriptFailure(['fmod("a", 1.1)'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
   v9.CheckDefAndScriptFailure(['fmod(1.1)'], ['E119:', 'E119:'])
+  assert_equal('0.13', string(fmod(12.33, 1.22)))
   # isinf()
   v9.CheckDefAndScriptFailure(['isinf("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal(1, isinf(1.0 / 0.0))
   # isnan()
   v9.CheckDefAndScriptFailure(['isnan("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_true(isnan(0.0 / 0.0))
   # log()
   v9.CheckDefAndScriptFailure(['log("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(log(1.0)))
   # log10()
   v9.CheckDefAndScriptFailure(['log10("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(log10(1.0)))
   # pow()
   v9.CheckDefAndScriptFailure(['pow("a", 1.1)'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
   v9.CheckDefAndScriptFailure(['pow(1.1, "a")'], ['E1013: Argument 2: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 2'])
   v9.CheckDefAndScriptFailure(['pow(1.1)'], ['E119:', 'E119:'])
+  assert_equal('1.0', string(pow(0.0, 0.0)))
   # round()
   v9.CheckDefAndScriptFailure(['round("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('2.0', string(round(2.1)))
   # sin()
   v9.CheckDefAndScriptFailure(['sin("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(sin(0.0)))
   # sinh()
   v9.CheckDefAndScriptFailure(['sinh("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(sinh(0.0)))
   # sqrt()
   v9.CheckDefAndScriptFailure(['sqrt("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(sqrt(0.0)))
   # tan()
   v9.CheckDefAndScriptFailure(['tan("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(tan(0.0)))
   # tanh()
   v9.CheckDefAndScriptFailure(['tanh("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('0.0', string(tanh(0.0)))
   # trunc()
   v9.CheckDefAndScriptFailure(['trunc("a")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1219: Float or Number required for argument 1'])
+  assert_equal('2.0', string(trunc(2.1)))
 enddef
 
 def Test_fnameescape()
@@ -1315,17 +1370,6 @@ def Wrong_dict_key_type(items: list<number>): list<number>
 enddef
 
 def Test_filter()
-  v9.CheckDefAndScriptFailure(['filter(1.1, "1")'], ['E1013: Argument 1: type mismatch, expected list<any> but got float', 'E1251: List, Dictionary, Blob or String required for argument 1'])
-  v9.CheckDefAndScriptFailure(['filter([1, 2], 4)'], ['E1256: String or function required for argument 2', 'E1024: Using a Number as a String'])
-
-  var lines =<< trim END
-    def F(i: number, v: any): string
-      return 'bad'
-    enddef
-    echo filter([1, 2, 3], F)
-  END
-  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(...): bool', 'E1135: Using a String as a Bool:'])
-
   assert_equal([], filter([1, 2, 3], '0'))
   assert_equal([1, 2, 3], filter([1, 2, 3], '1'))
   assert_equal({b: 20}, filter({a: 10, b: 20}, 'v:val == 20'))
@@ -1335,6 +1379,72 @@ def Test_filter()
     return range(3)->filter(Odd)
   enddef
   assert_equal([1], GetFiltered())
+
+  var lines =<< trim END
+      vim9script
+      def Func(): list<string>
+        var MatchWord: func: bool = (_, v) => true
+        var l = ['xxx']
+        return l->filter(MatchWord)
+      enddef
+      assert_equal(['xxx'], Func())
+  END
+  v9.CheckScriptSuccess(lines)
+
+  v9.CheckDefAndScriptFailure(['filter(1.1, "1")'], ['E1013: Argument 1: type mismatch, expected list<any> but got float', 'E1251: List, Dictionary, Blob or String required for argument 1'])
+  v9.CheckDefAndScriptFailure(['filter([1, 2], 4)'], ['E1256: String or function required for argument 2', 'E1024: Using a Number as a String'])
+
+  lines =<< trim END
+    def F(i: number, v: any): string
+      return 'bad'
+    enddef
+    echo filter([1, 2, 3], F)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?any): bool but got func(number, any): string', 'E1135: Using a String as a Bool:'])
+
+  # check first function argument type
+  lines =<< trim END
+    var l = [1, 2, 3]
+    filter(l, (i: string, v: number) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): bool but got func(string, number): bool', 'E1013: Argument 1: type mismatch, expected string but got number'])
+  lines =<< trim END
+    var d = {a: 1}
+    filter(d, (i: number, v: number) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?string, ?number): bool but got func(number, number): bool', 'E1013: Argument 1: type mismatch, expected number but got string'])
+  lines =<< trim END
+    var b = 0z1122
+    filter(b, (i: string, v: number) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): bool but got func(string, number): bool', 'E1013: Argument 1: type mismatch, expected string but got number'])
+  lines =<< trim END
+    var s = 'text'
+    filter(s, (i: string, v: string) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?string): bool but got func(string, string): bool', 'E1013: Argument 1: type mismatch, expected string but got number'])
+
+  # check second function argument type
+  lines =<< trim END
+    var l = [1, 2, 3]
+    filter(l, (i: number, v: string) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): bool but got func(number, string): bool', 'E1013: Argument 2: type mismatch, expected string but got number'])
+  lines =<< trim END
+    var d = {a: 1}
+    filter(d, (i: string, v: string) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?string, ?number): bool but got func(string, string): bool', 'E1013: Argument 2: type mismatch, expected string but got number'])
+  lines =<< trim END
+    var b = 0z1122
+    filter(b, (i: number, v: string) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): bool but got func(number, string): bool', 'E1013: Argument 2: type mismatch, expected string but got number'])
+  lines =<< trim END
+    var s = 'text'
+    filter(s, (i: number, v: number) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?string): bool but got func(number, number): bool', 'E1013: Argument 2: type mismatch, expected number but got string'])
 enddef
 
 def Test_filter_wrong_dict_key_type()
@@ -1617,6 +1727,7 @@ def Test_getenv()
   endif
   $SOMEENVVAR = 'some'
   assert_equal('some', getenv('SOMEENVVAR'))
+  assert_notequal(null, getenv('SOMEENVVAR'))
   unlet $SOMEENVVAR
   getenv('')->assert_equal(v:null)
 enddef
@@ -2289,11 +2400,11 @@ def Test_map_function_arg()
   lines =<< trim END
       range(3)->map((a, b, c) => a + b + c)
   END
-  v9.CheckDefExecAndScriptFailure(lines, 'E1190: One argument too few')
+  v9.CheckDefAndScriptFailure(lines, ['E176:', 'E1190: One argument too few'])
   lines =<< trim END
       range(3)->map((a, b, c, d) => a + b + c + d)
   END
-  v9.CheckDefExecAndScriptFailure(lines, 'E1190: 2 arguments too few')
+  v9.CheckDefAndScriptFailure(lines, ['E176:', 'E1190: 2 arguments too few'])
 
   # declared list cannot change type
   lines =<< trim END
@@ -2303,7 +2414,7 @@ def Test_map_function_arg()
     var ll: list<number> = [1, 2, 3]
     echo map(ll, Map)
   END
-  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(...): number but got func(number, number): string', 'E1012: Type mismatch; expected number but got string in map()'])
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(number, number): string', 'E1012: Type mismatch; expected number but got string in map()'])
 
   # not declared list can change type
   echo [1, 2, 3]->map((..._) => 'x')
@@ -2321,19 +2432,19 @@ def Test_map_item_type()
     var l: list<number> = [0]
     echo map(l, (_, v) => [])
   END
-  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(...): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
 
   lines =<< trim END
     var l: list<number> = range(2)
     echo map(l, (_, v) => [])
   END
-  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(...): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
 
   lines =<< trim END
     var d: dict<number> = {key: 0}
     echo map(d, (_, v) => [])
   END
-  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(...): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?string, ?number): number but got func(any, any): list<unknown>', 'E1012: Type mismatch; expected number but got list<unknown> in map()'], 2)
 enddef
 
 def Test_maparg()
@@ -2352,13 +2463,60 @@ def Test_maparg()
         sid: SID(),
         scriptversion: 999999,
         rhs: 'bar',
-        buffer: 0})
+        buffer: 0,
+        abbr: 0})
   unmap foo
   v9.CheckDefAndScriptFailure(['maparg(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
   v9.CheckDefAndScriptFailure(['maparg("a", 2)'], ['E1013: Argument 2: type mismatch, expected string but got number', 'E1174: String required for argument 2'])
   v9.CheckDefAndScriptFailure(['maparg("a", "b", 2)'], ['E1013: Argument 3: type mismatch, expected bool but got number', 'E1212: Bool required for argument 3'])
   v9.CheckDefAndScriptFailure(['maparg("a", "b", true, 2)'], ['E1013: Argument 4: type mismatch, expected bool but got number', 'E1212: Bool required for argument 4'])
   maparg('')->assert_equal('')
+
+  # value argument type is checked at compile time
+  var lines =<< trim END
+      var l = [123]
+      l->map((i: number, v: string) => 0)
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(number, string): number')
+
+  lines =<< trim END
+      var d = {a: 123}
+      d->map((i: string, v: string) => 0)
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?string, ?number): number but got func(string, string): number')
+
+  lines =<< trim END
+    var s = 'abc'
+    s->map((i: number, v: number) => 'x')
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?string): string but got func(number, number): string')
+
+  lines =<< trim END
+    var s = 0z1122
+    s->map((i: number, v: string) => 0)
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(number, string): number')
+
+  # index argument type is checked at compile time
+  lines =<< trim END
+      ['x']->map((i: string, v: string) => 'y')
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?any): any but got func(string, string): string')
+
+  lines =<< trim END
+    {a: 1}->map((i: number, v: number) => 0)
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?string, ?any): any but got func(number, number): number')
+
+  lines =<< trim END
+    'abc'->map((i: string, v: string) => 'x')
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?string): string but got func(string, string): string')
+
+  lines =<< trim END
+    0z1122->map((i: string, v: number) => 0)
+  END
+  v9.CheckDefFailure(lines, 'E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(string, number): number')
 enddef
 
 def Test_maparg_mapset()
@@ -2388,7 +2546,7 @@ def Test_mapnew()
 enddef
 
 def Test_mapset()
-  v9.CheckDefAndScriptFailure(['mapset(1, true, {})'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
+  v9.CheckDefAndScriptFailure(['mapset(1, true, {})'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1223: String or Dictionary required for argument 1'])
   v9.CheckDefAndScriptFailure(['mapset("a", 2, {})'], ['E1013: Argument 2: type mismatch, expected bool but got number', 'E1212: Bool required for argument 2'])
   v9.CheckDefAndScriptFailure(['mapset("a", false, [])'], ['E1013: Argument 3: type mismatch, expected dict<any> but got list<unknown>', 'E1206: Dictionary required for argument 3'])
 enddef
@@ -3691,19 +3849,52 @@ def Test_sort_argument()
     assert_equal([1, 2, 3, 4, 5, 6, 7, 8], l)
   END
   v9.CheckDefAndScriptSuccess(lines)
-  v9.CheckDefAndScriptFailure(['sort("a")'], ['E1013: Argument 1: type mismatch, expected list<any> but got string', 'E1211: List required for argument 1'])
-  v9.CheckDefAndScriptFailure(['sort([1], "", [1])'], ['E1013: Argument 3: type mismatch, expected dict<any> but got list<number>', 'E1206: Dictionary required for argument 3'])
+
+  lines =<< trim END
+      sort([1, 2, 3], (a: any, b: any) => 1)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+      vim9script
+      def SortedList(): list<number>
+        var Lambda: func: number = (a, b): number => a - b
+        var l = [3, 2, 1]
+        return l->sort(Lambda)
+      enddef
+      SortedList()->assert_equal([1, 2, 3])
+  END
+  v9.CheckScriptSuccess(lines)
 enddef
 
 def Test_sort_compare_func_fails()
+  v9.CheckDefAndScriptFailure(['sort("a")'], ['E1013: Argument 1: type mismatch, expected list<any> but got string', 'E1211: List required for argument 1'])
+  v9.CheckDefAndScriptFailure(['sort([1], "", [1])'], ['E1013: Argument 3: type mismatch, expected dict<any> but got list<number>', 'E1206: Dictionary required for argument 3'])
+
   var lines =<< trim END
     vim9script
     echo ['a', 'b', 'c']->sort((a: number, b: number) => 0)
   END
   writefile(lines, 'Xbadsort')
   assert_fails('source Xbadsort', ['E1013:', 'E702:'])
-
   delete('Xbadsort')
+
+  lines =<< trim END
+      var l = [1, 2, 3]
+      sort(l, (a: string, b: number) => 1)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(string, number): number', 'E1013: Argument 1: type mismatch, expected string but got number'])
+
+  lines =<< trim END
+      var l = ['a', 'b', 'c']
+      sort(l, (a: string, b: number) => 1)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?string, ?string): number but got func(string, number): number', 'E1013: Argument 2: type mismatch, expected number but got string'])
+
+  lines =<< trim END
+      sort([1, 2, 3], (a: number, b: number) => true)
+  END
+  v9.CheckDefAndScriptFailure(lines, ['E1013: Argument 2: type mismatch, expected func(?number, ?number): number but got func(number, number): bool', 'E1138: Using a Bool as a Number'])
 enddef
 
 def Test_spellbadword()
@@ -4249,7 +4440,7 @@ def Test_typename()
   if has('float')
     assert_equal('func([unknown], [unknown]): float', typename(function('pow')))
   endif
-  assert_equal('func', test_null_partial()->typename())
+  assert_equal('func(...): unknown', test_null_partial()->typename())
   assert_equal('list<unknown>', test_null_list()->typename())
   assert_equal('dict<unknown>', test_null_dict()->typename())
   if has('job')
@@ -4326,6 +4517,47 @@ enddef
 def Test_win_gotoid()
   v9.CheckDefAndScriptFailure(['win_gotoid("x")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1210: Number required for argument 1'])
 enddef
+
+func Test_win_gotoid_in_mapping()
+  CheckScreendump
+
+  " requires a working clipboard and this doesn't work on MacOS
+  if has('clipboard_working') && !has('mac')
+    let @* = 'foo'
+    let lines =<< trim END
+        set cmdheight=2
+        func On_click()
+          call win_gotoid(getmousepos().winid)
+          execute "norm! \<LeftMouse>"
+        endfunc
+        noremap <LeftMouse> <Cmd>call On_click()<CR>
+
+        autocmd SafeState * echo 'reg = "' .. @* .. '"'
+
+        call setline(1, range(20))
+        set nomodified
+        botright new
+        call setline(1, range(21, 40))
+        set nomodified
+
+        func Click()
+          map <silent> <F3> :call test_setmouse(3, 1)<CR>
+	  call feedkeys("\<F3>\<LeftMouse>\<LeftRelease>", "xt")
+        endfunc
+    END
+    call writefile(lines, 'Xgotoscript')
+    let buf = RunVimInTerminal('-S Xgotoscript', #{rows: 15, wait_for_ruler: 0})
+    call VerifyScreenDump(buf, 'Test_win_gotoid_1', {})
+    call term_sendkeys(buf, "3Gvl")
+    call VerifyScreenDump(buf, 'Test_win_gotoid_2', {})
+
+    call term_sendkeys(buf, ":call Click()\<CR>")
+    call VerifyScreenDump(buf, 'Test_win_gotoid_3', {})
+
+    call StopVimInTerminal(buf)
+    call delete('Xgotoscript')
+  endif
+endfunc
 
 def Test_win_id2tabwin()
   v9.CheckDefAndScriptFailure(['win_id2tabwin("x")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1210: Number required for argument 1'])

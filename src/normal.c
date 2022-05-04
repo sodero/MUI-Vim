@@ -689,7 +689,7 @@ normal_cmd(
 # endif
     }
 #endif
-    trigger_modechanged();
+    may_trigger_modechanged();
 
     // When not finishing an operator and no register name typed, reset the
     // count.
@@ -971,7 +971,7 @@ normal_end:
     c = finish_op;
 #endif
     finish_op = FALSE;
-    trigger_modechanged();
+    may_trigger_modechanged();
 #ifdef CURSOR_SHAPE
     // Redraw the cursor with another shape, if we were in Operator-pending
     // mode or did a replace command.
@@ -1027,7 +1027,7 @@ normal_end:
 	if (restart_VIsual_select == 1)
 	{
 	    VIsual_select = TRUE;
-	    trigger_modechanged();
+	    may_trigger_modechanged();
 	    showmode();
 	    restart_VIsual_select = 0;
 	    VIsual_select_reg = 0;
@@ -1151,7 +1151,7 @@ end_visual_mode_keep_button()
     may_clear_cmdline();
 
     adjust_cursor_eol();
-    trigger_modechanged();
+    may_trigger_modechanged();
 }
 
 /*
@@ -3222,7 +3222,7 @@ nv_ctrlg(cmdarg_T *cap)
     if (VIsual_active)	// toggle Selection/Visual mode
     {
 	VIsual_select = !VIsual_select;
-	trigger_modechanged();
+	may_trigger_modechanged();
 	showmode();
     }
     else if (!checkclearop(cap->oap))
@@ -3294,7 +3294,7 @@ nv_ctrlo(cmdarg_T *cap)
     if (VIsual_active && VIsual_select)
     {
 	VIsual_select = FALSE;
-	trigger_modechanged();
+	may_trigger_modechanged();
 	showmode();
 	restart_VIsual_select = 2;	// restart Select mode later
     }
@@ -4162,6 +4162,7 @@ nv_search(cmdarg_T *cap)
 						      ? 0 : SEARCH_MARK, NULL);
 }
 
+
 /*
  * Handle "N" and "n" commands.
  * cap->arg is SEARCH_REV for "N", 0 for "n".
@@ -4182,6 +4183,12 @@ nv_next(cmdarg_T *cap)
 	(void)normal_search(cap, 0, NULL, SEARCH_MARK | cap->arg, NULL);
 	cap->count1 -= 1;
     }
+
+#ifdef FEAT_SEARCH_EXTRA
+    // Redraw the window to refresh the highlighted matches.
+    if (i > 0 && p_hls && !no_hlsearch)
+	redraw_later(SOME_VALID);
+#endif
 }
 
 /*
@@ -4199,6 +4206,9 @@ normal_search(
 {
     int		i;
     searchit_arg_T sia;
+#ifdef FEAT_SEARCH_EXTRA
+    pos_T	prev_cursor = curwin->w_cursor;
+#endif
 
     cap->oap->motion_type = MCHAR;
     cap->oap->inclusive = FALSE;
@@ -4222,6 +4232,11 @@ normal_search(
 	    foldOpenCursor();
 #endif
     }
+#ifdef FEAT_SEARCH_EXTRA
+    // Redraw the window to refresh the highlighted matches.
+    if (!EQUAL_POS(curwin->w_cursor, prev_cursor) && p_hls && !no_hlsearch)
+	redraw_later(SOME_VALID);
+#endif
 
     // "/$" will put the cursor after the end of the line, may need to
     // correct that here
@@ -5431,7 +5446,7 @@ nv_visual(cmdarg_T *cap)
 	{				    //	   or char/line mode
 	    VIsual_mode = cap->cmdchar;
 	    showmode();
-	    trigger_modechanged();
+	    may_trigger_modechanged();
 	}
 	redraw_curbuf_later(INVERTED);	    // update the inversion
     }
@@ -5521,12 +5536,13 @@ start_selection(void)
 
 /*
  * Start Select mode, if "c" is in 'selectmode' and not in a mapping or menu.
+ * When "c" is 'o' (checking for "mouse") then also when mapped.
  */
     void
 may_start_select(int c)
 {
-    VIsual_select = (stuff_empty() && typebuf_typed()
-		    && (vim_strchr(p_slm, c) != NULL));
+    VIsual_select = (c == 'o' || (stuff_empty() && typebuf_typed()))
+		    && vim_strchr(p_slm, c) != NULL;
 }
 
 /*
@@ -5558,7 +5574,7 @@ n_start_visual_mode(int c)
     foldAdjustVisual();
 #endif
 
-    trigger_modechanged();
+    may_trigger_modechanged();
     setmouse();
 #ifdef FEAT_CONCEAL
     // Check if redraw is needed after changing the state.
@@ -6889,6 +6905,7 @@ nv_edit(cmdarg_T *cap)
     {
 	pos_T old_pos = curwin->w_cursor;
 	pos_T old_visual = VIsual;
+	int old_visual_mode = VIsual_mode;
 
 	// In Visual mode the selected text is deleted.
 	if (VIsual_mode == 'V' || curwin->w_cursor.lnum != VIsual.lnum)
@@ -6904,11 +6921,32 @@ nv_edit(cmdarg_T *cap)
 	do_pending_operator(cap, 0, FALSE);
 	cap->cmdchar = K_PS;
 
-	// When the last char in the line was deleted then append. Detect this
-	// by checking if the cursor moved to before the Visual area.
-	if (*ml_get_cursor() != NUL && LT_POS(curwin->w_cursor, old_pos)
-				       && LT_POS(curwin->w_cursor, old_visual))
-	    inc_cursor();
+	if (*ml_get_cursor() != NUL)
+	{
+	    if (old_visual_mode == 'V')
+	    {
+		// In linewise Visual mode insert before the beginning of the
+		// next line.
+		// When the last line in the buffer was deleted then create a
+		// new line, otherwise there is not need to move cursor.
+		// Detect this by checking if cursor moved above Visual area.
+		if (curwin->w_cursor.lnum < old_pos.lnum
+				&& curwin->w_cursor.lnum < old_visual.lnum)
+		{
+		    if (u_save_cursor() == OK)
+		    {
+			ml_append(curwin->w_cursor.lnum, (char_u *)"", 0,
+									FALSE);
+			appended_lines(curwin->w_cursor.lnum++, 1L);
+		    }
+		}
+	    }
+	    // When the last char in the line was deleted then append.
+	    // Detect this by checking if cursor moved before Visual area.
+	    else if (curwin->w_cursor.col < old_pos.col
+				&& curwin->w_cursor.col < old_visual.col)
+		inc_cursor();
+	}
 
 	// Insert to replace the deleted text with the pasted text.
 	invoke_edit(cap, FALSE, cap->cmdchar, FALSE);

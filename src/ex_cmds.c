@@ -2116,7 +2116,7 @@ check_overwrite(
 	    // with UNIX it is possible to open a directory
 	    if (mch_isdir(ffname))
 	    {
-		semsg(_(e_src_is_directory), ffname);
+		semsg(_(e_str_is_directory), ffname);
 		return FAIL;
 	    }
 #endif
@@ -2411,8 +2411,7 @@ getfile(
 	if (curbufIsChanged())
 #endif
 	{
-	    if (other)
-		--no_wait_return;
+	    --no_wait_return;
 	    no_write_message();
 	    retval = GETFILE_NOT_WRITTEN;	// file has been changed
 	    goto theend;
@@ -3183,7 +3182,7 @@ do_ecmd(
 	redraw_curbuf_later(NOT_VALID);	// redraw this buffer later
     }
 
-    if (p_im)
+    if (p_im && (State & INSERT) == 0)
 	need_start_insertmode = TRUE;
 
 #ifdef FEAT_AUTOCHDIR
@@ -3737,6 +3736,11 @@ ex_substitute(exarg_T *eap)
 	 */
 	if (*cmd == '\\')
 	{
+	    if (in_vim9script())
+	    {
+		emsg(_(e_cannot_use_s_backslash_in_vim9_script));
+		return;
+	    }
 	    ++cmd;
 	    if (vim_strchr((char_u *)"/?&", *cmd) == NULL)
 	    {
@@ -4229,6 +4233,11 @@ ex_substitute(exarg_T *eap)
 			    {
 				typed = *resp;
 				vim_free(resp);
+				// When ":normal" runs out of characters we get
+				// an empty line.  Use "q" to get out of the
+				// loop.
+				if (ex_normal_busy && typed == NUL)
+				    typed = 'q';
 			    }
 			}
 			else
@@ -4951,8 +4960,7 @@ ex_global(exarg_T *eap)
     else
     {
 	delim = *cmd;		// get the delimiter
-	if (delim)
-	    ++cmd;		// skip delimiter if there is one
+	++cmd;			// skip delimiter if there is one
 	pat = cmd;		// remember start of pattern
 	cmd = skip_regexp_ex(cmd, delim, magic_isset(), &eap->arg, NULL, NULL);
 	if (cmd[0] == delim)		    // end delimiter found
@@ -5001,9 +5009,19 @@ ex_global(exarg_T *eap)
 	else if (ndone == 0)
 	{
 	    if (type == 'v')
-		smsg(_("Pattern found in every line: %s"), pat);
+	    {
+		if (in_vim9script())
+		    semsg(_(e_pattern_found_in_every_line_str), pat);
+		else
+		    smsg(_("Pattern found in every line: %s"), pat);
+	    }
 	    else
-		smsg(_("Pattern not found: %s"), pat);
+	    {
+		if (in_vim9script())
+		    semsg(_(e_pattern_not_found_str), pat);
+		else
+		    smsg(_("Pattern not found: %s"), pat);
+	    }
 	}
 	else
 	{

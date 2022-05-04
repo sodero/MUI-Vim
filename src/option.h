@@ -131,7 +131,7 @@ typedef enum {
 #endif
 
 // end-of-line style
-#define EOL_UNKNOWN	-1	// not defined yet
+#define EOL_UNKNOWN	(-1)	// not defined yet
 #define EOL_UNIX	0	// NL
 #define EOL_DOS		1	// CR NL
 #define EOL_MAC		2	// CR
@@ -358,6 +358,7 @@ typedef enum {
 
 // flags for the 'wildoptions' option
 // each defined char should be unique over all values.
+#define WOP_FUZZY	'z'
 #define WOP_TAGFILE	't'
 #define WOP_PUM		'p'
 
@@ -399,6 +400,7 @@ EXTERN int	p_bl;		// 'buflisted'
 #ifdef FEAT_CINDENT
 EXTERN int	p_cin;		// 'cindent'
 EXTERN char_u	*p_cink;	// 'cinkeys'
+EXTERN char_u	*p_cinsd;	// 'cinscopedecls'
 #endif
 #if defined(FEAT_SMARTINDENT) || defined(FEAT_CINDENT)
 EXTERN char_u	*p_cinw;	// 'cinwords'
@@ -449,7 +451,8 @@ EXTERN unsigned	bo_flags;
 #define BO_REG		0x8000
 #define BO_SH		0x10000
 #define BO_SPELL	0x20000
-#define BO_WILD		0x40000
+#define BO_TERM		0x40000
+#define BO_WILD		0x80000
 
 #ifdef FEAT_WILDIGN
 EXTERN char_u	*p_bsk;		// 'backupskip'
@@ -569,7 +572,7 @@ EXTERN char_u	*p_fenc;	// 'fileencoding'
 EXTERN char_u	*p_fencs;	// 'fileencodings'
 EXTERN char_u	*p_ff;		// 'fileformat'
 EXTERN char_u	*p_ffs;		// 'fileformats'
-EXTERN long	p_fic;		// 'fileignorecase'
+EXTERN int	p_fic;		// 'fileignorecase'
 EXTERN char_u	*p_ft;		// 'filetype'
 EXTERN char_u	*p_fcs;		// 'fillchar'
 EXTERN int	p_fixeol;	// 'fixendofline'
@@ -749,7 +752,7 @@ EXTERN long	p_mis;		// 'menuitems'
 EXTERN char_u	*p_msm;		// 'mkspellmem'
 #endif
 EXTERN int	p_ml;		// 'modeline'
-EXTERN long	p_mle;		// 'modelineexpr'
+EXTERN int	p_mle;		// 'modelineexpr'
 EXTERN long	p_mls;		// 'modelines'
 EXTERN int	p_ma;		// 'modifiable'
 EXTERN int	p_mod;		// 'modified'
@@ -759,6 +762,9 @@ EXTERN int	p_mousef;	// 'mousefocus'
 EXTERN int	p_mh;		// 'mousehide'
 #endif
 EXTERN char_u	*p_mousem;	// 'mousemodel'
+#ifdef FEAT_GUI
+EXTERN int	p_mousemev;	// 'mousemoveevent'
+#endif
 EXTERN long	p_mouset;	// 'mousetime'
 EXTERN int	p_more;		// 'more'
 #ifdef FEAT_MZSCHEME
@@ -1077,7 +1083,7 @@ EXTERN int	p_wiv;		// 'weirdinvert'
 EXTERN char_u	*p_ww;		// 'whichwrap'
 EXTERN long	p_wc;		// 'wildchar'
 EXTERN long	p_wcm;		// 'wildcharm'
-EXTERN long	p_wic;		// 'wildignorecase'
+EXTERN int	p_wic;		// 'wildignorecase'
 EXTERN char_u	*p_wim;		// 'wildmode'
 #ifdef FEAT_WILDMENU
 EXTERN int	p_wmnu;		// 'wildmenu'
@@ -1122,6 +1128,7 @@ enum
     , BV_CIN
     , BV_CINK
     , BV_CINO
+    , BV_CINSD
 #endif
 #if defined(FEAT_SMARTINDENT) || defined(FEAT_CINDENT)
     , BV_CINW
@@ -1327,6 +1334,6 @@ enum
 };
 
 // Value for b_p_ul indicating the global value must be used.
-#define NO_LOCAL_UNDOLEVEL -123456
+#define NO_LOCAL_UNDOLEVEL (-123456)
 
 #endif // _OPTION_H_
