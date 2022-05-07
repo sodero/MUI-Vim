@@ -63,10 +63,13 @@ Hollywood syntax highlighting.
 
 @ENDNODE
 
-@NODE "Changelog" "Changelog"
+@nodE "Changelog" "Changelog"
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2022-05-07@{UB}
+- Update to VIM 8.2.4867.
+
 @{B}2022-02-10@{UB}
 - Update to VIM 8.2.4424.
 - AROS graphical glitch fixed.
