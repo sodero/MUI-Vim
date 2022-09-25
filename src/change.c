@@ -100,11 +100,7 @@ changed(void)
 
 	// Create a swap file if that is wanted.
 	// Don't do this for "nofile" and "nowrite" buffer types.
-	if (curbuf->b_may_swap
-#ifdef FEAT_QUICKFIX
-		&& !bt_dontwrite(curbuf)
-#endif
-		)
+	if (curbuf->b_may_swap && !bt_dontwrite(curbuf))
 	{
 	    int save_need_wait_return = need_wait_return;
 
@@ -172,9 +168,9 @@ check_recorded_changes(
 	FOR_ALL_LIST_ITEMS(buf->b_recorded_changes, li)
 	{
 	    prev_lnum = (linenr_T)dict_get_number(
-				      li->li_tv.vval.v_dict, (char_u *)"lnum");
+						li->li_tv.vval.v_dict, "lnum");
 	    prev_lnume = (linenr_T)dict_get_number(
-				       li->li_tv.vval.v_dict, (char_u *)"end");
+						 li->li_tv.vval.v_dict, "end");
 	    if (prev_lnum >= lnum || prev_lnum > lnume || prev_lnume >= lnum)
 	    {
 		// the current change is going to make the line number in
@@ -324,7 +320,7 @@ f_listener_remove(typval_T *argvars, typval_T *rettv)
 	    next = lnr->lr_next;
 	    if (lnr->lr_id == id)
 	    {
-		if (textwinlock > 0)
+		if (textlock > 0)
 		{
 		    // in invoke_listeners(), clear ID and delete later
 		    lnr->lr_id = 0;
@@ -366,6 +362,7 @@ invoke_listeners(buf_T *buf)
     int		save_updating_screen = updating_screen;
     static int	recursive = FALSE;
     listener_T	*next;
+    listener_T	*prev;
 
     if (buf->b_recorded_changes == NULL  // nothing changed
 	    || buf->b_listener == NULL   // no listeners
@@ -384,13 +381,13 @@ invoke_listeners(buf_T *buf)
     {
 	varnumber_T lnum;
 
-	lnum = dict_get_number(li->li_tv.vval.v_dict, (char_u *)"lnum");
+	lnum = dict_get_number(li->li_tv.vval.v_dict, "lnum");
 	if (start > lnum)
 	    start = lnum;
-	lnum = dict_get_number(li->li_tv.vval.v_dict, (char_u *)"end");
+	lnum = dict_get_number(li->li_tv.vval.v_dict, "end");
 	if (end < lnum)
 	    end = lnum;
-	added += dict_get_number(li->li_tv.vval.v_dict, (char_u *)"added");
+	added += dict_get_number(li->li_tv.vval.v_dict, "added");
     }
     argv[1].v_type = VAR_NUMBER;
     argv[1].vval.v_number = start;
@@ -401,7 +398,7 @@ invoke_listeners(buf_T *buf)
 
     argv[4].v_type = VAR_LIST;
     argv[4].vval.v_list = buf->b_recorded_changes;
-    ++textwinlock;
+    ++textlock;
 
     for (lnr = buf->b_listener; lnr != NULL; lnr = lnr->lr_next)
     {
@@ -410,10 +407,9 @@ invoke_listeners(buf_T *buf)
     }
 
     // If f_listener_remove() was called may have to remove a listener now.
+    prev = NULL;
     for (lnr = buf->b_listener; lnr != NULL; lnr = next)
     {
-	listener_T	*prev = NULL;
-
 	next = lnr->lr_next;
 	if (lnr->lr_id == 0)
 	    remove_listener(buf, lnr, prev);
@@ -421,7 +417,7 @@ invoke_listeners(buf_T *buf)
 	    prev = lnr;
     }
 
-    --textwinlock;
+    --textlock;
     list_unref(buf->b_recorded_changes);
     buf->b_recorded_changes = NULL;
 
@@ -548,6 +544,9 @@ changed_common(
 	curwin->w_changelistidx = curbuf->b_changelistlen;
     }
 
+    if (VIsual_active)
+	check_visual_pos();
+
     FOR_ALL_TAB_WINDOWS(tp, wp)
     {
 	if (wp->w_buffer == curbuf)
@@ -556,8 +555,8 @@ changed_common(
 	    linenr_T last = lnume + xtra - 1;  // last line after the change
 #endif
 	    // Mark this window to be redrawn later.
-	    if (wp->w_redr_type < VALID)
-		wp->w_redr_type = VALID;
+	    if (!redraw_not_allowed && wp->w_redr_type < UPD_VALID)
+		wp->w_redr_type = UPD_VALID;
 
 	    // Check if a change in the buffer has invalidated the cached
 	    // values for the cursor.
@@ -645,27 +644,30 @@ changed_common(
 	    if (wp->w_p_rnu && xtra != 0)
 	    {
 		wp->w_last_cursor_lnum_rnu = 0;
-		redraw_win_later(wp, VALID);
+		redraw_win_later(wp, UPD_VALID);
 	    }
 #ifdef FEAT_SYN_HL
 	    // Cursor line highlighting probably need to be updated with
-	    // "VALID" if it's below the change.
+	    // "UPD_VALID" if it's below the change.
 	    // If the cursor line is inside the change we need to redraw more.
 	    if (wp->w_p_cul)
 	    {
 		if (xtra == 0)
-		    redraw_win_later(wp, VALID);
+		    redraw_win_later(wp, UPD_VALID);
 		else if (lnum <= wp->w_last_cursorline)
-		    redraw_win_later(wp, SOME_VALID);
+		    redraw_win_later(wp, UPD_SOME_VALID);
 	    }
 #endif
 	}
+#ifdef FEAT_SEARCH_EXTRA
+	if (wp == curwin && xtra != 0 && search_hl_has_cursor_lnum >= lnum)
+	    search_hl_has_cursor_lnum += xtra;
+#endif
     }
 
     // Call update_screen() later, which checks out what needs to be redrawn,
     // since it notices b_mod_set and then uses b_mod_*.
-    if (must_redraw < VALID)
-	must_redraw = VALID;
+    set_must_redraw(UPD_VALID);
 
     // when the cursor line is changed always trigger CursorMoved
     if (lnum <= curwin->w_cursor.lnum
@@ -717,7 +719,7 @@ changed_bytes(linenr_T lnum, colnr_T col)
 	FOR_ALL_WINDOWS(wp)
 	    if (wp->w_p_diff && wp != curwin)
 	    {
-		redraw_win_later(wp, VALID);
+		redraw_win_later(wp, UPD_VALID);
 		wlnum = diff_lnum_win(lnum, wp);
 		if (wlnum > 0)
 		    changedOneline(wp->w_buffer, wlnum);
@@ -794,6 +796,7 @@ deleted_lines_mark(linenr_T lnum, long count)
 
 /*
  * Marks the area to be redrawn after a change.
+ * Consider also calling changed_line_display_buf().
  */
     void
 changed_lines_buf(
@@ -861,7 +864,7 @@ changed_lines(
 	FOR_ALL_WINDOWS(wp)
 	    if (wp->w_p_diff && wp != curwin)
 	    {
-		redraw_win_later(wp, VALID);
+		redraw_win_later(wp, UPD_VALID);
 		wlnum = diff_lnum_win(lnum, wp);
 		if (wlnum > 0)
 		    changed_lines_buf(wp->w_buffer, wlnum,
@@ -988,7 +991,7 @@ ins_bytes_len(char_u *p, int len)
 
 /*
  * Insert or replace a single character at the cursor position.
- * When in REPLACE or VREPLACE mode, replace any existing character.
+ * When in MODE_REPLACE or MODE_VREPLACE state, replace any existing character.
  * Caller must have prepared for undo.
  * For multi-byte characters we get the whole character, the caller must
  * convert bytes to a character.
@@ -1115,11 +1118,16 @@ ins_char_bytes(char_u *buf, int charlen)
     ml_replace(lnum, newp, FALSE);
 
     // mark the buffer as changed and prepare for displaying
-    inserted_bytes(lnum, col, newlen - oldlen);
+    changed_bytes(lnum, col);
+#ifdef FEAT_PROP_POPUP
+    if (curbuf->b_has_textprop && newlen != oldlen)
+	adjust_prop_columns(lnum, col, newlen - oldlen,
+				    State & REPLACE_FLAG ? APC_SUBSTITUTE : 0);
+#endif
 
     // If we're in Insert or Replace mode and 'showmatch' is set, then briefly
     // show the match for right parens and braces.
-    if (p_sm && (State & INSERT)
+    if (p_sm && (State & MODE_INSERT)
 	    && msg_silent == 0
 	    && !ins_compl_active())
     {
@@ -1286,7 +1294,7 @@ del_bytes(
 	// fixpos is TRUE, we don't want to end up positioned at the NUL,
 	// unless "restart_edit" is set or 'virtualedit' contains "onemore".
 	if (col > 0 && fixpos && restart_edit == 0
-					      && (get_ve_flags() & VE_ONEMORE) == 0)
+					 && (get_ve_flags() & VE_ONEMORE) == 0)
 	{
 	    --curwin->w_cursor.col;
 	    curwin->w_cursor.coladd = 0;
@@ -1342,10 +1350,10 @@ del_bytes(
 /*
  * open_line: Add a new line below or above the current line.
  *
- * For VREPLACE mode, we only add a new line when we get to the end of the
- * file, otherwise we just start replacing the next line.
+ * For MODE_VREPLACE state, we only add a new line when we get to the end of
+ * the file, otherwise we just start replacing the next line.
  *
- * Caller must take care of undo.  Since VREPLACE may affect any number of
+ * Caller must take care of undo.  Since MODE_VREPLACE may affect any number of
  * lines however, it may call u_save_cursor() again when starting to change a
  * new line.
  * "flags": OPENLINE_DELSPACES	delete spaces after cursor
@@ -1372,7 +1380,8 @@ open_line(
     char_u	*next_line = NULL;	// copy of the next line
     char_u	*p_extra = NULL;	// what goes to next line
     int		less_cols = 0;		// less columns for mark in new line
-    int		less_cols_off = 0;	// columns to skip for mark adjust
+    int		less_cols_off = 0;	// columns to skip for mark and
+					// textprop adjustment
     pos_T	old_cursor;		// old cursor position
     int		newcol = 0;		// new cursor column
     int		newindent = 0;		// auto-indent of the new line
@@ -1388,35 +1397,29 @@ open_line(
     char_u	*p;
     int		saved_char = NUL;	// init for GCC
     pos_T	*pos;
-#ifdef FEAT_CINDENT
     int		do_cindent;
-#endif
-#ifdef FEAT_SMARTINDENT
-    int		do_si = (!p_paste && curbuf->b_p_si
-# ifdef FEAT_CINDENT
-					&& !curbuf->b_p_cin
-# endif
-# ifdef FEAT_EVAL
-					&& *curbuf->b_p_inde == NUL
-# endif
-			);
+    int		do_si = may_do_si();
     int		no_si = FALSE;		// reset did_si afterwards
     int		first_char = NUL;	// init for GCC
-#endif
-#if defined(FEAT_LISP) || defined(FEAT_CINDENT)
     int		vreplace_mode;
-#endif
     int		did_append;		// appended a new line
     int		saved_pi = curbuf->b_p_pi; // copy of preserveindent setting
+#ifdef FEAT_PROP_POPUP
+    int		at_eol;			// cursor after last character
+#endif
 
     // make a copy of the current line so we can mess with it
     saved_line = vim_strsave(ml_get_curline());
     if (saved_line == NULL)	    // out of memory!
 	return FALSE;
 
+#ifdef FEAT_PROP_POPUP
+    at_eol = curwin->w_cursor.col >= (int)STRLEN(saved_line);
+#endif
+
     if (State & VREPLACE_FLAG)
     {
-	// With VREPLACE we make a copy of the next line, which we will be
+	// With MODE_VREPLACE we make a copy of the next line, which we will be
 	// starting to replace.  First make the new line empty and let vim play
 	// with the indenting and comment leader to its heart's content.  Then
 	// we grab what it ended up putting on the new line, put back the
@@ -1430,11 +1433,11 @@ open_line(
 	if (next_line == NULL)	    // out of memory!
 	    goto theend;
 
-	// In VREPLACE mode, a NL replaces the rest of the line, and starts
-	// replacing the next line, so push all of the characters left on the
-	// line onto the replace stack.  We'll push any other characters that
-	// might be replaced at the start of the next line (due to autoindent
-	// etc) a bit later.
+	// In MODE_VREPLACE state, a NL replaces the rest of the line, and
+	// starts replacing the next line, so push all of the characters left
+	// on the line onto the replace stack.  We'll push any other characters
+	// that might be replaced at the start of the next line (due to
+	// autoindent etc) a bit later.
 	replace_push(NUL);  // Call twice because BS over NL expects it
 	replace_push(NUL);
 	p = saved_line + curwin->w_cursor.col;
@@ -1448,25 +1451,21 @@ open_line(
 	saved_line[curwin->w_cursor.col] = NUL;
     }
 
-    if ((State & INSERT) && !(State & VREPLACE_FLAG))
+    if ((State & MODE_INSERT) && (State & VREPLACE_FLAG) == 0)
     {
 	p_extra = saved_line + curwin->w_cursor.col;
-#ifdef FEAT_SMARTINDENT
 	if (do_si)		// need first char after new line break
 	{
 	    p = skipwhite(p_extra);
 	    first_char = *p;
 	}
-#endif
 	extra_len = (int)STRLEN(p_extra);
 	saved_char = *p_extra;
 	*p_extra = NUL;
     }
 
     u_clearline();		// cannot do "U" command when adding lines
-#ifdef FEAT_SMARTINDENT
     did_si = FALSE;
-#endif
     ai_col = 0;
 
     // If we just did an auto-indent, then we didn't type anything on
@@ -1477,11 +1476,7 @@ open_line(
 
     // If 'autoindent' and/or 'smartindent' is set, try to figure out what
     // indent to use for the new line.
-    if (curbuf->b_p_ai
-#ifdef FEAT_SMARTINDENT
-			|| do_si
-#endif
-					    )
+    if (curbuf->b_p_ai || do_si)
     {
 	// count white space on current line
 #ifdef FEAT_VARTABS
@@ -1493,7 +1488,6 @@ open_line(
 	if (newindent == 0 && !(flags & OPENLINE_COM_LIST))
 	    newindent = second_line_indent; // for ^^D command in insert mode
 
-#ifdef FEAT_SMARTINDENT
 	// Do smart indenting.
 	// In insert/replace mode (only when dir == FORWARD)
 	// we may move some text to the next line. If it starts with '{'
@@ -1544,13 +1538,17 @@ open_line(
 			    {
 				// End of C comment, indent should line up
 				// with the line containing the start of
-				// the comment
+				// the comment.
 				curwin->w_cursor.col = (colnr_T)(p - ptr);
 				if ((pos = findmatch(NULL, NUL)) != NULL)
 				{
 				    curwin->w_cursor.lnum = pos->lnum;
 				    newindent = get_indent();
+				    break;
 				}
+				// this may make "ptr" invalid, get it again
+				ptr = ml_get(curwin->w_cursor.lnum);
+				p = ptr + curwin->w_cursor.col;
 			    }
 			}
 		    }
@@ -1634,22 +1632,19 @@ open_line(
 	}
 	if (do_si)
 	    can_si = TRUE;
-#endif // FEAT_SMARTINDENT
 
 	did_ai = TRUE;
     }
 
-#ifdef FEAT_CINDENT
     // May do indenting after opening a new line.
     do_cindent = !p_paste && (curbuf->b_p_cin
-# ifdef FEAT_EVAL
+#ifdef FEAT_EVAL
 		    || *curbuf->b_p_inde != NUL
-# endif
+#endif
 		)
 	    && in_cinkeys(dir == FORWARD
 		? KEY_OPEN_FORW
 		: KEY_OPEN_BACK, ' ', linewhite(curwin->w_cursor.lnum));
-#endif
 
     // Find out if the current line starts with a comment leader.
     // This may then be inserted in front of the new line.
@@ -1658,8 +1653,9 @@ open_line(
     {
 	lead_len = get_leader_len(saved_line, &lead_flags,
 							dir == BACKWARD, TRUE);
-#ifdef FEAT_CINDENT
-	if (lead_len == 0 && curbuf->b_p_cin && do_cindent && dir == FORWARD)
+	if (lead_len == 0 && curbuf->b_p_cin && do_cindent && dir == FORWARD
+		&& (!has_format_option(FO_NO_OPEN_COMS)
+						 || (flags & OPENLINE_FORMAT)))
 	{
 	    // Check for a line comment after code.
 	    comment_start = check_linecomment(saved_line);
@@ -1675,7 +1671,6 @@ open_line(
 		}
 	    }
 	}
-#endif
     }
     else
 	lead_len = 0;
@@ -1981,11 +1976,7 @@ open_line(
 		    }
 
 		    // Recompute the indent, it may have changed.
-		    if (curbuf->b_p_ai
-#ifdef FEAT_SMARTINDENT
-					|| do_si
-#endif
-							   )
+		    if (curbuf->b_p_ai || do_si)
 #ifdef FEAT_VARTABS
 			newindent = get_indent_str_vtab(leader, curbuf->b_p_ts,
 						 curbuf->b_p_vts_array, FALSE);
@@ -2032,11 +2023,7 @@ open_line(
 
 		// if a new indent will be set below, remove the indent that
 		// is in the comment leader
-		if (newindent
-#ifdef FEAT_SMARTINDENT
-				|| did_si
-#endif
-					   )
+		if (newindent || did_si)
 		{
 		    while (lead_len && VIM_ISWHITE(*leader))
 		    {
@@ -2047,9 +2034,7 @@ open_line(
 		}
 
 	    }
-#ifdef FEAT_SMARTINDENT
 	    did_si = can_si = FALSE;
-#endif
 	}
 	else if (comment_end != NULL)
 	{
@@ -2058,11 +2043,7 @@ open_line(
 	    // indent to align with the line containing the start of the
 	    // comment.
 	    if (comment_end[0] == '*' && comment_end[1] == '/' &&
-			(curbuf->b_p_ai
-#ifdef FEAT_SMARTINDENT
-					|| do_si
-#endif
-							   ))
+			(curbuf->b_p_ai || do_si))
 	    {
 		old_cursor = curwin->w_cursor;
 		curwin->w_cursor.col = (colnr_T)(comment_end - saved_line);
@@ -2076,7 +2057,7 @@ open_line(
 	}
     }
 
-    // (State == INSERT || State == REPLACE), only when dir == FORWARD
+    // (State == MODE_INSERT || State == MODE_REPLACE), only when dir == FORWARD
     if (p_extra != NULL)
     {
 	*p_extra = saved_char;		// restore char that NUL replaced
@@ -2084,8 +2065,9 @@ open_line(
 	// When 'ai' set or "flags" has OPENLINE_DELSPACES, skip to the first
 	// non-blank.
 	//
-	// When in REPLACE mode, put the deleted blanks on the replace stack,
-	// preceded by a NUL, so they can be put back when a BS is entered.
+	// When in MODE_REPLACE state, put the deleted blanks on the replace
+	// stack, preceded by a NUL, so they can be put back when a BS is
+	// entered.
 	if (REPLACE_NORMAL(State))
 	    replace_push(NUL);	    // end of extra blanks
 	if (curbuf->b_p_ai || (flags & OPENLINE_DELSPACES))
@@ -2155,15 +2137,15 @@ open_line(
 	    mark_adjust(curwin->w_cursor.lnum + 1, (linenr_T)MAXLNUM, 1L, 0L);
 	did_append = TRUE;
 #ifdef FEAT_PROP_POPUP
-	if ((State & INSERT) && !(State & VREPLACE_FLAG))
-	    // properties after the split move to the next line
+	if ((State & MODE_INSERT) && (State & VREPLACE_FLAG) == 0)
+	    // Properties after the split move to the next line.
 	    adjust_props_for_split(curwin->w_cursor.lnum, curwin->w_cursor.lnum,
-						  curwin->w_cursor.col + 1, 0);
+		    curwin->w_cursor.col + 1, 0, at_eol);
 #endif
     }
     else
     {
-	// In VREPLACE mode we are starting to replace the next line.
+	// In MODE_VREPLACE state we are starting to replace the next line.
 	curwin->w_cursor.lnum++;
 	if (curwin->w_cursor.lnum >= Insstart.lnum + vr_lines_changed)
 	{
@@ -2178,14 +2160,9 @@ open_line(
 	did_append = FALSE;
     }
 
-    if (newindent
-#ifdef FEAT_SMARTINDENT
-		    || did_si
-#endif
-				)
+    if (newindent || did_si)
     {
 	++curwin->w_cursor.lnum;
-#ifdef FEAT_SMARTINDENT
 	if (did_si)
 	{
 	    int sw = (int)get_sw_value(curbuf);
@@ -2194,7 +2171,6 @@ open_line(
 		newindent -= newindent % sw;
 	    newindent += sw;
 	}
-#endif
 	// Copy the indent
 	if (curbuf->b_p_ci)
 	{
@@ -2211,20 +2187,18 @@ open_line(
 
 	ai_col = curwin->w_cursor.col;
 
-	// In REPLACE mode, for each character in the new indent, there must
-	// be a NUL on the replace stack, for when it is deleted with BS
+	// In MODE_REPLACE state, for each character in the new indent, there
+	// must be a NUL on the replace stack, for when it is deleted with BS
 	if (REPLACE_NORMAL(State))
 	    for (n = 0; n < (int)curwin->w_cursor.col; ++n)
 		replace_push(NUL);
 	newcol += curwin->w_cursor.col;
-#ifdef FEAT_SMARTINDENT
 	if (no_si)
 	    did_si = FALSE;
-#endif
     }
 
-    // In REPLACE mode, for each character in the extra leader, there must be
-    // a NUL on the replace stack, for when it is deleted with BS.
+    // In MODE_REPLACE state, for each character in the extra leader, there
+    // must be a NUL on the replace stack, for when it is deleted with BS.
     if (REPLACE_NORMAL(State))
 	while (lead_len-- > 0)
 	    replace_push(NUL);
@@ -2233,7 +2207,7 @@ open_line(
 
     if (dir == FORWARD)
     {
-	if (trunc_line || (State & INSERT))
+	if (trunc_line || (State & MODE_INSERT))
 	{
 	    // truncate current line at cursor
 	    saved_line[curwin->w_cursor.col] = NUL;
@@ -2253,6 +2227,12 @@ open_line(
 		    mark_col_adjust(curwin->w_cursor.lnum,
 					 curwin->w_cursor.col + less_cols_off,
 						      1L, (long)-less_cols, 0);
+#ifdef FEAT_PROP_POPUP
+		// Keep into account the deleted blanks on the new line.
+		if (curbuf->b_has_textprop && less_cols_off != 0)
+		    adjust_prop_columns(curwin->w_cursor.lnum + 1, 0,
+							    -less_cols_off, 0);
+#endif
 	    }
 	    else
 		changed_bytes(curwin->w_cursor.lnum, curwin->w_cursor.col);
@@ -2268,19 +2248,17 @@ open_line(
     curwin->w_cursor.col = newcol;
     curwin->w_cursor.coladd = 0;
 
-#if defined(FEAT_LISP) || defined(FEAT_CINDENT)
-    // In VREPLACE mode, we are handling the replace stack ourselves, so stop
-    // fixthisline() from doing it (via change_indent()) by telling it we're in
-    // normal INSERT mode.
+    // In MODE_VREPLACE state, we are handling the replace stack ourselves, so
+    // stop fixthisline() from doing it (via change_indent()) by telling it
+    // we're in normal MODE_INSERT state.
     if (State & VREPLACE_FLAG)
     {
 	vreplace_mode = State;	// So we know to put things right later
-	State = INSERT;
+	State = MODE_INSERT;
     }
     else
 	vreplace_mode = 0;
-#endif
-#ifdef FEAT_LISP
+
     // May do lisp indenting.
     if (!p_paste
 	    && leader == NULL
@@ -2290,23 +2268,20 @@ open_line(
 	fixthisline(get_lisp_indent);
 	ai_col = (colnr_T)getwhitecols_curline();
     }
-#endif
-#ifdef FEAT_CINDENT
+
     // May do indenting after opening a new line.
     if (do_cindent)
     {
 	do_c_expr_indent();
 	ai_col = (colnr_T)getwhitecols_curline();
     }
-#endif
-#if defined(FEAT_LISP) || defined(FEAT_CINDENT)
+
     if (vreplace_mode != 0)
 	State = vreplace_mode;
-#endif
 
-    // Finally, VREPLACE gets the stuff on the new line, then puts back the
-    // original line, and inserts the new stuff char by char, pushing old stuff
-    // onto the replace stack (via ins_char()).
+    // Finally, MODE_VREPLACE gets the stuff on the new line, then puts back
+    // the original line, and inserts the new stuff char by char, pushing old
+    // stuff onto the replace stack (via ins_char()).
     if (State & VREPLACE_FLAG)
     {
 	// Put new line in p_extra
@@ -2347,11 +2322,15 @@ truncate_line(int fixpos)
     char_u	*newp;
     linenr_T	lnum = curwin->w_cursor.lnum;
     colnr_T	col = curwin->w_cursor.col;
+    char_u	*old_line;
+    int		deleted;
 
+    old_line = ml_get(lnum);
     if (col == 0)
 	newp = vim_strsave((char_u *)"");
     else
-	newp = vim_strnsave(ml_get(lnum), col);
+	newp = vim_strnsave(old_line, col);
+    deleted = (int)STRLEN(old_line) - col;
 
     if (newp == NULL)
 	return FAIL;
@@ -2359,7 +2338,7 @@ truncate_line(int fixpos)
     ml_replace(lnum, newp, FALSE);
 
     // mark the buffer as changed and prepare for displaying
-    changed_bytes(lnum, curwin->w_cursor.col);
+    inserted_bytes(lnum, curwin->w_cursor.col, -deleted);
 
     // If "fixpos" is TRUE we don't want to end up positioned at the NUL.
     if (fixpos && curwin->w_cursor.col > 0)

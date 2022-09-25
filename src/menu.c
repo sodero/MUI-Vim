@@ -299,7 +299,7 @@ ex_menu(
     root_menu_ptr = get_root_menu(menu_path);
     if (root_menu_ptr == &curwin->w_winbar)
 	// Assume the window toolbar menu will change.
-	redraw_later(NOT_VALID);
+	redraw_later(UPD_NOT_VALID);
 
     if (enable != MAYBE)
     {
@@ -436,6 +436,7 @@ ex_menu(
 		--curwin->w_height;
 	    curwin->w_winbar_height = h;
 	}
+	curwin->w_prev_height = curwin->w_height;
     }
 
 theend:
@@ -1638,7 +1639,7 @@ get_menu_cmd_modes(
 	    modes = MENU_INSERT_MODE;
 	    break;
 	case 't':
-	    if (*cmd == 'l')            // tlmenu, tlunmenu, tlnoremenu
+	    if (*cmd == 'l')		// tlmenu, tlunmenu, tlnoremenu
 	    {
 		modes = MENU_TERMINAL_MODE;
 		++cmd;
@@ -1754,9 +1755,9 @@ get_menu_index(vimmenu_T *menu, int state)
 {
     int		idx;
 
-    if ((state & INSERT))
+    if ((state & MODE_INSERT))
 	idx = MENU_INDEX_INSERT;
-    else if (state & CMDLINE)
+    else if (state & MODE_CMDLINE)
 	idx = MENU_INDEX_CMDLINE;
 #ifdef FEAT_TERMINAL
     else if (term_use_loop())
@@ -1769,11 +1770,11 @@ get_menu_index(vimmenu_T *menu, int state)
 	else
 	    idx = MENU_INDEX_VISUAL;
     }
-    else if (state == HITRETURN || state == ASKMORE)
+    else if (state == MODE_HITRETURN || state == MODE_ASKMORE)
 	idx = MENU_INDEX_CMDLINE;
     else if (finish_op)
 	idx = MENU_INDEX_OP_PENDING;
-    else if ((state & NORMAL))
+    else if ((state & MODE_NORMAL))
 	idx = MENU_INDEX_NORMAL;
     else
 	idx = MENU_INDEX_INVALID;
@@ -1929,15 +1930,16 @@ get_menu_mode(void)
 	    return MENU_INDEX_SELECT;
 	return MENU_INDEX_VISUAL;
     }
-    if (State & INSERT)
+    if (State & MODE_INSERT)
 	return MENU_INDEX_INSERT;
-    if ((State & CMDLINE) || State == ASKMORE || State == HITRETURN)
+    if ((State & MODE_CMDLINE) || State == MODE_ASKMORE
+						    || State == MODE_HITRETURN)
 	return MENU_INDEX_CMDLINE;
     if (finish_op)
 	return MENU_INDEX_OP_PENDING;
-    if (State & NORMAL)
+    if (State & MODE_NORMAL)
 	return MENU_INDEX_NORMAL;
-    if (State & LANGMAP)	// must be a "r" command, like Insert mode
+    if (State & MODE_LANGMAP)	// must be a "r" command, like Insert mode
 	return MENU_INDEX_INSERT;
     return MENU_INDEX_INVALID;
 }
@@ -2360,11 +2362,10 @@ execute_menu(exarg_T *eap, vimmenu_T *menu, int mode_idx)
     }
 
     // For the WinBar menu always use the Normal mode menu.
-    if (idx == -1 || eap == NULL)
+    if (idx == MENU_INDEX_INVALID || eap == NULL)
 	idx = MENU_INDEX_NORMAL;
 
-    if (idx != MENU_INDEX_INVALID && menu->strings[idx] != NULL
-						 && (menu->modes & (1 << idx)))
+    if (menu->strings[idx] != NULL && (menu->modes & (1 << idx)))
     {
 	// When executing a script or function execute the commands right now.
 	// Also for the window toolbar.
@@ -2890,7 +2891,7 @@ menuitem_getinfo(char_u *menu_name, vimmenu_T *menu, int modes, dict_T *dict)
 			*menu->strings[bit] == NUL
 				? (char_u *)"<Nop>"
 				: (tofree = str2special_save(
-						  menu->strings[bit], FALSE)));
+					menu->strings[bit], FALSE, FALSE)));
 		vim_free(tofree);
 	    }
 	    if (status == OK)
@@ -2944,7 +2945,7 @@ f_menu_info(typval_T *argvars, typval_T *rettv)
     vimmenu_T	*menu;
     dict_T	*retdict;
 
-    if (rettv_dict_alloc(rettv) != OK)
+    if (rettv_dict_alloc(rettv) == FAIL)
 	return;
     retdict = rettv->vval.v_dict;
 

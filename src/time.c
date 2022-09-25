@@ -172,7 +172,7 @@ f_reltime(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     proftime_T	start;
     long	n1, n2;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
 
     if (in_vim9script()
@@ -221,20 +221,19 @@ f_reltime(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 # endif
 }
 
-# ifdef FEAT_FLOAT
 /*
  * "reltimefloat()" function
  */
     void
 f_reltimefloat(typval_T *argvars UNUSED, typval_T *rettv)
 {
-#  ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
     proftime_T	tm;
-#  endif
+# endif
 
     rettv->v_type = VAR_FLOAT;
     rettv->vval.v_float = 0;
-#  ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
     if (in_vim9script() && check_for_list_arg(argvars, 0) == FAIL)
 	return;
 
@@ -242,9 +241,8 @@ f_reltimefloat(typval_T *argvars UNUSED, typval_T *rettv)
 	rettv->vval.v_float = profile_float(&tm);
     else if (in_vim9script())
 	emsg(_(e_invalid_argument));
-#  endif
-}
 # endif
+}
 
 /*
  * "reltimestr()" function
@@ -464,8 +462,18 @@ create_timer(long msec, int repeat)
 	timer->tr_repeat = repeat - 1;
     timer->tr_interval = msec;
 
-    profile_setlimit(msec, &timer->tr_due);
+    timer_start(timer);
     return timer;
+}
+
+/*
+ * (Re)start a timer.
+ */
+    void
+timer_start(timer_T *timer)
+{
+    profile_setlimit(timer->tr_interval, &timer->tr_due);
+    timer->tr_paused = FALSE;
 }
 
 /*
@@ -477,6 +485,16 @@ timer_callback(timer_T *timer)
     typval_T	rettv;
     typval_T	argv[2];
 
+#ifdef FEAT_JOB_CHANNEL
+    if (ch_log_active())
+    {
+	callback_T *cb = &timer->tr_callback;
+
+	ch_log(NULL, "invoking timer callback %s",
+	       cb->cb_partial != NULL ? cb->cb_partial->pt_name : cb->cb_name);
+    }
+#endif
+
     argv[0].v_type = VAR_NUMBER;
     argv[0].vval.v_number = (varnumber_T)timer->tr_id;
     argv[1].v_type = VAR_UNKNOWN;
@@ -484,6 +502,10 @@ timer_callback(timer_T *timer)
     rettv.v_type = VAR_UNKNOWN;
     call_callback(&timer->tr_callback, -1, &rettv, 1, argv);
     clear_tv(&rettv);
+
+#ifdef FEAT_JOB_CHANNEL
+    ch_log(NULL, "timer callback finished");
+#endif
 }
 
 /*
@@ -589,8 +611,13 @@ check_due_timer(void)
 	    else
 	    {
 		this_due = -1;
-		remove_timer(timer);
-		free_timer(timer);
+		if (timer->tr_keep)
+		    timer->tr_paused = TRUE;
+		else
+		{
+		    remove_timer(timer);
+		    free_timer(timer);
+		}
 	    }
 	}
 	if (this_due > 0 && (next_due == -1 || next_due > this_due))
@@ -773,22 +800,17 @@ f_timer_info(typval_T *argvars, typval_T *rettv)
 {
     timer_T *timer = NULL;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
 
-    if (in_vim9script() && check_for_opt_number_arg(argvars, 0) == FAIL)
+    if (check_for_opt_number_arg(argvars, 0) == FAIL)
 	return;
 
     if (argvars[0].v_type != VAR_UNKNOWN)
     {
-	if (argvars[0].v_type != VAR_NUMBER)
-	    emsg(_(e_number_expected));
-	else
-	{
-	    timer = find_timer((int)tv_get_number(&argvars[0]));
-	    if (timer != NULL)
-		add_timer_info(rettv, timer);
-	}
+	timer = find_timer((int)tv_get_number(&argvars[0]));
+	if (timer != NULL)
+	    add_timer_info(rettv, timer);
     }
     else
 	add_timer_info_all(rettv);
@@ -812,6 +834,7 @@ f_timer_pause(typval_T *argvars, typval_T *rettv UNUSED)
     else
     {
 	int	paused = (int)tv_get_bool(&argvars[1]);
+
 	timer = find_timer((int)tv_get_number(&argvars[0]));
 	if (timer != NULL)
 	    timer->tr_paused = paused;
@@ -842,14 +865,12 @@ f_timer_start(typval_T *argvars, typval_T *rettv)
     msec = (long)tv_get_number(&argvars[0]);
     if (argvars[2].v_type != VAR_UNKNOWN)
     {
-	if (argvars[2].v_type != VAR_DICT
-				   || (dict = argvars[2].vval.v_dict) == NULL)
-	{
-	    semsg(_(e_invalid_argument_str), tv_get_string(&argvars[2]));
+	if (check_for_nonnull_dict_arg(argvars, 2) == FAIL)
 	    return;
-	}
+
+	dict = argvars[2].vval.v_dict;
 	if (dict_has_key(dict, "repeat"))
-	    repeat = dict_get_number(dict, (char_u *)"repeat");
+	    repeat = dict_get_number(dict, "repeat");
     }
 
     callback = get_callback(&argvars[1]);
@@ -881,14 +902,9 @@ f_timer_stop(typval_T *argvars, typval_T *rettv UNUSED)
 {
     timer_T *timer;
 
-    if (in_vim9script() && check_for_number_arg(argvars, 0) == FAIL)
+    if (check_for_number_arg(argvars, 0) == FAIL)
 	return;
 
-    if (argvars[0].v_type != VAR_NUMBER)
-    {
-	emsg(_(e_number_expected));
-	return;
-    }
     timer = find_timer((int)tv_get_number(&argvars[0]));
     if (timer != NULL)
 	stop_timer(timer);

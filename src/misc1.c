@@ -364,9 +364,6 @@ plines_win_nofill(
 #endif
     int		lines;
 
-    if (!wp->w_p_wrap)
-	return 1;
-
     if (wp->w_width == 0)
 	return 1;
 
@@ -377,7 +374,16 @@ plines_win_nofill(
 	return 1;
 #endif
 
-    lines = plines_win_nofold(wp, lnum);
+    if (!wp->w_p_wrap)
+	lines = 1
+#ifdef FEAT_PROP_POPUP
+	    // add a line for each "above" and "below" aligned text property
+	    + prop_count_above_below(wp->w_buffer, lnum)
+#endif
+	;
+    else
+	lines = plines_win_nofold(wp, lnum);
+
     if (winheight > 0 && lines > wp->w_height)
 	return wp->w_height;
     return lines;
@@ -393,16 +399,22 @@ plines_win_nofold(win_T *wp, linenr_T lnum)
     char_u	*s;
     long	col;
     int		width;
+    chartabsize_T cts;
 
     s = ml_get_buf(wp->w_buffer, lnum, FALSE);
-    if (*s == NUL)		// empty line
-	return 1;
-    col = win_linetabsize(wp, s, (colnr_T)MAXCOL);
+    init_chartabsize_arg(&cts, wp, lnum, 0, s, s);
+    if (*s == NUL
+#ifdef FEAT_PROP_POPUP
+	    && !cts.cts_has_prop_with_text
+#endif
+	    )
+	return 1; // be quick for an empty line
+    win_linetabsize_cts(&cts, (colnr_T)MAXCOL);
+    clear_chartabsize_arg(&cts);
+    col = (int)cts.cts_vcol;
 
-    /*
-     * If list mode is on, then the '$' at the end of the line may take up one
-     * extra column.
-     */
+    // If list mode is on, then the '$' at the end of the line may take up one
+    // extra column.
     if (wp->w_p_list && wp->w_lcs_chars.eol != NUL)
 	col += 1;
 
@@ -427,10 +439,10 @@ plines_win_nofold(win_T *wp, linenr_T lnum)
 plines_win_col(win_T *wp, linenr_T lnum, long column)
 {
     long	col;
-    char_u	*s;
     int		lines = 0;
     int		width;
     char_u	*line;
+    chartabsize_T cts;
 
 #ifdef FEAT_DIFF
     // Check for filler lines above this buffer line.  When folded the result
@@ -444,25 +456,27 @@ plines_win_col(win_T *wp, linenr_T lnum, long column)
     if (wp->w_width == 0)
 	return lines + 1;
 
-    line = s = ml_get_buf(wp->w_buffer, lnum, FALSE);
+    line = ml_get_buf(wp->w_buffer, lnum, FALSE);
 
-    col = 0;
-    while (*s != NUL && --column >= 0)
+    init_chartabsize_arg(&cts, wp, lnum, 0, line, line);
+    while (*cts.cts_ptr != NUL && --column >= 0)
     {
-	col += win_lbr_chartabsize(wp, line, s, (colnr_T)col, NULL);
-	MB_PTR_ADV(s);
+	cts.cts_vcol += win_lbr_chartabsize(&cts, NULL);
+	MB_PTR_ADV(cts.cts_ptr);
     }
 
     /*
-     * If *s is a TAB, and the TAB is not displayed as ^I, and we're not in
-     * INSERT mode, then col must be adjusted so that it represents the last
-     * screen position of the TAB.  This only fixes an error when the TAB wraps
-     * from one screen line to the next (when 'columns' is not a multiple of
-     * 'ts') -- webb.
+     * If *cts.cts_ptr is a TAB, and the TAB is not displayed as ^I, and we're
+     * not in MODE_INSERT state, then col must be adjusted so that it
+     * represents the last screen position of the TAB.  This only fixes an
+     * error when the TAB wraps from one screen line to the next (when
+     * 'columns' is not a multiple of 'ts') -- webb.
      */
-    if (*s == TAB && (State & NORMAL) && (!wp->w_p_list ||
-							wp->w_lcs_chars.tab1))
-	col += win_lbr_chartabsize(wp, line, s, (colnr_T)col, NULL) - 1;
+    col = cts.cts_vcol;
+    if (*cts.cts_ptr == TAB && (State & MODE_NORMAL)
+				    && (!wp->w_p_list || wp->w_lcs_chars.tab1))
+	col += win_lbr_chartabsize(&cts, NULL) - 1;
+    clear_chartabsize_arg(&cts);
 
     /*
      * Add column offset for 'number', 'relativenumber', 'foldcolumn', etc.
@@ -569,13 +583,13 @@ check_status(buf_T *buf)
 	if (wp->w_buffer == buf && wp->w_status_height)
 	{
 	    wp->w_redr_status = TRUE;
-	    if (must_redraw < VALID)
-		must_redraw = VALID;
+	    set_must_redraw(UPD_VALID);
 	}
 }
 
 /*
- * Ask for a reply from the user, a 'y' or a 'n'.
+ * Ask for a reply from the user, a 'y' or a 'n', with prompt "str" (which
+ * should have been translated already).
  * No other characters are accepted, the message is repeated until a valid
  * reply is entered or CTRL-C is hit.
  * If direct is TRUE, don't use vgetc() but ui_inchar(), don't get characters
@@ -595,14 +609,14 @@ ask_yesno(char_u *str, int direct)
 #ifdef USE_ON_FLY_SCROLL
     dont_scroll = TRUE;		// disallow scrolling here
 #endif
-    State = CONFIRM;		// mouse behaves like with :confirm
+    State = MODE_CONFIRM;	// mouse behaves like with :confirm
     setmouse();			// disables mouse for xterm
     ++no_mapping;
     ++allow_keys;		// no mapping here, but recognize keys
 
     while (r != 'y' && r != 'n')
     {
-	// same highlighting as for wait_return
+	// same highlighting as for wait_return()
 	smsg_attr(HL_ATTR(HLF_R), "%s (y/n)?", str);
 	if (direct)
 	    r = get_keystroke();
@@ -653,21 +667,22 @@ get_mode(char_u *buf)
 	{
 	    buf[i++] = VIsual_mode;
 	    if (restart_VIsual_select)
-	        buf[i++] = 's';
+		buf[i++] = 's';
 	}
     }
-    else if (State == HITRETURN || State == ASKMORE || State == SETWSIZE
-		|| State == CONFIRM)
+    else if (State == MODE_HITRETURN || State == MODE_ASKMORE
+						      || State == MODE_SETWSIZE
+		|| State == MODE_CONFIRM)
     {
 	buf[i++] = 'r';
-	if (State == ASKMORE)
+	if (State == MODE_ASKMORE)
 	    buf[i++] = 'm';
-	else if (State == CONFIRM)
+	else if (State == MODE_CONFIRM)
 	    buf[i++] = '?';
     }
-    else if (State == EXTERNCMD)
+    else if (State == MODE_EXTERNCMD)
 	buf[i++] = '!';
-    else if (State & INSERT)
+    else if (State & MODE_INSERT)
     {
 	if (State & VREPLACE_FLAG)
 	{
@@ -687,7 +702,7 @@ get_mode(char_u *buf)
 	else if (ctrl_x_mode_not_defined_yet())
 	    buf[i++] = 'x';
     }
-    else if ((State & CMDLINE) || exmode_active)
+    else if ((State & MODE_CMDLINE) || exmode_active)
     {
 	buf[i++] = 'c';
 	if (exmode_active == EXMODE_VIM)
@@ -861,8 +876,8 @@ get_keystroke(void)
 
 	if (n == KEYLEN_REMOVED)  // key code removed
 	{
-	    if (must_redraw != 0 && !need_wait_return
-				 && (State & (CMDLINE|HITRETURN|ASKMORE)) == 0)
+	    if (must_redraw != 0 && !need_wait_return && (State
+			& (MODE_CMDLINE | MODE_HITRETURN | MODE_ASKMORE)) == 0)
 	    {
 		// Redrawing was postponed, do it now.
 		update_screen(0);
@@ -1014,7 +1029,7 @@ prompt_for_number(int *mouse_used)
     save_cmdline_row = cmdline_row;
     cmdline_row = 0;
     save_State = State;
-    State = CMDLINE;
+    State = MODE_CMDLINE;
     // May show different mouse shape.
     setmouse();
 
@@ -1131,7 +1146,7 @@ vim_beep(unsigned val)
 # endif
 			)
 		    {
-			redraw_later(CLEAR);
+			redraw_later(UPD_CLEAR);
 			update_screen(0);
 			redrawcmd();
 		    }
@@ -1349,6 +1364,9 @@ expand_env_esc(
     int		mustfree;	// var was allocated, need to free it later
     int		at_start = TRUE; // at start of a name
     int		startstr_len = 0;
+#if defined(BACKSLASH_IN_FILENAME) || defined(AMIGA)
+    char_u	*save_dst = dst;
+#endif
 
     if (startstr != NULL)
 	startstr_len = (int)STRLEN(startstr);
@@ -1573,7 +1591,7 @@ expand_env_esc(
 		// with it, skip a character
 		if (after_pathsep(dst, dst + c)
 #if defined(BACKSLASH_IN_FILENAME) || defined(AMIGA)
-			&& dst[-1] != ':'
+			&& (dst == save_dst || dst[-1] != ':')
 #endif
 			&& vim_ispathsep(*tail))
 		    ++tail;
@@ -1650,7 +1668,21 @@ vim_version_dir(char_u *vimdir)
     vim_free(p);
     p = concat_fnames(vimdir, (char_u *)RUNTIME_DIRNAME, TRUE);
     if (p != NULL && mch_isdir(p))
-	return p;
+    {
+	char_u *fname = concat_fnames(p, (char_u *)"defaults.vim", TRUE);
+
+	// Check that "defaults.vim" exists in this directory, to avoid picking
+	// up a stray "runtime" directory, it would make many tests fail in
+	// mysterious ways.
+	if (fname != NULL)
+	{
+	    int exists = file_is_readable(fname);
+
+	    vim_free(fname);
+	    if (exists)
+		return p;
+	}
+    }
     vim_free(p);
     return NULL;
 }
@@ -1984,18 +2016,14 @@ get_env_name(
     expand_T	*xp UNUSED,
     int		idx)
 {
-# if defined(AMIGA)
-    /*
-     * No environ[] on the Amiga.
-     */
+#if defined(AMIGA)
+    // No environ[] on the Amiga.
     return NULL;
-# else
+#else
 # ifndef __WIN32__
     // Borland C++ 5.2 has this in a header file.
     extern char		**environ;
 # endif
-# define ENVNAMELEN 100
-    static char_u	name[ENVNAMELEN];
     char_u		*str;
     int			n;
 
@@ -2003,15 +2031,15 @@ get_env_name(
     if (str == NULL)
 	return NULL;
 
-    for (n = 0; n < ENVNAMELEN - 1; ++n)
+    for (n = 0; n < EXPAND_BUF_LEN - 1; ++n)
     {
 	if (str[n] == '=' || str[n] == NUL)
 	    break;
-	name[n] = str[n];
+	xp->xp_buf[n] = str[n];
     }
-    name[n] = NUL;
-    return name;
-# endif
+    xp->xp_buf[n] = NUL;
+    return xp->xp_buf;
+#endif
 }
 
 /*
@@ -2399,7 +2427,8 @@ get_cmd_output_as_rettv(
 
     if (in_vim9script()
 	    && (check_for_string_arg(argvars, 0) == FAIL
-		|| check_for_opt_string_or_number_or_list_arg(argvars, 1) == FAIL))
+		|| check_for_opt_string_or_number_or_list_arg(argvars, 1)
+								      == FAIL))
 	return;
 
     if (argvars[1].v_type != VAR_UNKNOWN)

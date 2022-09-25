@@ -148,11 +148,8 @@ ses_do_win(win_T *wp)
 	    && term_should_restore(wp->w_buffer);
 #endif
     if (wp->w_buffer->b_fname == NULL
-#ifdef FEAT_QUICKFIX
 	    // When 'buftype' is "nofile" can't restore the window contents.
-	    || bt_nofilename(wp->w_buffer)
-#endif
-       )
+	    || bt_nofilename(wp->w_buffer))
 	return (ssop_flags & SSOP_BLANK);
     if (bt_help(wp->w_buffer))
 	return (ssop_flags & SSOP_HELP);
@@ -374,10 +371,7 @@ put_view(
 # endif
 	// Load the file.
 	else if (wp->w_buffer->b_ffname != NULL
-# ifdef FEAT_QUICKFIX
-		&& !bt_nofilename(wp->w_buffer)
-# endif
-		)
+		&& !bt_nofilename(wp->w_buffer))
 	{
 	    // Editing a file in this buffer: use ":edit file".
 	    // This may have side effects! (e.g., compressed or network file).
@@ -583,7 +577,6 @@ store_session_globals(FILE *fd)
 		}
 		vim_free(p);
 	    }
-#ifdef FEAT_FLOAT
 	    else if (this_var->di_tv.v_type == VAR_FLOAT
 		    && var_flavour(this_var->di_key) == VAR_FLAVOUR_SESSION)
 	    {
@@ -600,7 +593,6 @@ store_session_globals(FILE *fd)
 			|| put_eol(fd) == FAIL)
 		    return FAIL;
 	    }
-#endif
 	}
     }
     return OK;
@@ -692,10 +684,15 @@ makeopens(
 	    && put_line(fd, "let s:shortmess_save = &shortmess") == FAIL)
 	goto fail;
 
-    // Now save the current files, current buffer first.
-    if (put_line(fd, "set shortmess=aoO") == FAIL)
+    // set 'shortmess' for the following.  Add the 'A' flag if it was there
+    if (put_line(fd, "if &shortmess =~ 'A'") == FAIL
+	    || put_line(fd, "  set shortmess=aoOA") == FAIL
+	    || put_line(fd, "else") == FAIL
+	    || put_line(fd, "  set shortmess=aoO") == FAIL
+	    || put_line(fd, "endif") == FAIL)
 	goto fail;
 
+    // Now save the current files, current buffer first.
     // Put all buffers into the buffer list.
     // Do it very early to preserve buffer order after loading session (which
     // can be disrupted by prior `edit` or `tabedit` calls).
@@ -703,11 +700,9 @@ makeopens(
     {
 	if (!(only_save_windows && buf->b_nwindows == 0)
 		&& !(buf->b_help && !(ssop_flags & SSOP_HELP))
-#ifdef FEAT_TERMINAL
 		// Skip terminal buffers: finished ones are not useful, others
 		// will be resurrected and result in a new buffer.
 		&& !bt_terminal(buf)
-#endif
 		&& buf->b_fname != NULL
 		&& buf->b_p_bl)
 	{
@@ -813,10 +808,7 @@ makeopens(
 	    if (ses_do_win(wp)
 		    && wp->w_buffer->b_ffname != NULL
 		    && !bt_help(wp->w_buffer)
-#ifdef FEAT_QUICKFIX
-		    && !bt_nofilename(wp->w_buffer)
-#endif
-		    )
+		    && !bt_nofilename(wp->w_buffer))
 	    {
 		if (need_tabnext && put_line(fd, "tabnext") == FAIL)
 		    goto fail;
@@ -972,13 +964,13 @@ makeopens(
     // Restore 'shortmess'.
     if (ssop_flags & SSOP_OPTIONS)
     {
-        if (fprintf(fd, "set shortmess=%s", p_shm) < 0 || put_eol(fd) == FAIL)
-            goto fail;
+	if (fprintf(fd, "set shortmess=%s", p_shm) < 0 || put_eol(fd) == FAIL)
+	    goto fail;
     }
     else
     {
-        if (put_line(fd, "let &shortmess = s:shortmess_save") == FAIL)
-            goto fail;
+	if (put_line(fd, "let &shortmess = s:shortmess_save") == FAIL)
+	    goto fail;
     }
 
     if (restore_height_width)

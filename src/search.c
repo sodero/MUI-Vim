@@ -253,7 +253,7 @@ save_re_pat(int idx, char_u *pat, int magic)
 #ifdef FEAT_SEARCH_EXTRA
 	// If 'hlsearch' set and search pat changed: need redraw.
 	if (p_hls)
-	    redraw_all_later(SOME_VALID);
+	    redraw_all_later(UPD_SOME_VALID);
 	set_no_hlsearch(FALSE);
 #endif
     }
@@ -577,7 +577,7 @@ set_last_search_pat(
 # ifdef FEAT_SEARCH_EXTRA
     // If 'hlsearch' set and search pat changed: need redraw.
     if (p_hls && idx == last_idx && !no_hlsearch)
-	redraw_all_later(SOME_VALID);
+	redraw_all_later(UPD_SOME_VALID);
 # endif
 }
 #endif
@@ -658,19 +658,8 @@ searchit(
     int		break_loop = FALSE;
 #endif
     linenr_T	stop_lnum = 0;	// stop after this line number when != 0
-#ifdef FEAT_RELTIME
-    proftime_T	*tm = NULL;	// timeout limit or NULL
-    int		*timed_out = NULL;  // set when timed out or NULL
-#endif
-
-    if (extra_arg != NULL)
-    {
-	stop_lnum = extra_arg->sa_stop_lnum;
-#ifdef FEAT_RELTIME
-	tm = extra_arg->sa_tm;
-	timed_out = &extra_arg->sa_timed_out;
-#endif
-    }
+    int		unused_timeout_flag = FALSE;
+    int		*timed_out = &unused_timeout_flag;  // set when timed out.
 
     if (search_regcomp(pat, RE_SEARCH, pat_use,
 		   (options & (SEARCH_HIS + SEARCH_KEEP)), &regmatch) == FAIL)
@@ -678,6 +667,18 @@ searchit(
 	if ((options & SEARCH_MSG) && !rc_did_emsg)
 	    semsg(_(e_invalid_search_string_str), mr_pattern);
 	return FAIL;
+    }
+
+    if (extra_arg != NULL)
+    {
+	stop_lnum = extra_arg->sa_stop_lnum;
+#ifdef FEAT_RELTIME
+	if (extra_arg->sa_tm > 0)
+	    init_regexp_timeout(extra_arg->sa_tm);
+	// Also set the pointer when sa_tm is zero, the caller may have set the
+	// timeout.
+	timed_out = &extra_arg->sa_timed_out;
+#endif
     }
 
     /*
@@ -753,11 +754,9 @@ searchit(
 		if (stop_lnum != 0 && (dir == FORWARD
 				       ? lnum > stop_lnum : lnum < stop_lnum))
 		    break;
-#ifdef FEAT_RELTIME
-		// Stop after passing the "tm" time limit.
-		if (tm != NULL && profile_passed_limit(tm))
+		// Stop after passing the time limit.
+		if (*timed_out)
 		    break;
-#endif
 
 		/*
 		 * Look for a match somewhere in line "lnum".
@@ -765,22 +764,12 @@ searchit(
 		col = at_first_line && (options & SEARCH_COL) ? pos->col
 								 : (colnr_T)0;
 		nmatched = vim_regexec_multi(&regmatch, win, buf,
-					     lnum, col,
-#ifdef FEAT_RELTIME
-					     tm, timed_out
-#else
-					     NULL, NULL
-#endif
-						      );
+							 lnum, col, timed_out);
 		// vim_regexec_multi() may clear "regprog"
 		if (regmatch.regprog == NULL)
 		    break;
 		// Abort searching on an error (e.g., out of stack).
-		if (called_emsg > called_emsg_before
-#ifdef FEAT_RELTIME
-			|| (timed_out != NULL && *timed_out)
-#endif
-			)
+		if (called_emsg > called_emsg_before || *timed_out)
 		    break;
 		if (nmatched > 0)
 		{
@@ -863,13 +852,7 @@ searchit(
 			    if (ptr[matchcol] == NUL
 				    || (nmatched = vim_regexec_multi(&regmatch,
 					      win, buf, lnum + matchpos.lnum,
-					      matchcol,
-#ifdef FEAT_RELTIME
-					      tm, timed_out
-#else
-					      NULL, NULL
-#endif
-					      )) == 0)
+					      matchcol, timed_out)) == 0)
 			    {
 				match_ok = FALSE;
 				break;
@@ -974,21 +957,13 @@ searchit(
 			    if (ptr[matchcol] == NUL
 				    || (nmatched = vim_regexec_multi(&regmatch,
 					      win, buf, lnum + matchpos.lnum,
-					      matchcol,
-#ifdef FEAT_RELTIME
-					      tm, timed_out
-#else
-					      NULL, NULL
-#endif
-					    )) == 0)
+					      matchcol, timed_out)) == 0)
 			    {
-#ifdef FEAT_RELTIME
 				// If the search timed out, we did find a match
 				// but it might be the wrong one, so that's not
 				// OK.
-				if (timed_out != NULL && *timed_out)
+				if (*timed_out)
 				    match_ok = FALSE;
-#endif
 				break;
 			    }
 			    // vim_regexec_multi() may clear "regprog"
@@ -1097,14 +1072,11 @@ searchit(
 	     * twice.
 	     */
 	    if (!p_ws || stop_lnum != 0 || got_int
-					    || called_emsg > called_emsg_before
-#ifdef FEAT_RELTIME
-				|| (timed_out != NULL && *timed_out)
-#endif
+			      || called_emsg > called_emsg_before || *timed_out
 #ifdef FEAT_SEARCH_EXTRA
-				|| break_loop
+			      || break_loop
 #endif
-				|| found || loop)
+			      || found || loop)
 		break;
 
 	    /*
@@ -1124,10 +1096,7 @@ searchit(
 	    if (extra_arg != NULL)
 		extra_arg->sa_wrapped = TRUE;
 	}
-	if (got_int || called_emsg > called_emsg_before
-#ifdef FEAT_RELTIME
-		|| (timed_out != NULL && *timed_out)
-#endif
+	if (got_int || called_emsg > called_emsg_before || *timed_out
 #ifdef FEAT_SEARCH_EXTRA
 		|| break_loop
 #endif
@@ -1136,6 +1105,10 @@ searchit(
     }
     while (--count > 0 && found);   // stop after count matches or no match
 
+#ifdef FEAT_RELTIME
+    if (extra_arg != NULL && extra_arg->sa_tm > 0)
+	disable_regexp_timeout();
+#endif
     vim_regfree(regmatch.regprog);
 
     if (!found)		    // did not find it
@@ -1311,7 +1284,7 @@ do_search(
      */
     if (no_hlsearch && !(options & SEARCH_KEEP))
     {
-	redraw_all_later(SOME_VALID);
+	redraw_all_later(UPD_SOME_VALID);
 	set_no_hlsearch(FALSE);
     }
 #endif
@@ -2086,7 +2059,6 @@ find_mps_values(
  * "oap" is only used to set oap->motion_type for a linewise motion, it can be
  * NULL
  */
-
     pos_T *
 findmatchlimit(
     oparg_T	*oap,
@@ -2116,10 +2088,8 @@ findmatchlimit(
     int		match_escaped = 0;	// search for escaped match
     int		dir;			// Direction to search
     int		comment_col = MAXCOL;   // start of / / comment
-#ifdef FEAT_LISP
     int		lispcomm = FALSE;	// inside of Lisp-style comment
     int		lisp = curbuf->b_p_lisp; // engage Lisp-specific hacks ;)
-#endif
 
     pos = curwin->w_cursor;
     pos.coladd = 0;
@@ -2348,16 +2318,11 @@ findmatchlimit(
     CLEAR_POS(&match_pos);
 
     // backward search: Check if this line contains a single-line comment
-    if ((backwards && comment_dir)
-#ifdef FEAT_LISP
-	    || lisp
-#endif
-	    )
+    if ((backwards && comment_dir) || lisp)
 	comment_col = check_linecomment(linep);
-#ifdef FEAT_LISP
     if (lisp && comment_col != MAXCOL && pos.col > (colnr_T)comment_col)
 	lispcomm = TRUE;    // find match inside this comment
-#endif
+
     while (!got_int)
     {
 	/*
@@ -2366,11 +2331,9 @@ findmatchlimit(
 	 */
 	if (backwards)
 	{
-#ifdef FEAT_LISP
 	    // char to match is inside of comment, don't search outside
 	    if (lispcomm && pos.col < (colnr_T)comment_col)
 		break;
-#endif
 	    if (pos.col == 0)		// at start of line, go to prev. one
 	    {
 		if (pos.lnum == 1)	// start of file
@@ -2386,17 +2349,11 @@ findmatchlimit(
 		line_breakcheck();
 
 		// Check if this line contains a single-line comment
-		if (comment_dir
-#ifdef FEAT_LISP
-			|| lisp
-#endif
-			)
+		if (comment_dir || lisp)
 		    comment_col = check_linecomment(linep);
-#ifdef FEAT_LISP
 		// skip comment
 		if (lisp && comment_col != MAXCOL)
 		    pos.col = comment_col;
-#endif
 	    }
 	    else
 	    {
@@ -2409,20 +2366,14 @@ findmatchlimit(
 	{
 	    if (linep[pos.col] == NUL
 		    // at end of line, go to next one
-#ifdef FEAT_LISP
-		    // don't search for match in comment
+		    // For lisp don't search for match in comment
 		    || (lisp && comment_col != MAXCOL
-					   && pos.col == (colnr_T)comment_col)
-#endif
-		    )
+					   && pos.col == (colnr_T)comment_col))
 	    {
 		if (pos.lnum == curbuf->b_ml.ml_line_count  // end of file
-#ifdef FEAT_LISP
 			// line is exhausted and comment with it,
 			// don't search for match in code
-			 || lispcomm
-#endif
-			 )
+			 || lispcomm)
 		    break;
 		++pos.lnum;
 
@@ -2433,10 +2384,8 @@ findmatchlimit(
 		pos.col = 0;
 		do_quotes = -1;
 		line_breakcheck();
-#ifdef FEAT_LISP
 		if (lisp)   // find comment pos in new line
 		    comment_col = check_linecomment(linep);
-#endif
 	    }
 	    else
 	    {
@@ -2679,7 +2628,6 @@ findmatchlimit(
 	    // FALLTHROUGH
 
 	default:
-#ifdef FEAT_LISP
 	    /*
 	     * For Lisp skip over backslashed (), {} and [].
 	     * (actually, we skip #\( et al)
@@ -2690,7 +2638,6 @@ findmatchlimit(
 		    && check_prevcol(linep, pos.col, '\\', NULL)
 		    && check_prevcol(linep, pos.col - 1, '#', NULL))
 		break;
-#endif
 
 	    // Check for match outside of quotes, and inside of
 	    // quotes when the start is also inside of quotes.
@@ -2739,7 +2686,6 @@ check_linecomment(char_u *line)
     char_u  *p;
 
     p = line;
-#ifdef FEAT_LISP
     // skip Lispish one-line comments
     if (curbuf->b_p_lisp)
     {
@@ -2773,17 +2719,16 @@ check_linecomment(char_u *line)
 	    p = NULL;
     }
     else
-#endif
-    while ((p = vim_strchr(p, '/')) != NULL)
-    {
-	// Accept a double /, unless it's preceded with * and followed by *,
-	// because * / / * is an end and start of a C comment.
-	// Only accept the position if it is not inside a string.
-	if (p[1] == '/' && (p == line || p[-1] != '*' || p[2] != '*')
+	while ((p = vim_strchr(p, '/')) != NULL)
+	{
+	    // Accept a double /, unless it's preceded with * and followed by
+	    // *, because * / / * is an end and start of a C comment.  Only
+	    // accept the position if it is not inside a string.
+	    if (p[1] == '/' && (p == line || p[-1] != '*' || p[2] != '*')
 			       && !is_pos_in_string(line, (colnr_T)(p - line)))
-	    break;
-	++p;
-    }
+		break;
+	    ++p;
+	}
 
     if (p == NULL)
 	return MAXCOL;
@@ -2810,8 +2755,8 @@ showmatch(
 #endif
     colnr_T	save_dollar_vcol;
     char_u	*p;
-    long        *so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
-    long        *siso = curwin->w_p_siso >= 0 ? &curwin->w_p_siso : &p_siso;
+    long	*so = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
+    long	*siso = curwin->w_p_siso >= 0 ? &curwin->w_p_siso : &p_siso;
 
     /*
      * Only show match for chars in the 'matchpairs' option.
@@ -2855,12 +2800,12 @@ showmatch(
 	    if (dollar_vcol >= 0 && dollar_vcol == curwin->w_virtcol)
 		dollar_vcol = -1;
 	    ++curwin->w_virtcol;	// do display ')' just before "$"
-	    update_screen(VALID);	// show the new char first
+	    update_screen(UPD_VALID);	// show the new char first
 
 	    save_dollar_vcol = dollar_vcol;
 #ifdef CURSOR_SHAPE
 	    save_state = State;
-	    State = SHOWMATCH;
+	    State = MODE_SHOWMATCH;
 	    ui_cursor_shape();		// may show different cursor shape
 #endif
 	    curwin->w_cursor = mpos;	// move to matching char
@@ -2942,7 +2887,7 @@ is_zero_width(char_u *pattern, int move, pos_T *cur, int direction)
 	{
 	    regmatch.startpos[0].col++;
 	    nmatched = vim_regexec_multi(&regmatch, curwin, curbuf,
-			       pos.lnum, regmatch.startpos[0].col, NULL, NULL);
+			       pos.lnum, regmatch.startpos[0].col, NULL);
 	    if (nmatched != 0)
 		break;
 	} while (regmatch.regprog != NULL
@@ -3111,14 +3056,12 @@ current_search(
     // end are still the same, and the selection needs to be owned
     clip_star.vmode = NUL;
 #endif
-    redraw_curbuf_later(INVERTED);
+    redraw_curbuf_later(UPD_INVERTED);
     showmode();
 
     return OK;
 }
 
-#if defined(FEAT_LISP) || defined(FEAT_CINDENT) || defined(FEAT_TEXTOBJ) \
-	|| defined(PROTO)
 /*
  * return TRUE if line 'lnum' is empty or has white chars only.
  */
@@ -3130,7 +3073,6 @@ linewhite(linenr_T lnum)
     p = skipwhite(ml_get(lnum));
     return (*p == NUL);
 }
-#endif
 
 /*
  * Add the search count "[3/19]" to "msgbuf".
@@ -3335,6 +3277,21 @@ update_search_stat(
 }
 
 #if defined(FEAT_FIND_ID) || defined(PROTO)
+
+/*
+ * Get line "lnum" and copy it into "buf[LSIZE]".
+ * The copy is made because the regexp may make the line invalid when using a
+ * mark.
+ */
+    static char_u *
+get_line_and_copy(linenr_T lnum, char_u *buf)
+{
+    char_u *line = ml_get(lnum);
+
+    vim_strncpy(buf, line, LSIZE - 1);
+    return buf;
+}
+
 /*
  * Find identifiers or defines in included files.
  * If p_ic && compl_status_sol() then ptr must be in lowercase.
@@ -3439,7 +3396,7 @@ find_pattern_in_path(
 	end_lnum = curbuf->b_ml.ml_line_count;
     if (lnum > end_lnum)		// do at least one line
 	lnum = end_lnum;
-    line = ml_get(lnum);
+    line = get_line_and_copy(lnum, file_line);
 
     for (;;)
     {
@@ -3768,7 +3725,7 @@ search_line:
 		    {
 			if (lnum >= end_lnum)
 			    goto exit_matched;
-			line = ml_get(++lnum);
+			line = get_line_and_copy(++lnum, file_line);
 		    }
 		    else if (vim_fgets(line = file_line,
 						      LSIZE, files[depth].fp))
@@ -3920,7 +3877,7 @@ search_line:
 		{
 		    // Return cursor to where we were
 		    validate_cursor();
-		    redraw_later(VALID);
+		    redraw_later(UPD_VALID);
 		    win_enter(curwin_save, TRUE);
 		}
 # ifdef FEAT_PROP_POPUP
@@ -3980,7 +3937,7 @@ exit_matched:
 	{
 	    if (++lnum > end_lnum)
 		break;
-	    line = ml_get(lnum);
+	    line = get_line_and_copy(lnum, file_line);
 	}
 	already = NULL;
     }
@@ -4138,11 +4095,8 @@ f_searchcount(typval_T *argvars, typval_T *rettv)
 	listitem_T	*li;
 	int		error = FALSE;
 
-	if (argvars[0].v_type != VAR_DICT || argvars[0].vval.v_dict == NULL)
-	{
-	    emsg(_(e_dictionary_required));
+	if (check_for_nonnull_dict_arg(argvars, 0) == FAIL)
 	    return;
-	}
 	dict = argvars[0].vval.v_dict;
 	di = dict_find(dict, (char_u *)"timeout", -1);
 	if (di != NULL)
@@ -4158,7 +4112,7 @@ f_searchcount(typval_T *argvars, typval_T *rettv)
 	    if (error)
 		return;
 	}
-	recompute = dict_get_bool(dict, (char_u *)"recompute", recompute);
+	recompute = dict_get_bool(dict, "recompute", recompute);
 	di = dict_find(dict, (char_u *)"pattern", -1);
 	if (di != NULL)
 	{
@@ -4189,14 +4143,14 @@ f_searchcount(typval_T *argvars, typval_T *rettv)
 	    li = list_find(di->di_tv.vval.v_list, 1L);
 	    if (li != NULL)
 	    {
-	        pos.col = tv_get_number_chk(&li->li_tv, &error) - 1;
+		pos.col = tv_get_number_chk(&li->li_tv, &error) - 1;
 		if (error)
 		    return;
 	    }
 	    li = list_find(di->di_tv.vval.v_list, 2L);
 	    if (li != NULL)
 	    {
-	        pos.coladd = tv_get_number_chk(&li->li_tv, &error);
+		pos.coladd = tv_get_number_chk(&li->li_tv, &error);
 		if (error)
 		    return;
 	    }
@@ -4688,7 +4642,8 @@ fuzzy_match_in_list(
 	    // For a dict, either use the specified key to lookup the string or
 	    // use the specified callback function to get the string.
 	    if (key != NULL)
-		itemstr = dict_get_string(li->li_tv.vval.v_dict, key, FALSE);
+		itemstr = dict_get_string(li->li_tv.vval.v_dict,
+							   (char *)key, FALSE);
 	    else
 	    {
 		typval_T	argv[2];
@@ -4729,7 +4684,7 @@ fuzzy_match_in_list(
 		p = str;
 		while (*p != NUL)
 		{
-		    if (!VIM_ISWHITE(PTR2CHAR(p)))
+		    if (!VIM_ISWHITE(PTR2CHAR(p)) || matchseq)
 		    {
 			if (list_append_number(items[match_count].lmatchpos,
 				    matches[j]) == FAIL)
@@ -4793,8 +4748,7 @@ fuzzy_match_in_list(
 		if (items[i].score == SCORE_NONE)
 		    break;
 		if (items[i].lmatchpos != NULL
-			&& list_append_list(retlist, items[i].lmatchpos)
-								== FAIL)
+		      && list_append_list(retlist, items[i].lmatchpos) == FAIL)
 		    goto done;
 	    }
 
@@ -4857,11 +4811,8 @@ do_fuzzymatch(typval_T *argvars, typval_T *rettv, int retmatchpos)
 	dict_T		*d;
 	dictitem_T	*di;
 
-	if (argvars[2].v_type != VAR_DICT || argvars[2].vval.v_dict == NULL)
-	{
-	    emsg(_(e_dictionary_required));
+	if (check_for_nonnull_dict_arg(argvars, 2) == FAIL)
 	    return;
-	}
 
 	// To search a dict, either a callback function or a key can be
 	// specified.
@@ -4886,7 +4837,8 @@ do_fuzzymatch(typval_T *argvars, typval_T *rettv, int retmatchpos)
 		return;
 	    }
 	}
-	else if ((di = dict_find(d, (char_u *)"limit", -1)) != NULL)
+
+	if ((di = dict_find(d, (char_u *)"limit", -1)) != NULL)
 	{
 	    if (di->di_tv.v_type != VAR_NUMBER)
 	    {
@@ -4902,7 +4854,7 @@ do_fuzzymatch(typval_T *argvars, typval_T *rettv, int retmatchpos)
 
     // get the fuzzy matches
     ret = rettv_list_alloc(rettv);
-    if (ret != OK)
+    if (ret == FAIL)
 	goto done;
     if (retmatchpos)
     {
@@ -4916,17 +4868,26 @@ do_fuzzymatch(typval_T *argvars, typval_T *rettv, int retmatchpos)
 	if (l == NULL)
 	    goto done;
 	if (list_append_list(rettv->vval.v_list, l) == FAIL)
+	{
+	    vim_free(l);
 	    goto done;
+	}
 	l = list_alloc();
 	if (l == NULL)
 	    goto done;
 	if (list_append_list(rettv->vval.v_list, l) == FAIL)
+	{
+	    vim_free(l);
 	    goto done;
+	}
 	l = list_alloc();
 	if (l == NULL)
 	    goto done;
 	if (list_append_list(rettv->vval.v_list, l) == FAIL)
+	{
+	    vim_free(l);
 	    goto done;
+	}
     }
 
     fuzzy_match_in_list(argvars[0].vval.v_list, tv_get_string(&argvars[1]),

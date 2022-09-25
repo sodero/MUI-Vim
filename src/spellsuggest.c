@@ -592,15 +592,17 @@ spell_suggest(int count)
 	msg_scroll = TRUE;
 	for (i = 0; i < sug.su_ga.ga_len; ++i)
 	{
+	    int el;
+
 	    stp = &SUG(sug.su_ga, i);
 
 	    // The suggested word may replace only part of the bad word, add
-	    // the not replaced part.
+	    // the not replaced part.  But only when it's not getting too long.
 	    vim_strncpy(wcopy, stp->st_word, MAXWLEN);
-	    if (sug.su_badlen > stp->st_orglen)
+	    el = sug.su_badlen - stp->st_orglen;
+	    if (el > 0 && stp->st_wordlen + el <= MAXWLEN)
 		vim_strncpy(wcopy + stp->st_wordlen,
-					       sug.su_badptr + stp->st_orglen,
-					      sug.su_badlen - stp->st_orglen);
+					   sug.su_badptr + stp->st_orglen, el);
 	    vim_snprintf((char *)IObuff, IOSIZE, "%2d", i + 1);
 #ifdef FEAT_RIGHTLEFT
 	    if (cmdmsg_rl)
@@ -681,6 +683,8 @@ spell_suggest(int count)
 	p = alloc(STRLEN(line) - stp->st_orglen + stp->st_wordlen + 1);
 	if (p != NULL)
 	{
+	    int len_diff = stp->st_wordlen - stp->st_orglen;
+
 	    c = (int)(sug.su_badptr - line);
 	    mch_memmove(p, line, c);
 	    STRCPY(p + c, stp->st_word);
@@ -698,6 +702,9 @@ spell_suggest(int count)
 	    curwin->w_cursor.col = c;
 
 	    changed_bytes(curwin->w_cursor.lnum, c);
+	    if (curbuf->b_has_textprop && len_diff != 0)
+		adjust_prop_columns(curwin->w_cursor.lnum, c, len_diff,
+							       APC_SUBSTITUTE);
 	}
     }
     else
@@ -1948,7 +1955,8 @@ suggest_trie_walk(
 #endif
 		    ++depth;
 		    sp = &stack[depth];
-		    ++sp->ts_fidx;
+		    if (fword[sp->ts_fidx] != NUL)
+			++sp->ts_fidx;
 		    tword[sp->ts_twordlen++] = c;
 		    sp->ts_arridx = idxs[arridx];
 		    if (newscore == SCORE_SUBST)
@@ -1967,7 +1975,8 @@ suggest_trie_walk(
 			    sp->ts_isdiff = (newscore != 0)
 						       ? DIFF_YES : DIFF_NONE;
 			}
-			else if (sp->ts_isdiff == DIFF_INSERT)
+			else if (sp->ts_isdiff == DIFF_INSERT
+							    && sp->ts_fidx > 0)
 			    // When inserting trail bytes don't advance in the
 			    // bad word.
 			    --sp->ts_fidx;
@@ -3133,11 +3142,11 @@ suggest_try_soundalike(suginfo_T *su)
 	    // TODO: also soundfold the next words, so that we can try joining
 	    // and splitting
 #ifdef SUGGEST_PROFILE
-	prof_init();
+	    prof_init();
 #endif
 	    suggest_trie_walk(su, lp, salword, TRUE);
 #ifdef SUGGEST_PROFILE
-	prof_report("soundalike");
+	    prof_report("soundalike");
 #endif
 	}
     }

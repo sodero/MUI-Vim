@@ -3,6 +3,7 @@
 
 source check.vim
 source shared.vim
+import './vim9.vim' as v9
 
 "-------------------------------------------------------------------------------
 " Test environment							    {{{1
@@ -2008,6 +2009,27 @@ func Test_try_catch_errors()
   call assert_fails('try | for i in range(5) | endif | endtry', 'E580:')
   call assert_fails('try | while v:true | endtry', 'E170:')
   call assert_fails('try | if v:true | endtry', 'E171:')
+
+  " this was using a negative index in cstack[]
+  let lines =<< trim END
+      try
+      for
+      if
+      endwhile
+      if
+      finally
+  END
+  call v9.CheckScriptFailure(lines, 'E690:')
+
+  let lines =<< trim END
+      try
+      for
+      if
+      endwhile
+      if
+      endtry
+  END
+  call v9.CheckScriptFailure(lines, 'E690:')
 endfunc
 
 " Test for verbose messages with :try :catch, and :finally                 {{{1
@@ -2245,6 +2267,23 @@ func Test_user_command_throw_in_function_call()
 
   call delete('XtestThrow')
   unlet g:caught
+endfunc
+
+" Test that after reporting an uncaught exception there is no error for a
+" missing :endif
+func Test_after_exception_no_endif_error()
+  function Throw()
+    throw "Failure"
+  endfunction
+
+  function Foo()
+    if 1
+      call Throw()
+    endif
+  endfunction
+  call assert_fails('call Foo()', ['E605:', 'E605:'])
+  delfunc Throw
+  delfunc Foo
 endfunc
 
 " Test for using throw in a called function with following endtry    {{{1

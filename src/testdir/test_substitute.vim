@@ -2,6 +2,7 @@
 
 source shared.vim
 source check.vim
+source screendump.vim
 
 func Test_multiline_subst()
   enew!
@@ -141,7 +142,7 @@ endfunc
 
 func Test_substitute_repeat()
   " This caused an invalid memory access.
-  split Xfile
+  split Xsubfile
   s/^/x
   call feedkeys("Qsc\<CR>y", 'tx')
   bwipe!
@@ -438,25 +439,31 @@ endfunc
 func SubReplacer(text, submatches)
   return a:text .. a:submatches[0] .. a:text
 endfunc
+func SubReplacerVar(text, ...)
+  return a:text .. a:1[0] .. a:text
+endfunc
+def SubReplacerVar9(text: string, ...args: list<list<string>>): string
+  return text .. args[0][0] .. text
+enddef
 func SubReplacer20(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, submatches)
   return a:t3 .. a:submatches[0] .. a:t11
 endfunc
 
 func Test_substitute_partial()
-   call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacer', ['foo']), 'g'))
+  call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacer', ['foo']), 'g'))
+  call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacerVar', ['foo']), 'g'))
+  call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacerVar9', ['foo']), 'g'))
 
-   " 19 arguments plus one is just OK
-   let Replacer = function('SubReplacer20', repeat(['foo'], 19))
-   call assert_equal('1foo2foo3', substitute('123', '2', Replacer, 'g'))
+  " 19 arguments plus one is just OK
+  let Replacer = function('SubReplacer20', repeat(['foo'], 19))
+  call assert_equal('1foo2foo3', substitute('123', '2', Replacer, 'g'))
 
-   " 20 arguments plus one is too many
-   let Replacer = function('SubReplacer20', repeat(['foo'], 20))
-   call assert_fails("call substitute('123', '2', Replacer, 'g')", 'E118:')
+  " 20 arguments plus one is too many
+  let Replacer = function('SubReplacer20', repeat(['foo'], 20))
+  call assert_fails("call substitute('123', '2', Replacer, 'g')", 'E118:')
 endfunc
 
 func Test_substitute_float()
-  CheckFeature float
-
   call assert_equal('number 1.23', substitute('number ', '$', { -> 1.23 }, ''))
   vim9 assert_equal('number 1.23', substitute('number ', '$', () => 1.23, ''))
 endfunc
@@ -469,7 +476,6 @@ func Run_SubCmd_Tests(tests)
   for t in a:tests
     let start = line('.') + 1
     let end = start + len(t[2]) - 1
-    " TODO: why is there a one second delay the first time we get here?
     exe "normal o" . t[0]
     call cursor(start, 1)
     exe t[1]
@@ -504,7 +510,8 @@ func Test_sub_cmd_1()
 	      \ ['sSs', 's/S/\c/', ['scs']],
 	      \ ['tTt', "s/T/\<C-V>\<C-J>/", ["t\<C-V>\<C-J>t"]],
 	      \ ['U', 's/U/\L\uuUu\l\EU/', ['UuuU']],
-	      \ ['V', 's/V/\U\lVvV\u\Ev/', ['vVVv']]
+	      \ ['V', 's/V/\U\lVvV\u\Ev/', ['vVVv']],
+	      \ ['\', 's/\\/\\\\/', ['\\']]
 	      \ ]
   call Run_SubCmd_Tests(tests)
 endfunc
@@ -535,7 +542,8 @@ func Test_sub_cmd_2()
 	      \ ['sSs', 's/S/\c/', ['scs']],
 	      \ ['tTt', "s/T/\<C-V>\<C-J>/", ["t\<C-V>\<C-J>t"]],
 	      \ ['U', 's/U/\L\uuUu\l\EU/', ['UuuU']],
-	      \ ['V', 's/V/\U\lVvV\u\Ev/', ['vVVv']]
+	      \ ['V', 's/V/\U\lVvV\u\Ev/', ['vVVv']],
+	      \ ['\', 's/\\/\\\\/', ['\\']]
 	      \ ]
   call Run_SubCmd_Tests(tests)
 endfunc
@@ -683,6 +691,21 @@ func Test_sub_cmd_9()
   bw!
 endfunc
 
+func Test_sub_highlight_zero_match()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, ['one', 'two', 'three'])
+  END
+  call writefile(lines, 'XscriptSubHighlight', 'D')
+  let buf = RunVimInTerminal('-S XscriptSubHighlight', #{rows: 8, cols: 60})
+  call term_sendkeys(buf, ":%s/^/   /c\<CR>")
+  call VerifyScreenDump(buf, 'Test_sub_highlight_zer_match_1', {})
+
+  call term_sendkeys(buf, "\<Esc>")
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_nocatch_sub_failure_handling()
   " normal error results in all replacements 
   func Foo()
@@ -690,10 +713,11 @@ func Test_nocatch_sub_failure_handling()
   endfunc
   new
   call setline(1, ['1 aaa', '2 aaa', '3 aaa'])
-  %s/aaa/\=Foo()/g
+  " need silent! to avoid a delay when entering Insert mode
+  silent! %s/aaa/\=Foo()/g
   call assert_equal(['1 0', '2 0', '3 0'], getline(1, 3))
 
-  " Trow without try-catch causes abort after the first line.
+  " Throw without try-catch causes abort after the first line.
   " We cannot test this, since it would stop executing the test script.
 
   " try/catch does not result in any changes
@@ -993,11 +1017,85 @@ func Test_using_old_sub()
     ~
     s/
   endfunc
-  silent!  s/\%')/\=Repl()
+  silent! s/\%')/\=Repl()
 
   delfunc Repl
   bwipe!
   set nocompatible
+endfunc
+
+" This was switching windows in between computing the length and using it.
+func Test_sub_change_window()
+  silent! lfile
+  sil! norm o0000000000000000000000000000000000000000000000000000
+  func Repl()
+    lopen
+  endfunc
+  silent!  s/\%')/\=Repl()
+  bwipe!
+  bwipe!
+  delfunc Repl
+endfunc
+
+" This was undoign a change in between computing the length and using it.
+func Do_Test_sub_undo_change()
+  new
+  norm o0000000000000000000000000000000000000000000000000000
+  silent! s/\%')/\=Repl()
+  bwipe!
+endfunc
+
+func Test_sub_undo_change()
+  func Repl()
+    silent! norm g-
+  endfunc
+  call Do_Test_sub_undo_change()
+
+  func! Repl()
+    silent earlier
+  endfunc
+  call Do_Test_sub_undo_change()
+
+  delfunc Repl
+endfunc
+
+" This was opening a command line window from the expression
+func Test_sub_open_cmdline_win()
+  " the error only happens in a very specific setup, run a new Vim instance to
+  " get a clean starting point.
+  let lines =<< trim [SCRIPT]
+    set vb t_vb=
+    norm o0000000000000000000000000000000000000000000000000000
+    func Replace()
+      norm q/
+    endfunc
+    s/\%')/\=Replace()
+    redir >Xresult
+    messages
+    redir END
+    qall!
+  [SCRIPT]
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '-u NONE -S Xscript')
+    call assert_match('E565: Not allowed to change text or change window',
+          \ readfile('Xresult')->join('XX'))
+  endif
+
+  call delete('Xscript')
+  call delete('Xresult')
+endfunc
+
+" This was editing a script file from the expression
+func Test_sub_edit_scriptfile()
+  new
+  norm o0000000000000000000000000000000000000000000000000000
+  func EditScript()
+    silent! scr! Xsedfile
+  endfunc
+  s/\%')/\=EditScript()
+
+  delfunc EditScript
+  bwipe!
 endfunc
 
 " Test for the 2-letter and 3-letter :substitute commands
@@ -1281,6 +1379,16 @@ func Test_substitute_short_cmd()
   sIe
 
   bw!
+endfunc
+
+" This should be done last to reveal a memory leak when vim_regsub_both() is
+" called to evaluate an expression but it is not used in a second call.
+func Test_z_substitute_expr_leak()
+  func SubExpr()
+    ~n
+  endfunc
+  silent! s/\%')/\=SubExpr()
+  delfunc SubExpr
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -70,6 +70,16 @@ func Test_lambda_vim9cmd_linebreak()
   exe 'sleep ' .. [20, 100, 500, 500, 500][g:run_nr] .. 'm'
   call assert_equal('done', g:result)
   unlet g:result
+
+  let lines =<< trim END
+      g:result = [0]->map((_, v) =>
+          1 # inline comment
+          +
+          2
+      )
+      assert_equal([3], g:result)
+  END
+  call v9.CheckDefAndScriptSuccess(lines)
 endfunc
 
 func Test_lambda_with_partial()
@@ -241,9 +251,7 @@ endfunc
 func Test_lambda_combination()
   call assert_equal(2, {x -> {x -> x}}(1)(2))
   call assert_equal(10, {y -> {x -> x(y)(10)}({y -> y})}({z -> z}))
-  if has('float')
-    call assert_equal(5.0, {x -> {y -> x / y}}(10)(2.0))
-  endif
+  call assert_equal(5.0, {x -> {y -> x / y}}(10)(2.0))
   call assert_equal(6, {x -> {y -> {z -> x + y + z}}}(1)(2)(3))
 
   call assert_equal(6, {x -> {f -> f(x)}}(3)({x -> x * 2}))

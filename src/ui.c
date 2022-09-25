@@ -199,10 +199,10 @@ ui_inchar(
      * while (not timed out)
      * {
      *     if (any-timer-triggered)
-     *        invoke-timer-callback;
+     *	      invoke-timer-callback;
      *     wait-for-character();
      *     if (character available)
-     *        break;
+     *	      break;
      * }
      *
      * wait-for-character() does:
@@ -210,13 +210,13 @@ ui_inchar(
      * {
      *     Wait for event;
      *     if (something on channel)
-     *        read/write channel;
-     *     else if (resized)
-     *        handle_resize();
-     *     else if (system event)
-     *        deal-with-system-event;
-     *     else if (character available)
-     *        break;
+     *	      read/write channel;
+     *	   else if (resized)
+     *	      handle_resize();
+     *	   else if (system event)
+     *	      deal-with-system-event;
+     *	   else if (character available)
+     *	      break;
      * }
      *
      */
@@ -897,7 +897,8 @@ read_from_input_buf(char_u *buf, long maxlen)
 	maxlen = inbufcount;
     mch_memmove(buf, inbuf, (size_t)maxlen);
     inbufcount -= maxlen;
-    if (inbufcount)
+    // check "maxlen" to avoid clang warning
+    if (inbufcount > 0 && maxlen > 0)
 	mch_memmove(inbuf, inbuf + maxlen, (size_t)inbufcount);
     return (int)maxlen;
 }

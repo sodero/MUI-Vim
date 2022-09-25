@@ -478,9 +478,7 @@ func Test_terminal_size()
 
   call assert_fails("call term_start(cmd, {'term_rows': -1})", 'E475:')
   call assert_fails("call term_start(cmd, {'term_rows': 1001})", 'E475:')
-  if has('float')
-    call assert_fails("call term_start(cmd, {'term_rows': 10.0})", 'E805:')
-  endif
+  call assert_fails("call term_start(cmd, {'term_rows': 10.0})", 'E805:')
 
   call delete('Xtext')
 endfunc
@@ -630,21 +628,23 @@ func Test_terminal_cwd()
     CheckExecutable pwd
     let cmd = 'pwd'
   endif
-  call mkdir('Xdir')
-  let buf = term_start(cmd, {'cwd': 'Xdir'})
-  call WaitForAssert({-> assert_equal('Xdir', fnamemodify(getline(1), ":t"))})
+  call mkdir('Xtermdir')
+  let buf = term_start(cmd, {'cwd': 'Xtermdir'})
+  " if the path is very long it may be split over two lines, join them
+  " together
+  call WaitForAssert({-> assert_equal('Xtermdir', fnamemodify(getline(1) .. getline(2), ":t"))})
 
   exe buf . 'bwipe'
-  call delete('Xdir', 'rf')
+  call delete('Xtermdir', 'rf')
 endfunc
 
 func Test_terminal_cwd_failure()
   " Case 1: Provided directory is not actually a directory.  Attempt to make
   " the file executable as well.
-  call writefile([], 'Xfile')
-  call setfperm('Xfile', 'rwx------')
-  call assert_fails("call term_start(&shell, {'cwd': 'Xfile'})", 'E475:')
-  call delete('Xfile')
+  call writefile([], 'Xtcfile')
+  call setfperm('Xtcfile', 'rwx------')
+  call assert_fails("call term_start(&shell, {'cwd': 'Xtcfile'})", 'E475:')
+  call delete('Xtcfile')
 
   " Case 2: Directory does not exist.
   call assert_fails("call term_start(&shell, {'cwd': 'Xdir'})", 'E475:')
@@ -757,6 +757,7 @@ func Test_terminal_write_stdin()
   " TODO: enable once writing to stdin works on MS-Windows
   CheckNotMSWindows
   CheckExecutable wc
+  let g:test_is_flaky = 1
 
   call setline(1, ['one', 'two', 'three'])
   %term wc
@@ -775,6 +776,7 @@ endfunc
 
 func Test_terminal_eof_arg()
   call CheckPython(s:python)
+  let g:test_is_flaky = 1
 
   call setline(1, ['print("hello")'])
   exe '1term ++eof=exit(123) ' .. s:python
@@ -793,6 +795,7 @@ endfunc
 func Test_terminal_eof_arg_win32_ctrl_z()
   CheckMSWindows
   call CheckPython(s:python)
+  let g:test_is_flaky = 1
 
   call setline(1, ['print("hello")'])
   exe '1term ++eof=<C-Z> ' .. s:python
@@ -803,8 +806,9 @@ endfunc
 
 func Test_terminal_duplicate_eof_arg()
   call CheckPython(s:python)
+  let g:test_is_flaky = 1
 
-  " Check the last specified ++eof arg is used and should not memory leak.
+  " Check the last specified ++eof arg is used and does not leak memory.
   new
   call setline(1, ['print("hello")'])
   exe '1term ++eof=<C-Z> ++eof=exit(123) ' .. s:python
@@ -874,12 +878,12 @@ endfunc
 func Test_terminal_redir_file()
   let g:test_is_flaky = 1
   let cmd = Get_cat_123_cmd()
-  let buf = term_start(cmd, {'out_io': 'file', 'out_name': 'Xfile'})
+  let buf = term_start(cmd, {'out_io': 'file', 'out_name': 'Xtrfile'})
   call TermWait(buf)
   " ConPTY may precede escape sequence. There are things that are not so.
   if !has('conpty')
-    call WaitForAssert({-> assert_notequal(0, len(readfile("Xfile")))})
-    call assert_match('123', readfile('Xfile')[0])
+    call WaitForAssert({-> assert_notequal(0, len(readfile("Xtrfile")))})
+    call assert_match('123', readfile('Xtrfile')[0])
   endif
   let g:job = term_getjob(buf)
   call WaitForAssert({-> assert_equal("dead", job_status(g:job))})
@@ -890,18 +894,18 @@ func Test_terminal_redir_file()
     " Just wait for a moment.
     sleep 50m
   endif
-  call delete('Xfile')
+  call delete('Xtrfile')
   bwipe
 
   if has('unix')
-    call writefile(['one line'], 'Xfile')
-    let buf = term_start('cat', {'in_io': 'file', 'in_name': 'Xfile'})
+    call writefile(['one line'], 'Xtrfile')
+    let buf = term_start('cat', {'in_io': 'file', 'in_name': 'Xtrfile'})
     call TermWait(buf)
     call WaitForAssert({-> assert_equal('one line', term_getline(buf, 1))})
     let g:job = term_getjob(buf)
     call WaitForAssert({-> assert_equal('dead', job_status(g:job))})
     bwipe
-    call delete('Xfile')
+    call delete('Xtrfile')
   endif
 endfunc
 
@@ -1218,7 +1222,11 @@ endfunc
 " argument, check that :confirm qall works.
 func Test_terminal_qall_prompt()
   CheckRunVimInTerminal
+
   let buf = RunVimInTerminal('', {})
+
+  " the shell may set the window title, we don't want that here
+  call term_sendkeys(buf, ":call test_override('vterm_title', 1)\<CR>")
 
   " Open a terminal window and wait for the prompt to appear
   call term_sendkeys(buf, ":term\<CR>")
@@ -1445,7 +1453,7 @@ func Test_terminal_dumpwrite_errors()
   call assert_fails("call term_dumpwrite({}, 'Xtest.dump')", 'E728:')
   let buf = RunVimInTerminal('', {})
   call TermWait(buf)
-  call assert_fails("call term_dumpwrite(buf, 'Xtest.dump', '')", 'E715:')
+  call assert_fails("call term_dumpwrite(buf, 'Xtest.dump', '')", 'E1206:')
   call assert_fails("call term_dumpwrite(buf, [])", 'E730:')
   call writefile([], 'Xtest.dump')
   call assert_fails("call term_dumpwrite(buf, 'Xtest.dump')", 'E953:')
@@ -2012,10 +2020,16 @@ func Test_terminal_ansicolors_global()
   CheckFeature termguicolors
   CheckFunction term_getansicolors
 
+  if has('vtp') && !has('vcon') && !has('gui_running')
+    throw 'Skipped: does not support termguicolors'
+  endif
+
+  set tgc
   let g:terminal_ansi_colors = reverse(copy(s:test_colors))
   let buf = Run_shell_in_terminal({})
   call assert_equal(g:terminal_ansi_colors, term_getansicolors(buf))
   call StopShellInTerminal(buf)
+  set tgc&
 
   exe buf . 'bwipe'
   unlet g:terminal_ansi_colors
@@ -2025,6 +2039,11 @@ func Test_terminal_ansicolors_func()
   CheckFeature termguicolors
   CheckFunction term_getansicolors
 
+  if has('vtp') && !has('vcon') && !has('gui_running')
+    throw 'Skipped: does not support termguicolors'
+  endif
+
+  set tgc
   let g:terminal_ansi_colors = reverse(copy(s:test_colors))
   let buf = Run_shell_in_terminal({'ansi_colors': s:test_colors})
   call assert_equal(s:test_colors, term_getansicolors(buf))
@@ -2046,7 +2065,8 @@ func Test_terminal_ansicolors_func()
 
   let colors[4] = 'Invalid'
   call assert_fails('call term_setansicolors(buf, colors)', 'E254:')
-  call assert_fails('call term_setansicolors(buf, {})', 'E714:')
+  call assert_fails('call term_setansicolors(buf, {})', 'E1211:')
+  set tgc&
 
   call StopShellInTerminal(buf)
   call assert_equal(0, term_setansicolors(buf, []))

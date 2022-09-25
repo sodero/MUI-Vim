@@ -10,7 +10,6 @@ func Test_skip_lua()
 endfunc
 
 CheckFeature lua
-CheckFeature float
 
 " Depending on the lua version, the error messages are different.
 let [s:major, s:minor, s:patch] = luaeval('vim.lua_version')->split('\.')->map({-> str2nr(v:val)})
@@ -662,6 +661,17 @@ func Test_lua_blob()
   lua t = {}
   call assert_fails('lua b = vim.blob(t)',
         \ '[string "vim chunk"]:1: string expected, got table')
+endfunc
+
+def Vim9Test(Callback: func())
+  Callback()
+enddef
+
+func Test_call_lua_func_from_vim9_func()
+  " this only tests that Vim doesn't crash
+  lua << EOF
+vim.fn.Vim9Test(function () print('Hello') end)
+EOF
 endfunc
 
 func Test_lua_funcref()

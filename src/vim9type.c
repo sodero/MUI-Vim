@@ -20,6 +20,11 @@
 # include <float.h>
 #endif
 
+// When not generating protos this is included in proto.h
+#ifdef PROTO
+# include "vim9.h"
+#endif
+
 /*
  * Allocate memory for a type_T and add the pointer to type_gap, so that it can
  * be easily freed later.
@@ -244,48 +249,44 @@ alloc_func_type(type_T *ret_type, int argcount, garray_T *type_gap)
 
 /*
  * Get a function type, based on the return type "ret_type".
- * If "argcount" is -1 or 0 a predefined type can be used.
- * If "argcount" > 0 always create a new type, so that arguments can be added.
+ * "argcount" must be -1 or 0, a predefined type can be used.
  */
     type_T *
 get_func_type(type_T *ret_type, int argcount, garray_T *type_gap)
 {
     // recognize commonly used types
-    if (argcount <= 0)
+    if (ret_type == &t_unknown || ret_type == NULL)
     {
-	if (ret_type == &t_unknown || ret_type == NULL)
-	{
-	    // (argcount == 0) is not possible
-	    return &t_func_unknown;
-	}
-	if (ret_type == &t_void)
-	{
-	    if (argcount == 0)
-		return &t_func_0_void;
-	    else
-		return &t_func_void;
-	}
-	if (ret_type == &t_any)
-	{
-	    if (argcount == 0)
-		return &t_func_0_any;
-	    else
-		return &t_func_any;
-	}
-	if (ret_type == &t_number)
-	{
-	    if (argcount == 0)
-		return &t_func_0_number;
-	    else
-		return &t_func_number;
-	}
-	if (ret_type == &t_string)
-	{
-	    if (argcount == 0)
-		return &t_func_0_string;
-	    else
-		return &t_func_string;
-	}
+	// (argcount == 0) is not possible
+	return &t_func_unknown;
+    }
+    if (ret_type == &t_void)
+    {
+	if (argcount == 0)
+	    return &t_func_0_void;
+	else
+	    return &t_func_void;
+    }
+    if (ret_type == &t_any)
+    {
+	if (argcount == 0)
+	    return &t_func_0_any;
+	else
+	    return &t_func_any;
+    }
+    if (ret_type == &t_number)
+    {
+	if (argcount == 0)
+	    return &t_func_0_number;
+	else
+	    return &t_func_number;
+    }
+    if (ret_type == &t_string)
+    {
+	if (argcount == 0)
+	    return &t_func_0_string;
+	else
+	    return &t_func_string;
     }
 
     return alloc_func_type(ret_type, argcount, type_gap);
@@ -541,7 +542,7 @@ typval2type_vimvar(typval_T *tv, garray_T *type_gap)
 {
     if (tv->v_type == VAR_LIST)  // e.g. for v:oldfiles
 	return &t_list_string;
-    if (tv->v_type == VAR_DICT)  // e.g. for v:completed_item
+    if (tv->v_type == VAR_DICT)  // e.g. for v:event
 	return &t_dict_any;
     return typval2type(tv, get_copyID(), type_gap, TVTT_DO_MEMBER);
 }
@@ -807,7 +808,11 @@ check_argument_types(
 	else
 	    tv = &argvars[i];
 	if (varargs && i >= type->tt_argcount - 1)
-	    expected = type->tt_args[type->tt_argcount - 1]->tt_member;
+	{
+	    expected = type->tt_args[type->tt_argcount - 1];
+	    if (expected != NULL)
+		expected = expected->tt_member;
+	}
 	else
 	    expected = type->tt_args[i];
 	if (check_typval_arg_type(expected, tv, NULL, i + 1) == FAIL)
@@ -879,6 +884,7 @@ skip_type(char_u *start, int optional)
 /*
  * Parse the member type: "<type>" and return "type" with the member set.
  * Use "type_gap" if a new type needs to be added.
+ * "info" is extra information for an error message.
  * Returns NULL in case of failure.
  */
     static type_T *
@@ -886,8 +892,10 @@ parse_type_member(
 	char_u	    **arg,
 	type_T	    *type,
 	garray_T    *type_gap,
-	int	    give_error)
+	int	    give_error,
+	char	    *info)
 {
+    char_u  *arg_start = *arg;
     type_T  *member_type;
     int	    prev_called_emsg = called_emsg;
 
@@ -898,7 +906,7 @@ parse_type_member(
 	    if (*skipwhite(*arg) == '<')
 		semsg(_(e_no_white_space_allowed_before_str_str), "<", *arg);
 	    else
-		emsg(_(e_missing_type));
+		semsg(_(e_missing_type_after_str), info);
 	}
 	return NULL;
     }
@@ -912,7 +920,7 @@ parse_type_member(
     if (**arg != '>' && called_emsg == prev_called_emsg)
     {
 	if (give_error)
-	    emsg(_(e_missing_gt_after_type));
+	    semsg(_(e_missing_gt_after_type_str), arg_start);
 	return NULL;
     }
     ++*arg;
@@ -971,20 +979,14 @@ parse_type(char_u **arg, garray_T *type_gap, int give_error)
 	    {
 		*arg += len;
 		return parse_type_member(arg, &t_dict_any,
-							 type_gap, give_error);
+						 type_gap, give_error, "dict");
 	    }
 	    break;
 	case 'f':
 	    if (len == 5 && STRNCMP(*arg, "float", len) == 0)
 	    {
-#ifdef FEAT_FLOAT
 		*arg += len;
 		return &t_float;
-#else
-		if (give_error)
-		    emsg(_(e_this_vim_is_not_compiled_with_float_support));
-		return NULL;
-#endif
 	    }
 	    if (len == 4 && STRNCMP(*arg, "func", len) == 0)
 	    {
@@ -1115,7 +1117,7 @@ parse_type(char_u **arg, garray_T *type_gap, int give_error)
 	    {
 		*arg += len;
 		return parse_type_member(arg, &t_list_any,
-							 type_gap, give_error);
+						 type_gap, give_error, "list");
 	    }
 	    break;
 	case 'n':
@@ -1437,6 +1439,7 @@ vartype_name(vartype_T type)
 type_name(type_T *type, char **tofree)
 {
     char *name;
+    char *arg_free = NULL;
 
     *tofree = NULL;
     if (type == NULL)
@@ -1465,13 +1468,12 @@ type_name(type_T *type, char **tofree)
 
 	ga_init2(&ga, 1, 100);
 	if (ga_grow(&ga, 20) == FAIL)
-	    return "[unknown]";
+	    goto failed;
 	STRCPY(ga.ga_data, "func(");
 	ga.ga_len += 5;
 
 	for (i = 0; i < type->tt_argcount; ++i)
 	{
-	    char *arg_free = NULL;
 	    char *arg_type;
 	    int  len;
 
@@ -1486,17 +1488,13 @@ type_name(type_T *type, char **tofree)
 	    }
 	    len = (int)STRLEN(arg_type);
 	    if (ga_grow(&ga, len + 8) == FAIL)
-	    {
-		vim_free(arg_free);
-		ga_clear(&ga);
-		return "[unknown]";
-	    }
+		goto failed;
 	    if (varargs && i == type->tt_argcount - 1)
 		ga_concat(&ga, (char_u *)"...");
 	    else if (i >= type->tt_min_argcount)
 		*((char *)ga.ga_data + ga.ga_len++) = '?';
 	    ga_concat(&ga, (char_u *)arg_type);
-	    vim_free(arg_free);
+	    VIM_CLEAR(arg_free);
 	}
 	if (type->tt_argcount < 0)
 	    // any number of arguments
@@ -1512,17 +1510,18 @@ type_name(type_T *type, char **tofree)
 
 	    len = (int)STRLEN(ret_name) + 4;
 	    if (ga_grow(&ga, len) == FAIL)
-	    {
-		vim_free(ret_free);
-		ga_clear(&ga);
-		return "[unknown]";
-	    }
+		goto failed;
 	    STRCPY((char *)ga.ga_data + ga.ga_len, "): ");
 	    STRCPY((char *)ga.ga_data + ga.ga_len + 3, ret_name);
 	    vim_free(ret_free);
 	}
 	*tofree = ga.ga_data;
 	return ga.ga_data;
+
+failed:
+	vim_free(arg_free);
+	ga_clear(&ga);
+	return "[unknown]";
     }
 
     return name;

@@ -155,6 +155,8 @@ win_findbuf(typval_T *argvars, list_T *list)
 
 /*
  * Find window specified by "vp" in tabpage "tp".
+ * Returns current window if "vp" is number zero.
+ * Returns NULL if not found.
  */
     win_T *
 find_win_by_nr(
@@ -259,7 +261,7 @@ find_tabwin(
 }
 
 /*
- * Get the layout of the given tab page for winlayout().
+ * Get the layout of the given tab page for winlayout() and add it to "l".
  */
     static void
 get_framelayout(frame_T *fr, list_T *l, int outer)
@@ -279,7 +281,11 @@ get_framelayout(frame_T *fr, list_T *l, int outer)
 	fr_list = list_alloc();
 	if (fr_list == NULL)
 	    return;
-	list_append_list(l, fr_list);
+	if (list_append_list(l, fr_list) == FAIL)
+	{
+	    vim_free(fr_list);
+	    return;
+	}
     }
 
     if (fr->fr_layout == FR_LEAF)
@@ -298,7 +304,12 @@ get_framelayout(frame_T *fr, list_T *l, int outer)
 	win_list = list_alloc();
 	if (win_list == NULL)
 	    return;
-	list_append_list(fr_list, win_list);
+	if (list_append_list(fr_list, win_list) == FAIL)
+	{
+	    vim_free(win_list);
+	    return;
+	}
+
 	child = fr->fr_child;
 	while (child != NULL)
 	{
@@ -469,7 +480,7 @@ f_gettabinfo(typval_T *argvars, typval_T *rettv)
     dict_T	*d;
     int		tpnr = 0;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
 
     if (in_vim9script() && check_for_opt_number_arg(argvars, 0) == FAIL)
@@ -508,7 +519,7 @@ f_getwininfo(typval_T *argvars, typval_T *rettv)
     dict_T	*d;
     short	tabnr = 0, winnr;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
 
     if (in_vim9script() && check_for_opt_number_arg(argvars, 0) == FAIL)
@@ -777,7 +788,7 @@ f_win_findbuf(typval_T *argvars, typval_T *rettv)
     if (in_vim9script() && check_for_number_arg(argvars, 0) == FAIL)
 	return;
 
-    if (rettv_list_alloc(rettv) != FAIL)
+    if (rettv_list_alloc(rettv) == OK)
 	win_findbuf(argvars, rettv->vval.v_list);
 }
 
@@ -845,7 +856,7 @@ f_win_id2tabwin(typval_T *argvars, typval_T *rettv)
     if (in_vim9script() && check_for_number_arg(argvars, 0) == FAIL)
 	return;
 
-    if (rettv_list_alloc(rettv) != FAIL)
+    if (rettv_list_alloc(rettv) == OK)
 	win_id2tabwin(argvars, rettv->vval.v_list);
 }
 
@@ -997,28 +1008,25 @@ f_win_splitmove(typval_T *argvars, typval_T *rettv)
 	    || !win_valid(wp) || !win_valid(targetwin)
 	    || win_valid_popup(wp) || win_valid_popup(targetwin))
     {
-        emsg(_(e_invalid_window_number));
+	emsg(_(e_invalid_window_number));
 	rettv->vval.v_number = -1;
 	return;
     }
 
     if (argvars[2].v_type != VAR_UNKNOWN)
     {
-        dict_T      *d;
-        dictitem_T  *di;
+	dict_T      *d;
+	dictitem_T  *di;
 
-        if (argvars[2].v_type != VAR_DICT || argvars[2].vval.v_dict == NULL)
-        {
-            emsg(_(e_invalid_argument));
-            return;
-        }
+	if (check_for_nonnull_dict_arg(argvars, 2) == FAIL)
+	    return;
 
-        d = argvars[2].vval.v_dict;
-        if (dict_get_bool(d, (char_u *)"vertical", FALSE))
-            flags |= WSP_VERT;
-        if ((di = dict_find(d, (char_u *)"rightbelow", -1)) != NULL)
-            flags |= tv_get_bool(&di->di_tv) ? WSP_BELOW : WSP_ABOVE;
-        size = (int)dict_get_number(d, (char_u *)"size");
+	d = argvars[2].vval.v_dict;
+	if (dict_get_bool(d, "vertical", FALSE))
+	    flags |= WSP_VERT;
+	if ((di = dict_find(d, (char_u *)"rightbelow", -1)) != NULL)
+	    flags |= tv_get_bool(&di->di_tv) ? WSP_BELOW : WSP_ABOVE;
+	size = (int)dict_get_number(d, "size");
     }
 
     win_move_into_split(wp, targetwin, size, flags);
@@ -1141,7 +1149,7 @@ f_winlayout(typval_T *argvars, typval_T *rettv)
 {
     tabpage_T	*tp;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
 
     if (in_vim9script() && check_for_opt_number_arg(argvars, 0) == FAIL)
@@ -1225,50 +1233,45 @@ f_winrestview(typval_T *argvars, typval_T *rettv UNUSED)
 {
     dict_T	*dict;
 
-    if (in_vim9script() && check_for_dict_arg(argvars, 0) == FAIL)
+    if (check_for_nonnull_dict_arg(argvars, 0) == FAIL)
 	return;
 
-    if (argvars[0].v_type != VAR_DICT
-	    || (dict = argvars[0].vval.v_dict) == NULL)
-	emsg(_(e_invalid_argument));
-    else
+    dict = argvars[0].vval.v_dict;
+    if (dict_has_key(dict, "lnum"))
+	curwin->w_cursor.lnum = (linenr_T)dict_get_number(dict, "lnum");
+    if (dict_has_key(dict, "col"))
+	curwin->w_cursor.col = (colnr_T)dict_get_number(dict, "col");
+    if (dict_has_key(dict, "coladd"))
+	curwin->w_cursor.coladd = (colnr_T)dict_get_number(dict, "coladd");
+    if (dict_has_key(dict, "curswant"))
     {
-	if (dict_has_key(dict, "lnum"))
-	    curwin->w_cursor.lnum = (linenr_T)dict_get_number(dict, (char_u *)"lnum");
-	if (dict_has_key(dict, "col"))
-	    curwin->w_cursor.col = (colnr_T)dict_get_number(dict, (char_u *)"col");
-	if (dict_has_key(dict, "coladd"))
-	    curwin->w_cursor.coladd = (colnr_T)dict_get_number(dict, (char_u *)"coladd");
-	if (dict_has_key(dict, "curswant"))
-	{
-	    curwin->w_curswant = (colnr_T)dict_get_number(dict, (char_u *)"curswant");
-	    curwin->w_set_curswant = FALSE;
-	}
-
-	if (dict_has_key(dict, "topline"))
-	    set_topline(curwin, (linenr_T)dict_get_number(dict, (char_u *)"topline"));
-#ifdef FEAT_DIFF
-	if (dict_has_key(dict, "topfill"))
-	    curwin->w_topfill = (int)dict_get_number(dict, (char_u *)"topfill");
-#endif
-	if (dict_has_key(dict, "leftcol"))
-	    curwin->w_leftcol = (colnr_T)dict_get_number(dict, (char_u *)"leftcol");
-	if (dict_has_key(dict, "skipcol"))
-	    curwin->w_skipcol = (colnr_T)dict_get_number(dict, (char_u *)"skipcol");
-
-	check_cursor();
-	win_new_height(curwin, curwin->w_height);
-	win_new_width(curwin, curwin->w_width);
-	changed_window_setting();
-
-	if (curwin->w_topline <= 0)
-	    curwin->w_topline = 1;
-	if (curwin->w_topline > curbuf->b_ml.ml_line_count)
-	    curwin->w_topline = curbuf->b_ml.ml_line_count;
-#ifdef FEAT_DIFF
-	check_topfill(curwin, TRUE);
-#endif
+	curwin->w_curswant = (colnr_T)dict_get_number(dict, "curswant");
+	curwin->w_set_curswant = FALSE;
     }
+
+    if (dict_has_key(dict, "topline"))
+	set_topline(curwin, (linenr_T)dict_get_number(dict, "topline"));
+#ifdef FEAT_DIFF
+    if (dict_has_key(dict, "topfill"))
+	curwin->w_topfill = (int)dict_get_number(dict, "topfill");
+#endif
+    if (dict_has_key(dict, "leftcol"))
+	curwin->w_leftcol = (colnr_T)dict_get_number(dict, "leftcol");
+    if (dict_has_key(dict, "skipcol"))
+	curwin->w_skipcol = (colnr_T)dict_get_number(dict, "skipcol");
+
+    check_cursor();
+    win_new_height(curwin, curwin->w_height);
+    win_new_width(curwin, curwin->w_width);
+    changed_window_setting();
+
+    if (curwin->w_topline <= 0)
+	curwin->w_topline = 1;
+    if (curwin->w_topline > curbuf->b_ml.ml_line_count)
+	curwin->w_topline = curbuf->b_ml.ml_line_count;
+#ifdef FEAT_DIFF
+    check_topfill(curwin, TRUE);
+#endif
 }
 
 /*

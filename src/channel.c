@@ -152,7 +152,8 @@ static proftime_T log_start;
     void
 ch_logfile(char_u *fname, char_u *opt)
 {
-    FILE   *file = NULL;
+    FILE	*file = NULL;
+    char	*mode = "a";
 
     if (log_fd != NULL)
     {
@@ -163,9 +164,14 @@ ch_logfile(char_u *fname, char_u *opt)
 	fclose(log_fd);
     }
 
+    // The "a" flag overrules the "w" flag.
+    if (vim_strchr(opt, 'a') == NULL && vim_strchr(opt, 'w') != NULL)
+	mode = "w";
+    ch_log_output = vim_strchr(opt, 'o') != NULL ? LOG_ALWAYS : FALSE;
+
     if (*fname != NUL)
     {
-	file = fopen((char *)fname, *opt == 'w' ? "w" : "a");
+	file = fopen((char *)fname, mode);
 	if (file == NULL)
 	{
 	    semsg(_(e_cant_open_file_str), fname);
@@ -1274,7 +1280,7 @@ channel_set_options(channel_T *channel, jobopt_T *opt)
 
 	// writing output to a buffer. Default mode is NL.
 	if (!(opt->jo_set & JO_OUT_MODE))
-	    channel->ch_part[PART_OUT].ch_mode = MODE_NL;
+	    channel->ch_part[PART_OUT].ch_mode = CH_MODE_NL;
 	if (opt->jo_set & JO_OUT_BUF)
 	{
 	    buf = buflist_findnr(opt->jo_io_buf[PART_OUT]);
@@ -1320,7 +1326,7 @@ channel_set_options(channel_T *channel, jobopt_T *opt)
 
 	// writing err to a buffer. Default mode is NL.
 	if (!(opt->jo_set & JO_ERR_MODE))
-	    channel->ch_part[PART_ERR].ch_mode = MODE_NL;
+	    channel->ch_part[PART_ERR].ch_mode = CH_MODE_NL;
 	if (opt->jo_io[PART_ERR] == JIO_OUT)
 	    buf = channel->ch_part[PART_OUT].ch_bufref.br_buf;
 	else if (opt->jo_set & JO_ERR_BUF)
@@ -1386,11 +1392,8 @@ channel_open_func(typval_T *argvars)
 
     address = tv_get_string(&argvars[0]);
     if (argvars[1].v_type != VAR_UNKNOWN
-	 && (argvars[1].v_type != VAR_DICT || argvars[1].vval.v_dict == NULL))
-    {
-	emsg(_(e_invalid_argument));
+	    && check_for_nonnull_dict_arg(argvars, 1) == FAIL)
 	return NULL;
-    }
 
     if (*address == NUL)
     {
@@ -1445,7 +1448,7 @@ channel_open_func(typval_T *argvars)
 
     // parse options
     clear_job_options(&opt);
-    opt.jo_mode = MODE_JSON;
+    opt.jo_mode = CH_MODE_JSON;
     opt.jo_timeout = 2000;
     if (get_job_options(&argvars[1], &opt,
 	    JO_MODE_ALL + JO_CB_ALL + JO_TIMEOUT_ALL
@@ -1996,7 +1999,7 @@ channel_get_all(channel_T *channel, ch_part_T part, int *outlen)
 		    && p[3] == ';')
 	    {
 		// '\a' becomes a NL
-	        while (p < res + (len - 1) && *p != '\a')
+		while (p < res + (len - 1) && *p != '\a')
 		    ++p;
 		// BEL is zero width characters, suppress display mistake
 		// ConPTY (after 10.0.18317) requires advance checking
@@ -2051,9 +2054,9 @@ channel_collapse(channel_T *channel, ch_part_T part, int want_nl)
 
     last_node = node->rq_next;
     len = node->rq_buflen + last_node->rq_buflen;
-    if (want_nl || mode == MODE_LSP)
+    if (want_nl || mode == CH_MODE_LSP)
 	while (last_node->rq_next != NULL
-		&& (mode == MODE_LSP
+		&& (mode == CH_MODE_LSP
 		    || channel_first_nl(last_node) == NULL))
 	{
 	    last_node = last_node->rq_next;
@@ -2118,7 +2121,7 @@ channel_save(channel_T *channel, ch_part_T part, char_u *buf, int len,
 	return FAIL;	    // out of memory
     }
 
-    if (channel->ch_part[part].ch_mode == MODE_NL)
+    if (channel->ch_part[part].ch_mode == CH_MODE_NL)
     {
 	// Drop any CR before a NL.
 	p = node->rq_buffer;
@@ -2309,7 +2312,7 @@ channel_parse_json(channel_T *channel, ch_part_T part)
     reader.js_cookie = channel;
     reader.js_cookie_arg = part;
 
-    if (chanpart->ch_mode == MODE_LSP)
+    if (chanpart->ch_mode == CH_MODE_LSP)
 	status = channel_process_lsp_http_hdr(&reader);
 
     // When a message is incomplete we wait for a short while for more to
@@ -2320,20 +2323,20 @@ channel_parse_json(channel_T *channel, ch_part_T part)
     {
 	++emsg_silent;
 	status = json_decode(&reader, &listtv,
-				chanpart->ch_mode == MODE_JS ? JSON_JS : 0);
+				chanpart->ch_mode == CH_MODE_JS ? JSON_JS : 0);
 	--emsg_silent;
     }
     if (status == OK)
     {
 	// Only accept the response when it is a list with at least two
 	// items.
-	if (chanpart->ch_mode == MODE_LSP && listtv.v_type != VAR_DICT)
+	if (chanpart->ch_mode == CH_MODE_LSP && listtv.v_type != VAR_DICT)
 	{
 	    ch_error(channel, "Did not receive a LSP dict, discarding");
 	    clear_tv(&listtv);
 	}
-	else if (chanpart->ch_mode != MODE_LSP &&
-		(listtv.v_type != VAR_LIST || listtv.vval.v_list->lv_len < 2))
+	else if (chanpart->ch_mode != CH_MODE_LSP
+	      && (listtv.v_type != VAR_LIST || listtv.vval.v_list->lv_len < 2))
 	{
 	    if (listtv.v_type != VAR_LIST)
 		ch_error(channel, "Did not receive a list, discarding");
@@ -2563,7 +2566,7 @@ channel_get_json(
 	list_T	    *l;
 	typval_T    *tv;
 
-	if (channel->ch_part[part].ch_mode != MODE_LSP)
+	if (channel->ch_part[part].ch_mode != CH_MODE_LSP)
 	{
 	    l = item->jq_value->vval.v_list;
 	    CHECK_LIST_MATERIALIZE(l);
@@ -2684,7 +2687,8 @@ channel_exe_cmd(channel_T *channel, ch_part_T part, typval_T *argv)
 {
     char_u  *cmd = argv[0].vval.v_string;
     char_u  *arg;
-    int	    options = channel->ch_part[part].ch_mode == MODE_JS ? JSON_JS : 0;
+    int	    options = channel->ch_part[part].ch_mode == CH_MODE_JS
+								 ? JSON_JS : 0;
 
     if (argv[1].v_type != VAR_STRING)
     {
@@ -2727,12 +2731,8 @@ channel_exe_cmd(channel_T *channel, ch_part_T part, typval_T *argv)
     }
     else if (STRCMP(cmd, "redraw") == 0)
     {
-	exarg_T ea;
-
 	ch_log(channel, "redraw");
-	CLEAR_FIELD(ea);
-	ea.forceit = *arg != NUL;
-	ex_redraw(&ea);
+	redraw_cmd(*arg != NUL);
 	showruler(FALSE);
 	setcursor();
 	out_flush_cursor(TRUE, FALSE);
@@ -2923,7 +2923,7 @@ append_to_buffer(buf_T *buffer, char_u *msg, channel_T *channel, ch_part_T part)
 		}
 	    }
 	}
-	redraw_buf_and_status_later(buffer, VALID);
+	redraw_buf_and_status_later(buffer, UPD_VALID);
 	channel_need_redraw = TRUE;
     }
 
@@ -2964,7 +2964,8 @@ channel_use_json_head(channel_T *channel, ch_part_T part)
 {
     ch_mode_T	ch_mode = channel->ch_part[part].ch_mode;
 
-    return ch_mode == MODE_JSON || ch_mode == MODE_JS || ch_mode == MODE_LSP;
+    return ch_mode == CH_MODE_JSON || ch_mode == CH_MODE_JS
+						     || ch_mode == CH_MODE_LSP;
 }
 
 /*
@@ -3021,7 +3022,7 @@ may_invoke_callback(channel_T *channel, ch_part_T part)
 	// Get any json message in the queue.
 	if (channel_get_json(channel, part, -1, FALSE, &listtv) == FAIL)
 	{
-	    if (ch_mode == MODE_LSP)
+	    if (ch_mode == CH_MODE_LSP)
 		// In the "lsp" mode, the http header and the json payload may
 		// be received in multiple messages. So concatenate all the
 		// received messages.
@@ -3033,7 +3034,7 @@ may_invoke_callback(channel_T *channel, ch_part_T part)
 		return FALSE;
 	}
 
-	if (ch_mode == MODE_LSP)
+	if (ch_mode == CH_MODE_LSP)
 	{
 	    dict_T	*d = listtv->vval.v_dict;
 	    dictitem_T	*di;
@@ -3092,7 +3093,7 @@ may_invoke_callback(channel_T *channel, ch_part_T part)
 	    return FALSE;
 	}
 
-	if (ch_mode == MODE_NL)
+	if (ch_mode == CH_MODE_NL)
 	{
 	    char_u  *nl = NULL;
 	    char_u  *buf;
@@ -3169,7 +3170,7 @@ may_invoke_callback(channel_T *channel, ch_part_T part)
 	    }
     }
 
-    if (seq_nr > 0 && (ch_mode != MODE_LSP || called_otc))
+    if (seq_nr > 0 && (ch_mode != CH_MODE_LSP || called_otc))
     {
 	if (!called_otc)
 	{
@@ -3356,11 +3357,11 @@ channel_part_info(channel_T *channel, dict_T *dict, char *name, ch_part_T part)
     STRCPY(namebuf + tail, "mode");
     switch (chanpart->ch_mode)
     {
-	case MODE_NL: s = "NL"; break;
-	case MODE_RAW: s = "RAW"; break;
-	case MODE_JSON: s = "JSON"; break;
-	case MODE_JS: s = "JS"; break;
-	case MODE_LSP: s = "LSP"; break;
+	case CH_MODE_NL: s = "NL"; break;
+	case CH_MODE_RAW: s = "RAW"; break;
+	case CH_MODE_JSON: s = "JSON"; break;
+	case CH_MODE_JS: s = "JS"; break;
+	case CH_MODE_LSP: s = "LSP"; break;
     }
     dict_add_string(dict, namebuf, (char_u *)s);
 
@@ -3588,6 +3589,24 @@ channel_free_all(void)
 // Buffer size for reading incoming messages.
 #define MAXMSGSIZE 4096
 
+/*
+ * Check if there are remaining data that should be written for "in_part".
+ */
+    static int
+is_channel_write_remaining(chanpart_T *in_part)
+{
+    buf_T *buf = in_part->ch_bufref.br_buf;
+
+    if (in_part->ch_writeque.wq_next != NULL)
+	return TRUE;
+    if (buf == NULL)
+	return FALSE;
+    return in_part->ch_buf_append
+	    ? (in_part->ch_buf_bot < buf->b_ml.ml_line_count)
+	    : (in_part->ch_buf_top <= in_part->ch_buf_bot
+			    && in_part->ch_buf_top <= buf->b_ml.ml_line_count);
+}
+
 #if defined(HAVE_SELECT)
 /*
  * Add write fds where we are waiting for writing to be possible.
@@ -3603,8 +3622,7 @@ channel_fill_wfds(int maxfd_arg, fd_set *wfds)
 	chanpart_T  *in_part = &ch->ch_part[PART_IN];
 
 	if (in_part->ch_fd != INVALID_FD
-		&& (in_part->ch_bufref.br_buf != NULL
-		    || in_part->ch_writeque.wq_next != NULL))
+		&& is_channel_write_remaining(in_part))
 	{
 	    FD_SET((int)in_part->ch_fd, wfds);
 	    if ((int)in_part->ch_fd >= maxfd)
@@ -3628,8 +3646,7 @@ channel_fill_poll_write(int nfd_in, struct pollfd *fds)
 	chanpart_T  *in_part = &ch->ch_part[PART_IN];
 
 	if (in_part->ch_fd != INVALID_FD
-		&& (in_part->ch_bufref.br_buf != NULL
-		    || in_part->ch_writeque.wq_next != NULL))
+		&& is_channel_write_remaining(in_part))
 	{
 	    in_part->ch_poll_idx = nfd;
 	    fds[nfd].fd = in_part->ch_fd;
@@ -3864,8 +3881,6 @@ channel_read(channel_T *channel, ch_part_T part, char *func)
 	// Store the read message in the queue.
 	channel_save(channel, part, buf, len, FALSE, "RECV ");
 	readlen += len;
-	if (len < MAXMSGSIZE)
-	    break;	// did read everything that's available
     }
 
     // Reading a disconnection (readlen == 0), or an error.
@@ -3901,18 +3916,18 @@ channel_read_block(
     readq_T	*node;
 
     ch_log(channel, "Blocking %s read, timeout: %d msec",
-				     mode == MODE_RAW ? "RAW" : "NL", timeout);
+				  mode == CH_MODE_RAW ? "RAW" : "NL", timeout);
 
     while (TRUE)
     {
 	node = channel_peek(channel, part);
 	if (node != NULL)
 	{
-	    if (mode == MODE_RAW || (mode == MODE_NL
+	    if (mode == CH_MODE_RAW || (mode == CH_MODE_NL
 					   && channel_first_nl(node) != NULL))
 		// got a complete message
 		break;
-	    if (channel_collapse(channel, part, mode == MODE_NL) == OK)
+	    if (channel_collapse(channel, part, mode == CH_MODE_NL) == OK)
 		continue;
 	    // If not blocking or nothing more is coming then return what we
 	    // have.
@@ -3932,7 +3947,7 @@ channel_read_block(
     }
 
     // We have a complete message now.
-    if (mode == MODE_RAW || outlen != NULL)
+    if (mode == CH_MODE_RAW || outlen != NULL)
     {
 	msg = channel_get_all(channel, part, outlen);
     }
@@ -4014,7 +4029,7 @@ channel_read_json_block(
 
     for (;;)
     {
-	if (mode == MODE_LSP)
+	if (mode == CH_MODE_LSP)
 	    // In the "lsp" mode, the http header and the json payload may be
 	    // received in multiple messages. So concatenate all the received
 	    // messages.
@@ -4201,7 +4216,7 @@ common_channel_read(typval_T *argvars, typval_T *rettv, int raw, int blob)
 		vim_free(p);
 	    }
 	}
-	else if (raw || mode == MODE_RAW || mode == MODE_NL)
+	else if (raw || mode == CH_MODE_RAW || mode == CH_MODE_NL)
 	    rettv->vval.v_string = channel_read_block(channel, part,
 							 timeout, raw, NULL);
 	else
@@ -4578,13 +4593,13 @@ ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
     part_send = channel_part_send(channel);
 
     ch_mode = channel_get_mode(channel, part_send);
-    if (ch_mode == MODE_RAW || ch_mode == MODE_NL)
+    if (ch_mode == CH_MODE_RAW || ch_mode == CH_MODE_NL)
     {
 	emsg(_(e_cannot_use_evalexpr_sendexpr_with_raw_or_nl_channel));
 	return;
     }
 
-    if (ch_mode == MODE_LSP)
+    if (ch_mode == CH_MODE_LSP)
     {
 	dict_T		*d;
 	dictitem_T	*di;
@@ -4593,11 +4608,9 @@ ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
 	if (rettv_dict_alloc(rettv) == FAIL)
 	    return;
 
-	if (argvars[1].v_type != VAR_DICT)
-	{
-	    semsg(_(e_dict_required_for_argument_nr), 2);
+	if (check_for_dict_arg(argvars, 1) == FAIL)
 	    return;
-	}
+
 	d = argvars[1].vval.v_dict;
 	di = dict_find(d, (char_u *)"id", -1);
 	if (di != NULL && di->di_tv.v_type != VAR_NUMBER)
@@ -4637,7 +4650,7 @@ ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
     {
 	id = ++channel->ch_last_msg_id;
 	text = json_encode_nr_expr(id, &argvars[1],
-				(ch_mode == MODE_JS ? JSON_JS : 0) | JSON_NL);
+			      (ch_mode == CH_MODE_JS ? JSON_JS : 0) | JSON_NL);
     }
     if (text == NULL)
 	return;
@@ -4654,7 +4667,7 @@ ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
 	if (channel_read_json_block(channel, part_read, timeout, id, &listtv)
 									== OK)
 	{
-	    if (ch_mode == MODE_LSP)
+	    if (ch_mode == CH_MODE_LSP)
 	    {
 		*rettv = *listtv;
 		// Change the type to avoid the value being freed.
@@ -4674,7 +4687,7 @@ ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
 	}
     }
     free_job_options(&opt);
-    if (ch_mode == MODE_LSP && !eval && callback_present)
+    if (ch_mode == CH_MODE_LSP && !eval && callback_present)
     {
 	// if ch_sendexpr() is used to send a LSP message and a callback
 	// function is specified, then return the generated identifier for the
@@ -5126,13 +5139,13 @@ channel_part_read(channel_T *channel)
 
 /*
  * Return the mode of "channel"/"part"
- * If "channel" is invalid returns MODE_JSON.
+ * If "channel" is invalid returns CH_MODE_JSON.
  */
     static ch_mode_T
 channel_get_mode(channel_T *channel, ch_part_T part)
 {
     if (channel == NULL)
-	return MODE_JSON;
+	return CH_MODE_JSON;
     return channel->ch_part[part].ch_mode;
 }
 
@@ -5267,7 +5280,7 @@ f_ch_info(typval_T *argvars, typval_T *rettv UNUSED)
 	return;
 
     channel = get_channel_arg(&argvars[0], FALSE, FALSE, 0);
-    if (channel != NULL && rettv_dict_alloc(rettv) != FAIL)
+    if (channel != NULL && rettv_dict_alloc(rettv) == OK)
 	channel_info(channel, rettv->vval.v_dict);
 }
 

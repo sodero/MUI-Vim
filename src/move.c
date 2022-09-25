@@ -131,7 +131,7 @@ redraw_for_cursorline(win_T *wp)
 	    && !pum_visible())
     {
 	// win_line() will redraw the number column and cursorline only.
-	redraw_win_later(wp, VALID);
+	redraw_win_later(wp, UPD_VALID);
     }
 }
 
@@ -145,12 +145,13 @@ redraw_for_cursorcolumn(win_T *wp)
 {
     if ((wp->w_valid & VALID_VIRTCOL) == 0 && !pum_visible())
     {
-	// When 'cursorcolumn' is set need to redraw with SOME_VALID.
+	// When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.
 	if (wp->w_p_cuc)
-	    redraw_win_later(wp, SOME_VALID);
-	// When 'cursorlineopt' contains "screenline" need to redraw with VALID.
+	    redraw_win_later(wp, UPD_SOME_VALID);
+	// When 'cursorlineopt' contains "screenline" need to redraw with
+	// UPD_VALID.
 	else if (wp->w_p_cul && (wp->w_p_culopt_flags & CULOPT_SCRLINE))
-	    redraw_win_later(wp, VALID);
+	    redraw_win_later(wp, UPD_VALID);
     }
 }
 #endif
@@ -185,7 +186,7 @@ update_topline(void)
 #endif
     int		check_topline = FALSE;
     int		check_botline = FALSE;
-    long        *so_ptr = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
+    long	*so_ptr = curwin->w_p_so >= 0 ? &curwin->w_p_so : &p_so;
     int		save_so = *so_ptr;
 
     // If there is no valid screen and when the window height is zero just use
@@ -218,7 +219,7 @@ update_topline(void)
     if (BUFEMPTY())		// special case - file is empty
     {
 	if (curwin->w_topline != 1)
-	    redraw_later(NOT_VALID);
+	    redraw_later(UPD_NOT_VALID);
 	curwin->w_topline = 1;
 	curwin->w_botline = 2;
 	curwin->w_valid |= VALID_BOTLINE|VALID_BOTLINE_AP;
@@ -315,7 +316,7 @@ update_topline(void)
 	    if (curwin->w_cursor.lnum < curwin->w_botline)
 	    {
 	      if (((long)curwin->w_cursor.lnum
-					     >= (long)curwin->w_botline - *so_ptr
+					   >= (long)curwin->w_botline - *so_ptr
 #ifdef FEAT_FOLDING
 			|| hasAnyFolding(curwin)
 #endif
@@ -378,7 +379,7 @@ update_topline(void)
 		else
 #endif
 		    line_count = curwin->w_cursor.lnum - curwin->w_botline
-								   + 1 + *so_ptr;
+								 + 1 + *so_ptr;
 		if (line_count <= curwin->w_height + 1)
 		    scroll_cursor_bot(scrolljump_value(), FALSE);
 		else
@@ -401,10 +402,10 @@ update_topline(void)
 	if (curwin->w_skipcol != 0)
 	{
 	    curwin->w_skipcol = 0;
-	    redraw_later(NOT_VALID);
+	    redraw_later(UPD_NOT_VALID);
 	}
 	else
-	    redraw_later(VALID);
+	    redraw_later(UPD_VALID);
 	// May need to set w_skipcol when cursor in w_topline.
 	if (curwin->w_cursor.lnum == curwin->w_topline)
 	    validate_cursor();
@@ -435,7 +436,7 @@ check_top_offset(void)
 {
     lineoff_T	loff;
     int		n;
-    long        so = get_scrolloff_value();
+    long	so = get_scrolloff_value();
 
     if (curwin->w_cursor.lnum < curwin->w_topline + so
 #ifdef FEAT_FOLDING
@@ -469,15 +470,29 @@ check_top_offset(void)
     return FALSE;
 }
 
+/*
+ * Update w_curswant.
+ */
+    void
+update_curswant_force(void)
+{
+    validate_virtcol();
+    curwin->w_curswant = curwin->w_virtcol
+#ifdef FEAT_PROP_POPUP
+	- curwin->w_virtcol_first_char
+#endif
+	;
+    curwin->w_set_curswant = FALSE;
+}
+
+/*
+ * Update w_curswant if w_set_curswant is set.
+ */
     void
 update_curswant(void)
 {
     if (curwin->w_set_curswant)
-    {
-	validate_virtcol();
-	curwin->w_curswant = curwin->w_virtcol;
-	curwin->w_set_curswant = FALSE;
-    }
+	update_curswant_force();
 }
 
 /*
@@ -489,7 +504,8 @@ check_cursor_moved(win_T *wp)
     if (wp->w_cursor.lnum != wp->w_valid_cursor.lnum)
     {
 	wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL
-				     |VALID_CHEIGHT|VALID_CROW|VALID_TOPLINE);
+				      |VALID_CHEIGHT|VALID_CROW|VALID_TOPLINE
+				      |VALID_BOTLINE|VALID_BOTLINE_AP);
 	wp->w_valid_cursor = wp->w_cursor;
 	wp->w_valid_leftcol = wp->w_leftcol;
     }
@@ -521,7 +537,7 @@ changed_window_setting_win(win_T *wp)
     wp->w_lines_valid = 0;
     changed_line_abv_curs_win(wp);
     wp->w_valid &= ~(VALID_BOTLINE|VALID_BOTLINE_AP|VALID_TOPLINE);
-    redraw_win_later(wp, NOT_VALID);
+    redraw_win_later(wp, UPD_NOT_VALID);
 }
 
 /*
@@ -551,7 +567,7 @@ set_topline(win_T *wp, linenr_T lnum)
 #endif
     wp->w_valid &= ~(VALID_WROW|VALID_CROW|VALID_BOTLINE|VALID_TOPLINE);
     // Don't set VALID_TOPLINE here, 'scrolloff' needs to be checked.
-    redraw_later(VALID);
+    redraw_later(UPD_VALID);
 }
 
 /*
@@ -590,6 +606,22 @@ changed_line_abv_curs_win(win_T *wp)
 {
     wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL|VALID_CROW
 						|VALID_CHEIGHT|VALID_TOPLINE);
+}
+
+/*
+ * Display of line has changed for "buf", invalidate cursor position and
+ * w_botline.
+ */
+    void
+changed_line_display_buf(buf_T *buf)
+{
+    win_T *wp;
+
+    FOR_ALL_WINDOWS(wp)
+	if (wp->w_buffer == buf)
+	    wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL
+				|VALID_CROW|VALID_CHEIGHT
+				|VALID_TOPLINE|VALID_BOTLINE|VALID_BOTLINE_AP);
 }
 
 /*
@@ -651,6 +683,7 @@ cursor_valid(void)
     void
 validate_cursor(void)
 {
+    check_cursor_lnum();
     check_cursor_moved(curwin);
     if ((curwin->w_valid & (VALID_WCOL|VALID_WROW)) != (VALID_WCOL|VALID_WROW))
 	curs_columns(TRUE);
@@ -817,6 +850,9 @@ validate_virtcol_win(win_T *wp)
     check_cursor_moved(wp);
     if (!(wp->w_valid & VALID_VIRTCOL))
     {
+#ifdef FEAT_PROP_POPUP
+	wp->w_virtcol_first_char = 0;
+#endif
 	getvvcol(wp, &wp->w_cursor, NULL, &(wp->w_virtcol), NULL);
 #ifdef FEAT_SYN_HL
 	redraw_for_cursorcolumn(wp);
@@ -950,19 +986,25 @@ curs_columns(
     colnr_T	startcol;
     colnr_T	endcol;
     colnr_T	prev_skipcol;
-    long        so = get_scrolloff_value();
-    long        siso = get_sidescrolloff_value();
+    long	so = get_scrolloff_value();
+    long	siso = get_sidescrolloff_value();
 
     /*
      * First make sure that w_topline is valid (after moving the cursor).
      */
-    update_topline();
+    if (!skip_update_topline)
+	update_topline();
 
     /*
      * Next make sure that w_cline_row is valid.
      */
     if (!(curwin->w_valid & VALID_CROW))
 	curs_rows(curwin);
+
+#ifdef FEAT_PROP_POPUP
+    // will be set by getvvcol() but not reset
+    curwin->w_virtcol_first_char = 0;
+#endif
 
     /*
      * Compute the number of virtual columns.
@@ -1037,6 +1079,19 @@ curs_columns(
 #endif
 	    )
     {
+#ifdef FEAT_PROP_POPUP
+	if (curwin->w_virtcol_first_char > 0)
+	{
+	    int cols = (curwin->w_width - extra);
+	    int rows = cols > 0 ? curwin->w_virtcol_first_char / cols : 1;
+
+	    // each "above" text prop shifts the text one row down
+	    curwin->w_wrow += rows;
+	    curwin->w_wcol -= rows * cols;
+	    endcol -= rows * cols;
+	    curwin->w_cline_height = rows + 1;
+	}
+#endif
 	/*
 	 * If Cursor is left of the screen, scroll rightwards.
 	 * If Cursor is right of the screen, scroll leftwards
@@ -1072,7 +1127,7 @@ curs_columns(
 	    {
 		curwin->w_leftcol = new_leftcol;
 		// screen has to be redrawn with new curwin->w_leftcol
-		redraw_later(NOT_VALID);
+		redraw_later(UPD_NOT_VALID);
 	    }
 	}
 	curwin->w_wcol -= curwin->w_leftcol;
@@ -1185,7 +1240,7 @@ curs_columns(
     else
 	curwin->w_skipcol = 0;
     if (prev_skipcol != curwin->w_skipcol)
-	redraw_later(NOT_VALID);
+	redraw_later(UPD_NOT_VALID);
 
 #ifdef FEAT_SYN_HL
     redraw_for_cursorcolumn(curwin);
@@ -1297,7 +1352,7 @@ f_screenpos(typval_T *argvars UNUSED, typval_T *rettv)
     int		row = 0;
     int		scol = 0, ccol = 0, ecol = 0;
 
-    if (rettv_dict_alloc(rettv) != OK)
+    if (rettv_dict_alloc(rettv) == FAIL)
 	return;
     dict = rettv->vval.v_dict;
 
@@ -1320,6 +1375,39 @@ f_screenpos(typval_T *argvars UNUSED, typval_T *rettv)
     dict_add_number(dict, "col", scol);
     dict_add_number(dict, "curscol", ccol);
     dict_add_number(dict, "endcol", ecol);
+}
+
+/*
+ * "virtcol2col({winid}, {lnum}, {col})" function
+ */
+    void
+f_virtcol2col(typval_T *argvars UNUSED, typval_T *rettv)
+{
+    win_T	*wp;
+    linenr_T	lnum;
+    int		screencol;
+    int		error = FALSE;
+
+    rettv->vval.v_number = -1;
+
+    if (check_for_number_arg(argvars, 0) == FAIL
+	    || check_for_number_arg(argvars, 1) == FAIL
+	    || check_for_number_arg(argvars, 2) == FAIL)
+	return;
+
+    wp = find_win_by_nr_or_id(&argvars[0]);
+    if (wp == NULL)
+	return;
+
+    lnum = tv_get_number_chk(&argvars[1], &error);
+    if (error || lnum < 0 || lnum > wp->w_buffer->b_ml.ml_line_count)
+	return;
+
+    screencol = tv_get_number_chk(&argvars[2], &error);
+    if (error || screencol < 0)
+	return;
+
+    rettv->vval.v_number = vcol2col(wp, lnum, screencol);
 }
 #endif
 
@@ -1952,7 +2040,7 @@ set_empty_rows(win_T *wp, int used)
 
 /*
  * Recompute topline to put the cursor at the bottom of the window.
- * Scroll at least "min_scroll" lines.
+ * When scrolling scroll at least "min_scroll" lines.
  * If "set_topbot" is TRUE, set topline and botline first (for "zb").
  * This is messy stuff!!!
  */
@@ -1975,7 +2063,7 @@ scroll_cursor_bot(int min_scroll, int set_topbot)
     linenr_T	old_valid = curwin->w_valid;
     int		old_empty_rows = curwin->w_empty_rows;
     linenr_T	cln;		    // Cursor Line Number
-    long        so = get_scrolloff_value();
+    long	so = get_scrolloff_value();
 
     cln = curwin->w_cursor.lnum;
     if (set_topbot)
@@ -2269,7 +2357,7 @@ cursor_correct(void)
     int		above_wanted, below_wanted;
     linenr_T	cln;		    // Cursor Line Number
     int		max_off;
-    long        so = get_scrolloff_value();
+    long	so = get_scrolloff_value();
 
     /*
      * How many lines we would like to have above/below the cursor depends on
@@ -2389,7 +2477,7 @@ onepage(int dir, long count)
     int		retval = OK;
     lineoff_T	loff;
     linenr_T	old_topline = curwin->w_topline;
-    long        so = get_scrolloff_value();
+    long	so = get_scrolloff_value();
 
     if (curbuf->b_ml.ml_line_count == 1)    // nothing to do
     {
@@ -2622,7 +2710,7 @@ onepage(int dir, long count)
 #endif
     }
 
-    redraw_later(VALID);
+    redraw_later(UPD_VALID);
     return retval;
 }
 
@@ -2874,7 +2962,7 @@ halfpage(int flag, linenr_T Prenum)
 #endif
     cursor_correct();
     beginline(BL_SOL | BL_FIX);
-    redraw_later(VALID);
+    redraw_later(UPD_VALID);
 }
 
     void
@@ -2918,12 +3006,17 @@ do_check_cursorbind(void)
 	    restart_edit_save = restart_edit;
 	    restart_edit = TRUE;
 	    check_cursor();
-	    validate_cursor();
+
+	    // Avoid a scroll here for the cursor position, 'scrollbind' is
+	    // more important.
+	    if (!curwin->w_p_scb)
+		validate_cursor();
+
 	    restart_edit = restart_edit_save;
 	    // Correct cursor for multi-byte character.
 	    if (has_mbyte)
 		mb_adjust_cursor();
-	    redraw_later(VALID);
+	    redraw_later(UPD_VALID);
 
 	    // Only scroll when 'scrollbind' hasn't done this.
 	    if (!curwin->w_p_scb)

@@ -32,15 +32,17 @@ EXTERN long	Columns INIT(= 80);	// nr of columns in the screen
  * The characters that are currently on the screen are kept in ScreenLines[].
  * It is a single block of characters, the size of the screen plus one line.
  * The attributes for those characters are kept in ScreenAttrs[].
+ * The byte offset in the line is kept in ScreenCols[].
  *
  * "LineOffset[n]" is the offset from ScreenLines[] for the start of line 'n'.
- * The same value is used for ScreenLinesUC[] and ScreenAttrs[].
+ * The same value is used for ScreenLinesUC[], ScreenAttrs[] and ScreenCols[].
  *
  * Note: before the screen is initialized and when out of memory these can be
  * NULL.
  */
 EXTERN schar_T	*ScreenLines INIT(= NULL);
 EXTERN sattr_T	*ScreenAttrs INIT(= NULL);
+EXTERN colnr_T  *ScreenCols INIT(= NULL);
 EXTERN unsigned	*LineOffset INIT(= NULL);
 EXTERN char_u	*LineWraps INIT(= NULL);	// line wraps to next line
 
@@ -62,7 +64,7 @@ EXTERN int	Screen_mco INIT(= 0);		// value of p_mco used when
 EXTERN schar_T	*ScreenLines2 INIT(= NULL);
 
 /*
- * Buffer for one screen line (characters and attributes).
+ * One screen line to be displayed.  Points into ScreenLines.
  */
 EXTERN schar_T	*current_ScreenLine INIT(= NULL);
 
@@ -75,7 +77,14 @@ EXTERN int	screen_cur_row INIT(= 0);
 EXTERN int	screen_cur_col INIT(= 0);
 
 #ifdef FEAT_SEARCH_EXTRA
-EXTERN match_T	screen_search_hl; // used for 'hlsearch' highlight matching
+// used for 'hlsearch' highlight matching
+EXTERN match_T	screen_search_hl;
+
+// last lnum where CurSearch was displayed
+EXTERN linenr_T search_hl_has_cursor_lnum INIT(= 0);
+
+// don't use 'hlsearch' temporarily
+EXTERN int	no_hlsearch INIT(= FALSE);
 #endif
 
 #ifdef FEAT_FOLDING
@@ -227,6 +236,7 @@ EXTERN int	uncaught_emsg;		    // number of times emsg() was
 EXTERN int	did_emsg_syntax;	    // did_emsg set because of a
 					    // syntax error
 EXTERN int	called_emsg;		    // always incremented by emsg()
+EXTERN int	in_echowindow;		    // executing ":echowindow"
 EXTERN int	ex_exitval INIT(= 0);	    // exit value for ex mode
 EXTERN int	emsg_on_display INIT(= FALSE);	// there is an error message
 EXTERN int	rc_did_emsg INIT(= FALSE);  // vim_regcomp() called emsg()
@@ -591,8 +601,12 @@ EXTERN int	diff_need_scrollbind INIT(= FALSE);
 #endif
 
 // While redrawing the screen this flag is set.  It means the screen size
-// ('lines' and 'rows') must not be changed.
+// ('lines' and 'rows') must not be changed and prevents recursive updating.
 EXTERN int	updating_screen INIT(= FALSE);
+
+// While computing a statusline and the like we do not want any w_redr_type or
+// must_redraw to be set.
+EXTERN int	redraw_not_allowed INIT(= FALSE);
 
 #ifdef MESSAGE_QUEUE
 // While closing windows or buffers messages should not be handled to avoid
@@ -741,6 +755,9 @@ EXTERN int	popup_visible INIT(= FALSE);
 EXTERN int	popup_uses_mouse_move INIT(= FALSE);
 
 EXTERN int	text_prop_frozen INIT(= 0);
+
+// when TRUE computing the cursor position ignores text properties.
+EXTERN int	ignore_text_props INIT(= FALSE);
 #endif
 
 // When set the popup menu will redraw soon using the pum_win_ values. Do not
@@ -846,15 +863,10 @@ EXTERN int	secure INIT(= FALSE);
 				// allowed, e.g. when sourcing .exrc or .vimrc
 				// in current directory
 
-EXTERN int	textwinlock INIT(= 0);
+EXTERN int	textlock INIT(= 0);
 				// non-zero when changing text and jumping to
 				// another window or editing another buffer is
 				// not allowed
-
-EXTERN int	textlock INIT(= 0);
-				// non-zero when changing text is not allowed,
-				// jumping to another window is allowed,
-				// editing another buffer is not allowed.
 
 EXTERN int	curbuf_lock INIT(= 0);
 				// non-zero when the current buffer can't be
@@ -937,7 +949,6 @@ EXTERN int     end_comment_pending INIT(= NUL);
  */
 EXTERN int     did_syncbind INIT(= FALSE);
 
-#ifdef FEAT_SMARTINDENT
 /*
  * This flag is set when a smart indent has been performed. When the next typed
  * character is a '{' the inserted tab will be deleted again.
@@ -955,7 +966,6 @@ EXTERN int	can_si INIT(= FALSE);
  * one indent will be removed.
  */
 EXTERN int	can_si_back INIT(= FALSE);
-#endif
 
 EXTERN int	old_indent INIT(= 0);	// for ^^D command in insert mode
 
@@ -977,7 +987,7 @@ EXTERN pos_T	Insstart;		// This is where the latest
 EXTERN pos_T	Insstart_orig;
 
 /*
- * Stuff for VREPLACE mode.
+ * Stuff for MODE_VREPLACE state.
  */
 EXTERN int	orig_line_count INIT(= 0);  // Line count when "gR" started
 EXTERN int	vr_lines_changed INIT(= 0); // #Lines changed by "gR" so far
@@ -1033,7 +1043,8 @@ EXTERN vimconv_T output_conv;			// type of output conversion
  * (DBCS).
  * The value is set in mb_init();
  */
-// length of char in bytes, including following composing chars
+// Length of char in bytes, including any following composing chars.
+// NUL has length zero.
 EXTERN int (*mb_ptr2len)(char_u *p) INIT(= latin_ptr2len);
 
 // idem, with limit on string length
@@ -1095,14 +1106,14 @@ EXTERN guicolor_T	xim_bg_color INIT(= INVALCOLOR);
 /*
  * "State" is the main state of Vim.
  * There are other variables that modify the state:
- * "Visual_mode"    When State is NORMAL or INSERT.
- * "finish_op"	    When State is NORMAL, after typing the operator and before
- *		    typing the motion command.
+ * "Visual_mode"    When State is MODE_NORMAL or MODE_INSERT.
+ * "finish_op"	    When State is MODE_NORMAL, after typing the operator and
+ *		    before typing the motion command.
  * "motion_force"   Last motion_force  from do_pending_operator()
  * "debug_mode"	    Debug mode.
  */
-EXTERN int	State INIT(= NORMAL);	// This is the current state of the
-					// command interpreter.
+EXTERN int	State INIT(= MODE_NORMAL);
+
 #ifdef FEAT_EVAL
 EXTERN int	debug_mode INIT(= FALSE);
 #endif
@@ -1203,6 +1214,10 @@ EXTERN typebuf_T typebuf		// typeahead buffer
 		    = {NULL, NULL, 0, 0, 0, 0, 0, 0, 0}
 #endif
 		    ;
+// Flag used to indicate that vgetorpeek() returned a char like Esc when the
+// :normal argument was exhausted.
+EXTERN int	typebuf_was_empty INIT(= FALSE);
+
 EXTERN int	ex_normal_busy INIT(= 0);   // recursiveness of ex_normal()
 #ifdef FEAT_EVAL
 EXTERN int	in_feedkeys INIT(= 0);	    // ex_normal_busy set in feedkeys()
@@ -1227,6 +1242,10 @@ EXTERN int	skip_redraw INIT(= FALSE);  // skip redraw once
 EXTERN int	do_redraw INIT(= FALSE);    // extra redraw once
 #ifdef FEAT_DIFF
 EXTERN int	need_diff_redraw INIT(= 0); // need to call diff_redraw()
+#endif
+#ifdef FEAT_RELTIME
+// flag set when 'redrawtime' timeout has been set
+EXTERN int	redrawtime_limit_set INIT(= FALSE);
 #endif
 
 EXTERN int	need_highlight_changed INIT(= TRUE);
@@ -1291,7 +1310,7 @@ EXTERN pos_T	last_cursormoved	      // for CursorMoved event
 
 EXTERN int	postponed_split INIT(= 0);  // for CTRL-W CTRL-] command
 EXTERN int	postponed_split_flags INIT(= 0);  // args for win_split()
-EXTERN int	postponed_split_tab INIT(= 0);  // cmdmod.tab
+EXTERN int	postponed_split_tab INIT(= 0);  // cmdmod.cmod_tab
 #ifdef FEAT_QUICKFIX
 EXTERN int	g_do_tagpreview INIT(= 0);  // for tag preview commands:
 					    // height of preview window
@@ -1326,13 +1345,11 @@ EXTERN int  redir_execute INIT(= 0);	// execute() redirection
 EXTERN char_u	langmap_mapchar[256];	// mapping for language keys
 #endif
 
-#ifdef FEAT_WILDMENU
 EXTERN int  save_p_ls INIT(= -1);	// Save 'laststatus' setting
 EXTERN int  save_p_wmh INIT(= -1);	// Save 'winminheight' setting
 EXTERN int  wild_menu_showing INIT(= 0);
-# define WM_SHOWN	1		// wildmenu showing
-# define WM_SCROLLED	2		// wildmenu showing with scroll
-#endif
+#define WM_SHOWN	1		// wildmenu showing
+#define WM_SCROLLED	2		// wildmenu showing with scroll
 
 #ifdef MSWIN
 EXTERN char_u	toupper_tab[256];	// table for toupper()
@@ -1376,17 +1393,6 @@ EXTERN char_u	*homedir INIT(= NULL);
 // directory is not a local directory, globaldir is NULL.
 EXTERN char_u	*globaldir INIT(= NULL);
 
-// Characters from 'fillchars' option
-EXTERN int	fill_stl INIT(= ' ');
-EXTERN int	fill_stlnc INIT(= ' ');
-EXTERN int	fill_vert INIT(= ' ');
-EXTERN int	fill_fold INIT(= '-');
-EXTERN int	fill_foldopen INIT(= '-');
-EXTERN int	fill_foldclosed INIT(= '+');
-EXTERN int	fill_foldsep INIT(= '|');
-EXTERN int	fill_diff INIT(= '-');
-EXTERN int	fill_eob INIT(= '~');
-
 #ifdef FEAT_FOLDING
 EXTERN int	disable_fold_update INIT(= 0);
 #endif
@@ -1423,11 +1429,6 @@ EXTERN char_u	wim_flags[4];
 # define STL_IN_ICON	1
 # define STL_IN_TITLE	2
 EXTERN int      stl_syntax INIT(= 0);
-#endif
-
-#ifdef FEAT_SEARCH_EXTRA
-// don't use 'hlsearch' temporarily
-EXTERN int	no_hlsearch INIT(= FALSE);
 #endif
 
 #if defined(FEAT_BEVAL) && !defined(NO_X11_INCLUDES)
@@ -1606,9 +1607,7 @@ EXTERN int netbeansSuppressNoLines INIT(= 0); // skip "No lines in buffer"
 EXTERN char top_bot_msg[]   INIT(= N_("search hit TOP, continuing at BOTTOM"));
 EXTERN char bot_top_msg[]   INIT(= N_("search hit BOTTOM, continuing at TOP"));
 
-#ifdef FEAT_EVAL
 EXTERN char line_msg[]	    INIT(= N_(" line "));
-#endif
 
 #ifdef FEAT_CRYPT
 EXTERN char need_key_msg[]  INIT(= N_("Need encryption key for \"%s\""));
@@ -1655,6 +1654,7 @@ EXTERN int  reset_term_props_on_termresponse INIT(= FALSE);
 EXTERN int  disable_vterm_title_for_testing INIT(= FALSE);
 EXTERN long override_sysinfo_uptime INIT(= -1);
 EXTERN int  override_autoload INIT(= FALSE);
+EXTERN int  ml_get_alloc_lines INIT(= FALSE);
 
 EXTERN int  in_free_unref_items INIT(= FALSE);
 #endif
@@ -1737,3 +1737,12 @@ EXTERN int channel_need_redraw INIT(= FALSE);
 // While executing a regexp and set to OPTION_MAGIC_ON or OPTION_MAGIC_OFF this
 // overrules p_magic.  Otherwise set to OPTION_MAGIC_NOT_SET.
 EXTERN optmagic_T magic_overruled INIT(= OPTION_MAGIC_NOT_SET);
+
+#ifdef FEAT_CMDWIN
+// Skip win_fix_cursor() call for 'nosplitscroll' when cmdwin is closed.
+EXTERN int skip_win_fix_cursor INIT(= FALSE);
+#endif
+// Skip win_fix_scroll() call for 'nosplitscroll' when closing tab page.
+EXTERN int skip_win_fix_scroll INIT(= FALSE);
+// Skip update_topline() call while executing win_fix_scroll().
+EXTERN int skip_update_topline INIT(= FALSE);

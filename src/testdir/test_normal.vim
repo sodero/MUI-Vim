@@ -4,6 +4,7 @@ source shared.vim
 source check.vim
 source view_util.vim
 import './vim9.vim' as v9
+source screendump.vim
 
 func Setup_NewWindow()
   10new
@@ -1708,14 +1709,14 @@ endfunc
 func Test_normal20_exmode()
   " Reading from redirected file doesn't work on MS-Windows
   CheckNotMSWindows
-  call writefile(['1a', 'foo', 'bar', '.', 'w! Xfile2', 'q!'], 'Xscript')
-  call writefile(['1', '2'], 'Xfile')
-  call system(GetVimCommand() .. ' -e -s < Xscript Xfile')
-  let a=readfile('Xfile2')
+  call writefile(['1a', 'foo', 'bar', '.', 'w! Xn20file2', 'q!'], 'Xn20script')
+  call writefile(['1', '2'], 'Xn20file')
+  call system(GetVimCommand() .. ' -e -s < Xn20script Xn20file')
+  let a=readfile('Xn20file2')
   call assert_equal(['1', 'foo', 'bar', '2'], a)
 
   " clean up
-  for file in ['Xfile', 'Xfile2', 'Xscript']
+  for file in ['Xn20file', 'Xn20file2', 'Xn20script']
     call delete(file)
   endfor
   bw!
@@ -1757,22 +1758,22 @@ func Test_normal22_zet()
   " Test for ZZ
   " let shell = &shell
   " let &shell = 'sh'
-  call writefile(['1', '2'], 'Xfile')
+  call writefile(['1', '2'], 'Xn22file')
   let args = ' -N -i NONE --noplugins -X --not-a-term'
-  call system(GetVimCommand() .. args .. ' -c "%d" -c ":norm! ZZ" Xfile')
-  let a = readfile('Xfile')
+  call system(GetVimCommand() .. args .. ' -c "%d" -c ":norm! ZZ" Xn22file')
+  let a = readfile('Xn22file')
   call assert_equal([], a)
   " Test for ZQ
-  call writefile(['1', '2'], 'Xfile')
-  call system(GetVimCommand() . args . ' -c "%d" -c ":norm! ZQ" Xfile')
-  let a = readfile('Xfile')
+  call writefile(['1', '2'], 'Xn22file')
+  call system(GetVimCommand() . args . ' -c "%d" -c ":norm! ZQ" Xn22file')
+  let a = readfile('Xn22file')
   call assert_equal(['1', '2'], a)
 
   " Unsupported Z command
   call assert_beeps('normal! ZW')
 
   " clean up
-  for file in ['Xfile']
+  for file in ['Xn22file']
     call delete(file)
   endfor
   " let &shell = shell
@@ -1993,9 +1994,16 @@ func Test_normal27_bracket()
   call assert_equal(5, line('.'))
   call assert_equal(3, col('.'))
 
-  " No mark after line 21, cursor moves to first non blank on current line
+  " No mark before line 1, cursor moves to first non-blank on current line
+  1
+  norm! 5|['
+  call assert_equal('  1   b', getline('.'))
+  call assert_equal(1, line('.'))
+  call assert_equal(3, col('.'))
+
+  " No mark after line 21, cursor moves to first non-blank on current line
   21
-  norm! $]'
+  norm! 5|]'
   call assert_equal('  21   b', getline('.'))
   call assert_equal(21, line('.'))
   call assert_equal(3, col('.'))
@@ -2008,6 +2016,34 @@ func Test_normal27_bracket()
 
   " Test for ]`
   norm! ]`
+  call assert_equal('  20   b', getline('.'))
+  call assert_equal(20, line('.'))
+  call assert_equal(8, col('.'))
+
+  " No mark before line 1, cursor does not move
+  1
+  norm! 5|[`
+  call assert_equal('  1   b', getline('.'))
+  call assert_equal(1, line('.'))
+  call assert_equal(5, col('.'))
+
+  " No mark after line 21, cursor does not move
+  21
+  norm! 5|]`
+  call assert_equal('  21   b', getline('.'))
+  call assert_equal(21, line('.'))
+  call assert_equal(5, col('.'))
+
+  " Count too large for [`
+  " cursor moves to first lowercase mark
+  norm! 99[`
+  call assert_equal('  1   b', getline('.'))
+  call assert_equal(1, line('.'))
+  call assert_equal(7, col('.'))
+
+  " Count too large for ]`
+  " cursor moves to last lowercase mark
+  norm! 99]`
   call assert_equal('  20   b', getline('.'))
   call assert_equal(20, line('.'))
   call assert_equal(8, col('.'))
@@ -2458,9 +2494,9 @@ func Test_normal33_g_cmd2()
   call assert_equal(2, line('.'))
   call assert_fails(':norm! g;', 'E662:')
   call assert_fails(':norm! g,', 'E663:')
-  let &ul=&ul
+  let &ul = &ul
   call append('$', ['a', 'b', 'c', 'd'])
-  let &ul=&ul
+  let &ul = &ul
   call append('$', ['Z', 'Y', 'X', 'W'])
   let a = execute(':changes')
   call assert_match('2\s\+0\s\+2', a)
@@ -2944,12 +2980,6 @@ func Test_normal40_ctrl_bsl()
   call assert_false(&insertmode)
   call assert_beeps("normal! \<C-\>\<C-A>")
 
-  if has('cmdwin')
-    " Using CTRL-\ CTRL-N in cmd window should close the window
-    call feedkeys("q:\<C-\>\<C-N>", 'xt')
-    call assert_equal('', getcmdwintype())
-  endif
-
   " clean up
   bw!
 endfunc
@@ -3228,31 +3258,6 @@ func Test_gr_command()
   enew!
 endfunc
 
-" When splitting a window the changelist position is wrong.
-" Test the changelist position after splitting a window.
-" Test for the bug fixed by 7.4.386
-func Test_changelist()
-  let save_ul = &ul
-  enew!
-  call append('$', ['1', '2'])
-  exe "normal i\<C-G>u"
-  exe "normal Gkylpa\<C-G>u"
-  set ul=100
-  exe "normal Gylpa\<C-G>u"
-  set ul=100
-  normal gg
-  vsplit
-  normal g;
-  call assert_equal([3, 2], [line('.'), col('.')])
-  normal g;
-  call assert_equal([2, 2], [line('.'), col('.')])
-  call assert_fails('normal g;', 'E662:')
-  new
-  call assert_fails('normal g;', 'E664:')
-  %bwipe!
-  let &ul = save_ul
-endfunc
-
 func Test_nv_hat_count()
   %bwipeout!
   let l:nr = bufnr('%') + 1
@@ -3289,6 +3294,20 @@ func Test_message_when_using_ctrl_c()
   call assert_match("Type  :qa!  and press <Enter> to abandon all changes and exit Vim", Screenline(&lines))
 
   bwipe!
+endfunc
+
+func Test_mode_updated_after_ctrl_c()
+  CheckScreendump
+
+  let buf = RunVimInTerminal('', {'rows': 5})
+  call term_sendkeys(buf, "i")
+  call term_sendkeys(buf, "\<C-O>")
+  " wait a moment so that the "-- (insert) --" message is displayed
+  call TermWait(buf, 50)
+  call term_sendkeys(buf, "\<C-C>")
+  call VerifyScreenDump(buf, 'Test_mode_updated_1', {})
+
+  call StopVimInTerminal(buf)
 endfunc
 
 " Test for '[m', ']m', '[M' and ']M'

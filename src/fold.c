@@ -413,7 +413,7 @@ opFoldRange(
 	emsg(_(e_no_fold_found));
     // Force a redraw to remove the Visual highlighting.
     if (had_visual)
-	redraw_curbuf_later(INVERTED);
+	redraw_curbuf_later(UPD_INVERTED);
 }
 
 // openFold() {{{2
@@ -786,7 +786,7 @@ deleteFold(
 	emsg(_(e_no_fold_found));
 	// Force a redraw to remove the Visual highlighting.
 	if (had_visual)
-	    redraw_curbuf_later(INVERTED);
+	    redraw_curbuf_later(UPD_INVERTED);
     }
     else
 	// Deleting markers may make cursor column invalid.
@@ -829,10 +829,18 @@ foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 
     if (wp->w_folds.ga_len > 0)
     {
-	// Mark all folds from top to bot as maybe-small.
-	(void)foldFind(&wp->w_folds, top, &fp);
+	linenr_T	maybe_small_start = top;
+	linenr_T	maybe_small_end = bot;
+
+	// Mark all folds from top to bot (or bot to top) as maybe-small.
+	if (top > bot)
+	{
+	    maybe_small_start = bot;
+	    maybe_small_end = top;
+	}
+	(void)foldFind(&wp->w_folds, maybe_small_start, &fp);
 	while (fp < (fold_T *)wp->w_folds.ga_data + wp->w_folds.ga_len
-		&& fp->fd_top < bot)
+		&& fp->fd_top <= maybe_small_end)
 	{
 	    fp->fd_small = MAYBE;
 	    ++fp;
@@ -867,7 +875,7 @@ foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 foldUpdateAll(win_T *win)
 {
     win->w_foldinvalid = TRUE;
-    redraw_win_later(win, NOT_VALID);
+    redraw_win_later(win, UPD_NOT_VALID);
 }
 
 // foldMoveTo() {{{2
@@ -1499,7 +1507,7 @@ foldMarkAdjust(
 	line2 = line1 - amount_after - 1;
     // If appending a line in Insert mode, it should be included in the fold
     // just above the line.
-    if ((State & INSERT) && amount == (linenr_T)1 && line2 == MAXLNUM)
+    if ((State & MODE_INSERT) && amount == (linenr_T)1 && line2 == MAXLNUM)
 	--line1;
     foldMarkAdjustRecurse(&wp->w_folds, line1, line2, amount, amount_after);
 }
@@ -1523,7 +1531,7 @@ foldMarkAdjustRecurse(
 
     // In Insert mode an inserted line at the top of a fold is considered part
     // of the fold, otherwise it isn't.
-    if ((State & INSERT) && amount == (linenr_T)1 && line2 == MAXLNUM)
+    if ((State & MODE_INSERT) && amount == (linenr_T)1 && line2 == MAXLNUM)
 	top = line1 + 1;
     else
 	top = line1;
@@ -2165,7 +2173,7 @@ foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot)
 	bot = wp->w_buffer->b_ml.ml_line_count;
 	wp->w_foldinvalid = FALSE;
 
-	// Mark all folds a maybe-small.
+	// Mark all folds as maybe-small.
 	setSmallMaybe(&wp->w_folds);
     }
 
@@ -2246,7 +2254,14 @@ foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot)
 	    getlevel = foldlevelDiff;
 #endif
 	else
+	{
 	    getlevel = foldlevelIndent;
+	    // Start one line back, because if the line above "top" has an
+	    // undefined fold level, folding it relies on the line under it,
+	    // which is "top".
+	    if (top > 1)
+		--fline.lnum;
+	}
 
 	// Backup to a line for which the fold level is defined.  Since it's
 	// always defined for line one, we will stop there.
@@ -2559,6 +2574,7 @@ foldUpdateIEMSRecurse(
 					(long)(fp->fd_top - firstlnum));
 			    fp->fd_len += fp->fd_top - firstlnum;
 			    fp->fd_top = firstlnum;
+			    fp->fd_small = MAYBE;
 			    fold_changed = TRUE;
 			}
 			else if ((flp->start != 0 && lvl == level)

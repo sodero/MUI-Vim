@@ -2181,11 +2181,10 @@ cs_read_prompt(int i)
 /*
  * Used to catch and ignore SIGALRM below.
  */
-    static RETSIGTYPE
+    static void
 sig_handler SIGDEFARG(sigarg)
 {
     // do nothing
-    SIGRETURN;
 }
 #endif
 
@@ -2475,7 +2474,7 @@ cs_show(exarg_T *eap UNUSED)
 	}
     }
 
-    wait_return(TRUE);
+    wait_return(FALSE);
     return CSCOPE_SUCCESS;
 }
 

@@ -29,30 +29,15 @@
  */
 static int current_copyID = 0;
 
-/*
- * Info used by a ":for" loop.
- */
-typedef struct
-{
-    int		fi_semicolon;	// TRUE if ending in '; var]'
-    int		fi_varcount;	// nr of variables in the list
-    int		fi_break_count;	// nr of line breaks encountered
-    listwatch_T	fi_lw;		// keep an eye on the item used.
-    list_T	*fi_list;	// list being used
-    int		fi_bi;		// index of blob
-    blob_T	*fi_blob;	// blob being used
-    char_u	*fi_string;	// copy of string being used
-    int		fi_byte_idx;	// byte index in fi_string
-} forinfo_T;
-
 static int eval2(char_u **arg, typval_T *rettv, evalarg_T *evalarg);
 static int eval3(char_u **arg, typval_T *rettv, evalarg_T *evalarg);
 static int eval4(char_u **arg, typval_T *rettv, evalarg_T *evalarg);
 static int eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg);
-static int eval6(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int want_string);
-static int eval7t(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int want_string);
+static int eval6(char_u **arg, typval_T *rettv, evalarg_T *evalarg);
 static int eval7(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int want_string);
-static int eval7_leader(typval_T *rettv, int numeric_only, char_u *start_leader, char_u **end_leaderp);
+static int eval8(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int want_string);
+static int eval9(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int want_string);
+static int eval9_leader(typval_T *rettv, int numeric_only, char_u *start_leader, char_u **end_leaderp);
 
 static int free_unref_items(int copyID);
 static char_u *make_expanded_name(char_u *in_start, char_u *expr_start, char_u *expr_end, char_u *in_end);
@@ -140,7 +125,7 @@ fill_evalarg_from_eap(evalarg_T *evalarg, exarg_T *eap, int skip)
     if (eap != NULL)
     {
 	evalarg->eval_cstack = eap->cstack;
-	if (sourcing_a_script(eap))
+	if (sourcing_a_script(eap) || eap->getline == get_list_line)
 	{
 	    evalarg->eval_getline = eap->getline;
 	    evalarg->eval_cookie = eap->cookie;
@@ -262,8 +247,17 @@ eval_expr_typval(typval_T *expr, typval_T *argv, int argc, typval_T *rettv)
 	if (partial->pt_func != NULL
 			  && partial->pt_func->uf_def_status != UF_NOT_COMPILED)
 	{
-	    if (call_def_function(partial->pt_func, argc, argv,
-						       partial, rettv) == FAIL)
+	    funccall_T	*fc = create_funccal(partial->pt_func, rettv);
+	    int		r;
+
+	    if (fc == NULL)
+		return FAIL;
+
+	    // Shortcut to call a compiled function with minimal overhead.
+	    r = call_def_function(partial->pt_func, argc, argv,
+					  DEF_USE_PT_ARGV, partial, fc, rettv);
+	    remove_funccal();
+	    if (r == FAIL)
 		return FAIL;
 	}
 	else
@@ -353,6 +347,75 @@ eval_to_string_skip(
 }
 
 /*
+ * Initialize "evalarg" for use.
+ */
+    void
+init_evalarg(evalarg_T *evalarg)
+{
+    CLEAR_POINTER(evalarg);
+    ga_init2(&evalarg->eval_tofree_ga, sizeof(char_u *), 20);
+}
+
+/*
+ * If "evalarg->eval_tofree" is not NULL free it later.
+ * Caller is expected to overwrite "evalarg->eval_tofree" next.
+ */
+    static void
+free_eval_tofree_later(evalarg_T *evalarg)
+{
+    if (evalarg->eval_tofree != NULL)
+    {
+	if (ga_grow(&evalarg->eval_tofree_ga, 1) == OK)
+	    ((char_u **)evalarg->eval_tofree_ga.ga_data)
+		[evalarg->eval_tofree_ga.ga_len++]
+		= evalarg->eval_tofree;
+	else
+	    vim_free(evalarg->eval_tofree);
+    }
+}
+
+/*
+ * After using "evalarg" filled from "eap": free the memory.
+ */
+    void
+clear_evalarg(evalarg_T *evalarg, exarg_T *eap)
+{
+    if (evalarg != NULL)
+    {
+	garray_T *etga = &evalarg->eval_tofree_ga;
+
+	if (evalarg->eval_tofree != NULL || evalarg->eval_using_cmdline)
+	{
+	    if (eap != NULL)
+	    {
+		// We may need to keep the original command line, e.g. for
+		// ":let" it has the variable names.  But we may also need
+		// the new one, "nextcmd" points into it.  Keep both.
+		vim_free(eap->cmdline_tofree);
+		eap->cmdline_tofree = *eap->cmdlinep;
+
+		if (evalarg->eval_using_cmdline && etga->ga_len > 0)
+		{
+		    // "nextcmd" points into the last line in eval_tofree_ga,
+		    // need to keep it around.
+		    --etga->ga_len;
+		    *eap->cmdlinep = ((char_u **)etga->ga_data)[etga->ga_len];
+		    vim_free(evalarg->eval_tofree);
+		}
+		else
+		    *eap->cmdlinep = evalarg->eval_tofree;
+	    }
+	    else
+		vim_free(evalarg->eval_tofree);
+	    evalarg->eval_tofree = NULL;
+	}
+
+	ga_clear_strings(etga);
+	VIM_CLEAR(evalarg->eval_tofree_lambda);
+    }
+}
+
+/*
  * Skip over an expression at "*pp".
  * Return FAIL for an error, OK otherwise.
  */
@@ -434,8 +497,8 @@ skip_expr_concatenate(
 		// Do not free the first line, the caller can still use it.
 		*((char_u **)gap->ga_data) = NULL;
 		// Do not free the last line, "arg" points into it, free it
-		// later.
-		vim_free(evalarg->eval_tofree);
+		// later.  Also free "eval_tofree" later if needed.
+		free_eval_tofree_later(evalarg);
 		evalarg->eval_tofree =
 				    ((char_u **)gap->ga_data)[gap->ga_len - 1];
 		((char_u **)gap->ga_data)[gap->ga_len - 1] = NULL;
@@ -474,9 +537,7 @@ typval2string(typval_T *tv, int convert)
 {
     garray_T	ga;
     char_u	*retval;
-#ifdef FEAT_FLOAT
     char_u	numbuf[NUMBUFLEN];
-#endif
 
     if (convert && tv->v_type == VAR_LIST)
     {
@@ -490,13 +551,11 @@ typval2string(typval_T *tv, int convert)
 	ga_append(&ga, NUL);
 	retval = (char_u *)ga.ga_data;
     }
-#ifdef FEAT_FLOAT
     else if (convert && tv->v_type == VAR_FLOAT)
     {
 	vim_snprintf((char *)numbuf, NUMBUFLEN, "%g", tv->vval.v_float);
 	retval = vim_strsave(numbuf);
     }
-#endif
     else
 	retval = vim_strsave(tv_get_string(tv));
     return retval;
@@ -542,7 +601,7 @@ eval_to_string(
 
 /*
  * Call eval_to_string() without using current local variables and using
- * textwinlock.  When "use_sandbox" is TRUE use the sandbox.
+ * textlock.  When "use_sandbox" is TRUE use the sandbox.
  * Use legacy Vim script syntax.
  */
     char_u *
@@ -561,12 +620,12 @@ eval_to_string_safe(
     save_funccal(&funccal_entry);
     if (use_sandbox)
 	++sandbox;
-    ++textwinlock;
+    ++textlock;
     may_garbage_collect = FALSE;
     retval = eval_to_string(arg, FALSE);
     if (use_sandbox)
 	--sandbox;
-    --textwinlock;
+    --textlock;
     may_garbage_collect = save_garbage;
     restore_funccal();
     current_sctx.sc_version = save_sc_version;
@@ -636,16 +695,26 @@ deref_function_name(
 {
     typval_T	ref;
     char_u	*name = *arg;
+    int		save_flags = 0;
 
     ref.v_type = VAR_UNKNOWN;
-    if (eval7(arg, &ref, evalarg, FALSE) == FAIL)
+    if (evalarg != NULL)
+    {
+	// need to evaluate this to get an import, like in "a.Func"
+	save_flags = evalarg->eval_flags;
+	evalarg->eval_flags |= EVAL_EVALUATE;
+    }
+    if (eval9(arg, &ref, evalarg, FALSE) == FAIL)
     {
 	dictitem_T	*v;
 
 	// If <SID>VarName was used it would not be found, try another way.
 	v = find_var_also_in_script(name, NULL, FALSE);
 	if (v == NULL)
-	    return NULL;
+	{
+	    name = NULL;
+	    goto theend;
+	}
 	copy_tv(&v->di_tv, &ref);
     }
     if (*skipwhite(*arg) != NUL)
@@ -681,7 +750,11 @@ deref_function_name(
 	    semsg(_(e_not_callable_type_str), name);
 	name = NULL;
     }
+
+theend:
     clear_tv(&ref);
+    if (evalarg != NULL)
+	evalarg->eval_flags = save_flags;
     return name;
 }
 
@@ -761,6 +834,7 @@ call_func_retstr(
  * Call Vim script function "func" and return the result as a List.
  * Uses "argv" and "argc" as call_func_retstr().
  * Returns NULL when there is something wrong.
+ * Gives an error when the returned value is not a list.
  */
     void *
 call_func_retlist(
@@ -775,6 +849,8 @@ call_func_retlist(
 
     if (rettv.v_type != VAR_LIST)
     {
+	semsg(_(e_custom_list_completion_function_does_not_return_list_but_str),
+		vartype_name(rettv.v_type));
 	clear_tv(&rettv);
 	return NULL;
     }
@@ -806,7 +882,7 @@ eval_foldexpr(win_T *wp, int *cp)
     ++emsg_off;
     if (use_sandbox)
 	++sandbox;
-    ++textwinlock;
+    ++textlock;
     *cp = NUL;
     if (eval0(arg, &tv, NULL, &EVALARG_EVALUATE) == FAIL)
 	retval = 0;
@@ -831,7 +907,7 @@ eval_foldexpr(win_T *wp, int *cp)
     --emsg_off;
     if (use_sandbox)
 	--sandbox;
-    --textwinlock;
+    --textlock;
     clear_evalarg(&EVALARG_EVALUATE, NULL);
     current_sctx = saved_sctx;
 
@@ -947,12 +1023,16 @@ get_lval(
 	    {
 		char_u	    *tp = skipwhite(p + 1);
 
+		if (is_scoped_variable(name))
+		{
+		    semsg(_(e_cannot_use_type_with_this_variable_str), name);
+		    return NULL;
+		}
 		if (tp == p + 1 && !quiet)
 		{
 		    semsg(_(e_white_space_required_after_str_str), ":", p);
 		    return NULL;
 		}
-
 		if (!SCRIPT_ID_VALID(current_sctx.sc_sid))
 		{
 		    semsg(_(e_using_type_not_in_script_context_str), p);
@@ -981,6 +1061,7 @@ get_lval(
 	    ufunc_T *ufunc;
 	    type_T *type;
 
+	    import_check_sourced_sid(&import->imp_sid);
 	    lp->ll_sid = import->imp_sid;
 	    lp->ll_name = skipwhite(p + 1);
 	    p = find_name_end(lp->ll_name, NULL, NULL, fne_flags);
@@ -1039,6 +1120,8 @@ get_lval(
     var2.v_type = VAR_UNKNOWN;
     while (*p == '[' || (*p == '.' && p[1] != '=' && p[1] != '.'))
     {
+	int r = OK;
+
 	if (*p == '.' && lp->ll_tv->v_type != VAR_DICT)
 	{
 	    if (!quiet)
@@ -1054,12 +1137,14 @@ get_lval(
 	    return NULL;
 	}
 
-	// a NULL list/blob works like an empty list/blob, allocate one now.
+	// A NULL list/blob works like an empty list/blob, allocate one now.
 	if (lp->ll_tv->v_type == VAR_LIST && lp->ll_tv->vval.v_list == NULL)
-	    rettv_list_alloc(lp->ll_tv);
+	    r = rettv_list_alloc(lp->ll_tv);
 	else if (lp->ll_tv->v_type == VAR_BLOB
 					     && lp->ll_tv->vval.v_blob == NULL)
-	    rettv_blob_alloc(lp->ll_tv);
+	    r = rettv_blob_alloc(lp->ll_tv);
+	if (r == FAIL)
+	    return NULL;
 
 	if (lp->ll_range)
 	{
@@ -1606,7 +1691,6 @@ tv_op(typval_T *tv1, typval_T *tv2, char_u *op)
 		{
 		    // nr += nr , nr -= nr , nr *=nr , nr /= nr , nr %= nr
 		    n = tv_get_number(tv1);
-#ifdef FEAT_FLOAT
 		    if (tv2->v_type == VAR_FLOAT)
 		    {
 			float_T f = n;
@@ -1625,7 +1709,6 @@ tv_op(typval_T *tv1, typval_T *tv2, char_u *op)
 			tv1->vval.v_float = f;
 		    }
 		    else
-#endif
 		    {
 			switch (*op)
 			{
@@ -1657,7 +1740,6 @@ tv_op(typval_T *tv1, typval_T *tv2, char_u *op)
 		return failed ? FAIL : OK;
 
 	    case VAR_FLOAT:
-#ifdef FEAT_FLOAT
 		{
 		    float_T f;
 
@@ -1678,7 +1760,6 @@ tv_op(typval_T *tv1, typval_T *tv2, char_u *op)
 			case '/': tv1->vval.v_float /= f; break;
 		    }
 		}
-#endif
 		return OK;
 	}
     }
@@ -1803,7 +1884,7 @@ skip_for_lines(void *fi_void, evalarg_T *evalarg)
     int		i;
 
     for (i = 0; i < fi->fi_break_count; ++i)
-	eval_next_line(evalarg);
+	eval_next_line(NULL, evalarg);
 }
 
 /*
@@ -1821,7 +1902,8 @@ next_for_item(void *fi_void, char_u *arg)
 			 ? (ASSIGN_FINAL
 			     // first round: error if variable exists
 			     | (fi->fi_bi == 0 ? 0 : ASSIGN_DECL)
-			     | ASSIGN_NO_MEMBER_TYPE)
+			     | ASSIGN_NO_MEMBER_TYPE
+			     | ASSIGN_UPDATE_BLOCK_ID)
 			 : 0);
     listitem_T	*item;
     int		skip_assign = in_vim9script() && arg[0] == '_'
@@ -2019,7 +2101,8 @@ set_context_for_expression(
     if ((cmdidx == CMD_execute
 		|| cmdidx == CMD_echo
 		|| cmdidx == CMD_echon
-		|| cmdidx == CMD_echomsg)
+		|| cmdidx == CMD_echomsg
+		|| cmdidx == CMD_echowindow)
 	    && xp->xp_context == EXPAND_EXPRESSION)
     {
 	for (;;)
@@ -2135,6 +2218,35 @@ eval_func(
 }
 
 /*
+ * After a NL, skip over empty lines and comment-only lines.
+ */
+    static char_u *
+newline_skip_comments(char_u *arg)
+{
+    char_u *p = arg + 1;
+
+    for (;;)
+    {
+	p = skipwhite(p);
+
+	if (*p == NUL)
+	    break;
+	if (vim9_comment_start(p))
+	{
+	    char_u *nl = vim_strchr(p, NL);
+
+	    if (nl == NULL)
+		    break;
+	    p = nl;
+	}
+	if (*p != NL)
+	    break;
+	++p;  // skip another NL
+    }
+    return p;
+}
+
+/*
  * Get the next line source line without advancing.  But do skip over comment
  * lines.
  * Only called for Vim9 script.
@@ -2153,7 +2265,7 @@ getline_peek_skip_comments(evalarg_T *evalarg)
 	p = skipwhite(next);
 	if (*p != NUL && !vim9_comment_start(p))
 	    return next;
-	if (eval_next_line(evalarg) == NULL)
+	if (eval_next_line(NULL, evalarg) == NULL)
 	    break;
     }
     return NULL;
@@ -2175,19 +2287,23 @@ eval_next_non_blank(char_u *arg, evalarg_T *evalarg, int *getnext)
     *getnext = FALSE;
     if (in_vim9script()
 	    && evalarg != NULL
-	    && (evalarg->eval_cookie != NULL || evalarg->eval_cctx != NULL)
-	    && (*p == NUL || (vim9_comment_start(p) && VIM_ISWHITE(p[-1]))))
+	    && (evalarg->eval_cookie != NULL || evalarg->eval_cctx != NULL
+								   || *p == NL)
+	    && (*p == NUL || *p == NL
+			     || (vim9_comment_start(p) && VIM_ISWHITE(p[-1]))))
     {
 	char_u *next;
 
-	if (evalarg->eval_cookie != NULL)
+	if (*p == NL)
+	    next = newline_skip_comments(p);
+	else if (evalarg->eval_cookie != NULL)
 	    next = getline_peek_skip_comments(evalarg);
 	else
 	    next = peek_next_line_from_context(evalarg->eval_cctx);
 
 	if (next != NULL)
 	{
-	    *getnext = TRUE;
+	    *getnext = *p != NL;
 	    return skipwhite(next);
 	}
     }
@@ -2199,10 +2315,20 @@ eval_next_non_blank(char_u *arg, evalarg_T *evalarg, int *getnext)
  * Only called for Vim9 script.
  */
     char_u *
-eval_next_line(evalarg_T *evalarg)
+eval_next_line(char_u *arg, evalarg_T *evalarg)
 {
     garray_T	*gap = &evalarg->eval_ga;
     char_u	*line;
+
+    if (arg != NULL)
+    {
+	if (*arg == NL)
+	    return newline_skip_comments(arg);
+	// Truncate before a trailing comment, so that concatenating the lines
+	// won't turn the rest into a comment.
+	if (*skipwhite(arg) == '#')
+	    *arg = NUL;
+    }
 
     if (evalarg->eval_cookie != NULL)
 	line = evalarg->eval_getline(0, evalarg->eval_cookie, 0,
@@ -2230,7 +2356,7 @@ eval_next_line(evalarg_T *evalarg)
     }
     else if (evalarg->eval_cookie != NULL)
     {
-	vim_free(evalarg->eval_tofree);
+	free_eval_tofree_later(evalarg);
 	evalarg->eval_tofree = line;
     }
 
@@ -2253,47 +2379,8 @@ skipwhite_and_linebreak(char_u *arg, evalarg_T *evalarg)
 	return skipwhite(arg);
     eval_next_non_blank(p, evalarg, &getnext);
     if (getnext)
-	return eval_next_line(evalarg);
+	return eval_next_line(arg, evalarg);
     return p;
-}
-
-/*
- * Initialize "evalarg" for use.
- */
-    void
-init_evalarg(evalarg_T *evalarg)
-{
-    CLEAR_POINTER(evalarg);
-    ga_init2(&evalarg->eval_tofree_ga, sizeof(char_u *), 20);
-}
-
-/*
- * After using "evalarg" filled from "eap": free the memory.
- */
-    void
-clear_evalarg(evalarg_T *evalarg, exarg_T *eap)
-{
-    if (evalarg != NULL)
-    {
-	if (evalarg->eval_tofree != NULL)
-	{
-	    if (eap != NULL)
-	    {
-		// We may need to keep the original command line, e.g. for
-		// ":let" it has the variable names.  But we may also need the
-		// new one, "nextcmd" points into it.  Keep both.
-		vim_free(eap->cmdline_tofree);
-		eap->cmdline_tofree = *eap->cmdlinep;
-		*eap->cmdlinep = evalarg->eval_tofree;
-	    }
-	    else
-		vim_free(evalarg->eval_tofree);
-	    evalarg->eval_tofree = NULL;
-	}
-
-	ga_clear_strings(&evalarg->eval_tofree_ga);
-	VIM_CLEAR(evalarg->eval_tofree_lambda);
-    }
 }
 
 /*
@@ -2343,27 +2430,32 @@ eval0_retarg(
 
     p = skipwhite(arg);
     ret = eval1(&p, rettv, evalarg);
-    expr_end = p;
-    p = skipwhite(p);
 
-    // In Vim9 script a command block is not split at NL characters for
-    // commands using an expression argument.  Skip over a '#' comment to check
-    // for a following NL.  Require white space before the '#'.
-    if (in_vim9script() && p > expr_end && retarg == NULL)
-	while (*p == '#')
-	{
-	    char_u *nl = vim_strchr(p, NL);
+    if (ret != FAIL)
+    {
+	expr_end = p;
+	p = skipwhite(p);
 
-	    if (nl == NULL)
-		break;
-	    p = skipwhite(nl + 1);
-	    if (eap != NULL && *p != NUL)
-		eap->nextcmd = p;
-	    check_for_end = FALSE;
-	}
+	// In Vim9 script a command block is not split at NL characters for
+	// commands using an expression argument.  Skip over a '#' comment to
+	// check for a following NL.  Require white space before the '#'.
+	if (in_vim9script() && p > expr_end && retarg == NULL)
+	    while (*p == '#')
+	    {
+		char_u *nl = vim_strchr(p, NL);
 
-    if (ret != FAIL && check_for_end)
-	end_error = !ends_excmd2(arg, p);
+		if (nl == NULL)
+		    break;
+		p = skipwhite(nl + 1);
+		if (eap != NULL && *p != NUL)
+		    eap->nextcmd = p;
+		check_for_end = FALSE;
+	    }
+
+	if (check_for_end)
+	    end_error = !ends_excmd2(arg, p);
+    }
+
     if (ret == FAIL || end_error)
     {
 	if (ret != FAIL)
@@ -2389,7 +2481,8 @@ eval0_retarg(
 	// Some of the expression may not have been consumed.  Do not check for
 	// a next command to avoid more errors, unless "|" is following, which
 	// could only be a command separator.
-	if (eap != NULL && skipwhite(p)[0] == '|' && skipwhite(p)[1] != '|')
+	if (eap != NULL && p != NULL
+			  &&  skipwhite(p)[0] == '|' && skipwhite(p)[1] != '|')
 	    eap->nextcmd = check_nextcmd(p);
 	return FAIL;
     }
@@ -2449,7 +2542,7 @@ eval1(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	evaluate = evalarg_used->eval_flags & EVAL_EVALUATE;
 
 	if (getnext)
-	    *arg = eval_next_line(evalarg_used);
+	    *arg = eval_next_line(*arg, evalarg_used);
 	else
 	{
 	    if (evaluate && vim9script && !VIM_ISWHITE(p[-1]))
@@ -2515,7 +2608,7 @@ eval1(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 		return FAIL;
 	    }
 	    if (getnext)
-		*arg = eval_next_line(evalarg_used);
+		*arg = eval_next_line(*arg, evalarg_used);
 	    else
 	    {
 		if (evaluate && vim9script && !VIM_ISWHITE(p[-1]))
@@ -2577,7 +2670,7 @@ eval2(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
     int		getnext;
 
     /*
-     * Get the first variable.
+     * Get the first expression.
      */
     if (eval3(arg, rettv, evalarg) == FAIL)
 	return FAIL;
@@ -2621,7 +2714,7 @@ eval2(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	while (p[0] == '|' && p[1] == '|')
 	{
 	    if (getnext)
-		*arg = eval_next_line(evalarg_used);
+		*arg = eval_next_line(*arg, evalarg_used);
 	    else
 	    {
 		if (evaluate && vim9script && !VIM_ISWHITE(p[-1]))
@@ -2703,7 +2796,7 @@ eval3(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
     int		getnext;
 
     /*
-     * Get the first variable.
+     * Get the first expression.
      */
     if (eval4(arg, rettv, evalarg) == FAIL)
 	return FAIL;
@@ -2747,7 +2840,7 @@ eval3(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	while (p[0] == '&' && p[1] == '&')
 	{
 	    if (getnext)
-		*arg = eval_next_line(evalarg_used);
+		*arg = eval_next_line(*arg, evalarg_used);
 	    else
 	    {
 		if (evaluate && vim9script && !VIM_ISWHITE(p[-1]))
@@ -2842,12 +2935,13 @@ eval4(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
     int		type_is = FALSE;
 
     /*
-     * Get the first variable.
+     * Get the first expression.
      */
     if (eval5(arg, rettv, evalarg) == FAIL)
 	return FAIL;
 
     p = eval_next_non_blank(*arg, evalarg, &getnext);
+
     type = get_compare_type(p, &len, &type_is);
 
     /*
@@ -2864,7 +2958,7 @@ eval4(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 
 	if (getnext)
 	{
-	    *arg = eval_next_line(evalarg);
+	    *arg = eval_next_line(*arg, evalarg);
 	    p = *arg;
 	}
 	else if (evaluate && vim9script && !VIM_ISWHITE(**arg))
@@ -2977,7 +3071,116 @@ eval_addlist(typval_T *tv1, typval_T *tv2)
 }
 
 /*
- * Handle fourth level expression:
+ * Handle the bitwise left/right shift operator expression:
+ *	var1 << var2
+ *	var1 >> var2
+ *
+ * "arg" must point to the first non-white of the expression.
+ * "arg" is advanced to just after the recognized expression.
+ *
+ * Return OK or FAIL.
+ */
+    static int
+eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
+{
+    /*
+     * Get the first expression.
+     */
+    if (eval6(arg, rettv, evalarg) == FAIL)
+	return FAIL;
+
+    /*
+     * Repeat computing, until no '<<' or '>>' is following.
+     */
+    for (;;)
+    {
+	char_u		*p;
+	int		getnext;
+	exprtype_T	type;
+	int		evaluate;
+	typval_T	var2;
+	int		vim9script;
+
+	p = eval_next_non_blank(*arg, evalarg, &getnext);
+	if (p[0] == '<' && p[1] == '<')
+	    type = EXPR_LSHIFT;
+	else if (p[0] == '>' && p[1] == '>')
+	    type = EXPR_RSHIFT;
+	else
+	    return OK;
+
+	// Handle a bitwise left or right shift operator
+	if (rettv->v_type != VAR_NUMBER)
+	{
+	    // left operand should be a number
+	    emsg(_(e_bitshift_ops_must_be_number));
+	    clear_tv(rettv);
+	    return FAIL;
+	}
+
+	evaluate = evalarg == NULL ? 0 : (evalarg->eval_flags & EVAL_EVALUATE);
+	vim9script = in_vim9script();
+	if (getnext)
+	{
+	    *arg = eval_next_line(*arg, evalarg);
+	    p = *arg;
+	}
+	else if (evaluate && vim9script && !VIM_ISWHITE(**arg))
+	{
+	    error_white_both(*arg, 2);
+	    clear_tv(rettv);
+	    return FAIL;
+	}
+
+	/*
+	 * Get the second variable.
+	 */
+	if (evaluate && vim9script && !IS_WHITE_OR_NUL(p[2]))
+	{
+	    error_white_both(p, 2);
+	    clear_tv(rettv);
+	    return FAIL;
+	}
+	*arg = skipwhite_and_linebreak(p + 2, evalarg);
+	if (eval6(arg, &var2, evalarg) == FAIL)
+	{
+	    clear_tv(rettv);
+	    return FAIL;
+	}
+
+	if (var2.v_type != VAR_NUMBER || var2.vval.v_number < 0)
+	{
+	    // right operand should be a positive number
+	    if (var2.v_type != VAR_NUMBER)
+		emsg(_(e_bitshift_ops_must_be_number));
+	    else
+		emsg(_(e_bitshift_ops_must_be_postive));
+	    clear_tv(rettv);
+	    clear_tv(&var2);
+	    return FAIL;
+	}
+
+	if (evaluate)
+	{
+	    if (var2.vval.v_number > MAX_LSHIFT_BITS)
+		// shifting more bits than we have always results in zero
+		rettv->vval.v_number = 0;
+	    else if (type == EXPR_LSHIFT)
+		rettv->vval.v_number =
+		      (uvarnumber_T)rettv->vval.v_number << var2.vval.v_number;
+	    else
+		rettv->vval.v_number =
+		      (uvarnumber_T)rettv->vval.v_number >> var2.vval.v_number;
+	}
+
+	clear_tv(&var2);
+    }
+
+    return OK;
+}
+
+/*
+ * Handle fifth level expression:
  *	+	number addition, concatenation of list or blob
  *	-	number subtraction
  *	.	string concatenation (if script version is 1)
@@ -2989,12 +3192,12 @@ eval_addlist(typval_T *tv1, typval_T *tv2)
  * Return OK or FAIL.
  */
     static int
-eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
+eval6(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 {
     /*
-     * Get the first variable.
+     * Get the first expression.
      */
-    if (eval6(arg, rettv, evalarg, FALSE) == FAIL)
+    if (eval7(arg, rettv, evalarg, FALSE) == FAIL)
 	return FAIL;
 
     /*
@@ -3026,7 +3229,7 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	evaluate = evalarg == NULL ? 0 : (evalarg->eval_flags & EVAL_EVALUATE);
 	oplen = (concat && p[1] == '.') ? 2 : 1;
 	if (getnext)
-	    *arg = eval_next_line(evalarg);
+	    *arg = eval_next_line(*arg, evalarg);
 	else
 	{
 	    if (evaluate && vim9script && !VIM_ISWHITE(**arg))
@@ -3039,9 +3242,7 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	}
 	if ((op != '+' || (rettv->v_type != VAR_LIST
 						 && rettv->v_type != VAR_BLOB))
-#ifdef FEAT_FLOAT
 		&& (op == '.' || rettv->v_type != VAR_FLOAT)
-#endif
 		&& evaluate)
 	{
 	    int		error = FALSE;
@@ -3072,7 +3273,7 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	    return FAIL;
 	}
 	*arg = skipwhite_and_linebreak(*arg + oplen, evalarg);
-	if (eval6(arg, &var2, evalarg, !vim9script && op == '.') == FAIL)
+	if (eval7(arg, &var2, evalarg, !vim9script && op == '.') == FAIL)
 	{
 	    clear_tv(rettv);
 	    return FAIL;
@@ -3094,14 +3295,12 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 			|| var2.v_type == VAR_JOB))
 		    semsg(_(e_using_invalid_value_as_string_str),
 						   vartype_name(var2.v_type));
-#ifdef FEAT_FLOAT
 		else if (vim9script && var2.v_type == VAR_FLOAT)
 		{
 		    vim_snprintf((char *)buf2, NUMBUFLEN, "%g",
 							    var2.vval.v_float);
 		    s2 = buf2;
 		}
-#endif
 		else
 		    s2 = tv_get_string_buf_chk(&var2, buf2);
 		if (s2 == NULL)		// type error ?
@@ -3128,8 +3327,7 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 	    {
 		int		error = FALSE;
 		varnumber_T	n1, n2;
-#ifdef FEAT_FLOAT
-		float_T	    f1 = 0, f2 = 0;
+		float_T		f1 = 0, f2 = 0;
 
 		if (rettv->v_type == VAR_FLOAT)
 		{
@@ -3137,7 +3335,6 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 		    n1 = 0;
 		}
 		else
-#endif
 		{
 		    n1 = tv_get_number_chk(rettv, &error);
 		    if (error)
@@ -3150,19 +3347,15 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 			clear_tv(&var2);
 			return FAIL;
 		    }
-#ifdef FEAT_FLOAT
 		    if (var2.v_type == VAR_FLOAT)
 			f1 = n1;
-#endif
 		}
-#ifdef FEAT_FLOAT
 		if (var2.v_type == VAR_FLOAT)
 		{
 		    f2 = var2.vval.v_float;
 		    n2 = 0;
 		}
 		else
-#endif
 		{
 		    n2 = tv_get_number_chk(&var2, &error);
 		    if (error)
@@ -3171,14 +3364,11 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 			clear_tv(&var2);
 			return FAIL;
 		    }
-#ifdef FEAT_FLOAT
 		    if (rettv->v_type == VAR_FLOAT)
 			f2 = n2;
-#endif
 		}
 		clear_tv(rettv);
 
-#ifdef FEAT_FLOAT
 		// If there is a float on either side the result is a float.
 		if (rettv->v_type == VAR_FLOAT || var2.v_type == VAR_FLOAT)
 		{
@@ -3190,7 +3380,6 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 		    rettv->vval.v_float = f1;
 		}
 		else
-#endif
 		{
 		    if (op == '+')
 			n1 = n1 + n2;
@@ -3207,7 +3396,7 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
 }
 
 /*
- * Handle fifth level expression:
+ * Handle sixth level expression:
  *	*	number multiplication
  *	/	number division
  *	%	number modulo
@@ -3218,20 +3407,18 @@ eval5(char_u **arg, typval_T *rettv, evalarg_T *evalarg)
  * Return OK or FAIL.
  */
     static int
-eval6(
+eval7(
     char_u	**arg,
     typval_T	*rettv,
     evalarg_T	*evalarg,
     int		want_string)  // after "." operator
 {
-#ifdef FEAT_FLOAT
     int	    use_float = FALSE;
-#endif
 
     /*
-     * Get the first variable.
+     * Get the first expression.
      */
-    if (eval7t(arg, rettv, evalarg, want_string) == FAIL)
+    if (eval8(arg, rettv, evalarg, want_string) == FAIL)
 	return FAIL;
 
     /*
@@ -3245,9 +3432,7 @@ eval6(
 	char_u	    *p;
 	int	    op;
 	varnumber_T n1, n2;
-#ifdef FEAT_FLOAT
 	float_T	    f1, f2;
-#endif
 	int	    error;
 
 	// "*=", "/=" and "%=" are assignments
@@ -3258,7 +3443,7 @@ eval6(
 
 	evaluate = evalarg == NULL ? 0 : (evalarg->eval_flags & EVAL_EVALUATE);
 	if (getnext)
-	    *arg = eval_next_line(evalarg);
+	    *arg = eval_next_line(*arg, evalarg);
 	else
 	{
 	    if (evaluate && in_vim9script() && !VIM_ISWHITE(**arg))
@@ -3270,14 +3455,11 @@ eval6(
 	    *arg = p;
 	}
 
-#ifdef FEAT_FLOAT
 	f1 = 0;
 	f2 = 0;
-#endif
 	error = FALSE;
 	if (evaluate)
 	{
-#ifdef FEAT_FLOAT
 	    if (rettv->v_type == VAR_FLOAT)
 	    {
 		f1 = rettv->vval.v_float;
@@ -3285,7 +3467,6 @@ eval6(
 		n1 = 0;
 	    }
 	    else
-#endif
 		n1 = tv_get_number_chk(rettv, &error);
 	    clear_tv(rettv);
 	    if (error)
@@ -3304,12 +3485,11 @@ eval6(
 	    return FAIL;
 	}
 	*arg = skipwhite_and_linebreak(*arg + 1, evalarg);
-	if (eval7t(arg, &var2, evalarg, FALSE) == FAIL)
+	if (eval8(arg, &var2, evalarg, FALSE) == FAIL)
 	    return FAIL;
 
 	if (evaluate)
 	{
-#ifdef FEAT_FLOAT
 	    if (var2.v_type == VAR_FLOAT)
 	    {
 		if (!use_float)
@@ -3321,30 +3501,26 @@ eval6(
 		n2 = 0;
 	    }
 	    else
-#endif
 	    {
 		n2 = tv_get_number_chk(&var2, &error);
 		clear_tv(&var2);
 		if (error)
 		    return FAIL;
-#ifdef FEAT_FLOAT
 		if (use_float)
 		    f2 = n2;
-#endif
 	    }
 
 	    /*
 	     * Compute the result.
 	     * When either side is a float the result is a float.
 	     */
-#ifdef FEAT_FLOAT
 	    if (use_float)
 	    {
 		if (op == '*')
 		    f1 = f1 * f2;
 		else if (op == '/')
 		{
-# ifdef VMS
+#ifdef VMS
 		    // VMS crashes on divide by zero, work around it
 		    if (f2 == 0.0)
 		    {
@@ -3357,11 +3533,11 @@ eval6(
 		    }
 		    else
 			f1 = f1 / f2;
-# else
+#else
 		    // We rely on the floating point library to handle divide
 		    // by zero to result in "inf" and not a crash.
 		    f1 = f1 / f2;
-# endif
+#endif
 		}
 		else
 		{
@@ -3372,7 +3548,6 @@ eval6(
 		rettv->vval.v_float = f1;
 	    }
 	    else
-#endif
 	    {
 		int	    failed = FALSE;
 
@@ -3401,7 +3576,7 @@ eval6(
  * Return OK or FAIL.
  */
     static int
-eval7t(
+eval8(
     char_u	**arg,
     typval_T	*rettv,
     evalarg_T	*evalarg,
@@ -3439,7 +3614,7 @@ eval7t(
 	*arg = skipwhite_and_linebreak(*arg, evalarg);
     }
 
-    res = eval7(arg, rettv, evalarg, want_string);
+    res = eval9(arg, rettv, evalarg, want_string);
 
     if (want_type != NULL && evaluate)
     {
@@ -3628,7 +3803,7 @@ handle_predefined(char_u *s, int len, typval_T *rettv)
  * Return OK or FAIL.
  */
     static int
-eval7(
+eval9(
     char_u	**arg,
     typval_T	*rettv,
     evalarg_T	*evalarg,
@@ -3659,11 +3834,7 @@ eval7(
 	return FAIL;
     end_leader = *arg;
 
-    if (**arg == '.' && (!isdigit(*(*arg + 1))
-#ifdef FEAT_FLOAT
-	    || in_old_script(2)
-#endif
-	    ))
+    if (**arg == '.' && (!isdigit(*(*arg + 1)) || in_old_script(2)))
     {
 	semsg(_(e_invalid_expression_str), *arg);
 	++*arg;
@@ -3706,19 +3877,19 @@ eval7(
 		// "->" follows.
 		if (ret == OK && evaluate && end_leader > start_leader
 						  && rettv->v_type != VAR_BLOB)
-		    ret = eval7_leader(rettv, TRUE, start_leader, &end_leader);
+		    ret = eval9_leader(rettv, TRUE, start_leader, &end_leader);
 		break;
 
     /*
      * String constant: "string".
      */
-    case '"':	ret = eval_string(arg, rettv, evaluate);
+    case '"':	ret = eval_string(arg, rettv, evaluate, FALSE);
 		break;
 
     /*
      * Literal string constant: 'str''ing'.
      */
-    case '\'':	ret = eval_lit_string(arg, rettv, evaluate);
+    case '\'':	ret = eval_lit_string(arg, rettv, evaluate, FALSE);
 		break;
 
     /*
@@ -3763,8 +3934,12 @@ eval7(
 
     /*
      * Environment variable: $VAR.
+     * Interpolated string: $"string" or $'string'.
      */
-    case '$':	ret = eval_env_var(arg, rettv, evaluate);
+    case '$':	if ((*arg)[1] == '"' || (*arg)[1] == '\'')
+		    ret = eval_interp_string(arg, rettv, evaluate);
+		else
+		    ret = eval_env_var(arg, rettv, evaluate);
 		break;
 
     /*
@@ -3896,25 +4071,25 @@ eval7(
     // Handle following '[', '(' and '.' for expr[expr], expr.name,
     // expr(expr), expr->name(expr)
     if (ret == OK)
-	ret = handle_subscript(arg, name_start, rettv, evalarg, TRUE);
+	ret = handle_subscript(arg, name_start, rettv, evalarg, evaluate);
 
     /*
      * Apply logical NOT and unary '-', from right to left, ignore '+'.
      */
     if (ret == OK && evaluate && end_leader > start_leader)
-	ret = eval7_leader(rettv, FALSE, start_leader, &end_leader);
+	ret = eval9_leader(rettv, FALSE, start_leader, &end_leader);
 
     --recurse;
     return ret;
 }
 
 /*
- * Apply the leading "!" and "-" before an eval7 expression to "rettv".
+ * Apply the leading "!" and "-" before an eval9 expression to "rettv".
  * When "numeric_only" is TRUE only handle "+" and "-".
  * Adjusts "end_leaderp" until it is at "start_leader".
  */
     static int
-eval7_leader(
+eval9_leader(
 	typval_T    *rettv,
 	int	    numeric_only,
 	char_u	    *start_leader,
@@ -3926,13 +4101,11 @@ eval7_leader(
     varnumber_T val = 0;
     vartype_T	type = rettv->v_type;
     int		vim9script = in_vim9script();
-#ifdef FEAT_FLOAT
     float_T	    f = 0.0;
 
     if (rettv->v_type == VAR_FLOAT)
 	f = rettv->vval.v_float;
     else
-#endif
     {
 	while (VIM_ISWHITE(end_leader[-1]))
 	    --end_leader;
@@ -3958,7 +4131,6 @@ eval7_leader(
 		    ++end_leader;
 		    break;
 		}
-#ifdef FEAT_FLOAT
 		if (rettv->v_type == VAR_FLOAT)
 		{
 		    if (vim9script)
@@ -3970,7 +4142,6 @@ eval7_leader(
 			f = !f;
 		}
 		else
-#endif
 		{
 		    val = !val;
 		    type = VAR_BOOL;
@@ -3978,25 +4149,21 @@ eval7_leader(
 	    }
 	    else if (*end_leader == '-')
 	    {
-#ifdef FEAT_FLOAT
 		if (rettv->v_type == VAR_FLOAT)
 		    f = -f;
 		else
-#endif
 		{
 		    val = -val;
 		    type = VAR_NUMBER;
 		}
 	    }
 	}
-#ifdef FEAT_FLOAT
 	if (rettv->v_type == VAR_FLOAT)
 	{
 	    clear_tv(rettv);
 	    rettv->vval.v_float = f;
 	}
 	else
-#endif
 	{
 	    clear_tv(rettv);
 	    if (vim9script)
@@ -4165,7 +4332,7 @@ eval_method(
     rettv->v_type = VAR_UNKNOWN;
 
     name = *arg;
-    len = get_name_len(arg, &alias, evaluate, TRUE);
+    len = get_name_len(arg, &alias, evaluate, evaluate);
     if (alias != NULL)
 	name = alias;
 
@@ -4297,7 +4464,6 @@ eval_index(
 	{
 	    int error = FALSE;
 
-#ifdef FEAT_FLOAT
 	    // allow for indexing with float
 	    if (vim9script && rettv->v_type == VAR_DICT
 						   && var1.v_type == VAR_FLOAT)
@@ -4305,7 +4471,7 @@ eval_index(
 		var1.vval.v_string = typval_tostring(&var1, TRUE);
 		var1.v_type = VAR_STRING;
 	    }
-#endif
+
 	    if (vim9script && rettv->v_type == VAR_LIST)
 		tv_get_number_chk(&var1, &error);
 	    else
@@ -4396,11 +4562,9 @@ check_can_index(typval_T *rettv, int evaluate, int verbose)
 		emsg(_(e_cannot_index_a_funcref));
 	    return FAIL;
 	case VAR_FLOAT:
-#ifdef FEAT_FLOAT
 	    if (verbose)
 		emsg(_(e_using_float_as_string));
 	    return FAIL;
-#endif
 	case VAR_BOOL:
 	case VAR_SPECIAL:
 	case VAR_JOB:
@@ -4654,6 +4818,13 @@ partial_free(partial_T *pt)
 	--pt->pt_funcstack->fs_refcount;
 	funcstack_check_refcount(pt->pt_funcstack);
     }
+    // Similarly for loop variables.
+    for (i = 0; i < MAX_LOOP_DEPTH; ++i)
+	if (pt->pt_loopvars[i] != NULL)
+	{
+	    --pt->pt_loopvars[i]->lvs_refcount;
+	    loopvars_check_refcount(pt->pt_loopvars[i]);
+	}
 
     vim_free(pt);
 }
@@ -4667,13 +4838,30 @@ partial_unref(partial_T *pt)
 {
     if (pt != NULL)
     {
+	int	done = FALSE;
+
 	if (--pt->pt_refcount <= 0)
 	    partial_free(pt);
 
 	// If the reference count goes down to one, the funcstack may be the
 	// only reference and can be freed if no other partials reference it.
-	else if (pt->pt_refcount == 1 && pt->pt_funcstack != NULL)
-	    funcstack_check_refcount(pt->pt_funcstack);
+	else if (pt->pt_refcount == 1)
+	{
+	    // careful: if the funcstack is freed it may contain this partial
+	    // and it gets freed as well
+	    if (pt->pt_funcstack != NULL)
+		done = funcstack_check_refcount(pt->pt_funcstack);
+
+	    if (!done)
+	    {
+		int	depth;
+
+		for (depth = 0; depth < MAX_LOOP_DEPTH; ++depth)
+		    if (pt->pt_loopvars[depth] != NULL
+			    && loopvars_check_refcount(pt->pt_loopvars[depth]))
+		    break;
+	    }
+	}
     }
 }
 
@@ -4812,6 +5000,9 @@ garbage_collect(int testing)
 
     // funcstacks keep variables for closures
     abort = abort || set_ref_in_funcstacks(copyID);
+
+    // loopvars keep variables for loop blocks
+    abort = abort || set_ref_in_loopvars(copyID);
 
     // v: vars
     abort = abort || garbage_collect_vimvars(copyID);
@@ -5176,6 +5367,7 @@ set_ref_in_item(
 		abort = abort || set_ref_in_item(&pt->pt_argv[i], copyID,
 							ht_stack, list_stack);
 	    // pt_funcstack is handled in set_ref_in_funcstacks()
+	    // pt_loopvars is handled in set_ref_in_loopvars()
 	}
     }
 #ifdef FEAT_JOB_CHANNEL
@@ -5473,12 +5665,10 @@ echo_string_core(
 	    break;
 
 	case VAR_FLOAT:
-#ifdef FEAT_FLOAT
 	    *tofree = NULL;
 	    vim_snprintf((char *)numbuf, NUMBUFLEN, "%g", tv->vval.v_float);
 	    r = numbuf;
 	    break;
-#endif
 
 	case VAR_BOOL:
 	case VAR_SPECIAL:
@@ -6150,7 +6340,7 @@ handle_subscript(
 			|| ASCII_ISALPHA(in_vim9script() ? *skipwhite(p + 2)
 								    : p[2])))))
 	{
-	    *arg = eval_next_line(evalarg);
+	    *arg = eval_next_line(*arg, evalarg);
 	    p = *arg;
 	    check_white = FALSE;
 	}
@@ -6190,7 +6380,8 @@ handle_subscript(
 	    **arg = NUL;
 
 	    idx = find_exported(rettv->vval.v_number, exp_name, &ufunc, &type,
-			    evalarg->eval_cctx, evalarg->eval_cstack, verbose);
+		       evalarg == NULL ? NULL : evalarg->eval_cctx,
+		       evalarg == NULL ? NULL : evalarg->eval_cstack, verbose);
 	    **arg = cc;
 
 	    if (idx < 0 && ufunc == NULL)
@@ -6526,6 +6717,7 @@ get_echo_attr(void)
 /*
  * ":execute expr1 ..."	execute the result of an expression.
  * ":echomsg expr1 ..."	Print a message
+ * ":echowindow expr1 ..." Print a message in the messages window
  * ":echoerr expr1 ..."	Print an error
  * ":echoconsole expr1 ..." Print a message on stdout
  * Each gets spaces around each argument and a newline at the end for
@@ -6597,7 +6789,9 @@ ex_execute(exarg_T *eap)
 	// use the first line of continuation lines for messages
 	SOURCING_LNUM = start_lnum;
 
-	if (eap->cmdidx == CMD_echomsg || eap->cmdidx == CMD_echoerr)
+	if (eap->cmdidx == CMD_echomsg
+		|| eap->cmdidx == CMD_echowindow
+		|| eap->cmdidx == CMD_echoerr)
 	{
 	    // Mark the already saved text as finishing the line, so that what
 	    // follows is displayed on a new line when scrolling back at the
@@ -6609,6 +6803,16 @@ ex_execute(exarg_T *eap)
 	{
 	    msg_attr(ga.ga_data, echo_attr);
 	    out_flush();
+	}
+	else if (eap->cmdidx == CMD_echowindow)
+	{
+#ifdef HAS_MESSAGE_WINDOW
+	    start_echowindow();
+#endif
+	    msg_attr(ga.ga_data, echo_attr);
+#ifdef HAS_MESSAGE_WINDOW
+	    end_echowindow();
+#endif
 	}
 	else if (eap->cmdidx == CMD_echoconsole)
 	{
@@ -6641,7 +6845,6 @@ ex_execute(exarg_T *eap)
 
     if (eap->skip)
 	--emsg_skip;
-
     set_nextcmd(eap, arg);
 }
 
@@ -6776,7 +6979,7 @@ do_string_sub(
 	     * - The substituted text.
 	     * - The text after the match.
 	     */
-	    sublen = vim_regsub(&regmatch, sub, expr, tail, FALSE, TRUE, FALSE);
+	    sublen = vim_regsub(&regmatch, sub, expr, tail, 0, REGSUB_MAGIC);
 	    if (ga_grow(&ga, (int)((end - tail) + sublen -
 			    (regmatch.endp[0] - regmatch.startp[0]))) == FAIL)
 	    {
@@ -6788,8 +6991,9 @@ do_string_sub(
 	    i = (int)(regmatch.startp[0] - tail);
 	    mch_memmove((char_u *)ga.ga_data + ga.ga_len, tail, (size_t)i);
 	    // add the substituted text
-	    (void)vim_regsub(&regmatch, sub, expr, (char_u *)ga.ga_data
-					  + ga.ga_len + i, TRUE, TRUE, FALSE);
+	    (void)vim_regsub(&regmatch, sub, expr,
+				  (char_u *)ga.ga_data + ga.ga_len + i, sublen,
+				  REGSUB_COPY | REGSUB_MAGIC);
 	    ga.ga_len += i + sublen - 1;
 	    tail = regmatch.endp[0];
 	    if (*tail == NUL)

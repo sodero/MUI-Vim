@@ -1035,7 +1035,7 @@ endfunc
 func Test_popup_invalid_arguments()
   call assert_fails('call popup_create(666, {})', 'E86:')
   call popup_clear()
-  call assert_fails('call popup_create("text", "none")', 'E715:')
+  call assert_fails('call popup_create("text", "none")', 'E1206:')
   call popup_clear()
   call assert_fails('call popup_create(test_null_string(), {})', 'E450:')
   call assert_fails('call popup_create(test_null_list(), {})', 'E450:')
@@ -1072,7 +1072,7 @@ func Test_popup_invalid_arguments()
   call assert_fails('call popup_create("text", #{borderchars: "none"})', 'E714:')
   call popup_clear()
 
-  call assert_fails('call popup_create([#{text: "text"}, 666], {})', 'E715:')
+  call assert_fails('call popup_create([#{text: "text"}, 666], {})', 'E1284: Argument 1, list item 2: Dictionary required')
   call popup_clear()
   call assert_fails('call popup_create([#{text: "text", props: "none"}], {})', 'E714:')
   call popup_clear()
@@ -1090,6 +1090,11 @@ func Test_popup_invalid_arguments()
   call assert_fails('call popup_create("text", #{mapping: []})', 'E745:')
   call popup_clear()
   call assert_fails('call popup_create("text", #{tabpage : 4})', 'E997:')
+  call popup_clear()
+
+  call assert_fails('call popup_create(range(10), {})', 'E1024:')
+  call popup_clear()
+  call assert_fails('call popup_create([1, 2], {})', 'E1284: Argument 1, list item 1: Dictionary required')
   call popup_clear()
 endfunc
 
@@ -1304,8 +1309,8 @@ func Test_popup_move()
   let line = join(map(range(1, 6), 'screenstring(1, v:val)'), '')
   call assert_equal('hworld', line)
 
-  call assert_fails('call popup_move(winid, [])', 'E715:')
-  call assert_fails('call popup_move(winid, test_null_dict())', 'E715:')
+  call assert_fails('call popup_move(winid, [])', 'E1206:')
+  call assert_fails('call popup_move(winid, test_null_dict())', 'E1297:')
 
   call popup_close(winid)
 
@@ -2309,8 +2314,8 @@ func Test_popup_scrollbar()
       endif
     endfunc
 
-    def CreatePopup(text: list<string>)
-      popup_create(text, {
+    def CreatePopup(text: list<string>): number
+      return popup_create(text, {
 	    \ minwidth: 30,
 	    \ maxwidth: 30,
 	    \ minheight: 4,
@@ -2336,6 +2341,11 @@ func Test_popup_scrollbar()
 	  long line long line long line long line long line long line
       END
       call CreatePopup(text)
+    endfunc
+    func ScrollBottom()
+      call popup_clear()
+      let id = CreatePopup(range(100)->map({k, v -> string(v)}))
+      call popup_setoptions(id, #{firstline: 100, minheight: 9, maxheight: 9})
     endfunc
     map <silent> <F3> :call test_setmouse(5, 36)<CR>
     map <silent> <F4> :call test_setmouse(4, 42)<CR>
@@ -2391,6 +2401,10 @@ func Test_popup_scrollbar()
   " check size with wrapping lines
   call term_sendkeys(buf, "j")
   call VerifyScreenDump(buf, 'Test_popupwin_scroll_12', {})
+
+  " check thumb when scrolled all the way down
+  call term_sendkeys(buf, ":call ScrollBottom()\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_scroll_13', {})
 
   " clean up
   call term_sendkeys(buf, "x")
@@ -2563,8 +2577,8 @@ func Test_set_get_options()
   call assert_equal(1, options.drag)
   call assert_equal('Another', options.highlight)
 
-  call assert_fails('call popup_setoptions(winid, [])', 'E715:')
-  call assert_fails('call popup_setoptions(winid, test_null_dict())', 'E715:')
+  call assert_fails('call popup_setoptions(winid, [])', 'E1206:')
+  call assert_fails('call popup_setoptions(winid, test_null_dict())', 'E1297:')
 
   call popup_close(winid)
   call assert_equal(0, popup_setoptions(winid, options.wrap))
@@ -2856,7 +2870,7 @@ func Test_popupwin_terminal_buffer()
   call assert_fails('call popup_create(termbuf2, #{})', 'E861:')
   call term_sendkeys(termbuf2, "exit\<CR>")
 
-  " Exiting shell closes popup window
+  " Exiting shell puts popup window in Terminal-Normal mode.
   call feedkeys("exit\<CR>", 'xt')
   " Wait for shell to exit
   call WaitForAssert({-> assert_equal("dead", job_status(term_getjob(termbuf)))})
@@ -2864,6 +2878,67 @@ func Test_popupwin_terminal_buffer()
   helpclose
   call feedkeys(":quit\<CR>", 'xt')
   call assert_equal(origwin, win_getid())
+endfunc
+
+func Test_popupwin_terminal_buffer_none()
+  CheckFeature terminal
+  CheckUnix
+
+  " Starting a terminal to run a shell in is considered flaky.
+  let g:test_is_flaky = 1
+
+  let origwin = win_getid()
+  call term_start("NONE", {"hidden": 1})->popup_create({"border": []})
+  sleep 50m
+
+  " since no actual job is running can close the window with :quit
+  call feedkeys("\<C-W>:q\<CR>", 'xt')
+  call assert_equal([], popup_list())
+
+  call assert_equal(origwin, win_getid())
+endfunc
+
+func Test_popupwin_terminal_scrollbar()
+  CheckFeature terminal
+  CheckScreendump
+  CheckUnix
+
+  call writefile(range(50), 'Xtestfile')
+  let lines =<< trim END
+      vim9script
+
+      # testing CTRL-W CTRL-W requires two windows
+      split
+
+      term_start(['cat', 'Xtestfile'], {hidden: true})
+	  ->popup_create({
+	      minwidth: 40,
+	      maxwidth: 40,
+	      minheight: 8,
+	      maxheight: 8,
+	      scrollbar: true,
+	      border: []
+	  })
+  END
+  call writefile(lines, 'Xpterm')
+  let buf = RunVimInTerminal('-S Xpterm', #{rows: 15})
+  call VerifyScreenDump(buf, 'Test_popupwin_poptermscroll_1', {})
+
+  " scroll to the middle
+  call term_sendkeys(buf, "50%")
+  call VerifyScreenDump(buf, 'Test_popupwin_poptermscroll_2', {})
+
+  " get error if trying to escape the window
+  call term_sendkeys(buf, "\<C-W>\<C-W>")
+  call VerifyScreenDump(buf, 'Test_popupwin_poptermscroll_3', {})
+
+  " close the popupwin.
+  call term_sendkeys(buf, ":q\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_poptermscroll_4', {})
+
+  call StopVimInTerminal(buf)
+  call delete('Xtestfile')
+  call delete('Xpterm')
 endfunc
 
 func Test_popupwin_close_prevwin()
@@ -4029,7 +4104,7 @@ endfunc
 
 
 func Test_popup_setoptions_other_tab()
-  new Xfile
+  new Xpotfile
   let winid = win_getid()
   call setline(1, 'some text')
   call prop_type_add('textprop', {})
@@ -4041,7 +4116,7 @@ func Test_popup_setoptions_other_tab()
 
   tabclose
   call popup_close(id)
-  bwipe! Xfile
+  bwipe! Xpotfile
   call prop_type_delete('textprop')
 endfunc
 
@@ -4055,7 +4130,7 @@ func Test_popup_prop_not_visible()
       setline(1, ['', 'some text', '', 'other text'])
       prop_type_add('someprop', {})
       prop_add(2, 9, {type: 'someprop', length: 5})
-      popup_create('attached to "some"', {
+      g:some_id = popup_create('attached to "some"', {
           textprop: 'someprop',
           highlight: 'ErrorMsg',
           line: -1,
@@ -4076,6 +4151,12 @@ func Test_popup_prop_not_visible()
   let buf = RunVimInTerminal('-S XtestPropNotVisble', #{rows: 10})
   call VerifyScreenDump(buf, 'Test_popup_prop_not_visible_01', {})
 
+  " check that hiding and unhiding the popup works
+  call term_sendkeys(buf, ":call popup_hide(g:some_id)\<CR>")
+  call VerifyScreenDump(buf, 'Test_popup_prop_not_visible_01a', {})
+  call term_sendkeys(buf, ":call popup_show(g:some_id)\<CR>")
+  call VerifyScreenDump(buf, 'Test_popup_prop_not_visible_01b', {})
+
   call term_sendkeys(buf, ":vert resize -14\<CR>")
   call VerifyScreenDump(buf, 'Test_popup_prop_not_visible_02', {})
 
@@ -4091,6 +4172,29 @@ func Test_bufdel_skips_popupwin_buffer()
     let id = popup_create("Some text", {})
     %bd
     call popup_close(id)
+endfunc
+
+func Test_term_popup_bufline()
+  " very specific situation where a non-existing buffer line is used, leading
+  " to an ml_get error
+  CheckScreendump
+
+  let lines =<< trim END
+      vim9script
+      &scrolloff = 5
+      term_start('seq 1 5', {term_finish: 'open'})
+      timer_start(50, (_) => {
+	  set cpoptions&vim
+	  var buf = popup_create([], {})->winbufnr()
+	  appendbufline(buf, 0, range(5))
+      })
+  END
+  call writefile(lines, 'XtestTermPopup', 'D')
+  let buf = RunVimInTerminal('-S XtestTermPopup', #{rows: 15})
+  call VerifyScreenDump(buf, 'Test_term_popup_bufline', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
 endfunc
 
 

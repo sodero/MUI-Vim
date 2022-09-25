@@ -502,6 +502,13 @@ func Test_list_mappings()
   call assert_equal(['n  <M-…>         foo'],
         \ execute('nmap <M-…>')->trim()->split("\n"))
 
+  " illegal bytes
+  let str = ":\x7f:\x80:\x90:\xd0:"
+  exe 'nmap foo ' .. str
+  call assert_equal(['n  foo           ' .. strtrans(str)],
+        \ execute('nmap foo')->trim()->split("\n"))
+  unlet str
+
   " map to CTRL-V
   exe "nmap ,k \<C-V>"
   call assert_equal(['n  ,k            <Nop>'],
@@ -1522,6 +1529,35 @@ func Test_map_script_cmd_survives_unmap()
   autocmd! CmdlineEnter
 endfunc
 
+func Test_map_script_cmd_redo()
+  call mkdir('Xmapcmd')
+  let lines =<< trim END
+      vim9script
+      import autoload './script.vim'
+      onoremap <F3> <ScriptCmd>script.Func()<CR>
+  END
+  call writefile(lines, 'Xmapcmd/plugin.vim')
+
+  let lines =<< trim END
+      vim9script
+      export def Func()
+        normal! dd
+      enddef
+  END
+  call writefile(lines, 'Xmapcmd/script.vim')
+  new
+  call setline(1, ['one', 'two', 'three', 'four'])
+  nnoremap j j
+  source Xmapcmd/plugin.vim
+  call feedkeys("d\<F3>j.", 'xt')
+  call assert_equal(['two', 'four'], getline(1, '$'))
+
+  ounmap <F3>
+  nunmap j
+  call delete('Xmapcmd', 'rf')
+  bwipe!
+endfunc
+
 " Test for using <script> with a map to remap characters in rhs
 func Test_script_local_remap()
   new
@@ -1677,5 +1713,45 @@ func Test_expr_map_escape_special()
   unlet g:got_ellipsis
   nunmap …
 endfunc
+
+" Testing for mapping after an <Nop> mapping is triggered on timeout.
+" Test for what patch 8.1.0052 fixes.
+func Test_map_after_timed_out_nop()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    set timeout timeoutlen=400
+    inoremap ab TEST
+    inoremap a <Nop>
+  END
+  call writefile(lines, 'Xtest_map_after_timed_out_nop')
+  let buf = RunVimInTerminal('-S Xtest_map_after_timed_out_nop', #{rows: 6})
+
+  " Enter Insert mode
+  call term_sendkeys(buf, 'i')
+  " Wait for the "a" mapping to timeout
+  call term_sendkeys(buf, 'a')
+  call term_wait(buf, 500)
+  " Send "a" and wait for a period shorter than 'timeoutlen'
+  call term_sendkeys(buf, 'a')
+  call term_wait(buf, 100)
+  " Send "b", should trigger the "ab" mapping
+  call term_sendkeys(buf, 'b')
+  call WaitForAssert({-> assert_equal("TEST", term_getline(buf, 1))})
+
+  " clean up
+  call StopVimInTerminal(buf)
+  call delete('Xtest_map_after_timed_out_nop')
+endfunc
+
+func Test_using_past_typeahead()
+  nnoremap :00 0
+  exe "norm :set \x80\xfb0=0\<CR>"
+  exe "sil norm :0\x0f\<C-U>\<CR>"
+
+  exe "norm :set \x80\xfb0=\<CR>"
+  nunmap :00
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

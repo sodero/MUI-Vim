@@ -30,8 +30,9 @@ virtual_active(void)
     if (virtual_op != MAYBE)
 	return virtual_op;
     return (cur_ve_flags == VE_ALL
-	    || ((cur_ve_flags & VE_BLOCK) && VIsual_active && VIsual_mode == Ctrl_V)
-	    || ((cur_ve_flags & VE_INSERT) && (State & INSERT)));
+	    || ((cur_ve_flags & VE_BLOCK) && VIsual_active
+						      && VIsual_mode == Ctrl_V)
+	    || ((cur_ve_flags & VE_INSERT) && (State & MODE_INSERT)));
 }
 
 /*
@@ -84,7 +85,7 @@ getviscol2(colnr_T col, colnr_T coladd UNUSED)
 }
 
 /*
- * Try to advance the Cursor to the specified screen column.
+ * Try to advance the Cursor to the specified screen column "wantcol".
  * If virtual editing: fine tune the cursor position.
  * Note that all virtual positions off the end of a line should share
  * a curwin->w_cursor.col value (n.b. this is equal to STRLEN(line)),
@@ -93,29 +94,30 @@ getviscol2(colnr_T col, colnr_T coladd UNUSED)
  * return OK if desired column is reached, FAIL if not
  */
     int
-coladvance(colnr_T wcol)
+coladvance(colnr_T wantcol)
 {
-    int rc = getvpos(&curwin->w_cursor, wcol);
+    int rc = getvpos(&curwin->w_cursor, wantcol);
 
-    if (wcol == MAXCOL || rc == FAIL)
+    if (wantcol == MAXCOL || rc == FAIL)
 	curwin->w_valid &= ~VALID_VIRTCOL;
     else if (*ml_get_cursor() != TAB)
     {
 	// Virtcol is valid when not on a TAB
 	curwin->w_valid |= VALID_VIRTCOL;
-	curwin->w_virtcol = wcol;
+	curwin->w_virtcol = wantcol;
     }
     return rc;
 }
 
 /*
- * Return in "pos" the position of the cursor advanced to screen column "wcol".
+ * Return in "pos" the position of the cursor advanced to screen column
+ * "wantcol".
  * return OK if desired column is reached, FAIL if not
  */
     int
-getvpos(pos_T *pos, colnr_T wcol)
+getvpos(pos_T *pos, colnr_T wantcol)
 {
-    return coladvance2(pos, FALSE, virtual_active(), wcol);
+    return coladvance2(pos, FALSE, virtual_active(), wantcol);
 }
 
     static int
@@ -127,7 +129,6 @@ coladvance2(
 {
     colnr_T	wcol = wcol_arg;
     int		idx;
-    char_u	*ptr;
     char_u	*line;
     colnr_T	col = 0;
     int		csize = 0;
@@ -136,7 +137,7 @@ coladvance2(
     int		head = 0;
 #endif
 
-    one_more = (State & INSERT)
+    one_more = (State & MODE_INSERT)
 		    || restart_edit != NUL
 		    || (VIsual_active && *p_sel != 'o')
 		    || ((get_ve_flags() & VE_ONEMORE) && wcol < MAXCOL);
@@ -156,7 +157,8 @@ coladvance2(
     }
     else
     {
-	int width = curwin->w_width - win_col_off(curwin);
+	int		width = curwin->w_width - win_col_off(curwin);
+	chartabsize_T	cts;
 
 	if (finetune
 		&& curwin->w_p_wrap
@@ -169,7 +171,7 @@ coladvance2(
 		csize--;
 
 	    if (wcol / width > (colnr_T)csize / width
-		    && ((State & INSERT) == 0 || (int)wcol > csize + 1))
+		    && ((State & MODE_INSERT) == 0 || (int)wcol > csize + 1))
 	    {
 		// In case of line wrapping don't move the cursor beyond the
 		// right screen edge.  In Insert mode allow going just beyond
@@ -179,19 +181,30 @@ coladvance2(
 	    }
 	}
 
-	ptr = line;
-	while (col <= wcol && *ptr != NUL)
+	init_chartabsize_arg(&cts, curwin, pos->lnum, 0, line, line);
+	while (cts.cts_vcol <= wcol && *cts.cts_ptr != NUL)
 	{
+#ifdef FEAT_PROP_POPUP
+	    int at_start = cts.cts_ptr == cts.cts_line;
+#endif
 	    // Count a tab for what it's worth (if list mode not on)
 #ifdef FEAT_LINEBREAK
-	    csize = win_lbr_chartabsize(curwin, line, ptr, col, &head);
-	    MB_PTR_ADV(ptr);
+	    csize = win_lbr_chartabsize(&cts, &head);
+	    MB_PTR_ADV(cts.cts_ptr);
 #else
-	    csize = lbr_chartabsize_adv(line, &ptr, col);
+	    csize = lbr_chartabsize_adv(&cts);
 #endif
-	    col += csize;
+	    cts.cts_vcol += csize;
+#ifdef FEAT_PROP_POPUP
+	    if (at_start)
+		// do not count the columns for virtual text above
+		cts.cts_vcol -= cts.cts_first_char;
+#endif
 	}
-	idx = (int)(ptr - line);
+	col = cts.cts_vcol;
+	idx = (int)(cts.cts_ptr - line);
+	clear_chartabsize_arg(&cts);
+
 	/*
 	 * Handle all the special cases.  The virtual_active() check
 	 * is needed to ensure that a virtual position off the end of
@@ -566,7 +579,7 @@ check_cursor_col_win(win_T *win)
 	// - in Insert mode or restarting Insert mode
 	// - in Visual mode and 'selection' isn't "old"
 	// - 'virtualedit' is set
-	if ((State & INSERT) || restart_edit
+	if ((State & MODE_INSERT) || restart_edit
 		|| (VIsual_active && *p_sel != 'o')
 		|| (cur_ve_flags & VE_ONEMORE)
 		|| virtual_active())
@@ -621,7 +634,31 @@ check_cursor(void)
     check_cursor_col();
 }
 
-#if defined(FEAT_TEXTOBJ) || defined(PROTO)
+/*
+ * Check if VIsual position is valid, correct it if not.
+ * Can be called when in Visual mode and a change has been made.
+ */
+    void
+check_visual_pos(void)
+{
+    if (VIsual.lnum > curbuf->b_ml.ml_line_count)
+    {
+	VIsual.lnum = curbuf->b_ml.ml_line_count;
+	VIsual.col = 0;
+	VIsual.coladd = 0;
+    }
+    else
+    {
+	int len = (int)STRLEN(ml_get(VIsual.lnum));
+
+	if (VIsual.col > len)
+	{
+	    VIsual.col = len;
+	    VIsual.coladd = 0;
+	}
+    }
+}
+
 /*
  * Make sure curwin->w_cursor is not on the NUL at the end of the line.
  * Allow it when in Visual mode and 'selection' is not "old".
@@ -634,7 +671,6 @@ adjust_cursor_col(void)
 	    && gchar_cursor() == NUL)
 	--curwin->w_cursor.col;
 }
-#endif
 
 /*
  * When curwin->w_leftcol has changed, adjust the cursor position.
@@ -646,7 +682,7 @@ leftcol_changed(void)
     long	lastcol;
     colnr_T	s, e;
     int		retval = FALSE;
-    long        siso = get_sidescrolloff_value();
+    long	siso = get_sidescrolloff_value();
 
     changed_cline_bef_curs();
     lastcol = curwin->w_leftcol + curwin->w_width - curwin_col_off() - 1;
@@ -690,7 +726,7 @@ leftcol_changed(void)
 
     if (retval)
 	curwin->w_set_curswant = TRUE;
-    redraw_later(NOT_VALID);
+    redraw_later(UPD_NOT_VALID);
     return retval;
 }
 
@@ -1504,7 +1540,8 @@ may_adjust_key_for_ctrl(int modifiers, int key)
  * When Ctrl is also used <C-H> and <C-S-H> are different, but <C-S-{> should
  * be <C-{>.  Same for <C-S-}> and <C-S-|>.
  * Also for <A-S-a> and <M-S-a>.
- * This includes all printable ASCII characters except numbers and a-z.
+ * This includes all printable ASCII characters except a-z.
+ * Digits are included because with AZERTY the Shift key is used to get them.
  */
     int
 may_remove_shift_modifier(int modifiers, int key)
@@ -1514,6 +1551,7 @@ may_remove_shift_modifier(int modifiers, int key)
 		|| modifiers == (MOD_MASK_SHIFT | MOD_MASK_META))
 	    && ((key >= '!' && key <= '/')
 		|| (key >= ':' && key <= 'Z')
+		|| vim_isdigit(key)
 		|| (key >= '[' && key <= '`')
 		|| (key >= '{' && key <= '~')))
 	return modifiers & ~MOD_MASK_SHIFT;
@@ -1836,22 +1874,23 @@ call_shell(char_u *cmd, int opt)
 }
 
 /*
- * VISUAL, SELECTMODE and OP_PENDING State are never set, they are equal to
- * NORMAL State with a condition.  This function returns the real State.
+ * MODE_VISUAL, MODE_SELECT and MODE_OP_PENDING State are never set, they are
+ * equal to MODE_NORMAL State with a condition.  This function returns the real
+ * State.
  */
     int
 get_real_state(void)
 {
-    if (State & NORMAL)
+    if (State & MODE_NORMAL)
     {
 	if (VIsual_active)
 	{
 	    if (VIsual_select)
-		return SELECTMODE;
-	    return VISUAL;
+		return MODE_SELECT;
+	    return MODE_VISUAL;
 	}
 	else if (finish_op)
-	    return OP_PENDING;
+	    return MODE_OP_PENDING;
     }
     return State;
 }
@@ -2271,7 +2310,7 @@ parse_shape_opt(int what)
 get_shape_idx(int mouse)
 {
 #ifdef FEAT_MOUSESHAPE
-    if (mouse && (State == HITRETURN || State == ASKMORE))
+    if (mouse && (State == MODE_HITRETURN || State == MODE_ASKMORE))
     {
 # ifdef FEAT_GUI
 	int x, y;
@@ -2286,15 +2325,15 @@ get_shape_idx(int mouse)
     if (mouse && drag_sep_line)
 	return SHAPE_IDX_VDRAG;
 #endif
-    if (!mouse && State == SHOWMATCH)
+    if (!mouse && State == MODE_SHOWMATCH)
 	return SHAPE_IDX_SM;
     if (State & VREPLACE_FLAG)
 	return SHAPE_IDX_R;
     if (State & REPLACE_FLAG)
 	return SHAPE_IDX_R;
-    if (State & INSERT)
+    if (State & MODE_INSERT)
 	return SHAPE_IDX_I;
-    if (State & CMDLINE)
+    if (State & MODE_CMDLINE)
     {
 	if (cmdline_at_end())
 	    return SHAPE_IDX_C;
@@ -2371,15 +2410,12 @@ update_mouseshape(int shape_idx)
 
 
 /*
- * Change directory to "new_dir".  If FEAT_SEARCHPATH is defined, search
- * 'cdpath' for relative directory names, otherwise just mch_chdir().
+ * Change directory to "new_dir".  Search 'cdpath' for relative directory
+ * names.
  */
     int
 vim_chdir(char_u *new_dir)
 {
-#ifndef FEAT_SEARCHPATH
-    return mch_chdir((char *)new_dir);
-#else
     char_u	*dir_name;
     int		r;
 
@@ -2390,7 +2426,6 @@ vim_chdir(char_u *new_dir)
     r = mch_chdir((char *)dir_name);
     vim_free(dir_name);
     return r;
-#endif
 }
 
 /*
@@ -2414,7 +2449,7 @@ get_user_name(char_u *buf, int len)
     return OK;
 }
 
-#if defined(EXITFREE) || defined(PROTOS)
+#if defined(EXITFREE) || defined(PROTO)
 /*
  * Free the memory allocated by get_user_name()
  */

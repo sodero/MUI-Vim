@@ -253,7 +253,7 @@ spell_check(
 							     MAXWLEN + 1);
     mi.mi_fwordlen = (int)STRLEN(mi.mi_fword);
 
-    if (camel_case)
+    if (camel_case && mi.mi_fwordlen > 0)
 	// Introduce a fake word end space into the folded word.
 	mi.mi_fword[mi.mi_fwordlen - 1] = ' ';
 
@@ -1275,7 +1275,7 @@ spell_move_to(
     char_u	*line;
     char_u	*p;
     char_u	*endp;
-    hlf_T	attr;
+    hlf_T	attr = 0;
     int		len;
 #ifdef FEAT_SYN_HL
     int		has_syntax = syntax_present(wp);
@@ -1308,6 +1308,8 @@ spell_move_to(
 
     while (!got_int)
     {
+	int empty_line;
+
 	line = ml_get_buf(wp->w_buffer, lnum, FALSE);
 
 	len = (int)STRLEN(line);
@@ -1340,7 +1342,9 @@ spell_move_to(
 	}
 
 	// Copy the line into "buf" and append the start of the next line if
-	// possible.
+	// possible.  Note: this ml_get_buf() may make "line" invalid, check
+	// for empty line first.
+	empty_line = *skipwhite(line) == NUL;
 	STRCPY(buf, line);
 	if (lnum < wp->w_buffer->b_ml.ml_line_count)
 	    spell_cat_line(buf + STRLEN(buf),
@@ -1487,7 +1491,7 @@ spell_move_to(
 	    --capcol;
 
 	    // But after empty line check first word in next line
-	    if (*skipwhite(line) == NUL)
+	    if (empty_line)
 		capcol = 0;
 	}
 
@@ -2280,7 +2284,7 @@ did_set_spelllang(win_T *wp)
 		}
 	    }
     }
-    redraw_win_later(wp, NOT_VALID);
+    redraw_win_later(wp, UPD_NOT_VALID);
 
 theend:
     vim_free(spl_copy);
@@ -2913,6 +2917,9 @@ ex_spellrepall(exarg_T *eap UNUSED)
 	    STRCAT(p, line + curwin->w_cursor.col + STRLEN(repl_from));
 	    ml_replace(curwin->w_cursor.lnum, p, FALSE);
 	    changed_bytes(curwin->w_cursor.lnum, curwin->w_cursor.col);
+	    if (curbuf->b_has_textprop && addlen != 0)
+		adjust_prop_columns(curwin->w_cursor.lnum,
+				 curwin->w_cursor.col, addlen, APC_SUBSTITUTE);
 
 	    if (curwin->w_cursor.lnum != prev_lnum)
 	    {
@@ -3847,7 +3854,7 @@ ex_spelldump(exarg_T *eap)
     if (curbuf->b_ml.ml_line_count > 1)
 	ml_delete(curbuf->b_ml.ml_line_count);
 
-    redraw_later(NOT_VALID);
+    redraw_later(UPD_NOT_VALID);
 }
 
 /*
@@ -3989,9 +3996,10 @@ spell_dump_compl(
 		    n = arridx[depth] + curi[depth];
 		    ++curi[depth];
 		    c = byts[n];
-		    if (c == 0)
+		    if (c == 0 || depth >= MAXWLEN - 1)
 		    {
-			// End of word, deal with the word.
+			// End of word or reached maximum length, deal with the
+			// word.
 			// Don't use keep-case words in the fold-case tree,
 			// they will appear in the keep-case tree.
 			// Only use the word when the region matches.
@@ -4355,7 +4363,7 @@ valid_spellfile(char_u *val)
     char_u *s;
 
     for (s = val; *s != NUL; ++s)
-	if (!vim_isfilec(*s) && *s != ',' && *s != ' ')
+	if (!vim_is_fname_char(*s))
 	    return FALSE;
     return TRUE;
 }

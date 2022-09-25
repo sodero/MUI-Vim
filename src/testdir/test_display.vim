@@ -78,7 +78,7 @@ func Test_scroll_without_region()
     set t_cs=
     set laststatus=2
   END
-  call writefile(lines, 'Xtestscroll')
+  call writefile(lines, 'Xtestscroll', 'D')
   let buf = RunVimInTerminal('-S Xtestscroll', #{rows: 10})
 
   call VerifyScreenDump(buf, 'Test_scroll_no_region_1', {})
@@ -102,7 +102,6 @@ func Test_scroll_without_region()
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete('Xtestscroll')
 endfunc
 
 func Test_display_listchars_precedes()
@@ -172,14 +171,13 @@ func Test_scroll_CursorLineNr_update()
     exe ":norm! o\<esc>110ia\<esc>"
   END
   let filename = 'Xdrawscreen'
-  call writefile(lines, filename)
+  call writefile(lines, filename, 'D')
   let buf = RunVimInTerminal('-S '.filename, #{rows: 5, cols: 50})
   call term_sendkeys(buf, "k")
   call VerifyScreenDump(buf, 'Test_winline_rnu', {})
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete(filename)
 endfunc
 
 " check a long file name does not result in the hit-enter prompt
@@ -187,28 +185,27 @@ func Test_edit_long_file_name()
   CheckScreendump
 
   let longName = 'x'->repeat(min([&columns, 255]))
-  call writefile([], longName)
+  call writefile([], longName, 'D')
   let buf = RunVimInTerminal('-N -u NONE ' .. longName, #{rows: 8})
 
   call VerifyScreenDump(buf, 'Test_long_file_name_1', {})
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete(longName)
 endfunc
 
 func Test_unprintable_fileformats()
   CheckScreendump
 
-  call writefile(["unix\r", "two"], 'Xunix.txt')
-  call writefile(["mac\r", "two"], 'Xmac.txt')
+  call writefile(["unix\r", "two"], 'Xunix.txt', 'D')
+  call writefile(["mac\r", "two"], 'Xmac.txt', 'D')
   let lines =<< trim END
     edit Xunix.txt
     split Xmac.txt
     edit ++ff=mac
   END
   let filename = 'Xunprintable'
-  call writefile(lines, filename)
+  call writefile(lines, filename, 'D')
   let buf = RunVimInTerminal('-S '.filename, #{rows: 9, cols: 50})
   call VerifyScreenDump(buf, 'Test_display_unprintable_01', {})
   call term_sendkeys(buf, "\<C-W>\<C-W>\<C-L>")
@@ -216,9 +213,6 @@ func Test_unprintable_fileformats()
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete('Xunix.txt')
-  call delete('Xmac.txt')
-  call delete(filename)
 endfunc
 
 " Test for scrolling that modifies buffer during visual block
@@ -233,7 +227,7 @@ func Test_visual_block_scroll()
   END
 
   let filename = 'Xvisualblockmodifiedscroll'
-  call writefile(lines, filename)
+  call writefile(lines, filename, 'D')
 
   let buf = RunVimInTerminal('-S '.filename, #{rows: 7})
   call term_sendkeys(buf, "V\<C-D>\<C-D>")
@@ -241,7 +235,6 @@ func Test_visual_block_scroll()
   call VerifyScreenDump(buf, 'Test_display_visual_block_scroll', {})
 
   call StopVimInTerminal(buf)
-  call delete(filename)
 endfunc
 
 func Test_display_scroll_at_topline()
@@ -267,14 +260,13 @@ func Test_display_scroll_update_visual()
       call sign_place(2, 'bar', 'foo', bufnr(), { 'lnum': 1 })
       autocmd CursorMoved * if getcurpos()[1] == 2 | call sign_unplace('bar', { 'id': 1 }) | endif
   END
-  call writefile(lines, 'XupdateVisual.vim')
+  call writefile(lines, 'XupdateVisual.vim', 'D')
 
   let buf = RunVimInTerminal('-S XupdateVisual.vim', #{rows: 8, cols: 60})
   call term_sendkeys(buf, "VG7kk")
   call VerifyScreenDump(buf, 'Test_display_scroll_update_visual', {})
 
   call StopVimInTerminal(buf)
-  call delete('XupdateVisual.vim')
 endfunc
 
 " Test for 'eob' (EndOfBuffer) item in 'fillchars'
@@ -356,6 +348,33 @@ func Test_fold_fillchars()
   set fillchars& fdc& foldmethod& foldenable&
 endfunc
 
+func Test_local_fillchars()
+  CheckScreendump
+
+  let lines =<< trim END
+      call setline(1, ['window 1']->repeat(3))
+      setlocal fillchars=stl:1,stlnc:a,vert:=,eob:x
+      vnew
+      call setline(1, ['window 2']->repeat(3))
+      setlocal fillchars=stl:2,stlnc:b,vert:+,eob:y
+      new
+      wincmd J
+      call setline(1, ['window 3']->repeat(3))
+      setlocal fillchars=stl:3,stlnc:c,vert:<,eob:z
+      vnew
+      call setline(1, ['window 4']->repeat(3))
+      setlocal fillchars=stl:4,stlnc:d,vert:>,eob:o
+  END
+  call writefile(lines, 'Xdisplayfillchars', 'D')
+  let buf = RunVimInTerminal('-S Xdisplayfillchars', #{rows: 12})
+  call VerifyScreenDump(buf, 'Test_display_fillchars_1', {})
+
+  call term_sendkeys(buf, ":wincmd k\r")
+  call VerifyScreenDump(buf, 'Test_display_fillchars_2', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_display_linebreak_breakat()
   new
   vert resize 25
@@ -381,7 +400,7 @@ func Test_display_lastline()
       vsplit
       100wincmd <
   END
-  call writefile(lines, 'XdispLastline')
+  call writefile(lines, 'XdispLastline', 'D')
   let buf = RunVimInTerminal('-S XdispLastline', #{rows: 10})
   call VerifyScreenDump(buf, 'Test_display_lastline_1', {})
 
@@ -395,7 +414,6 @@ func Test_display_lastline()
   call VerifyScreenDump(buf, 'Test_display_lastline_4', {})
 
   call StopVimInTerminal(buf)
-  call delete('XdispLastline')
 endfunc
 
 

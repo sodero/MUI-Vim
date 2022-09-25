@@ -58,7 +58,10 @@ function Test_cmdmods()
   call assert_equal('lockmarks', g:mods)
   loc MyCmd
   call assert_equal('lockmarks', g:mods)
-  " noautocmd MyCmd
+  noautocmd MyCmd
+  call assert_equal('noautocmd', g:mods)
+  noa MyCmd
+  call assert_equal('noautocmd', g:mods)
   noswapfile MyCmd
   call assert_equal('noswapfile', g:mods)
   nos MyCmd
@@ -72,29 +75,47 @@ function Test_cmdmods()
   call assert_equal('silent', g:mods)
   sil MyCmd
   call assert_equal('silent', g:mods)
+  silent! MyCmd
+  call assert_equal('silent!', g:mods)
+  sil! MyCmd
+  call assert_equal('silent!', g:mods)
   tab MyCmd
   call assert_equal('tab', g:mods)
   topleft MyCmd
   call assert_equal('topleft', g:mods)
   to MyCmd
   call assert_equal('topleft', g:mods)
-  " unsilent MyCmd
+  unsilent MyCmd
+  call assert_equal('unsilent', g:mods)
+  uns MyCmd
+  call assert_equal('unsilent', g:mods)
   verbose MyCmd
   call assert_equal('verbose', g:mods)
   verb MyCmd
   call assert_equal('verbose', g:mods)
+  0verbose MyCmd
+  call assert_equal('0verbose', g:mods)
+  3verbose MyCmd
+  call assert_equal('3verbose', g:mods)
+  999verbose MyCmd
+  call assert_equal('999verbose', g:mods)
   vertical MyCmd
   call assert_equal('vertical', g:mods)
   vert MyCmd
   call assert_equal('vertical', g:mods)
+  horizontal MyCmd
+  call assert_equal('horizontal', g:mods)
+  hor MyCmd
+  call assert_equal('horizontal', g:mods)
 
   aboveleft belowright botright browse confirm hide keepalt keepjumps
-	      \ keepmarks keeppatterns lockmarks noswapfile silent tab
-	      \ topleft verbose vertical MyCmd
+	      \ keepmarks keeppatterns lockmarks noautocmd noswapfile silent
+	      \ tab topleft unsilent verbose vertical MyCmd
 
   call assert_equal('browse confirm hide keepalt keepjumps ' .
-      \ 'keepmarks keeppatterns lockmarks noswapfile silent ' .
-      \ 'verbose aboveleft belowright botright tab topleft vertical', g:mods)
+      \ 'keepmarks keeppatterns lockmarks noswapfile unsilent noautocmd ' .
+      \ 'silent verbose aboveleft belowright botright tab topleft vertical',
+      \ g:mods)
 
   let g:mods = ''
   command! -nargs=* MyQCmd let g:mods .= '<q-mods> '
@@ -645,7 +666,7 @@ func Test_usercmd_custom()
     return "a\nb\n"
   endfunc
   command -nargs=* -complete=customlist,T1 TCmd1
-  call feedkeys(":TCmd1 \<C-A>\<C-B>\"\<CR>", 'xt')
+  call assert_fails('call feedkeys(":TCmd1 \<C-A>\<C-B>\"\<CR>", "xt")', 'E1303: Custom list completion function does not return a List but a string')
   call assert_equal('"TCmd1 ', @:)
   delcommand TCmd1
   delfunc T1
@@ -654,7 +675,7 @@ func Test_usercmd_custom()
     return {}
   endfunc
   command -nargs=* -complete=customlist,T2 TCmd2
-  call feedkeys(":TCmd2 \<C-A>\<C-B>\"\<CR>", 'xt')
+  call assert_fails('call feedkeys(":TCmd2 \<C-A>\<C-B>\"\<CR>", "xt")', 'E1303: Custom list completion function does not return a List but a dict')
   call assert_equal('"TCmd2 ', @:)
   delcommand TCmd2
   delfunc T2
@@ -693,6 +714,25 @@ func Test_usercmd_with_block()
   END
   call v9.CheckScriptSuccess(lines)
   delcommand HelloThere
+
+  let lines =<< trim END
+      command EchoCond {
+          const test: string = true
+              ? 'true'
+              : 'false'
+          g:result = test
+      }
+      EchoCond
+  END
+  call v9.CheckScriptSuccess(lines)
+  call assert_equal('true', g:result)
+  unlet g:result
+
+  call feedkeys(":EchoCond\<CR>", 'xt')
+  call assert_equal('true', g:result)
+
+  delcommand EchoCond
+  unlet g:result
 
   let lines =<< trim END
       command BadCommand {

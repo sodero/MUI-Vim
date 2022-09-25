@@ -404,7 +404,7 @@ spell_load_file(
      * <HEADER>: <fileID>
      */
     for (i = 0; i < VIMSPELLMAGICL; ++i)
-	buf[i] = getc(fd);				// <fileID>
+	buf[i] = (c = getc(fd)) == EOF ? 0 : c;		// <fileID>
     if (STRNCMP(buf, VIMSPELLMAGIC, VIMSPELLMAGICL) != 0)
     {
 	emsg(_(e_this_does_not_look_like_spell_file));
@@ -700,7 +700,7 @@ suggest_load_files(void)
 	     * <SUGHEADER>: <fileID> <versionnr> <timestamp>
 	     */
 	    for (i = 0; i < VIMSUGMAGICL; ++i)
-		buf[i] = getc(fd);			// <fileID>
+		buf[i] = (c = getc(fd)) == EOF ? 0 : c;	// <fileID>
 	    if (STRNCMP(buf, VIMSUGMAGIC, VIMSUGMAGICL) != 0)
 	    {
 		semsg(_(e_this_does_not_look_like_sug_file_str),
@@ -841,13 +841,14 @@ read_cnt_string(FILE *fd, int cnt_bytes, int *cntp)
 read_region_section(FILE *fd, slang_T *lp, int len)
 {
     int		i;
+    int		c = 0;
 
     if (len > MAXREGIONS * 2)
 	return SP_FORMERROR;
     for (i = 0; i < len; ++i)
-	lp->sl_regions[i] = getc(fd);			// <regionname>
+	lp->sl_regions[i] = (c = getc(fd)) == EOF ? 0 : c; // <regionname>
     lp->sl_regions[len] = NUL;
-    return 0;
+    return c == EOF ? SP_TRUNCERROR : 0;
 }
 
 /*
@@ -898,6 +899,7 @@ read_prefcond_section(FILE *fd, slang_T *lp)
     int		cnt;
     int		i;
     int		n;
+    int		c;
     char_u	*p;
     char_u	buf[MAXWLEN + 1];
 
@@ -925,7 +927,9 @@ read_prefcond_section(FILE *fd, slang_T *lp)
 	    buf[0] = '^';	    // always match at one position only
 	    p = buf + 1;
 	    while (n-- > 0)
-		*p++ = getc(fd);			// <condstr>
+		*p++ = (c = getc(fd)) == EOF ? 0 : c;	    // <condstr>
+	    if (c == EOF)
+		break;
 	    *p = NUL;
 	    lp->sl_prefprog[i] = vim_regcomp(buf, RE_MAGIC + RE_STRING);
 	}
@@ -1063,7 +1067,7 @@ read_sal_section(FILE *fd, slang_T *slang)
 	    // store the char we got while checking for end of sm_lead
 	    *p++ = c;
 	for (++i; i < ccnt; ++i)
-	    *p++ = getc(fd);			// <salfrom>
+	    *p++ = (c = getc(fd)) == EOF ? 0 : c;	// <salfrom>
 	*p++ = NUL;
 
 	// <saltolen> <salto>
@@ -1759,7 +1763,7 @@ spell_reload_one(
 	    if (spell_load_file(fname, NULL, slang, FALSE) == NULL)
 		// reloading failed, clear the language
 		slang_clear(slang);
-	    redraw_all_later(SOME_VALID);
+	    redraw_all_later(UPD_SOME_VALID);
 	    didit = TRUE;
 	}
     }
@@ -4367,6 +4371,23 @@ wordtree_alloc(spellinfo_T *spin)
 }
 
 /*
+ * Return TRUE if "word" contains valid word characters.
+ * Control characters and trailing '/' are invalid.  Space is OK.
+ */
+    static int
+valid_spell_word(char_u *word, char_u *end)
+{
+    char_u *p;
+
+    if (enc_utf8 && !utf_valid_string(word, end))
+	return FALSE;
+    for (p = word; *p != NUL && p < end; p += mb_ptr2len(p))
+	if (*p < ' ' || (p[0] == '/' && p[1] == NUL))
+	    return FALSE;
+    return TRUE;
+}
+
+/*
  * Store a word in the tree(s).
  * Always store it in the case-folded tree.  For a keep-case word this is
  * useful when the word can also be used with all caps (no WF_FIXCAP flag) and
@@ -4389,6 +4410,10 @@ store_word(
     char_u	foldword[MAXWLEN];
     int		res = OK;
     char_u	*p;
+
+    // Avoid adding illegal bytes to the word tree.
+    if (!valid_spell_word(word, word + len))
+	return FAIL;
 
     (void)spell_casefold(curwin, word, len, foldword, MAXWLEN);
     for (p = pfxlist; res == OK; ++p)
@@ -5564,10 +5589,12 @@ sug_filltree(spellinfo_T *spin, slang_T *slang)
 
     /*
      * Go through the whole case-folded tree, soundfold each word and put it
-     * in the trie.
+     * in the trie.  Bail out if the tree is empty.
      */
     byts = slang->sl_fbyts;
     idxs = slang->sl_fidxs;
+    if (byts == NULL || idxs == NULL)
+	return FAIL;
 
     arridx[0] = 0;
     curi[0] = 1;
@@ -6190,6 +6217,12 @@ spell_add_word(
     int		i;
     char_u	*spf;
 
+    if (!valid_spell_word(word, word + len))
+    {
+	emsg(_(e_illegal_character_in_word));
+	return;
+    }
+
     if (idx == 0)	    // use internal wordlist
     {
 	if (int_wordlist == NULL)
@@ -6340,7 +6373,7 @@ spell_add_word(
 	if (buf != NULL)
 	    buf_reload(buf, buf->b_orig_mode, FALSE);
 
-	redraw_all_later(SOME_VALID);
+	redraw_all_later(UPD_SOME_VALID);
     }
     vim_free(fnamebuf);
 }

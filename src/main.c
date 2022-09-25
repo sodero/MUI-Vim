@@ -159,7 +159,7 @@ main
 # endif
 # ifdef FEAT_JOB_CHANNEL
 	if (STRICMP(argv[i], "--log") == 0)
-	    ch_logfile((char_u *)(argv[i + 1]), (char_u *)"a");
+	    ch_logfile((char_u *)(argv[i + 1]), (char_u *)"ao");
 # endif
     }
 #endif
@@ -547,6 +547,7 @@ vim_main2(void)
 	// don't have them.
 	if (!gui.in_use && params.evim_mode)
 	    mch_exit(1);
+	firstwin->w_prev_height = firstwin->w_height; // may have changed
     }
 #endif
 
@@ -658,7 +659,7 @@ vim_main2(void)
 
     /*
      * When done something that is not allowed or given an error message call
-     * wait_return.  This must be done before starttermcap(), because it may
+     * wait_return().  This must be done before starttermcap(), because it may
      * switch to another screen. It must be done after settmode(TMODE_RAW),
      * because we want to react on a single key stroke.
      * Call settmode and starttermcap here, so the T_KS and T_TI may be
@@ -693,7 +694,7 @@ vim_main2(void)
 			&& !gui.in_use
 #endif
 					)
-	must_redraw = CLEAR;
+	set_must_redraw(UPD_CLEAR);
     else
     {
 	screenclear();			// clear screen
@@ -795,7 +796,7 @@ vim_main2(void)
 #endif
 
     RedrawingDisabled = 0;
-    redraw_all_later(NOT_VALID);
+    redraw_all_later(UPD_NOT_VALID);
     no_wait_return = FALSE;
 
     // 'autochdir' has been postponed
@@ -1014,7 +1015,7 @@ common_init(mparm_T *paramp)
  * Return TRUE when the --not-a-term argument was found.
  */
     int
-is_not_a_term()
+is_not_a_term(void)
 {
     return params.not_a_term;
 }
@@ -1022,8 +1023,8 @@ is_not_a_term()
 /*
  * Return TRUE when the --not-a-term argument was found or the GUI is in use.
  */
-    static int
-is_not_a_term_or_gui()
+    int
+is_not_a_term_or_gui(void)
 {
     return params.not_a_term
 #ifdef FEAT_GUI
@@ -1032,6 +1033,17 @@ is_not_a_term_or_gui()
 	;
 }
 
+#if defined(FEAT_GUI) || defined(PROTO)
+/*
+ * If a --gui-dialog-file argument was given return the file name.
+ * Otherwise return NULL.
+ */
+    char_u *
+get_gui_dialog_file(void)
+{
+    return params.gui_dialog_file;
+}
+#endif
 
 // When TRUE in a safe state when starting to wait for a character.
 static int	was_safe = FALSE;
@@ -1188,7 +1200,7 @@ main_loop(
     // exits while Vim is running in a console.
     if (!cmdwin && !noexmode && SETJMP(x_jump_env))
     {
-	State = NORMAL;
+	State = MODE_NORMAL;
 	VIsual_active = FALSE;
 	got_int = TRUE;
 	need_wait_return = FALSE;
@@ -1222,7 +1234,7 @@ main_loop(
 	    did_check_timestamps = FALSE;
 	    if (need_check_timestamps)
 		check_timestamps(FALSE);
-	    if (need_wait_return)	// if wait_return still needed ...
+	    if (need_wait_return)	// if wait_return() still needed ...
 		wait_return(FALSE);	// ... call it now
 	    if (need_start_insertmode && goto_im() && !VIsual_active)
 	    {
@@ -1246,7 +1258,7 @@ main_loop(
 		// Typed two CTRL-C in a row: go back to ex mode as if "Q" was
 		// used and keep "got_int" set, so that it aborts ":g".
 		exmode_active = EXMODE_NORMAL;
-		State = NORMAL;
+		State = MODE_NORMAL;
 	    }
 	    else if (!global_busy || !exmode_active)
 	    {
@@ -1408,14 +1420,14 @@ main_loop(
 	    validate_cursor();
 
 	    if (VIsual_active)
-		update_curbuf(INVERTED); // update inverted part
+		update_curbuf(UPD_INVERTED); // update inverted part
 	    else if (must_redraw)
 	    {
 		mch_disable_flush();	// Stop issuing gui_mch_flush().
 		update_screen(0);
 		mch_enable_flush();
 	    }
-	    else if (redraw_cmdline || clear_cmdline)
+	    else if (redraw_cmdline || clear_cmdline || redraw_mode)
 		showmode();
 	    redraw_statuslines();
 	    if (need_maketitle)
@@ -1578,6 +1590,11 @@ getout(int exitval)
     // Position the cursor on the last screen line, below all the text
     if (!is_not_a_term_or_gui())
 	windgoto((int)Rows - 1, 0);
+
+#ifdef FEAT_EVAL
+    // Invoked all deferred functions in the function stack.
+    invoke_all_defer();
+#endif
 
 #if defined(FEAT_EVAL) || defined(FEAT_SYN_HL)
     // Optionally print hashtable efficiency.
@@ -2016,6 +2033,7 @@ command_line_scan(mparm_T *parmp)
 				// "--log fname" start logging early
 				// "--nofork" don't fork
 				// "--not-a-term" don't warn for not a term
+				// "--gui-dialog-file fname" write dialog text
 				// "--ttyfail" exit if not a term
 				// "--noplugin[s]" skip plugins
 				// "--cmd <cmd>" execute cmd before vimrc
@@ -2059,6 +2077,12 @@ command_line_scan(mparm_T *parmp)
 		    p_lpl = FALSE;
 		else if (STRNICMP(argv[0] + argv_idx, "not-a-term", 10) == 0)
 		    parmp->not_a_term = TRUE;
+		else if (STRNICMP(argv[0] + argv_idx, "gui-dialog-file", 15)
+									 == 0)
+		{
+		    want_argument = TRUE;
+		    argv_idx += 15;
+		}
 		else if (STRNICMP(argv[0] + argv_idx, "ttyfail", 7) == 0)
 		    parmp->tty_fail = TRUE;
 		else if (STRNICMP(argv[0] + argv_idx, "cmd", 3) == 0)
@@ -2187,10 +2211,8 @@ command_line_scan(mparm_T *parmp)
 		break;
 
 	    case 'l':		// "-l" lisp mode, 'lisp' and 'showmatch' on
-#ifdef FEAT_LISP
 		set_option_value_give_err((char_u *)"lisp", 1L, NULL, 0);
 		p_sm = TRUE;
-#endif
 		break;
 
 	    case 'M':		// "-M"  no changes or writing of files
@@ -2457,6 +2479,15 @@ command_line_scan(mparm_T *parmp)
 			parmp->pre_commands[parmp->n_pre_commands++] =
 							    (char_u *)argv[0];
 		    }
+		    // --gui-dialog-file fname
+		    if (argv[-1][2] == 'g')
+		    {
+			// without GUI ignore the argument
+#ifdef FEAT_GUI
+			parmp->gui_dialog_file = (char_u *)argv[0];
+#endif
+		    }
+
 		    // "--startuptime <file>" already handled
 		    // "--log <file>" already handled
 		    break;
@@ -3501,9 +3532,7 @@ usage(void)
     main_msg(_("-m\t\t\tModifications (writing files) not allowed"));
     main_msg(_("-M\t\t\tModifications in text not allowed"));
     main_msg(_("-b\t\t\tBinary mode"));
-#ifdef FEAT_LISP
     main_msg(_("-l\t\t\tLisp mode"));
-#endif
     main_msg(_("-C\t\t\tCompatible with Vi: 'compatible'"));
     main_msg(_("-N\t\t\tNot fully Vi compatible: 'nocompatible'"));
     main_msg(_("-V[N][fname]\t\tBe verbose [level N] [log messages to fname]"));
@@ -3526,6 +3555,9 @@ usage(void)
 #endif
     main_msg(_("-T <terminal>\tSet terminal type to <terminal>"));
     main_msg(_("--not-a-term\t\tSkip warning for input/output not being a terminal"));
+#ifdef FEAT_GUI
+    main_msg(_("--gui-dialog-file {fname}  For testing: write dialog text"));
+#endif
     main_msg(_("--ttyfail\t\tExit if input or output is not a terminal"));
     main_msg(_("-u <vimrc>\t\tUse <vimrc> instead of any .vimrc"));
 #ifdef FEAT_GUI

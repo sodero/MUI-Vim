@@ -126,6 +126,45 @@
 #ifndef IO_REPARSE_TAG_SYMLINK
 # define IO_REPARSE_TAG_SYMLINK		0xA000000C
 #endif
+#ifndef IO_REPARSE_TAG_APPEXECLINK
+# define IO_REPARSE_TAG_APPEXECLINK	0x8000001B
+#endif
+
+/*
+ * Definition of the reparse point buffer.
+ * This is usually defined in the DDK, copy the definition here to avoid
+ * adding it as a dependence only for a single structure.
+ */
+typedef struct _REPARSE_DATA_BUFFER {
+    ULONG  ReparseTag;
+    USHORT ReparseDataLength;
+    USHORT Reserved;
+    union {
+	struct {
+	    USHORT SubstituteNameOffset;
+	    USHORT SubstituteNameLength;
+	    USHORT PrintNameOffset;
+	    USHORT PrintNameLength;
+	    ULONG  Flags;
+	    WCHAR  PathBuffer[1];
+	} SymbolicLinkReparseBuffer;
+	struct {
+	    USHORT SubstituteNameOffset;
+	    USHORT SubstituteNameLength;
+	    USHORT PrintNameOffset;
+	    USHORT PrintNameLength;
+	    WCHAR  PathBuffer[1];
+	} MountPointReparseBuffer;
+	struct {
+	    UCHAR DataBuffer[1];
+	} GenericReparseBuffer;
+	struct
+	{
+	    ULONG StringCount;
+	    WCHAR StringList[1];
+	} AppExecLinkReparseBuffer;
+    } DUMMYUNIONNAME;
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
 #ifdef _MSC_VER
     // Support for __try / __except.  All versions of MSVC are
@@ -159,7 +198,7 @@ Trace(char *pszFormat, ...);
 
   // These macros should all compile away to nothing
 # define ASSERT(f)		((void)0)
-# define TRACE			1 ? (void)0 : printf
+# define TRACE			1 ? (void)0 : (void)printf
 # define TRACE0(sz)
 # define TRACE1(sz, p1)
 # define TRACE2(sz, p1, p2)

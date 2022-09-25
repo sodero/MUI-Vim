@@ -108,6 +108,7 @@ filemess(
  * READ_STDIN	read from stdin instead of a file
  * READ_BUFFER	read from curbuf instead of a file (converting after reading
  *		stdin)
+ * READ_NOFILE	do not read a file, only trigger BufReadCmd
  * READ_DUMMY	read into a dummy buffer (to check if file contents changed)
  * READ_KEEP_UNDO  don't clear undo info or read it from a file
  * READ_FIFO	read from fifo/socket instead of a file
@@ -216,7 +217,7 @@ readfile(
     int		using_b_ffname;
     int		using_b_fname;
     static char *msg_is_a_directory = N_("is a directory");
-    int         eof;
+    int		eof;
 
     au_did_filetype = FALSE; // reset before triggering any autocommands
 
@@ -309,6 +310,11 @@ readfile(
 #endif
 
 	curbuf->b_op_start = orig_start;
+
+	if (flags & READ_NOFILE)
+	    // Return NOTDONE instead of FAIL so that BufEnter can be triggered
+	    // and other operations don't fail.
+	    return NOTDONE;
     }
 
     if ((shortmess(SHM_OVER) || curbuf->b_help) && p_verbose == 0)
@@ -514,9 +520,7 @@ readfile(
 		    // Create a swap file now, so that other Vims are warned
 		    // that we are editing this file.  Don't do this for a
 		    // "nofile" or "nowrite" buffer type.
-#ifdef FEAT_QUICKFIX
 		    if (!bt_dontwrite(curbuf))
-#endif
 		    {
 			check_need_swap(newfile);
 			// SwapExists autocommand may mess things up
@@ -595,9 +599,7 @@ readfile(
     // Create a swap file now, so that other Vims are warned that we are
     // editing this file.
     // Don't do this for a "nofile" or "nowrite" buffer type.
-#ifdef FEAT_QUICKFIX
     if (!bt_dontwrite(curbuf))
-#endif
     {
 	check_need_swap(newfile);
 	if (!read_stdin && (curbuf != old_curbuf
@@ -1631,7 +1633,6 @@ retry:
 		 * Do the conversion.
 		 */
 		dst = ptr;
-		size = size;
 		while (size > 0)
 		{
 		    found_bad = FALSE;
@@ -2376,7 +2377,7 @@ failed:
 	    linecnt = 0;
 	if (newfile || read_buffer)
 	{
-	    redraw_curbuf_later(NOT_VALID);
+	    redraw_curbuf_later(UPD_NOT_VALID);
 #ifdef FEAT_DIFF
 	    // After reading the text into the buffer the diff info needs to
 	    // be updated.
@@ -2945,7 +2946,7 @@ check_for_cryptkey(
     // When starting to edit a new file which does not have encryption, clear
     // the 'key' option, except when starting up (called with -x argument)
     else if (newfile && *curbuf->b_p_key != NUL && !starting)
-	set_option_value((char_u *)"key", 0L, (char_u *)"", OPT_LOCAL);
+	set_option_value_give_err((char_u *)"key", 0L, (char_u *)"", OPT_LOCAL);
 
     return cryptkey;
 }
@@ -3408,9 +3409,7 @@ shorten_buf_fname(buf_T *buf, char_u *dirname, int force)
     char_u	*p;
 
     if (buf->b_fname != NULL
-#ifdef FEAT_QUICKFIX
 	    && !bt_nofilename(buf)
-#endif
 	    && !path_with_url(buf->b_fname)
 	    && (force
 		|| buf->b_sfname == NULL
@@ -4265,7 +4264,8 @@ buf_check_timestamp(
 	    }
 	    else
 #endif
-	    if (State > NORMAL_BUSY || (State & CMDLINE) || already_warned)
+	    if (State > MODE_NORMAL_BUSY || (State & MODE_CMDLINE)
+							     || already_warned)
 	    {
 		if (*mesg2 != NUL)
 		{
@@ -4747,8 +4747,8 @@ compare_readdirex_item(const void *p1, const void *p2)
 {
     char_u  *name1, *name2;
 
-    name1 = dict_get_string(*(dict_T**)p1, (char_u*)"name", FALSE);
-    name2 = dict_get_string(*(dict_T**)p2, (char_u*)"name", FALSE);
+    name1 = dict_get_string(*(dict_T**)p1, "name", FALSE);
+    name2 = dict_get_string(*(dict_T**)p2, "name", FALSE);
     if (readdirex_sort == READDIR_SORT_BYTE)
 	return STRCMP(name1, name2);
     else if (readdirex_sort == READDIR_SORT_IC)
@@ -4784,7 +4784,7 @@ readdir_core(
     int		withattr UNUSED,
     void	*context,
     int		(*checkitem)(void *context, void *item),
-    int         sort)
+    int		sort)
 {
     int			failed = FALSE;
     char_u		*p;
@@ -5405,7 +5405,6 @@ match_file_pat(
     return result;
 }
 
-#if defined(FEAT_WILDIGN) || defined(PROTO)
 /*
  * Return TRUE if a file matches with a pattern in "list".
  * "list" is a comma-separated list of patterns, like 'wildignore'.
@@ -5439,7 +5438,6 @@ match_file_list(char_u *list, char_u *sfname, char_u *ffname)
     }
     return FALSE;
 }
-#endif
 
 /*
  * Convert the given pattern "pat" which has shell style wildcards in it, into

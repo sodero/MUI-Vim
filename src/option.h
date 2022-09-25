@@ -141,6 +141,7 @@ typedef enum {
 #define FO_WRAP_COMS	'c'
 #define FO_RET_COMS	'r'
 #define FO_OPEN_COMS	'o'
+#define FO_NO_OPEN_COMS	'/'
 #define FO_Q_COMS	'q'
 #define FO_Q_NUMBER	'n'
 #define FO_Q_SECOND	'2'
@@ -159,7 +160,7 @@ typedef enum {
 
 #define DFLT_FO_VI	"vt"
 #define DFLT_FO_VIM	"tcq"
-#define FO_ALL		"tcroq2vlb1mMBn,aw]jp"	// for do_set()
+#define FO_ALL		"tcro/q2vlb1mMBn,aw]jp"	// for do_set()
 
 // characters for the p_cpo option:
 #define CPO_ALTREAD	'a'	// ":read" sets alternate file name
@@ -196,7 +197,7 @@ typedef enum {
 #define CPO_REMMARK	'R'	// remove marks when filtering
 #define CPO_BUFOPT	's'
 #define CPO_BUFOPTGLOB	'S'
-#define CPO_TAGPAT	't'
+#define CPO_TAGPAT	't'	// tag pattern is used for "n"
 #define CPO_UNDO	'u'	// "u" undoes itself
 #define CPO_BACKSPACE	'v'	// "v" keep deleted text
 #define CPO_CW		'w'	// "cw" only changes one blank
@@ -266,8 +267,8 @@ typedef enum {
 #define SHM_COMPLETIONMENU  'c'		// completion menu messages
 #define SHM_RECORDING	'q'		// short recording message
 #define SHM_FILEINFO	'F'		// no file info messages
-#define SHM_SEARCHCOUNT  'S'	        // search stats: '[1/10]'
-#define SHM_POSIX       "AS"            // POSIX value
+#define SHM_SEARCHCOUNT  'S'		// search stats: '[1/10]'
+#define SHM_POSIX       "AS"		// POSIX value
 #define SHM_ALL		"rmfixlnwaWtToOsAIcqFS" // all possible flags for 'shm'
 
 // characters for p_go:
@@ -397,14 +398,10 @@ EXTERN int	p_ai;		// 'autoindent'
 EXTERN int	p_bin;		// 'binary'
 EXTERN int	p_bomb;		// 'bomb'
 EXTERN int	p_bl;		// 'buflisted'
-#ifdef FEAT_CINDENT
 EXTERN int	p_cin;		// 'cindent'
 EXTERN char_u	*p_cink;	// 'cinkeys'
 EXTERN char_u	*p_cinsd;	// 'cinscopedecls'
-#endif
-#if defined(FEAT_SMARTINDENT) || defined(FEAT_CINDENT)
 EXTERN char_u	*p_cinw;	// 'cinwords'
-#endif
 #ifdef FEAT_COMPL_FUNC
 EXTERN char_u	*p_cfu;		// 'completefunc'
 EXTERN char_u	*p_ofu;		// 'omnifunc'
@@ -454,9 +451,7 @@ EXTERN unsigned	bo_flags;
 #define BO_TERM		0x40000
 #define BO_WILD		0x80000
 
-#ifdef FEAT_WILDIGN
 EXTERN char_u	*p_bsk;		// 'backupskip'
-#endif
 #ifdef FEAT_CRYPT
 EXTERN char_u	*p_cm;		// 'cryptmethod'
 #endif
@@ -490,9 +485,7 @@ EXTERN int	p_deco;		// 'delcombine'
 EXTERN char_u	*p_ccv;		// 'charconvert'
 #endif
 EXTERN int	p_cdh;		// 'cdhome'
-#ifdef FEAT_CINDENT
 EXTERN char_u	*p_cino;	// 'cinoptions'
-#endif
 #ifdef FEAT_CMDWIN
 EXTERN char_u	*p_cedit;	// 'cedit'
 EXTERN long	p_cwh;		// 'cmdwinheight'
@@ -687,7 +680,7 @@ EXTERN int	p_inf;		// 'infercase'
 EXTERN char_u	*p_inex;	// 'includeexpr'
 #endif
 EXTERN int	p_is;		// 'incsearch'
-#if defined(FEAT_CINDENT) && defined(FEAT_EVAL)
+#if defined(FEAT_EVAL)
 EXTERN char_u	*p_inde;	// 'indentexpr'
 EXTERN char_u	*p_indk;	// 'indentkeys'
 #endif
@@ -716,10 +709,8 @@ EXTERN char_u	*p_lm;		// 'langmenu'
 #ifdef FEAT_GUI
 EXTERN long	p_linespace;	// 'linespace'
 #endif
-#ifdef FEAT_LISP
 EXTERN int	p_lisp;		// 'lisp'
 EXTERN char_u	*p_lispwords;	// 'lispwords'
-#endif
 EXTERN long	p_ls;		// 'laststatus'
 EXTERN long	p_stal;		// 'showtabline'
 EXTERN char_u	*p_lcs;		// 'listchars'
@@ -787,9 +778,7 @@ EXTERN char_u	*p_pex;		// 'patchexpr'
 #endif
 EXTERN char_u	*p_pm;		// 'patchmode'
 EXTERN char_u	*p_path;	// 'path'
-#ifdef FEAT_SEARCHPATH
 EXTERN char_u	*p_cdpath;	// 'cdpath'
-#endif
 #if defined(DYNAMIC_PERL)
 EXTERN char_u	*p_perldll;	// 'perldll'
 #endif
@@ -809,9 +798,7 @@ EXTERN char_u	*p_pyhome;	// 'pythonhome'
 #if defined(FEAT_PYTHON) || defined(FEAT_PYTHON3)
 EXTERN long	p_pyx;		// 'pyxversion'
 #endif
-#ifdef FEAT_TEXTOBJ
 EXTERN char_u	*p_qe;		// 'quoteescape'
-#endif
 EXTERN int	p_ro;		// 'readonly'
 #ifdef FEAT_RELTIME
 EXTERN long	p_rdt;		// 'redrawtime'
@@ -913,15 +900,11 @@ EXTERN int	p_smd;		// 'showmode'
 EXTERN long	p_ss;		// 'sidescroll'
 EXTERN long	p_siso;		// 'sidescrolloff'
 EXTERN int	p_scs;		// 'smartcase'
-#ifdef FEAT_SMARTINDENT
 EXTERN int	p_si;		// 'smartindent'
-#endif
 EXTERN int	p_sta;		// 'smarttab'
 EXTERN long	p_sts;		// 'softtabstop'
 EXTERN int	p_sb;		// 'splitbelow'
-#if defined(FEAT_SEARCHPATH)
 EXTERN char_u	*p_sua;		// 'suffixesadd'
-#endif
 EXTERN int	p_swf;		// 'swapfile'
 #ifdef FEAT_SYN_HL
 EXTERN long	p_smc;		// 'synmaxcol'
@@ -941,6 +924,7 @@ EXTERN char_u	*p_spo;		// 'spelloptions'
 EXTERN char_u	*p_sps;		// 'spellsuggest'
 #endif
 EXTERN int	p_spr;		// 'splitright'
+EXTERN int	p_spsc;		// 'splitscroll'
 EXTERN int	p_sol;		// 'startofline'
 EXTERN char_u	*p_su;		// 'suffixes'
 EXTERN char_u	*p_sws;		// 'swapsync'
@@ -1076,18 +1060,14 @@ EXTERN long	p_window;	// 'window'
 #define FEAT_WAK
 EXTERN char_u	*p_wak;		// 'winaltkeys'
 #endif
-#ifdef FEAT_WILDIGN
 EXTERN char_u	*p_wig;		// 'wildignore'
-#endif
 EXTERN int	p_wiv;		// 'weirdinvert'
 EXTERN char_u	*p_ww;		// 'whichwrap'
 EXTERN long	p_wc;		// 'wildchar'
 EXTERN long	p_wcm;		// 'wildcharm'
 EXTERN int	p_wic;		// 'wildignorecase'
 EXTERN char_u	*p_wim;		// 'wildmode'
-#ifdef FEAT_WILDMENU
 EXTERN int	p_wmnu;		// 'wildmenu'
-#endif
 EXTERN long	p_wh;		// 'winheight'
 EXTERN long	p_wmh;		// 'winminheight'
 EXTERN long	p_wmw;		// 'winminwidth'
@@ -1124,15 +1104,11 @@ enum
     , BV_BL
     , BV_BOMB
     , BV_CI
-#ifdef FEAT_CINDENT
     , BV_CIN
     , BV_CINK
     , BV_CINO
     , BV_CINSD
-#endif
-#if defined(FEAT_SMARTINDENT) || defined(FEAT_CINDENT)
     , BV_CINW
-#endif
     , BV_CM
 #ifdef FEAT_FOLDING
     , BV_CMS
@@ -1167,7 +1143,7 @@ enum
     , BV_FT
     , BV_IMI
     , BV_IMS
-#if defined(FEAT_CINDENT) && defined(FEAT_EVAL)
+#if defined(FEAT_EVAL)
     , BV_INDE
     , BV_INDK
 #endif
@@ -1183,10 +1159,8 @@ enum
     , BV_KMAP
 #endif
     , BV_KP
-#ifdef FEAT_LISP
     , BV_LISP
     , BV_LW
-#endif
     , BV_MENC
     , BV_MA
     , BV_ML
@@ -1198,13 +1172,9 @@ enum
 #endif
     , BV_PATH
     , BV_PI
-#ifdef FEAT_TEXTOBJ
     , BV_QE
-#endif
     , BV_RO
-#ifdef FEAT_SMARTINDENT
     , BV_SI
-#endif
     , BV_SN
 #ifdef FEAT_SYN_HL
     , BV_SMC
@@ -1217,9 +1187,7 @@ enum
     , BV_SPO
 #endif
     , BV_STS
-#ifdef FEAT_SEARCHPATH
     , BV_SUA
-#endif
     , BV_SW
     , BV_SWF
 #ifdef FEAT_EVAL
@@ -1255,6 +1223,7 @@ enum
 {
     WV_LIST = 0
     , WV_LCS
+    , WV_FCS
 #ifdef FEAT_ARABIC
     , WV_ARAB
 #endif

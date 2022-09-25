@@ -697,7 +697,7 @@ VimCommand(PyObject *self UNUSED, PyObject *string)
 
     VimTryStart();
     do_cmdline_cmd(cmd);
-    update_screen(VALID);
+    update_screen(UPD_VALID);
 
     Python_Release_Vim();
     Py_END_ALLOW_THREADS
@@ -761,7 +761,6 @@ VimToPython(typval_T *our_tv, int depth, PyObject *lookup_dict)
 	sprintf(buf, "%ld", (long)our_tv->vval.v_number);
 	ret = PyString_FromString((char *)buf);
     }
-#ifdef FEAT_FLOAT
     else if (our_tv->v_type == VAR_FLOAT)
     {
 	char buf[NUMBUFLEN];
@@ -769,7 +768,6 @@ VimToPython(typval_T *our_tv, int depth, PyObject *lookup_dict)
 	sprintf(buf, "%f", our_tv->vval.v_float);
 	ret = PyString_FromString((char *)buf);
     }
-#endif
     else if (our_tv->v_type == VAR_LIST)
     {
 	list_T		*list = our_tv->vval.v_list;
@@ -4067,7 +4065,7 @@ WindowSetattr(WindowObject *self, char *name, PyObject *valObject)
 	// When column is out of range silently correct it.
 	check_cursor_col_win(self->win);
 
-	update_screen(VALID);
+	update_screen(UPD_VALID);
 	return 0;
     }
     else if (strcmp(name, "height") == 0)
@@ -4676,9 +4674,11 @@ SetBufferLineList(
 	// Only adjust marks if we managed to switch to a window that holds
 	// the buffer, otherwise line numbers will be invalid.
 	if (save_curbuf.br_buf == NULL)
+	{
 	    mark_adjust((linenr_T)lo, (linenr_T)(hi - 1),
 						  (long)MAXLNUM, (long)extra);
-	changed_lines((linenr_T)lo, 0, (linenr_T)hi, (long)extra);
+	    changed_lines((linenr_T)lo, 0, (linenr_T)hi, (long)extra);
+	}
 
 	if (buf == curbuf && (switchwin.sw_curwin != NULL
 					   || save_curbuf.br_buf == NULL))
@@ -4743,7 +4743,7 @@ InsertBufferLines(buf_T *buf, PyInt n, PyObject *lines, PyInt *len_change)
 
 	vim_free(str);
 	restore_win_for_buf(&switchwin, &save_curbuf);
-	update_screen(VALID);
+	update_screen(UPD_VALID);
 
 	if (VimTryEnd())
 	    return FAIL;
@@ -4814,7 +4814,7 @@ InsertBufferLines(buf_T *buf, PyInt n, PyObject *lines, PyInt *len_change)
 	PyMem_Free(array);
 	restore_win_for_buf(&switchwin, &save_curbuf);
 
-	update_screen(VALID);
+	update_screen(UPD_VALID);
 
 	if (VimTryEnd())
 	    return FAIL;
@@ -5823,7 +5823,7 @@ out:
     if (status)
 	return;
     check_cursor();
-    update_curbuf(NOT_VALID);
+    update_curbuf(UPD_NOT_VALID);
 }
 
     static void
@@ -6327,13 +6327,11 @@ _ConvertFromPyObject(PyObject *obj, typval_T *tv, PyObject *lookup_dict)
     }
     else if (PyDict_Check(obj))
 	return convert_dl(obj, tv, pydict_to_tv, lookup_dict);
-#ifdef FEAT_FLOAT
     else if (PyFloat_Check(obj))
     {
 	tv->v_type = VAR_FLOAT;
 	tv->vval.v_float = (float_T) PyFloat_AsDouble(obj);
     }
-#endif
     else if (PyObject_HasAttrString(obj, "keys"))
 	return convert_dl(obj, tv, pymap_to_tv, lookup_dict);
     // PyObject_GetIter can create built-in iterator for any sequence object
@@ -6386,9 +6384,7 @@ ConvertToPyObject(typval_T *tv)
 	case VAR_NUMBER:
 	    return PyLong_FromLong((long) tv->vval.v_number);
 	case VAR_FLOAT:
-#ifdef FEAT_FLOAT
 	    return PyFloat_FromDouble((double) tv->vval.v_float);
-#endif
 	case VAR_LIST:
 	    return NEW_LIST(tv->vval.v_list);
 	case VAR_DICT:
@@ -6954,7 +6950,7 @@ populate_module(PyObject *m)
     {
 	// find_module() is deprecated, this may stop working in some later
 	// version.
-        ADD_OBJECT(m, "_find_module", py_find_module);
+	ADD_OBJECT(m, "_find_module", py_find_module);
     }
 
     Py_DECREF(imp);

@@ -67,6 +67,29 @@ def Test_range_only()
   endif
 enddef
 
+def Test_invalid_range()
+  var lines =<< trim END
+      :123 eval 1 + 2
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E481:', 1)
+
+  lines =<< trim END
+      :123 if true
+      endif
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E481:', 1)
+
+  lines =<< trim END
+      :123 echo 'yes'
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E481:', 1)
+
+  lines =<< trim END
+      :123 cd there
+  END
+  v9.CheckDefAndScriptFailure(lines, 'E481:', 1)
+enddef
+
 let g:alist = [7]
 let g:astring = 'text'
 let g:anumber = 123
@@ -377,11 +400,10 @@ def Test_block_local_vars()
 
   # need to execute this with a separate Vim instance to avoid the current
   # context gets garbage collected.
-  writefile(lines, 'Xscript')
+  writefile(lines, 'Xscript', 'D')
   g:RunVim([], [], '-S Xscript')
   assert_equal(['ok'], readfile('Xdidit'))
 
-  delete('Xscript')
   delete('Xdidit')
 enddef
 
@@ -945,11 +967,11 @@ def Test_cnext_works_in_catch()
   var lines =<< trim END
       vim9script
       au BufEnter * eval 1 + 2
-      writefile(['text'], 'Xfile1')
-      writefile(['text'], 'Xfile2')
+      writefile(['text'], 'Xcncfile1')
+      writefile(['text'], 'Xcncfile2')
       var items = [
-          {lnum: 1, filename: 'Xfile1', valid: true},
-          {lnum: 1, filename: 'Xfile2', valid: true}
+          {lnum: 1, filename: 'Xcncfile1', valid: true},
+          {lnum: 1, filename: 'Xcncfile2', valid: true}
         ]
       setqflist([], ' ', {items: items})
       cwindow
@@ -965,17 +987,16 @@ def Test_cnext_works_in_catch()
 
       CnextOrCfirst()
       CnextOrCfirst()
-      writefile([getqflist({idx: 0}).idx], 'Xresult')
+      writefile([getqflist({idx: 0}).idx], 'Xcncresult')
       qall
   END
-  writefile(lines, 'XCatchCnext')
+  writefile(lines, 'XCatchCnext', 'D')
   g:RunVim([], [], '--clean -S XCatchCnext')
-  assert_equal(['1'], readfile('Xresult'))
+  assert_equal(['1'], readfile('Xcncresult'))
 
-  delete('Xfile1')
-  delete('Xfile2')
-  delete('XCatchCnext')
-  delete('Xresult')
+  delete('Xcncfile1')
+  delete('Xcncfile2')
+  delete('Xcncresult')
 enddef
 
 def Test_throw_skipped()
@@ -992,9 +1013,8 @@ def Test_nocatch_throw_silenced()
     enddef
     silent! Func()
   END
-  writefile(lines, 'XthrowSilenced')
+  writefile(lines, 'XthrowSilenced', 'D')
   source XthrowSilenced
-  delete('XthrowSilenced')
 enddef
 
 def DeletedFunc(): list<any>
@@ -1450,7 +1470,7 @@ def Test_vim9script_reload_delfunc()
   END
 
   # FuncNo() is defined
-  writefile(first_lines + withno_lines, 'Xreloaded.vim')
+  writefile(first_lines + withno_lines, 'Xreloaded.vim', 'D')
   source Xreloaded.vim
   g:DoCheck(true)
 
@@ -1463,8 +1483,6 @@ def Test_vim9script_reload_delfunc()
   writefile(first_lines + withno_lines, 'Xreloaded.vim')
   source Xreloaded.vim
   g:DoCheck(false)
-
-  delete('Xreloaded.vim')
 enddef
 
 def Test_vim9script_reload_delvar()
@@ -1473,7 +1491,7 @@ def Test_vim9script_reload_delvar()
     vim9script
     var name = 'string'
   END
-  writefile(lines, 'XreloadVar.vim')
+  writefile(lines, 'XreloadVar.vim', 'D')
   source XreloadVar.vim
 
   # now write the script using the same variable locally - works
@@ -1485,8 +1503,6 @@ def Test_vim9script_reload_delvar()
   END
   writefile(lines, 'XreloadVar.vim')
   source XreloadVar.vim
-
-  delete('XreloadVar.vim')
 enddef
 
 def Test_func_redefine_error()
@@ -1497,19 +1513,17 @@ def Test_func_redefine_error()
         'enddef',
         'Func()',
         ]
-  writefile(lines, 'Xtestscript.vim')
+  writefile(lines, 'Xtestscript.vim', 'D')
 
   for count in range(3)
     try
       source Xtestscript.vim
     catch /E684/
       # function name should contain <SNR> every time
-      assert_match('E684: list index out of range', v:exception)
+      assert_match('E684: List index out of range', v:exception)
       assert_match('function <SNR>\d\+_Func, line 1', v:throwpoint)
     endtry
   endfor
-
-  delete('Xtestscript.vim')
 enddef
 
 def Test_func_redefine_fails()
@@ -1535,6 +1549,19 @@ def Test_func_redefine_fails()
     defcompile
   END
   v9.CheckScriptFailure(lines, 'E1073:')
+enddef
+
+def Test_lambda_split()
+  # this was using freed memory, because of the split expression
+  var lines =<< trim END
+      vim9script
+      try
+      0
+      0->(0
+        ->a.0(
+        ->u
+  END
+  v9.CheckScriptFailure(lines, 'E1050:')
 enddef
 
 def Test_fixed_size_list()
@@ -1615,6 +1642,50 @@ def Test_if_elseif_else_fails()
       endif
   END
   v9.CheckDefAndScriptFailure(lines, ['E1143:', 'E15:'], 4)
+enddef
+
+def Test_if_else_func_using_var()
+  var lines =<< trim END
+      vim9script
+
+      const debug = true
+      if debug
+        var mode_chars = 'something'
+        def Bits2Ascii()
+          var x = mode_chars
+          g:where = 'in true'
+        enddef
+      else
+        def Bits2Ascii()
+          g:where = 'in false'
+        enddef
+      endif
+
+      Bits2Ascii()
+  END
+  v9.CheckScriptSuccess(lines)
+  assert_equal('in true', g:where)
+  unlet g:where
+
+  lines =<< trim END
+      vim9script
+
+      const debug = false
+      if debug
+        var mode_chars = 'something'
+        def Bits2Ascii()
+          g:where = 'in true'
+        enddef
+      else
+        def Bits2Ascii()
+          var x = mode_chars
+          g:where = 'in false'
+        enddef
+      endif
+
+      Bits2Ascii()
+  END
+  v9.CheckScriptFailure(lines, 'E1001: Variable not found: mode_chars')
 enddef
 
 let g:bool_true = v:true
@@ -1931,6 +2002,13 @@ def Test_echoconsole_cmd()
   # output goes anywhere
 enddef
 
+def Test_echowindow_cmd()
+  var local = 'local'
+  echowindow 'something' local # comment
+  # output goes in message window
+  popup_clear()
+enddef
+
 def Test_for_outside_of_function()
   var lines =<< trim END
     vim9script
@@ -1948,9 +2026,8 @@ def Test_for_outside_of_function()
     endfor
     assert_equal(' loop 1 loop 2 loop 3', result)
   END
-  writefile(lines, 'Xvim9for.vim')
+  writefile(lines, 'Xvim9for.vim', 'D')
   source Xvim9for.vim
-  delete('Xvim9for.vim')
 enddef
 
 def Test_for_skipped_block()
@@ -2028,6 +2105,19 @@ def Test_for_skipped_block()
     BuildDiagrams()
   END
   v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+def Test_skipped_redir()
+  var lines =<< trim END
+      def T()
+        if 0
+          redir =>l[0]
+          redir END
+        endif
+      enddef
+      defcompile
+  END
+  v9.CheckScriptSuccess(lines)
 enddef
 
 def Test_for_loop()
@@ -2159,14 +2249,40 @@ def Test_for_loop()
 enddef
 
 def Test_for_loop_with_closure()
+  # using the loop variable in a closure results in the last used value
   var lines =<< trim END
+      var flist: list<func>
+      for i in range(5)
+        flist[i] = () => i
+      endfor
+      for i in range(5)
+        assert_equal(4, flist[i]())
+      endfor
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+
+  # also works when the loop variable is used only once halfway the loops
+  lines =<< trim END
+      var Clo: func
+      for i in range(5)
+        if i == 3
+          Clo = () => i
+        endif
+      endfor
+      assert_equal(4, Clo())
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+
+  # using a local variable set to the loop variable in a closure results in the
+  # value at that moment
+  lines =<< trim END
       var flist: list<func>
       for i in range(5)
         var inloop = i
         flist[i] = () => inloop
       endfor
       for i in range(5)
-        assert_equal(4, flist[i]())
+        assert_equal(i, flist[i]())
       endfor
   END
   v9.CheckDefAndScriptSuccess(lines)
@@ -2180,10 +2296,93 @@ def Test_for_loop_with_closure()
             }
       endfor
       for i in range(5)
-        assert_equal(4, flist[i]())
+        assert_equal(i, flist[i]())
       endfor
   END
   v9.CheckDefAndScriptSuccess(lines)
+
+  # Also works for a nested loop
+  lines =<< trim END
+      var flist: list<func>
+      var n = 0
+      for i in range(3)
+        var ii = i
+        for a in ['a', 'b', 'c']
+          var aa = a
+          flist[n] = () => ii .. aa
+          ++n
+        endfor
+      endfor
+
+      n = 0
+      for i in range(3)
+        for a in ['a', 'b', 'c']
+          assert_equal(i .. a, flist[n]())
+          ++n
+        endfor
+      endfor
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+
+  # using two loop variables
+  lines =<< trim END
+      var lv_list: list<func>
+      var copy_list: list<func>
+      for [idx, c] in items('word')
+        var lidx = idx
+        var lc = c
+        lv_list[idx] = () => {
+              return idx .. c
+            }
+        copy_list[idx] = () => {
+              return lidx .. lc
+            }
+      endfor
+      for [i, c] in items('word')
+        assert_equal(3 .. 'd', lv_list[i]())
+        assert_equal(i .. c, copy_list[i]())
+      endfor
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+def Test_define_global_closure_in_loops()
+  var lines =<< trim END
+      vim9script
+
+      def Func()
+        for i in range(3)
+          var ii = i
+          for a in ['a', 'b', 'c']
+            var aa = a
+            if ii == 0 && aa == 'a'
+              def g:Global_0a(): string
+                return ii .. aa
+              enddef
+            endif
+            if ii == 1 && aa == 'b'
+              def g:Global_1b(): string
+                return ii .. aa
+              enddef
+            endif
+            if ii == 2 && aa == 'c'
+              def g:Global_2c(): string
+                return ii .. aa
+              enddef
+            endif
+          endfor
+        endfor
+      enddef
+      Func()
+  END
+  v9.CheckScriptSuccess(lines)
+  assert_equal("0a", g:Global_0a())
+  assert_equal("1b", g:Global_1b())
+  assert_equal("2c", g:Global_2c())
+
+  delfunc g:Global_0a
+  delfunc g:Global_1b
+  delfunc g:Global_2c
 enddef
 
 def Test_for_loop_fails()
@@ -2235,7 +2434,7 @@ def Test_for_loop_fails()
         echo k v
       endfor
   END
-  v9.CheckDefExecAndScriptFailure(lines, ['E1013: Argument 1: type mismatch, expected job but got string', 'E1012: Type mismatch; expected job but got string'], 2)
+  v9.CheckDefExecAndScriptFailure(lines, ['E1163: Variable 1: type mismatch, expected job but got string', 'E1012: Type mismatch; expected job but got string'], 2)
 
   lines =<< trim END
       var i = 0
@@ -2276,6 +2475,32 @@ def Test_for_loop_fails()
       endfor
   END
   v9.CheckDefExecAndScriptFailure(lines, 'E1013: Argument 2: type mismatch, expected dict<number> but got dict<string>')
+
+  lines =<< trim END
+      for a in range(3)
+        while a > 3
+          for b in range(2)
+            while b < 0
+              for c in range(5)
+                while c > 6
+                  while c < 0
+                    for d in range(1)
+                      for e in range(3)
+                        while e > 3
+                        endwhile
+                      endfor
+                    endfor
+                  endwhile
+                endwhile
+              endfor
+            endwhile
+          endfor
+        endwhile
+      endfor
+  END
+  v9.CheckDefSuccess(lines)
+
+  v9.CheckDefFailure(['for x in range(3)'] + lines + ['endfor'], 'E1306:')
 enddef
 
 def Test_for_loop_script_var()
@@ -2601,10 +2826,14 @@ def Test_vim9_comment()
       'vim9script',
       '# something',
       '#something',
-      '#{something',
+      '#{{something',
       ])
+  v9.CheckScriptFailure([
+      'vim9script',
+      '#{something',
+      ], 'E1170:')
 
-  split Xfile
+  split Xv9cfile
   v9.CheckScriptSuccess([
       'vim9script',
       'edit #something',
@@ -3177,7 +3406,7 @@ def Test_vim9_comment_not_compiled()
 
   v9.CheckScriptSuccess([
       'vim9script',
-      'new'
+      'new',
       'setline(1, ["# define pat", "last"])',
       ':$',
       'dsearch /pat/ #comment',
@@ -3186,7 +3415,7 @@ def Test_vim9_comment_not_compiled()
 
   v9.CheckScriptFailure([
       'vim9script',
-      'new'
+      'new',
       'setline(1, ["# define pat", "last"])',
       ':$',
       'dsearch /pat/#comment',
@@ -3208,12 +3437,11 @@ def Test_finish()
     finish
     g:res = 'three'
   END
-  writefile(lines, 'Xfinished')
+  writefile(lines, 'Xfinished', 'D')
   source Xfinished
   assert_equal('two', g:res)
 
   unlet g:res
-  delete('Xfinished')
 enddef
 
 def Test_forward_declaration()
@@ -3227,14 +3455,13 @@ def Test_forward_declaration()
     theVal = 'else'
     g:laterVal = GetValue()
   END
-  writefile(lines, 'Xforward')
+  writefile(lines, 'Xforward', 'D')
   source Xforward
   assert_equal('something', g:initVal)
   assert_equal('else', g:laterVal)
 
   unlet g:initVal
   unlet g:laterVal
-  delete('Xforward')
 enddef
 
 def Test_declare_script_var_in_func()
@@ -3286,7 +3513,7 @@ func Test_vim9script_not_global()
       echo 'local'
     enddef
   END
-  call writefile(vim9lines, 'Xvim9script.vim')
+  call writefile(vim9lines, 'Xvim9script.vim', 'D')
   source Xvim9script.vim
   try
     echo g:var
@@ -3306,8 +3533,6 @@ func Test_vim9script_not_global()
   catch /E117:/
     " caught
   endtry
-
-  call delete('Xvim9script.vim')
 endfunc
 
 def Test_vim9_copen()
@@ -3337,7 +3562,7 @@ def Test_error_in_autoload_script()
   var save_rtp = &rtp
   var dir = getcwd() .. '/Xruntime'
   &rtp = dir
-  mkdir(dir .. '/autoload', 'p')
+  mkdir(dir .. '/autoload', 'pR')
 
   var lines =<< trim END
       vim9script noclear
@@ -3370,7 +3595,28 @@ def Test_error_in_autoload_script()
   v9.CheckScriptSuccess(lines)
 
   &rtp = save_rtp
-  delete(dir, 'rf')
+enddef
+
+def Test_error_in_autoload_script_foldexpr()
+  var save_rtp = &rtp
+  mkdir('Xvim/autoload', 'pR')
+  &runtimepath = 'Xvim'
+
+  var lines =<< trim END
+      vim9script
+      eval [][0]
+      echomsg 'no error'
+  END
+  lines->writefile('Xvim/autoload/script.vim')
+
+  lines =<< trim END
+      vim9script
+      import autoload 'script.vim'
+      &foldmethod = 'expr'
+      &foldexpr = 'script.Func()'
+      redraw
+  END
+  v9.CheckScriptFailure(lines, 'E684: List index out of range: 0')
 enddef
 
 def Test_invalid_sid()
@@ -3383,16 +3629,14 @@ def Test_invalid_sid()
 enddef
 
 def Test_restoring_cpo()
-  writefile(['vim9script', 'set nocp'], 'Xsourced')
-  writefile(['call writefile(["done"], "Xdone")', 'quit!'], 'Xclose')
+  writefile(['vim9script', 'set nocp'], 'Xsourced', 'D')
+  writefile(['call writefile(["done"], "Xdone")', 'quit!'], 'Xclose', 'D')
   if g:RunVim([], [], '-u NONE +"set cpo+=a" -S Xsourced -S Xclose')
     assert_equal(['done'], readfile('Xdone'))
   endif
-  delete('Xsourced')
-  delete('Xclose')
   delete('Xdone')
 
-  writefile(['vim9script', 'g:cpoval = &cpo'], 'XanotherScript')
+  writefile(['vim9script', 'g:cpoval = &cpo'], 'XanotherScript', 'D')
   set cpo=aABceFsMny>
   edit XanotherScript
   so %
@@ -3405,7 +3649,6 @@ def Test_restoring_cpo()
   assert_equal('aABceFsMny>', &cpo)
   assert_equal('aABceFsMny>', g:cpoval)
 
-  delete('XanotherScript')
   set cpo&vim
   unlet g:cpoval
 
@@ -3413,26 +3656,26 @@ def Test_restoring_cpo()
     # 'cpo' is not restored in main vimrc
     var save_HOME = $HOME
     $HOME = getcwd() .. '/Xhome'
-    mkdir('Xhome')
+    mkdir('Xhome', 'R')
     var lines =<< trim END
         vim9script
-        writefile(['before: ' .. &cpo], 'Xresult')
+        writefile(['before: ' .. &cpo], 'Xrporesult')
         set cpo+=M
-        writefile(['after: ' .. &cpo], 'Xresult', 'a')
+        writefile(['after: ' .. &cpo], 'Xrporesult', 'a')
     END
     writefile(lines, 'Xhome/.vimrc')
 
     lines =<< trim END
-        call writefile(['later: ' .. &cpo], 'Xresult', 'a')
+        call writefile(['later: ' .. &cpo], 'Xrporesult', 'a')
     END
-    writefile(lines, 'Xlegacy')
+    writefile(lines, 'Xlegacy', 'D')
 
     lines =<< trim END
         vim9script
-        call writefile(['vim9: ' .. &cpo], 'Xresult', 'a')
+        call writefile(['vim9: ' .. &cpo], 'Xrporesult', 'a')
         qa
     END
-    writefile(lines, 'Xvim9')
+    writefile(lines, 'Xvim9', 'D')
 
     var cmd = g:GetVimCommand() .. " -S Xlegacy -S Xvim9"
     cmd = substitute(cmd, '-u NONE', '', '')
@@ -3442,13 +3685,10 @@ def Test_restoring_cpo()
         'before: aABceFs',
         'after: aABceFsM',
         'later: aABceFsM',
-        'vim9: aABceFs'], readfile('Xresult'))
+        'vim9: aABceFs'], readfile('Xrporesult'))
 
     $HOME = save_HOME
-    delete('Xhome', 'rf')
-    delete('Xlegacy')
-    delete('Xvim9')
-    delete('Xresult')
+    delete('Xrporesult')
   endif
 enddef
 
@@ -3465,17 +3705,17 @@ def Run_test_no_redraw_when_restoring_cpo()
     export def Func()
     enddef
   END
-  mkdir('Xdir/autoload', 'p')
-  writefile(lines, 'Xdir/autoload/script.vim')
+  mkdir('Xnordir/autoload', 'pR')
+  writefile(lines, 'Xnordir/autoload/script.vim')
 
   lines =<< trim END
       vim9script
       set cpo+=M
-      exe 'set rtp^=' .. getcwd() .. '/Xdir'
+      exe 'set rtp^=' .. getcwd() .. '/Xnordir'
       au CmdlineEnter : ++once timer_start(0, (_) => script#Func())
       setline(1, 'some text')
   END
-  writefile(lines, 'XTest_redraw_cpo')
+  writefile(lines, 'XTest_redraw_cpo', 'D')
   var buf = g:RunVimInTerminal('-S XTest_redraw_cpo', {'rows': 6})
   term_sendkeys(buf, "V:")
   g:VerifyScreenDump(buf, 'Test_vim9_no_redraw', {})
@@ -3483,8 +3723,6 @@ def Run_test_no_redraw_when_restoring_cpo()
   # clean up
   term_sendkeys(buf, "\<Esc>u")
   g:StopVimInTerminal(buf)
-  delete('XTest_redraw_cpo')
-  delete('Xdir', 'rf')
 enddef
 
 func Test_reject_declaration()
@@ -3585,8 +3823,8 @@ def Run_Test_define_func_at_command_line()
       call writefile(['errors: ' .. string(v:errors)], 'Xdidcmd')
     endfunc
   END
-  writefile([''], 'Xdidcmd')
-  writefile(lines, 'XcallFunc')
+  writefile([''], 'Xdidcmd', 'D')
+  writefile(lines, 'XcallFunc', 'D')
   var buf = g:RunVimInTerminal('-S XcallFunc', {rows: 6})
   # define Afunc() on the command line
   term_sendkeys(buf, ":def Afunc()\<CR>Bfunc()\<CR>enddef\<CR>")
@@ -3594,8 +3832,6 @@ def Run_Test_define_func_at_command_line()
   g:WaitForAssert(() => assert_equal(['errors: []'], readfile('Xdidcmd')))
 
   call g:StopVimInTerminal(buf)
-  delete('XcallFunc')
-  delete('Xdidcmd')
 enddef
 
 def Test_script_var_scope()
@@ -3723,9 +3959,8 @@ def Test_no_unknown_error_after_error()
         sleep 10m
       endfor
   END
-  writefile(lines, 'Xdef')
+  writefile(lines, 'Xdef', 'D')
   assert_fails('so Xdef', ['E684:', 'E1012:'])
-  delete('Xdef')
 enddef
 
 def InvokeNormal()
@@ -3768,7 +4003,7 @@ def Test_script_var_gone_when_sourced_twice()
         name = arg
       enddef
   END
-  writefile(lines, 'XscriptTwice.vim')
+  writefile(lines, 'XscriptTwice.vim', 'D')
   so XscriptTwice.vim
   assert_equal('thename', g:GetName())
   g:SetName('newname')
@@ -3779,7 +4014,6 @@ def Test_script_var_gone_when_sourced_twice()
 
   delfunc g:GetName
   delfunc g:SetName
-  delete('XscriptTwice.vim')
   unlet g:guard
 enddef
 
@@ -3956,7 +4190,7 @@ def Run_Test_debug_with_lambda()
       breakadd func Func
       Func()
   END
-  writefile(lines, 'XdebugFunc')
+  writefile(lines, 'XdebugFunc', 'D')
   var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 6, wait_for_ruler: 0})
   g:WaitForAssert(() => assert_match('^>', term_getline(buf, 6)))
 
@@ -3964,7 +4198,6 @@ def Run_Test_debug_with_lambda()
   g:WaitForAssert(() => assert_match('\[0\]', term_getline(buf, 5)))
 
   g:StopVimInTerminal(buf)
-  delete('XdebugFunc')
 enddef
 
 func Test_debug_running_out_of_lines()
@@ -3992,7 +4225,7 @@ def Run_Test_debug_running_out_of_lines()
       breakadd func Crash
       Crash()
   END
-  writefile(lines, 'XdebugFunc')
+  writefile(lines, 'XdebugFunc', 'D')
   var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 6, wait_for_ruler: 0})
   g:WaitForAssert(() => assert_match('^>', term_getline(buf, 6)))
 
@@ -4004,7 +4237,6 @@ def Run_Test_debug_running_out_of_lines()
   g:TermWait(buf)
 
   g:StopVimInTerminal(buf)
-  delete('XdebugFunc')
 enddef
 
 def Test_ambigous_command_error()
@@ -4093,7 +4325,7 @@ def Test_profile_with_lambda()
         writefile([result], 'Xdidprofile')
       endtry
   END
-  writefile(lines, 'Xprofile.vim')
+  writefile(lines, 'Xprofile.vim', 'D')
   call system(g:GetVimCommand()
         .. ' --clean'
         .. ' -c "so Xprofile.vim"'
@@ -4104,7 +4336,6 @@ def Test_profile_with_lambda()
   assert_true(filereadable('Xprofile.log'))
   delete('Xdidprofile')
   delete('Xprofile.log')
-  delete('Xprofile.vim')
 enddef
 
 func Test_misplaced_type()
@@ -4113,13 +4344,12 @@ func Test_misplaced_type()
 endfunc
 
 def Run_Test_misplaced_type()
-  writefile(['let g:somevar = "asdf"'], 'XTest_misplaced_type')
+  writefile(['let g:somevar = "asdf"'], 'XTest_misplaced_type', 'D')
   var buf = g:RunVimInTerminal('-S XTest_misplaced_type', {'rows': 6})
-  term_sendkeys(buf, ":vim9cmd echo islocked('g:somevar: string')\<CR>")
+  term_sendkeys(buf, ":vim9cmd echo islocked('somevar: string')\<CR>")
   g:VerifyScreenDump(buf, 'Test_misplaced_type', {})
 
   g:StopVimInTerminal(buf)
-  delete('XTest_misplaced_type')
 enddef
 
 " Ensure echo doesn't crash when stringifying empty variables.
@@ -4132,8 +4362,6 @@ def Test_echo_uninit_variables()
   var Var_func: func
   var var_string: string
   var var_blob: blob
-  var var_job: job
-  var var_channel: channel
   var var_list: list<any>
   var var_dict: dict<any>
 
@@ -4144,19 +4372,23 @@ def Test_echo_uninit_variables()
   echo Var_func
   echo var_string
   echo var_blob
-  if has('job')
-    echo var_job
-    echo var_channel
-  else
-    echo 'no process'
-    echo 'channel fail'
-  endif
   echo var_list
   echo var_dict
   redir END
 
-  assert_equal(['false', '0', '0.0', 'function()', '', '0z', 'no process',
-    'channel fail', '[]', '{}'], res->split('\n'))
+  assert_equal(['false', '0', '0.0', 'function()', '', '0z', '[]', '{}'], res->split('\n'))
+
+  if has('job')
+    var var_job: job
+    var var_channel: channel
+
+    redir => res
+    echo var_job
+    echo var_channel
+    redir END
+
+    assert_equal(['no process', 'channel fail'], res->split('\n'))
+  endif
 enddef
 
 " Keep this last, it messes up highlighting.
@@ -4176,10 +4408,8 @@ def Test_substitute_cmd()
     assert_equal('otherthing', getline(1))
     bwipe!
   END
-  writefile(lines, 'Xvim9lines')
+  writefile(lines, 'Xvim9lines', 'D')
   source Xvim9lines
-
-  delete('Xvim9lines')
 enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

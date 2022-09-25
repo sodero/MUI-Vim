@@ -32,6 +32,7 @@ static void gui_do_scrollbar(win_T *wp, int which, int enable);
 static void gui_update_horiz_scrollbar(int);
 static void gui_set_fg_color(char_u *name);
 static void gui_set_bg_color(char_u *name);
+static void init_gui_options(void);
 static win_T *xy2win(int x, int y, mouse_find_T popup);
 
 #ifdef GUI_MAY_FORK
@@ -225,6 +226,11 @@ gui_do_fork(void)
     int		status;
     int		exit_status;
     pid_t	pid = -1;
+
+#if defined(FEAT_RELTIME) && defined(HAVE_TIMER_CREATE)
+    // a timer is not carried forward
+    delete_timer();
+#endif
 
     // Setup a pipe between the child and the parent, so that the parent
     // knows when the child has done the setsid() call and is allowed to
@@ -438,9 +444,6 @@ gui_init_check(void)
 #endif
 #if defined(FEAT_TOOLBAR) && (defined(FEAT_GUI_MOTIF) || defined(FEAT_GUI_HAIKU))
     gui.toolbar_height = 0;
-#endif
-#if defined(FEAT_FOOTER) && defined(FEAT_GUI_MOTIF)
-    gui.footer_height = 0;
 #endif
 #ifdef FEAT_BEVAL_TIP
     gui.tooltip_fontset = NOFONTSET;
@@ -1217,7 +1220,7 @@ gui_update_cursor(
 	else
 #endif
 	    shape = &shape_table[get_shape_idx(FALSE)];
-	if (State & LANGMAP)
+	if (State & MODE_LANGMAP)
 	    id = shape->id_lm;
 	else
 	    id = shape->id;
@@ -1400,7 +1403,7 @@ gui_update_cursor(
 }
 
 #if defined(FEAT_MENU) || defined(PROTO)
-    void
+    static void
 gui_position_menu(void)
 {
 # if !defined(FEAT_GUI_GTK) && !defined(FEAT_GUI_MOTIF)
@@ -1534,10 +1537,6 @@ gui_get_base_height(void)
     if (gui_has_tabline())
 	base_height += gui.tabline_height;
 # endif
-# ifdef FEAT_FOOTER
-    if (vim_strchr(p_go, GO_FOOTER) != NULL)
-	base_height += gui.footer_height;
-# endif
 # if defined(FEAT_GUI_MOTIF) && defined(FEAT_MENU)
     base_height += gui_mch_text_area_extra_height();
 # endif
@@ -1590,7 +1589,7 @@ again:
      * At the "more" and ":confirm" prompt there is no redraw, put the cursor
      * at the last line here (why does it have to be one row too low?).
      */
-    if (State == ASKMORE || State == CONFIRM)
+    if (State == MODE_ASKMORE || State == MODE_CONFIRM)
 	gui.row = gui.num_rows;
 
     // Only comparing Rows and Columns may be sufficient, but let's stay on
@@ -2135,8 +2134,7 @@ gui_outstr(char_u *s, int len)
 	    if (this_len > len)
 		this_len = len;	    // don't include following composing char
 	}
-	else
-	    if (gui.col + len > Columns)
+	else if (gui.col + len > Columns)
 	    this_len = Columns - gui.col;
 	else
 	    this_len = len;
@@ -2504,6 +2502,8 @@ gui_outstr_nowrap(
     // Do we undercurl the text?
     if (hl_mask_todo & HL_UNDERCURL)
 	draw_flags |= DRAW_UNDERC;
+
+    // TODO: HL_UNDERDOUBLE, HL_UNDERDOTTED, HL_UNDERDASHED
 
     // Do we strikethrough the text?
     if (hl_mask_todo & HL_STRIKETHROUGH)
@@ -3202,22 +3202,23 @@ button_set:
     // Determine which mouse settings to look for based on the current mode
     switch (get_real_state())
     {
-	case NORMAL_BUSY:
-	case OP_PENDING:
+	case MODE_NORMAL_BUSY:
+	case MODE_OP_PENDING:
 # ifdef FEAT_TERMINAL
-	case TERMINAL:
+	case MODE_TERMINAL:
 # endif
-	case NORMAL:		checkfor = MOUSE_NORMAL;	break;
-	case VISUAL:		checkfor = MOUSE_VISUAL;	break;
-	case SELECTMODE:	checkfor = MOUSE_VISUAL;	break;
-	case REPLACE:
-	case REPLACE+LANGMAP:
-	case VREPLACE:
-	case VREPLACE+LANGMAP:
-	case INSERT:
-	case INSERT+LANGMAP:	checkfor = MOUSE_INSERT;	break;
-	case ASKMORE:
-	case HITRETURN:		// At the more- and hit-enter prompt pass the
+	case MODE_NORMAL:	checkfor = MOUSE_NORMAL; break;
+	case MODE_VISUAL:	checkfor = MOUSE_VISUAL; break;
+	case MODE_SELECT:	checkfor = MOUSE_VISUAL; break;
+	case MODE_REPLACE:
+	case MODE_REPLACE | MODE_LANGMAP:
+	case MODE_VREPLACE:
+	case MODE_VREPLACE | MODE_LANGMAP:
+	case MODE_INSERT:
+	case MODE_INSERT | MODE_LANGMAP:
+				checkfor = MOUSE_INSERT; break;
+	case MODE_ASKMORE:
+	case MODE_HITRETURN:	// At the more- and hit-enter prompt pass the
 				// mouse event for a click on or below the
 				// message line.
 				if (Y_2_ROW(y) >= msg_row)
@@ -3230,8 +3231,8 @@ button_set:
 	     * On the command line, use the clipboard selection on all lines
 	     * but the command line.  But not when pasting.
 	     */
-	case CMDLINE:
-	case CMDLINE+LANGMAP:
+	case MODE_CMDLINE:
+	case MODE_CMDLINE | MODE_LANGMAP:
 	    if (Y_2_ROW(y) < cmdline_row && button != MOUSE_MIDDLE)
 		checkfor = MOUSE_NONE;
 	    else
@@ -3248,7 +3249,8 @@ button_set:
      * modes.  Don't do this when dragging the status line, or extending a
      * Visual selection.
      */
-    if ((State == NORMAL || State == NORMAL_BUSY || (State & INSERT))
+    if ((State == MODE_NORMAL || State == MODE_NORMAL_BUSY
+						      || (State & MODE_INSERT))
 	    && Y_2_ROW(y) >= topframe->fr_height + firstwin->w_winrow
 	    && button != MOUSE_DRAG
 # ifdef FEAT_MOUSESHAPE
@@ -3280,7 +3282,7 @@ button_set:
     if (!mouse_has(checkfor) || checkfor == MOUSE_COMMAND)
     {
 	// Don't do modeless selection in Visual mode.
-	if (checkfor != MOUSE_NONEF && VIsual_active && (State & NORMAL))
+	if (checkfor != MOUSE_NONEF && VIsual_active && (State & MODE_NORMAL))
 	    return;
 
 	/*
@@ -3301,7 +3303,7 @@ button_set:
 	{
 	    if (clip_star.state == SELECT_CLEARED)
 	    {
-		if (State & CMDLINE)
+		if (State & MODE_CMDLINE)
 		{
 		    col = msg_col;
 		    row = msg_row;
@@ -3480,10 +3482,6 @@ gui_init_which_components(char_u *oldval UNUSED)
 #ifdef FEAT_GUI_TABLINE
     int		using_tabline;
 #endif
-#ifdef FEAT_FOOTER
-    static int	prev_footer = -1;
-    int		using_footer = FALSE;
-#endif
 #if defined(FEAT_MENU)
     static int	prev_tearoff = -1;
     int		using_tearoff = FALSE;
@@ -3556,11 +3554,6 @@ gui_init_which_components(char_u *oldval UNUSED)
 #ifdef FEAT_TOOLBAR
 	    case GO_TOOLBAR:
 		using_toolbar = TRUE;
-		break;
-#endif
-#ifdef FEAT_FOOTER
-	    case GO_FOOTER:
-		using_footer = TRUE;
 		break;
 #endif
 	    case GO_TEAROFF:
@@ -3659,16 +3652,6 @@ gui_init_which_components(char_u *oldval UNUSED)
 	    prev_toolbar = using_toolbar;
 	    need_set_size |= RESIZE_VERT;
 	    if (using_toolbar)
-		fix_size = TRUE;
-	}
-#endif
-#ifdef FEAT_FOOTER
-	if (using_footer != prev_footer)
-	{
-	    gui_mch_enable_footer(using_footer);
-	    prev_footer = using_footer;
-	    need_set_size |= RESIZE_VERT;
-	    if (using_footer)
 		fix_size = TRUE;
 	}
 #endif
@@ -4096,17 +4079,17 @@ gui_drag_scrollbar(scrollbar_T *sb, long value, int still_dragging)
 #ifdef USE_ON_FLY_SCROLL
 	current_scrollbar = sb_num;
 	scrollbar_value = value;
-	if (State & NORMAL)
+	if (State & MODE_NORMAL)
 	{
 	    gui_do_scroll();
 	    setcursor();
 	}
-	else if (State & INSERT)
+	else if (State & MODE_INSERT)
 	{
 	    ins_scroll();
 	    setcursor();
 	}
-	else if (State & CMDLINE)
+	else if (State & MODE_CMDLINE)
 	{
 	    if (msg_scrolled == 0)
 	    {
@@ -4141,11 +4124,11 @@ gui_drag_scrollbar(scrollbar_T *sb, long value, int still_dragging)
 #ifdef USE_ON_FLY_SCROLL
 	scrollbar_value = value;
 
-	if (State & NORMAL)
+	if (State & MODE_NORMAL)
 	    gui_do_horiz_scroll(scrollbar_value, FALSE);
-	else if (State & INSERT)
+	else if (State & MODE_INSERT)
 	    ins_horscroll();
-	else if (State & CMDLINE)
+	else if (State & MODE_CMDLINE)
 	{
 	    if (msg_scrolled == 0)
 	    {
@@ -4517,11 +4500,11 @@ gui_do_scroll(void)
 #endif
 	    )
     {
-	int type = VALID;
+	int type = UPD_VALID;
 
 	if (pum_visible())
 	{
-	    type = NOT_VALID;
+	    type = UPD_NOT_VALID;
 	    wp->w_lines_valid = 0;
 	}
 
@@ -4818,7 +4801,7 @@ gui_bg_default(void)
 /*
  * Option initializations that can only be done after opening the GUI window.
  */
-    void
+    static void
 init_gui_options(void)
 {
     // Set the 'background' option according to the lightness of the
@@ -4900,8 +4883,8 @@ gui_mouse_focus(int x, int y)
     // Only handle this when 'mousefocus' set and ...
     if (p_mousef
 	    && !hold_gui_events		// not holding events
-	    && (State & (NORMAL|INSERT))// Normal/Visual/Insert mode
-	    && State != HITRETURN	// but not hit-return prompt
+	    && (State & (MODE_NORMAL | MODE_INSERT))// Normal/Visual/Insert mode
+	    && State != MODE_HITRETURN	// but not hit-return prompt
 	    && msg_scrolled == 0	// no scrolled message
 	    && !need_mouse_correct	// not moving the pointer
 	    && gui.in_focus)		// gvim in focus
@@ -5032,7 +5015,7 @@ xy2win(int x, int y, mouse_find_T popup)
     if (wp == NULL)
 	return NULL;
 #ifdef FEAT_MOUSESHAPE
-    if (State == HITRETURN || State == ASKMORE)
+    if (State == MODE_HITRETURN || State == MODE_ASKMORE)
     {
 	if (Y_2_ROW(y) >= msg_row)
 	    update_mouseshape(SHAPE_IDX_MOREL);
@@ -5041,10 +5024,10 @@ xy2win(int x, int y, mouse_find_T popup)
     }
     else if (row > wp->w_height)	// below status line
 	update_mouseshape(SHAPE_IDX_CLINE);
-    else if (!(State & CMDLINE) && wp->w_vsep_width > 0 && col == wp->w_width
+    else if (!(State & MODE_CMDLINE) && wp->w_vsep_width > 0 && col == wp->w_width
 	    && (row != wp->w_height || !stl_connected(wp)) && msg_scrolled == 0)
 	update_mouseshape(SHAPE_IDX_VSEP);
-    else if (!(State & CMDLINE) && wp->w_status_height > 0
+    else if (!(State & MODE_CMDLINE) && wp->w_status_height > 0
 				  && row == wp->w_height && msg_scrolled == 0)
 	update_mouseshape(SHAPE_IDX_STATUS);
     else
@@ -5379,7 +5362,7 @@ gui_do_findrepl(
     // escape slash and backslash
     p = vim_strsave_escaped(find_text, (char_u *)"/\\");
     if (p != NULL)
-        ga_concat(&ga, p);
+	ga_concat(&ga, p);
     vim_free(p);
     if (flags & FRD_WHOLE_WORD)
 	ga_concat(&ga, (char_u *)"\\>");
@@ -5387,8 +5370,10 @@ gui_do_findrepl(
     if (type == FRD_REPLACEALL)
     {
 	ga_concat(&ga, (char_u *)"/");
-	// escape slash and backslash
-	p = vim_strsave_escaped(repl_text, (char_u *)"/\\");
+	// Escape slash and backslash.
+	// Also escape tilde and ampersand if 'magic' is set.
+	p = vim_strsave_escaped(repl_text,
+				p_magic ? (char_u *)"/\\~&" : (char_u *)"/\\");
 	if (p != NULL)
 	    ga_concat(&ga, p);
 	vim_free(p);
@@ -5453,7 +5438,7 @@ gui_do_findrepl(
 	    // direction
 	    p = vim_strsave_escaped(ga.ga_data, (char_u *)"?");
 	    if (p != NULL)
-	        (void)do_search(NULL, '?', '?', p, 1L, searchflags, NULL);
+		(void)do_search(NULL, '?', '?', p, 1L, searchflags, NULL);
 	    vim_free(p);
 	}
 
@@ -5464,7 +5449,7 @@ gui_do_findrepl(
     // syntax HL if we were busy redrawing.
     did_emsg = save_did_emsg;
 
-    if (State & (NORMAL | INSERT))
+    if (State & (MODE_NORMAL | MODE_INSERT))
     {
 	gui_update_screen();		// update the screen
 	msg_didout = 0;			// overwrite any message
@@ -5528,7 +5513,7 @@ drop_callback(void *cookie)
     }
 
     // Update the screen display
-    update_screen(NOT_VALID);
+    update_screen(UPD_NOT_VALID);
 # ifdef FEAT_MENU
     gui_update_menus(0);
 # endif
@@ -5568,7 +5553,7 @@ gui_handle_drop(
      * When the cursor is at the command line, add the file names to the
      * command line, don't edit the files.
      */
-    if (State & CMDLINE)
+    if (State & MODE_CMDLINE)
     {
 	shorten_filenames(fnames, count);
 	for (i = 0; i < count; ++i)
@@ -5649,3 +5634,26 @@ check_for_interrupt(int key, int modifiers_arg)
     return NUL;
 }
 
+/*
+ * If the "--gui-log-file fname" argument is given write the dialog title and
+ * message to a file and return TRUE.  Otherwise return FALSE.
+ * When there is any problem opening the file or writing to the file this is
+ * ignored, showing the dialog might get the test to get stuck.
+ */
+    int
+gui_dialog_log(char_u *title, char_u *message)
+{
+    char_u  *fname = get_gui_dialog_file();
+    FILE    *fd;
+
+    if (fname == NULL)
+	return FALSE;
+
+    fd = mch_fopen((char *)fname, "a");
+    if (fd != NULL)
+    {
+	fprintf(fd, "%s: %s\n", title, message);
+	fclose(fd);
+    }
+    return TRUE;
+}

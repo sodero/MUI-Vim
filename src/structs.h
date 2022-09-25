@@ -232,6 +232,8 @@ typedef struct
 #define w_p_list w_onebuf_opt.wo_list	// 'list'
     char_u	*wo_lcs;
 #define w_p_lcs w_onebuf_opt.wo_lcs	// 'listchars'
+    char_u	*wo_fcs;
+#define w_p_fcs w_onebuf_opt.wo_fcs	// 'fillchars'
     int		wo_nu;
 #define w_p_nu w_onebuf_opt.wo_nu	// 'number'
     int		wo_rnu;
@@ -596,6 +598,8 @@ typedef struct expand
     int		xp_col;			// cursor position in line
     char_u	**xp_files;		// list of files
     char_u	*xp_line;		// text being completed
+#define EXPAND_BUF_LEN 256
+    char_u	xp_buf[EXPAND_BUF_LEN];	// buffer for returned match
 } expand_T;
 
 /*
@@ -662,8 +666,8 @@ typedef struct
     regmatch_T	cmod_filter_regmatch;	// set by :filter /pat/
     int		cmod_filter_force;	// set for :filter!
 
-    int		cmod_verbose;		// non-zero to set 'verbose', -1 is
-					// used for zero override
+    int		cmod_verbose;		// 0 if not set, > 0 to set 'verbose'
+					// to cmod_verbose - 1
 
     // values for undo_cmdmod()
     char_u	*cmod_save_ei;		// saved value of 'eventignore'
@@ -756,10 +760,11 @@ typedef struct memline
     int		ml_stack_top;	// current top of ml_stack
     int		ml_stack_size;	// total number of entries in ml_stack
 
-#define ML_EMPTY	1	// empty buffer
-#define ML_LINE_DIRTY	2	// cached line was changed and allocated
-#define ML_LOCKED_DIRTY	4	// ml_locked was changed
-#define ML_LOCKED_POS	8	// ml_locked needs positive block number
+#define ML_EMPTY	0x01	// empty buffer
+#define ML_LINE_DIRTY	0x02	// cached line was changed and allocated
+#define ML_LOCKED_DIRTY	0x04	// ml_locked was changed
+#define ML_LOCKED_POS	0x08	// ml_locked needs positive block number
+#define ML_ALLOCATED	0x10	// ml_line_ptr is an allocated copy
     int		ml_flags;
 
     colnr_T	ml_line_len;	// length of the cached line, including NUL
@@ -797,14 +802,27 @@ typedef struct memline
 typedef struct textprop_S
 {
     colnr_T	tp_col;		// start column (one based, in bytes)
-    colnr_T	tp_len;		// length in bytes
+    colnr_T	tp_len;		// length in bytes, when tp_id is negative used
+				// for left padding plus one
     int		tp_id;		// identifier
     int		tp_type;	// property type
     int		tp_flags;	// TP_FLAG_ values
 } textprop_T;
 
-#define TP_FLAG_CONT_NEXT	1	// property continues in next line
-#define TP_FLAG_CONT_PREV	2	// property was continued from prev line
+#define TP_FLAG_CONT_NEXT	0x1	// property continues in next line
+#define TP_FLAG_CONT_PREV	0x2	// property was continued from prev line
+
+// without these text is placed after the end of the line
+#define TP_FLAG_ALIGN_RIGHT	0x010	// virtual text is right-aligned
+#define TP_FLAG_ALIGN_ABOVE	0x020	// virtual text above the line
+#define TP_FLAG_ALIGN_BELOW	0x040	// virtual text on next screen line
+
+#define TP_FLAG_WRAP		0x080	// virtual text wraps - when missing
+					// text is truncated
+#define TP_FLAG_START_INCL	0x100	// "start_incl" copied from proptype
+
+#define PROP_TEXT_MIN_CELLS	4	// minimun number of cells to use for
+					// the text, even when truncating
 
 /*
  * Structure defining a property type.
@@ -822,6 +840,7 @@ typedef struct proptype_S
 #define PT_FLAG_INS_START_INCL	1	// insert at start included in property
 #define PT_FLAG_INS_END_INCL	2	// insert at end included in property
 #define PT_FLAG_COMBINE		4	// combine with syntax highlight
+#define PT_FLAG_OVERRIDE	8	// override any highlight
 
 // Sign group
 typedef struct signgroup_S
@@ -1441,9 +1460,7 @@ typedef struct
     union
     {
 	varnumber_T	v_number;	// number value
-#ifdef FEAT_FLOAT
 	float_T		v_float;	// floating number value
-#endif
 	char_u		*v_string;	// string value (can be NULL!)
 	list_T		*v_list;	// list value (can be NULL!)
 	dict_T		*v_dict;	// dict value (can be NULL!)
@@ -1607,6 +1624,23 @@ typedef enum {
 typedef struct svar_S svar_T;
 
 #if defined(FEAT_EVAL) || defined(PROTO)
+/*
+ * Info used by a ":for" loop.
+ */
+typedef struct
+{
+    int		fi_semicolon;	// TRUE if ending in '; var]'
+    int		fi_varcount;	// nr of variables in [] or zero
+    int		fi_break_count;	// nr of line breaks encountered
+    listwatch_T	fi_lw;		// keep an eye on the item used.
+    list_T	*fi_list;	// list being used
+    int		fi_bi;		// index of blob
+    blob_T	*fi_blob;	// blob being used
+    char_u	*fi_string;	// copy of string being used
+    int		fi_byte_idx;	// byte index in fi_string
+    int		fi_cs_flags;	// cs_flags or'ed together
+} forinfo_T;
+
 typedef struct funccall_S funccall_T;
 
 // values used for "uf_def_status"
@@ -1620,7 +1654,7 @@ typedef enum {
 
 /*
  * Structure to hold info for a user function.
- * When adding a field check copy_func().
+ * When adding a field check copy_lambda_to_global_func().
  */
 typedef struct
 {
@@ -1650,7 +1684,7 @@ typedef struct
 # if defined(FEAT_LUA)
     cfunc_T     uf_cb;		// callback function for cfunc
     cfunc_free_T uf_cb_free;    // callback function to free cfunc
-    void        *uf_cb_state;   // state of uf_cb
+    void	*uf_cb_state;   // state of uf_cb
 # endif
 
     garray_T	uf_lines;	// function lines
@@ -1705,7 +1739,8 @@ typedef struct
 #define FC_NOARGS   0x200	// no a: variables in lambda
 #define FC_VIM9	    0x400	// defined in vim9 script file
 #define FC_CFUNC    0x800	// defined as Lua C func
-#define FC_COPY	    0x1000	// copy of another function by copy_func()
+#define FC_COPY	    0x1000	// copy of another function by
+				// copy_lambda_to_global_func()
 #define FC_LAMBDA   0x2000	// one line "return {expr}"
 
 #define MAX_FUNC_ARGS	20	// maximum number of function arguments
@@ -1717,37 +1752,50 @@ typedef struct
  */
 struct funccall_S
 {
-    ufunc_T	*func;		// function being called
-    int		linenr;		// next line to be executed
-    int		returned;	// ":return" used
+    ufunc_T	*fc_func;	// function being called
+    int		fc_linenr;	// next line to be executed
+    int		fc_returned;	// ":return" used
     struct			// fixed variables for arguments
     {
 	dictitem_T	var;		// variable (without room for name)
 	char_u	room[VAR_SHORT_LEN];	// room for the name
-    } fixvar[FIXVAR_CNT];
-    dict_T	l_vars;		// l: local function variables
-    dictitem_T	l_vars_var;	// variable for l: scope
-    dict_T	l_avars;	// a: argument variables
-    dictitem_T	l_avars_var;	// variable for a: scope
-    list_T	l_varlist;	// list for a:000
-    listitem_T	l_listitems[MAX_FUNC_ARGS];	// listitems for a:000
-    typval_T	*rettv;		// return value
-    linenr_T	breakpoint;	// next line with breakpoint or zero
-    int		dbg_tick;	// debug_tick when breakpoint was set
-    int		level;		// top nesting level of executed function
+    } fc_fixvar[FIXVAR_CNT];
+    dict_T	fc_l_vars;	// l: local function variables
+    dictitem_T	fc_l_vars_var;	// variable for l: scope
+    dict_T	fc_l_avars;	// a: argument variables
+    dictitem_T	fc_l_avars_var;	// variable for a: scope
+    list_T	fc_l_varlist;	// list for a:000
+    listitem_T	fc_l_listitems[MAX_FUNC_ARGS];	// listitems for a:000
+    typval_T	*fc_rettv;	// return value
+    linenr_T	fc_breakpoint;	// next line with breakpoint or zero
+    int		fc_dbg_tick;	// debug_tick when breakpoint was set
+    int		fc_level;	// top nesting level of executed function
+
+    garray_T	fc_defer;	// functions to be called on return
+    ectx_T	*fc_ectx;	// execution context for :def function, NULL
+				// otherwise
+
 #ifdef FEAT_PROFILE
-    proftime_T	prof_child;	// time spent in a child
+    proftime_T	fc_prof_child;	// time spent in a child
 #endif
-    funccall_T	*caller;	// calling function or NULL; or next funccal in
+    funccall_T	*fc_caller;	// calling function or NULL; or next funccal in
 				// list pointed to by previous_funccal.
 
     // for closure
     int		fc_refcount;	// number of user functions that reference this
 				// funccal
     int		fc_copyID;	// for garbage collection
-    garray_T	fc_funcs;	// list of ufunc_T* which keep a reference to
+    garray_T	fc_ufuncs;	// list of ufunc_T* which keep a reference to
 				// "func"
 };
+
+// structure used as item in "fc_defer"
+typedef struct
+{
+    char_u	*dr_name;	// function name, allocated
+    typval_T	dr_argvars[MAX_FUNC_ARGS + 1];
+    int		dr_argcount;
+} defer_T;
 
 /*
  * Struct used by trans_function_name()
@@ -1834,12 +1882,18 @@ typedef struct {
 #define IMP_FLAGS_AUTOLOAD	4   // script still needs to be loaded
 
 /*
- * Info about an already sourced scripts.
+ * Info about an encoutered script.
+ * When sn_state has the SN_STATE_NOT_LOADED is has not been sourced yet.
  */
 typedef struct
 {
     char_u	*sn_name;	    // full path of script file
     int		sn_script_seq;	    // latest sctx_T sc_seq value
+
+    // When non-zero the script ID of the actually sourced script.  Used if a
+    // script is used by a name which has a symlink, we list both names, but
+    // only the linked-to script is actually sourced.
+    int		sn_sourced_sid;
 
     // "sn_vars" stores the s: variables currently valid.  When leaving a block
     // variables local to that block are removed.
@@ -1997,13 +2051,13 @@ typedef struct
 
 // Struct passed between functions dealing with function call execution.
 //
-// "argv_func", when not NULL, can be used to fill in arguments only when the
+// "fe_argv_func", when not NULL, can be used to fill in arguments only when the
 // invoked function uses them.  It is called like this:
-//   new_argcount = argv_func(current_argcount, argv, partial_argcount,
-//							called_func_argcount)
+//   new_argcount = fe_argv_func(current_argcount, argv, partial_argcount,
+//							called_func)
 //
 typedef struct {
-    int		(* fe_argv_func)(int, typval_T *, int, int);
+    int		(* fe_argv_func)(int, typval_T *, int, ufunc_T *);
     linenr_T	fe_firstline;	// first line of range
     linenr_T	fe_lastline;	// last line of range
     int		*fe_doesrange;	// if not NULL: return: function handled range
@@ -2021,7 +2075,6 @@ typedef struct {
  * defined in that function.
  */
 typedef struct funcstack_S funcstack_T;
-
 struct funcstack_S
 {
     funcstack_T *fs_next;	// linked list at "first_funcstack"
@@ -2036,15 +2089,44 @@ struct funcstack_S
 
     int		fs_refcount;	// nr of closures referencing this funcstack
     int		fs_min_refcount; // nr of closures on this funcstack
-    int		fs_copyID;	// for garray_T collection
+    int		fs_copyID;	// for garbage collection
 };
+
+/*
+ * Structure to hold the variables declared in a loop that are possiblly used
+ * in a closure.
+ */
+typedef struct loopvars_S loopvars_T;
+struct loopvars_S
+{
+    loopvars_T *lvs_next;	// linked list at "first_loopvars"
+    loopvars_T *lvs_prev;
+
+    garray_T	lvs_ga;		// contains the variables
+    int		lvs_refcount;	// nr of closures referencing this loopvars
+    int		lvs_min_refcount; // nr of closures on this loopvars
+    int		lvs_copyID;	// for garbage collection
+};
+
+// maximum nesting of :while and :for loops in a :def function
+#define MAX_LOOP_DEPTH 10
 
 typedef struct outer_S outer_T;
 struct outer_S {
-    garray_T	*out_stack;	    // stack from outer scope
+    garray_T	*out_stack;	    // stack from outer scope, or a copy
+				    // containing only arguments and local vars
     int		out_frame_idx;	    // index of stack frame in out_stack
     outer_T	*out_up;	    // outer scope of outer scope or NULL
     partial_T	*out_up_partial;    // partial owning out_up or NULL
+
+    struct {
+	garray_T *stack;	    // stack from outer scope, or a copy
+				    // containing only vars inside the loop
+	short	 var_idx;	    // first variable defined in a loop in
+				    // out_loop_stack
+	short	 var_count;	    // number of variables defined in a loop
+    } out_loop[MAX_LOOP_DEPTH];
+    int		out_loop_size;	    // nr of used entries in out_loop[]
 };
 
 struct partial_S
@@ -2065,6 +2147,9 @@ struct partial_S
 
     funcstack_T	*pt_funcstack;	// copy of stack, used after context
 				// function returns
+    loopvars_T	*(pt_loopvars[MAX_LOOP_DEPTH]);
+				// copy of loop variables, used after loop
+				// block ends
 
     typval_T	*pt_argv;	// arguments in allocated array
     int		pt_argc;	// number of arguments
@@ -2073,6 +2158,14 @@ struct partial_S
     dict_T	*pt_dict;	// dict for "self"
 };
 
+typedef struct {
+    short	lvi_depth;	    // current nested loop depth
+    struct {
+	short	var_idx;	    // index of first variable inside loop
+	short	var_count;	    // number of variables inside loop
+    } lvi_loop[MAX_LOOP_DEPTH];
+} loopvarinfo_T;
+
 typedef struct AutoPatCmd_S AutoPatCmd_T;
 
 /*
@@ -2080,15 +2173,15 @@ typedef struct AutoPatCmd_S AutoPatCmd_T;
  */
 typedef enum {
     ETYPE_TOP,		    // toplevel
-    ETYPE_SCRIPT,           // sourcing script, use es_info.sctx
-    ETYPE_UFUNC,            // user function, use es_info.ufunc
-    ETYPE_AUCMD,            // autocomand, use es_info.aucmd
-    ETYPE_MODELINE,         // modeline, use es_info.sctx
-    ETYPE_EXCEPT,           // exception, use es_info.exception
-    ETYPE_ARGS,             // command line argument
-    ETYPE_ENV,              // environment variable
-    ETYPE_INTERNAL,         // internal operation
-    ETYPE_SPELL,            // loading spell file
+    ETYPE_SCRIPT,	    // sourcing script, use es_info.sctx
+    ETYPE_UFUNC,	    // user function, use es_info.ufunc
+    ETYPE_AUCMD,	    // autocomand, use es_info.aucmd
+    ETYPE_MODELINE,	    // modeline, use es_info.sctx
+    ETYPE_EXCEPT,	    // exception, use es_info.exception
+    ETYPE_ARGS,		    // command line argument
+    ETYPE_ENV,		    // environment variable
+    ETYPE_INTERNAL,	    // internal operation
+    ETYPE_SPELL,	    // loading spell file
 } etype_T;
 
 typedef struct {
@@ -2198,11 +2291,11 @@ struct cbq_S
 // mode for a channel
 typedef enum
 {
-    MODE_NL = 0,
-    MODE_RAW,
-    MODE_JSON,
-    MODE_JS,
-    MODE_LSP			// Language Server Protocol (http + json)
+    CH_MODE_NL = 0,
+    CH_MODE_RAW,
+    CH_MODE_JSON,
+    CH_MODE_JS,
+    CH_MODE_LSP		// Language Server Protocol (http + json)
 } ch_mode_T;
 
 typedef enum {
@@ -2545,6 +2638,7 @@ struct timer_S
     proftime_T	tr_due;		    // when the callback is to be invoked
     char	tr_firing;	    // when TRUE callback is being called
     char	tr_paused;	    // when TRUE callback is not invoked
+    char	tr_keep;	    // when TRUE keep timer after it fired
     int		tr_repeat;	    // number of times to repeat, -1 forever
     long	tr_interval;	    // msec
     callback_T	tr_callback;
@@ -2581,6 +2675,7 @@ typedef enum {
     POPPOS_BOTRIGHT,
     POPPOS_TOPRIGHT,
     POPPOS_CENTER,
+    POPPOS_BOTTOM,	// bottom of popup just above the command line
     POPPOS_NONE
 } poppos_T;
 
@@ -2824,7 +2919,7 @@ struct file_buffer
     int		b_u_synced;	// entry lists are synced
     long	b_u_seq_last;	// last used undo sequence number
     long	b_u_save_nr_last; // counter for last file write
-    long	b_u_seq_cur;	// hu_seq of header below which we are now
+    long	b_u_seq_cur;	// uh_seq of header below which we are now
     time_T	b_u_time_cur;	// uh_time of header below which we are now
     long	b_u_save_nr_cur; // file write nr after which we are now
 
@@ -2879,15 +2974,11 @@ struct file_buffer
     int		b_has_qf_entry;
 #endif
     int		b_p_bl;		// 'buflisted'
-#ifdef FEAT_CINDENT
     int		b_p_cin;	// 'cindent'
     char_u	*b_p_cino;	// 'cinoptions'
     char_u	*b_p_cink;	// 'cinkeys'
     char_u	*b_p_cinsd;	// 'cinscopedecls'
-#endif
-#if defined(FEAT_CINDENT) || defined(FEAT_SMARTINDENT)
     char_u	*b_p_cinw;	// 'cinwords'
-#endif
     char_u	*b_p_com;	// 'comments'
 #ifdef FEAT_FOLDING
     char_u	*b_p_cms;	// 'commentstring'
@@ -2926,7 +3017,7 @@ struct file_buffer
     long_u	b_p_inex_flags;	// flags for 'includeexpr'
 # endif
 #endif
-#if defined(FEAT_CINDENT) && defined(FEAT_EVAL)
+#if defined(FEAT_EVAL)
     char_u	*b_p_inde;	// 'indentexpr'
     long_u	b_p_inde_flags;	// flags for 'indentexpr'
     char_u	*b_p_indk;	// 'indentkeys'
@@ -2940,9 +3031,7 @@ struct file_buffer
     char_u	*b_p_key;	// 'key'
 #endif
     char_u	*b_p_kp;	// 'keywordprg'
-#ifdef FEAT_LISP
     int		b_p_lisp;	// 'lisp'
-#endif
     char_u	*b_p_menc;	// 'makeencoding'
     char_u	*b_p_mps;	// 'matchpairs'
     int		b_p_ml;		// 'modeline'
@@ -2950,20 +3039,14 @@ struct file_buffer
     int		b_p_ma;		// 'modifiable'
     char_u	*b_p_nf;	// 'nrformats'
     int		b_p_pi;		// 'preserveindent'
-#ifdef FEAT_TEXTOBJ
     char_u	*b_p_qe;	// 'quoteescape'
-#endif
     int		b_p_ro;		// 'readonly'
     long	b_p_sw;		// 'shiftwidth'
     int		b_p_sn;		// 'shortname'
-#ifdef FEAT_SMARTINDENT
     int		b_p_si;		// 'smartindent'
-#endif
     long	b_p_sts;	// 'softtabstop'
     long	b_p_sts_nopaste; // b_p_sts saved for paste mode
-#ifdef FEAT_SEARCHPATH
     char_u	*b_p_sua;	// 'suffixesadd'
-#endif
     int		b_p_swf;	// 'swapfile'
 #ifdef FEAT_SYN_HL
     long	b_p_smc;	// 'synmaxcol'
@@ -3012,9 +3095,7 @@ struct file_buffer
 #ifdef FEAT_PERSISTENT_UNDO
     int		b_p_udf;	// 'undofile'
 #endif
-#ifdef FEAT_LISP
     char_u	*b_p_lw;	// 'lispwords' local value
-#endif
 #ifdef FEAT_TERMINAL
     long	b_p_twsl;	// 'termwinscroll'
 #endif
@@ -3023,7 +3104,6 @@ struct file_buffer
      * end of buffer options
      */
 
-#ifdef FEAT_CINDENT
     // values set from b_p_cino
     int		b_ind_level;
     int		b_ind_open_imag;
@@ -3062,7 +3142,6 @@ struct file_buffer
     int		b_ind_if_for_while;
     int		b_ind_cpp_extern_c;
     int		b_ind_pragma;
-#endif
 
     linenr_T	b_no_eol_lnum;	// non-zero lnum when last line of next binary
 				// write should not have an end-of-line
@@ -3083,6 +3162,8 @@ struct file_buffer
 #ifdef FEAT_PROP_POPUP
     int		b_has_textprop;	// TRUE when text props were added
     hashtab_T	*b_proptypes;	// text property types local to buffer
+    proptype_T	**b_proparray;	// entries of b_proptypes sorted on tp_id
+    garray_T	b_textprop_text; // stores text for props, index by (-id - 1)
 #endif
 
 #if defined(FEAT_BEVAL) && defined(FEAT_EVAL)
@@ -3215,7 +3296,7 @@ struct diffblock_S
 #endif
 
 #define SNAP_HELP_IDX	0
-#define SNAP_AUCMD_IDX 1
+#define SNAP_AUCMD_IDX	1
 #define SNAP_COUNT	2
 
 /*
@@ -3312,7 +3393,8 @@ struct frame_S
 				// for first
     // fr_child and fr_win are mutually exclusive
     frame_T	*fr_child;	// first contained frame
-    win_T	*fr_win;	// window that fills this frame
+    win_T	*fr_win;	// window that fills this frame; for a snapshot
+				// set to the current window
 };
 
 #define FR_LEAF	0	// frame is a leaf
@@ -3340,9 +3422,6 @@ typedef struct
 			    // matchaddpos(). TRUE/FALSE
     char	has_cursor; // TRUE if the cursor is inside the match, used for
 			    // CurSearch
-#ifdef FEAT_RELTIME
-    proftime_T	tm;	    // for a time limit
-#endif
 } match_T;
 
 // number of positions supported by matchaddpos()
@@ -3425,10 +3504,27 @@ typedef struct
     int		trail;
     int		lead;
     int		*multispace;
+    int		*leadmultispace;
 #ifdef FEAT_CONCEAL
     int		conceal;
 #endif
 } lcs_chars_T;
+
+/*
+ * Characters from the 'fillchars' option
+ */
+typedef struct
+{
+    int	stl;
+    int	stlnc;
+    int	vert;
+    int	fold;
+    int	foldopen;
+    int	foldclosed;
+    int	foldsep;
+    int	diff;
+    int	eob;
+} fill_chars_T;
 
 /*
  * Structure which contains all information that belongs to a window
@@ -3482,6 +3578,7 @@ struct window_S
 					 // redrawn
 
     lcs_chars_T	w_lcs_chars;	    // 'listchars' characters
+    fill_chars_T w_fill_chars;	    // 'fillchars' characters
 
     /*
      * "w_topline", "w_leftcol" and "w_skipcol" specify the offsets for
@@ -3514,9 +3611,10 @@ struct window_S
 				    // window
 #endif
 
-    // four fields that are only used when there is a WinScrolled autocommand
+    // five fields that are only used when there is a WinScrolled autocommand
     linenr_T	w_last_topline;	    // last known value for w_topline
     colnr_T	w_last_leftcol;	    // last known value for w_leftcol
+    colnr_T	w_last_skipcol;	    // last known value for w_skipcol
     int		w_last_width;	    // last known value for w_width
     int		w_last_height;	    // last known value for w_height
 
@@ -3527,6 +3625,8 @@ struct window_S
     int		w_winrow;	    // first row of window in screen
     int		w_height;	    // number of rows in window, excluding
 				    // status/command/winbar line(s)
+    int		w_prev_winrow;	    // previous winrow used for 'splitscroll'
+    int		w_prev_height;	    // previous height used for 'splitscroll'
 
     int		w_status_height;    // number of status lines (0 or 1)
     int		w_wincol;	    // Leftmost column of window in screen.
@@ -3636,6 +3736,11 @@ struct window_S
 				    // more than one screen line or when
 				    // w_leftcol is non-zero
 
+#ifdef FEAT_PROP_POPUP
+    colnr_T	w_virtcol_first_char;	// offset for w_virtcol when there are
+					// virtual text properties above the
+					// line
+#endif
     /*
      * w_wrow and w_wcol specify the cursor position in the window.
      * This is related to positions in the window, not in the display or
@@ -3677,7 +3782,7 @@ struct window_S
 
     int		w_redr_type;	    // type of redraw to be performed on win
     int		w_upd_rows;	    // number of window lines to update when
-				    // w_redr_type is REDRAW_TOP
+				    // w_redr_type is UPD_REDRAW_TOP
     linenr_T	w_redraw_top;	    // when != 0: first line needing redraw
     linenr_T	w_redraw_bot;	    // when != 0: last line needing redraw
     int		w_redr_status;	    // if TRUE status line must be redrawn
@@ -3742,6 +3847,7 @@ struct window_S
     int		w_briopt_shift;	    // additional shift for breakindent
     int		w_briopt_sbr;	    // sbr in 'briopt'
     int		w_briopt_list;      // additional indent for lists
+    int		w_briopt_vcol;	    // indent for specific column
 #endif
 
     long	w_scbind_pos;
@@ -4162,6 +4268,8 @@ typedef enum
     EXPR_MULT,		// *
     EXPR_DIV,		// /
     EXPR_REM,		// %
+    EXPR_LSHIFT,	// <<
+    EXPR_RSHIFT,	// >>
     // used with ISN_ADDLIST
     EXPR_COPY,		// create new list
     EXPR_APPEND,	// append to first list
@@ -4217,6 +4325,9 @@ typedef struct
 
     int		want_full_screen;
     int		not_a_term;		// no warning for missing term?
+#ifdef FEAT_GUI
+    char_u	*gui_dialog_file;	// file to write dialog text in
+#endif
     int		tty_fail;		// exit if not a tty
     char_u	*term;			// specified terminal name
 #ifdef FEAT_CRYPT
@@ -4427,7 +4538,7 @@ typedef struct
 {
     linenr_T	sa_stop_lnum;	// stop after this line number when != 0
 #ifdef FEAT_RELTIME
-    proftime_T	*sa_tm;		// timeout limit or NULL
+    long	sa_tm;		// timeout limit or zero
     int		sa_timed_out;	// set when timed out
 #endif
     int		sa_wrapped;	// search wrapped around
@@ -4547,3 +4658,22 @@ typedef struct {
     char_u	*str;
     int		score;
 } fuzmatch_str_T;
+
+// Argument for lbr_chartabsize().
+typedef struct {
+    win_T	*cts_win;
+    char_u	*cts_line;	    // start of the line
+    char_u	*cts_ptr;	    // current position in line
+#ifdef FEAT_PROP_POPUP
+    int		cts_text_prop_count;	// number of text props; when zero
+					// cts_text_props is not used
+    textprop_T	*cts_text_props;	// text props (allocated)
+    char	cts_has_prop_with_text; // TRUE if if a property inserts text
+    int         cts_cur_text_width;     // width of current inserted text
+    int         cts_first_char;		// width text props above the line
+    int		cts_with_trailing;	// include size of trailing props with
+					// last character
+    int		cts_start_incl;		// prop has true "start_incl" arg
+#endif
+    int		cts_vcol;	    // virtual column at current position
+} chartabsize_T;

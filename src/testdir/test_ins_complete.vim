@@ -9,8 +9,8 @@ func Test_ins_complete()
   edit test_ins_complete.vim
   " The files in the current directory interferes with the files
   " used by this test. So use a separate directory for the test.
-  call mkdir('Xdir')
-  cd Xdir
+  call mkdir('Xcpldir')
+  cd Xcpldir
 
   set ff=unix
   call writefile(["test11\t36Gepeto\t/Tag/",
@@ -105,7 +105,7 @@ func Test_ins_complete()
   call delete('Xtestdata')
   set cpt& cot& def& tags& tagbsearch& hidden&
   cd ..
-  call delete('Xdir', 'rf')
+  call delete('Xcpldir', 'rf')
 endfunc
 
 func Test_ins_complete_invalid_byte()
@@ -137,6 +137,30 @@ func Test_omni_dash()
 
   bwipe!
   delfunc Omni
+  set omnifunc=
+endfunc
+
+func Test_omni_throw()
+  let g:CallCount = 0
+  func Omni(findstart, base)
+    let g:CallCount += 1
+    if a:findstart
+      throw "he he he"
+    endif
+  endfunc
+  set omnifunc=Omni
+  new
+  try
+    exe "normal ifoo\<C-x>\<C-o>"
+    call assert_false(v:true, 'command should have failed')
+  catch
+    call assert_exception('he he he')
+    call assert_equal(1, g:CallCount)
+  endtry
+
+  bwipe!
+  delfunc Omni
+  unlet g:CallCount
   set omnifunc=
 endfunc
 
@@ -363,6 +387,19 @@ func Test_CompleteDone_undo()
   au! CompleteDone
 endfunc
 
+func Test_CompleteDone_modify()
+  let value = {
+        \ 'word': '',
+        \ 'abbr': '',
+        \ 'menu': '',
+        \ 'info': '',
+        \ 'kind': '',
+        \ 'user_data': '',
+        \ }
+  let v:completed_item = value
+  call assert_equal(value, v:completed_item)
+endfunc
+
 func CompleteTest(findstart, query)
   if a:findstart
     return col('.')
@@ -392,105 +429,11 @@ func Test_compl_feedkeys()
   set completeopt&
 endfunc
 
-func s:ComplInCmdwin_GlobalCompletion(a, l, p)
-  return 'global'
-endfunc
-
-func s:ComplInCmdwin_LocalCompletion(a, l, p)
-  return 'local'
-endfunc
-
-func Test_compl_in_cmdwin()
-  CheckFeature cmdwin
-
-  set wildmenu wildchar=<Tab>
-  com! -nargs=1 -complete=command GetInput let input = <q-args>
-  com! -buffer TestCommand echo 'TestCommand'
-  let w:test_winvar = 'winvar'
-  let b:test_bufvar = 'bufvar'
-
-  " User-defined commands
-  let input = ''
-  call feedkeys("q:iGetInput T\<C-x>\<C-v>\<CR>", 'tx!')
-  call assert_equal('TestCommand', input)
-
-  let input = ''
-  call feedkeys("q::GetInput T\<Tab>\<CR>:q\<CR>", 'tx!')
-  call assert_equal('T', input)
-
-
-  com! -nargs=1 -complete=var GetInput let input = <q-args>
-  " Window-local variables
-  let input = ''
-  call feedkeys("q:iGetInput w:test_\<C-x>\<C-v>\<CR>", 'tx!')
-  call assert_equal('w:test_winvar', input)
-
-  let input = ''
-  call feedkeys("q::GetInput w:test_\<Tab>\<CR>:q\<CR>", 'tx!')
-  call assert_equal('w:test_', input)
-
-  " Buffer-local variables
-  let input = ''
-  call feedkeys("q:iGetInput b:test_\<C-x>\<C-v>\<CR>", 'tx!')
-  call assert_equal('b:test_bufvar', input)
-
-  let input = ''
-  call feedkeys("q::GetInput b:test_\<Tab>\<CR>:q\<CR>", 'tx!')
-  call assert_equal('b:test_', input)
-
-
-  " Argument completion of buffer-local command
-  func s:ComplInCmdwin_GlobalCompletionList(a, l, p)
-    return ['global']
-  endfunc
-
-  func s:ComplInCmdwin_LocalCompletionList(a, l, p)
-    return ['local']
-  endfunc
-
-  func s:ComplInCmdwin_CheckCompletion(arg)
-    call assert_equal('local', a:arg)
-  endfunc
-
-  com! -nargs=1 -complete=custom,<SID>ComplInCmdwin_GlobalCompletion
-       \ TestCommand call s:ComplInCmdwin_CheckCompletion(<q-args>)
-  com! -buffer -nargs=1 -complete=custom,<SID>ComplInCmdwin_LocalCompletion
-       \ TestCommand call s:ComplInCmdwin_CheckCompletion(<q-args>)
-  call feedkeys("q:iTestCommand \<Tab>\<CR>", 'tx!')
-
-  com! -nargs=1 -complete=customlist,<SID>ComplInCmdwin_GlobalCompletionList
-       \ TestCommand call s:ComplInCmdwin_CheckCompletion(<q-args>)
-  com! -buffer -nargs=1 -complete=customlist,<SID>ComplInCmdwin_LocalCompletionList
-       \ TestCommand call s:ComplInCmdwin_CheckCompletion(<q-args>)
-
-  call feedkeys("q:iTestCommand \<Tab>\<CR>", 'tx!')
-
-  func! s:ComplInCmdwin_CheckCompletion(arg)
-    call assert_equal('global', a:arg)
-  endfunc
-  new
-  call feedkeys("q:iTestCommand \<Tab>\<CR>", 'tx!')
-  quit
-
-  delfunc s:ComplInCmdwin_GlobalCompletion
-  delfunc s:ComplInCmdwin_LocalCompletion
-  delfunc s:ComplInCmdwin_GlobalCompletionList
-  delfunc s:ComplInCmdwin_LocalCompletionList
-  delfunc s:ComplInCmdwin_CheckCompletion
-
-  delcom -buffer TestCommand
-  delcom TestCommand
-  delcom GetInput
-  unlet w:test_winvar
-  unlet b:test_bufvar
-  set wildmenu& wildchar&
-endfunc
-
 " Test for insert path completion with completeslash option
 func Test_ins_completeslash()
   CheckMSWindows
 
-  call mkdir('Xdir')
+  call mkdir('Xcpldir')
   let orig_shellslash = &shellslash
   set cpt&
   new
@@ -498,32 +441,32 @@ func Test_ins_completeslash()
   set noshellslash
 
   set completeslash=
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir\', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir\', getline('.'))
 
   set completeslash=backslash
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir\', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir\', getline('.'))
 
   set completeslash=slash
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir/', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir/', getline('.'))
 
   set shellslash
 
   set completeslash=
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir/', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir/', getline('.'))
 
   set completeslash=backslash
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir\', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir\', getline('.'))
 
   set completeslash=slash
-  exe "normal oXd\<C-X>\<C-F>"
-  call assert_equal('Xdir/', getline('.'))
+  exe "normal oXcp\<C-X>\<C-F>"
+  call assert_equal('Xcpldir/', getline('.'))
   %bw!
-  call delete('Xdir', 'rf')
+  call delete('Xcpldir', 'rf')
 
   set noshellslash
   set completeslash=slash
@@ -604,9 +547,8 @@ func Test_pum_with_preview_win()
 
   call writefile(lines, 'Xpreviewscript')
   let buf = RunVimInTerminal('-S Xpreviewscript', #{rows: 12})
-  call TermWait(buf, 50)
   call term_sendkeys(buf, "Gi\<C-X>\<C-O>")
-  call TermWait(buf, 100)
+  call TermWait(buf, 200)
   call term_sendkeys(buf, "\<C-N>")
   call VerifyScreenDump(buf, 'Test_pum_with_preview_win', {})
 
@@ -674,7 +616,7 @@ func Test_completefunc_error()
   endfunc
   set completefunc=CompleteFunc
   call setline(1, ['', 'abcd', ''])
-  call assert_fails('exe "normal 2G$a\<C-X>\<C-U>"', 'E578:')
+  call assert_fails('exe "normal 2G$a\<C-X>\<C-U>"', 'E565:')
 
   " delete text when called for the second time
   func CompleteFunc2(findstart, base)
@@ -686,7 +628,7 @@ func Test_completefunc_error()
   endfunc
   set completefunc=CompleteFunc2
   call setline(1, ['', 'abcd', ''])
-  call assert_fails('exe "normal 2G$a\<C-X>\<C-U>"', 'E578:')
+  call assert_fails('exe "normal 2G$a\<C-X>\<C-U>"', 'E565:')
 
   " Jump to a different window from the complete function
   func CompleteFunc3(findstart, base)
@@ -730,14 +672,14 @@ func Test_complete_func_error()
   func ListColors()
     call complete(col('.'), "blue")
   endfunc
-  call assert_fails('exe "normal i\<C-R>=ListColors()\<CR>"', 'E474:')
+  call assert_fails('exe "normal i\<C-R>=ListColors()\<CR>"', 'E1211:')
   func ListMonths()
     call complete(col('.'), test_null_list())
   endfunc
-  call assert_fails('exe "normal i\<C-R>=ListMonths()\<CR>"', 'E474:')
+  call assert_fails('exe "normal i\<C-R>=ListMonths()\<CR>"', 'E1298:')
   delfunc ListColors
   delfunc ListMonths
-  call assert_fails('call complete_info({})', 'E714:')
+  call assert_fails('call complete_info({})', 'E1211:')
   call assert_equal([], complete_info(['items']).items)
 endfunc
 
@@ -755,6 +697,27 @@ func Test_recursive_complete_func()
   delfunc ListColors
   bw!
 endfunc
+
+" Test for using complete() with completeopt+=longest
+func Test_complete_with_longest()
+  new
+  inoremap <buffer> <f3> <cmd>call complete(1, ["iaax", "iaay", "iaaz"])<cr>
+
+  " default: insert first match
+  set completeopt&
+  call setline(1, ['i'])
+  exe "normal Aa\<f3>\<esc>"
+  call assert_equal('iaax', getline(1))
+
+  " with longest: insert longest prefix
+  set completeopt+=longest
+  call setline(1, ['i'])
+  exe "normal Aa\<f3>\<esc>"
+  call assert_equal('iaa', getline(1))
+  set completeopt&
+  bwipe!
+endfunc
+
 
 " Test for completing words following a completed word in a line
 func Test_complete_wrapscan()
@@ -1283,14 +1246,14 @@ func Test_complete_unreadable_thesaurus_file()
   CheckUnix
   CheckNotRoot
 
-  call writefile(['about', 'above'], 'Xfile')
-  call setfperm('Xfile', '---r--r--')
+  call writefile(['about', 'above'], 'Xunrfile')
+  call setfperm('Xunrfile', '---r--r--')
   new
   set complete=sXfile
   exe "normal! ia\<C-P>"
   call assert_equal('a', getline(1))
   bw!
-  call delete('Xfile')
+  call delete('Xunrfile')
   set complete&
 endfunc
 
@@ -1309,7 +1272,7 @@ endfunc
 " A mapping is not used for the key after CTRL-X.
 func Test_no_mapping_for_ctrl_x_key()
   new
-  inoremap <C-K> <Cmd>let was_mapped = 'yes'<CR>
+  inoremap <buffer> <C-K> <Cmd>let was_mapped = 'yes'<CR>
   setlocal dictionary=README.txt
   call feedkeys("aexam\<C-X>\<C-K> ", 'xt')
   call assert_equal('example ', getline(1))
@@ -2159,5 +2122,70 @@ func Test_complete_smartindent()
   bw!
   delfunction! FooBarComplete
 endfunc
+
+func Test_complete_overrun()
+  " this was going past the end of the copied text
+  new
+  sil norm si0s0
+  bwipe!
+endfunc
+
+func Test_infercase_very_long_line()
+  " this was truncating the line when inferring case
+  new
+  let longLine = "blah "->repeat(300)
+  let verylongLine = "blah "->repeat(400)
+  call setline(1, verylongLine)
+  call setline(2, longLine)
+  set ic infercase
+  exe "normal 2Go\<C-X>\<C-L>\<Esc>"
+  call assert_equal(longLine, getline(3))
+
+  " check that the too long text is NUL terminated
+  %del
+  norm o
+  norm 1987ax
+  exec "norm ox\<C-X>\<C-L>"
+  call assert_equal(repeat('x', 1987), getline(3))
+
+  bwipe!
+  set noic noinfercase
+endfunc
+
+func Test_ins_complete_add()
+  " this was reading past the end of allocated memory
+  new
+  norm o
+  norm 7o
+  sil! norm o
+
+  bwipe!
+endfunc
+
+func Test_ins_complete_end_of_line()
+  " this was reading past the end of the line
+  new  
+  norm 8oý 
+  sil! norm o
+
+  bwipe!
+endfunc
+
+func s:Tagfunc(t,f,o)
+  bwipe!
+  return []
+endfunc
+
+" This was using freed memory, since 'complete' was in a wiped out buffer.
+" Also using a window that was closed.
+func Test_tagfunc_wipes_out_buffer()
+  new
+  set complete=.,t,w,b,u,i
+  se tagfunc=s:Tagfunc
+  sil norm i
+
+  bwipe!
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

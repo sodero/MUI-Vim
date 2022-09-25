@@ -4,6 +4,7 @@ source check.vim
 CheckFeature conceal
 
 source screendump.vim
+source view_util.vim
 
 func Test_conceal_two_windows()
   CheckScreendump
@@ -24,7 +25,7 @@ func Test_conceal_two_windows()
     exe "normal /here\r"
   [CODE]
 
-  call writefile(code, 'XTest_conceal')
+  call writefile(code, 'XTest_conceal', 'D')
   " Check that cursor line is concealed
   let buf = RunVimInTerminal('-S XTest_conceal', {})
   call VerifyScreenDump(buf, 'Test_conceal_two_windows_01', {})
@@ -108,7 +109,6 @@ func Test_conceal_two_windows()
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete('XTest_conceal')
 endfunc
 
 func Test_conceal_with_cursorline()
@@ -125,7 +125,7 @@ func Test_conceal_with_cursorline()
     normal M
   [CODE]
 
-  call writefile(code, 'XTest_conceal_cul')
+  call writefile(code, 'XTest_conceal_cul', 'D')
   let buf = RunVimInTerminal('-S XTest_conceal_cul', {})
   call VerifyScreenDump(buf, 'Test_conceal_cul_01', {})
 
@@ -137,7 +137,6 @@ func Test_conceal_with_cursorline()
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete('XTest_conceal_cul')
 endfunc
 
 func Test_conceal_resize_term()
@@ -149,7 +148,7 @@ func Test_conceal_resize_term()
     syn region CommentCodeSpan matchgroup=Comment start=/`/ end=/`/ concealends
     normal fb
   [CODE]
-  call writefile(code, 'XTest_conceal_resize')
+  call writefile(code, 'XTest_conceal_resize', 'D')
   let buf = RunVimInTerminal('-S XTest_conceal_resize', {'rows': 6})
   call VerifyScreenDump(buf, 'Test_conceal_resize_01', {})
 
@@ -158,7 +157,6 @@ func Test_conceal_resize_term()
 
   " clean up
   call StopVimInTerminal(buf)
-  call delete('XTest_conceal_resize')
 endfunc
 
 " Tests for correct display (cursor column position) with +conceal and
@@ -246,7 +244,7 @@ func Test_conceal_cursor_pos()
     :q!
 
   [CODE]
-  call writefile(code, 'XTest_conceal_curpos')
+  call writefile(code, 'XTest_conceal_curpos', 'D')
 
   if RunVim([], [], '-s XTest_conceal_curpos')
     call assert_equal([
@@ -257,7 +255,6 @@ func Test_conceal_cursor_pos()
   endif
 
   call delete('Xconceal_curpos.out')
-  call delete('XTest_conceal_curpos')
 endfunc
 
 func Test_conceal_eol()
@@ -280,6 +277,25 @@ func Test_conceal_eol()
   call assert_notequal(screenattr(1, 2), screenattr(2, 1))
 
   set nolist
+endfunc
+
+func Test_conceal_mouse_click()
+  enew!
+  set mouse=a
+  setlocal conceallevel=2 concealcursor=nc
+  syn match Concealed "this" conceal
+  hi link Concealed Search
+  call setline(1, 'conceal this click here')
+  redraw
+  call assert_equal(['conceal  click here '], ScreenLines(1, 20))
+
+  " click on 'h' of "here" puts cursor there
+  call test_setmouse(1, 16)
+  call feedkeys("\<LeftMouse>", "tx")
+  call assert_equal([0, 1, 20, 0, 20], getcurpos())
+
+  bwipe!
+  set mouse&
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

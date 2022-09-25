@@ -85,6 +85,7 @@ static int	last_recorded_len = 0;	// number of last recorded chars
 
 #ifdef FEAT_EVAL
 mapblock_T	*last_used_map = NULL;
+int		last_used_sid = -1;
 #endif
 
 static int	read_readbuf(buffheader_T *buf, int advance);
@@ -669,7 +670,7 @@ stuffReadbuffSpec(char_u *s)
 	}
 	else
 	{
-	    c = mb_ptr2char_adv(&s);
+	    c = mb_cptr2char_adv(&s);
 	    if (c == CAR || c == NL || c == ESC)
 		c = ' ';
 	    stuffcharReadbuff(c);
@@ -837,6 +838,22 @@ start_redo(long count, int old_redo)
 
     c = read_redo(FALSE, old_redo);
 
+#ifdef FEAT_EVAL
+    if (c == K_SID)
+    {
+	// Copy the <SID>{sid}; sequence
+	add_char_buff(&readbuf2, c);
+	for (;;)
+	{
+	    c = read_redo(FALSE, old_redo);
+	    add_char_buff(&readbuf2, c);
+	    if (!isdigit(c))
+		break;
+	}
+	c = read_redo(FALSE, old_redo);
+    }
+#endif
+
     // copy the buffer name, if present
     if (c == '"')
     {
@@ -876,7 +893,7 @@ start_redo(long count, int old_redo)
 	add_num_buff(&readbuf2, count);
     }
 
-    // copy from the redo buffer into the stuff buffer
+    // copy the rest from the redo buffer into the stuff buffer
     add_char_buff(&readbuf2, c);
     copy_redo(old_redo);
     return OK;
@@ -1115,33 +1132,12 @@ ins_typebuf(
  * Returns the length of what was inserted.
  */
     int
-ins_char_typebuf(int c, int modifier)
+ins_char_typebuf(int c, int modifiers)
 {
     char_u	buf[MB_MAXBYTES * 3 + 4];
-    int		len = 0;
+    int		len = special_to_buf(c, modifiers, TRUE, buf);
 
-    if (modifier != 0)
-    {
-	buf[0] = K_SPECIAL;
-	buf[1] = KS_MODIFIER;
-	buf[2] = modifier;
-	buf[3] = NUL;
-	len = 3;
-    }
-    if (IS_SPECIAL(c))
-    {
-	buf[len] = K_SPECIAL;
-	buf[len + 1] = K_SECOND(c);
-	buf[len + 2] = K_THIRD(c);
-	buf[len + 3] = NUL;
-	len += 3;
-    }
-    else
-    {
-	char_u *end = add_char2buf(c, buf + len);
-	*end = NUL;
-	len = end - buf;
-    }
+    buf[len] = NUL;
     (void)ins_typebuf(buf, KeyNoremap, 0, !KeyTyped, cmd_silent);
     return len;
 }
@@ -1346,7 +1342,7 @@ ungetchars(int len)
     static void
 may_sync_undo(void)
 {
-    if ((!(State & (INSERT + CMDLINE)) || arrow_used)
+    if ((!(State & (MODE_INSERT | MODE_CMDLINE)) || arrow_used)
 					       && scriptin[curscript] == NULL)
 	u_sync(FALSE);
 }
@@ -1533,7 +1529,7 @@ openscript(
 	int	save_finish_op = finish_op;
 	int	save_msg_scroll = msg_scroll;
 
-	State = NORMAL;
+	State = MODE_NORMAL;
 	msg_scroll = FALSE;	// no msg scrolling in Normal mode
 	restart_edit = 0;	// don't go to Insert mode
 	p_im = FALSE;		// don't use 'insertmode'
@@ -1724,6 +1720,8 @@ vgetc(void)
 	{
 	    int did_inc = FALSE;
 
+	    // No mapping after modifier has been read, using an input method
+	    // and when a popup window has disabled mapping.
 	    if (mod_mask
 #if defined(FEAT_XIM) && defined(FEAT_GUI_GTK)
 		    || im_is_preediting()
@@ -1733,10 +1731,10 @@ vgetc(void)
 #endif
 		    )
 	    {
-		// no mapping after modifier has been read
 		++no_mapping;
 		++allow_keys;
-		did_inc = TRUE;	// mod_mask may change value
+		// mod_mask value may change, remember we did the increment
+		did_inc = TRUE;
 	    }
 	    c = vgetorpeek(TRUE);
 	    if (did_inc)
@@ -1817,7 +1815,21 @@ vgetc(void)
 		if (c == K_CSI)
 		    c = CSI;
 #endif
+#ifdef FEAT_EVAL
+		if (c == K_SID)
+		{
+		    int	    j;
+
+		    // Handle <SID>{sid};  Do up to 20 digits for safety.
+		    last_used_sid = 0;
+		    for (j = 0; j < 20 && isdigit(c = vgetorpeek(TRUE)); ++j)
+			last_used_sid = last_used_sid * 10 + (c - '0');
+		    last_used_map = NULL;
+		    continue;
+		}
+#endif
 	    }
+
 	    // a keypad or special function key was not mapped, use it like
 	    // its ASCII equivalent
 	    switch (c)
@@ -1978,9 +1990,10 @@ safe_vgetc(void)
 /*
  * Like safe_vgetc(), but loop to handle K_IGNORE.
  * Also ignore scrollbar events.
+ * Does not handle bracketed paste - do not use the result for commands.
  */
-    int
-plain_vgetc(void)
+    static int
+plain_vgetc_nopaste(void)
 {
     int c;
 
@@ -1989,6 +2002,17 @@ plain_vgetc(void)
     while (c == K_IGNORE
 	    || c == K_VER_SCROLLBAR || c == K_HOR_SCROLLBAR
 	    || c == K_MOUSEMOVE);
+    return c;
+}
+
+/*
+ * Like safe_vgetc(), but loop to handle K_IGNORE.
+ * Also ignore scrollbar events.
+ */
+    int
+plain_vgetc(void)
+{
+    int c = plain_vgetc_nopaste();
 
     if (c == K_PS)
 	// Only handle the first pasted character.  Drop the rest, since we
@@ -2097,7 +2121,7 @@ getchar_common(typval_T *argvars, typval_T *rettv)
     {
 	if (argvars[0].v_type == VAR_UNKNOWN)
 	    // getchar(): blocking wait.
-	    n = plain_vgetc();
+	    n = plain_vgetc_nopaste();
 	else if (tv_get_bool_chk(&argvars[0], &error))
 	    // getchar(1): only check if char avail
 	    n = vpeekc_any();
@@ -2377,7 +2401,7 @@ check_simplify_modifier(int max_offset)
 	if (offset + 3 >= typebuf.tb_len)
 	    break;
 	tp = typebuf.tb_buf + typebuf.tb_off + offset;
-	if (tp[0] == K_SPECIAL && tp[1] == KS_MODIFIER)
+	if ((tp[0] == K_SPECIAL || tp[0] == CSI) && tp[1] == KS_MODIFIER)
 	{
 	    // A modifier was not used for a mapping, apply it to ASCII keys.
 	    // Shift would already have been applied.
@@ -2457,8 +2481,9 @@ handle_mapping(
     int		local_State = get_real_state();
     int		is_plug_map = FALSE;
 
-    // If typehead starts with <Plug> then remap, even for a "noremap" mapping.
-    if (typebuf.tb_buf[typebuf.tb_off] == K_SPECIAL
+    // If typeahead starts with <Plug> then remap, even for a "noremap" mapping.
+    if (typebuf.tb_len >= 3
+	    && typebuf.tb_buf[typebuf.tb_off] == K_SPECIAL
 	    && typebuf.tb_buf[typebuf.tb_off + 1] == KS_EXTRA
 	    && typebuf.tb_buf[typebuf.tb_off + 2] == KE_PLUG)
 	is_plug_map = TRUE;
@@ -2483,10 +2508,10 @@ handle_mapping(
 		|| (p_remap
 		    && (typebuf.tb_noremap[typebuf.tb_off]
 				    & (RM_NONE|RM_ABBR)) == 0))
-	    && !(p_paste && (State & (INSERT + CMDLINE)))
-	    && !(State == HITRETURN && (tb_c1 == CAR || tb_c1 == ' '))
-	    && State != ASKMORE
-	    && State != CONFIRM
+	    && !(p_paste && (State & (MODE_INSERT | MODE_CMDLINE)))
+	    && !(State == MODE_HITRETURN && (tb_c1 == CAR || tb_c1 == ' '))
+	    && State != MODE_ASKMORE
+	    && State != MODE_CONFIRM
 	    && !at_ins_compl_key())
     {
 #ifdef FEAT_GUI
@@ -2503,8 +2528,8 @@ handle_mapping(
 	    nolmaplen = 2;
 	else
 	{
-	    LANGMAP_ADJUST(tb_c1, (State & (CMDLINE | INSERT)) == 0
-					    && get_real_state() != SELECTMODE);
+	    LANGMAP_ADJUST(tb_c1, (State & (MODE_CMDLINE | MODE_INSERT)) == 0
+					   && get_real_state() != MODE_SELECT);
 	    nolmaplen = 0;
 	}
 #endif
@@ -2537,7 +2562,7 @@ handle_mapping(
 		    && (mp->m_mode & local_State)
 		    && !(mp->m_simplified && seenModifyOtherKeys
 						     && typebuf.tb_maplen == 0)
-		    && ((mp->m_mode & LANGMAP) == 0 || typebuf.tb_maplen == 0))
+		    && ((mp->m_mode & MODE_LANGMAP) == 0 || typebuf.tb_maplen == 0))
 	    {
 #ifdef FEAT_LANGMAP
 		int	nomap = nolmaplen;
@@ -2644,7 +2669,7 @@ handle_mapping(
     /*
      * Check for match with 'pastetoggle'
      */
-    if (*p_pt != NUL && mp == NULL && (State & (INSERT|NORMAL)))
+    if (*p_pt != NUL && mp == NULL && (State & (MODE_INSERT | MODE_NORMAL)))
     {
 	for (mlen = 0; mlen < typebuf.tb_len && p_pt[mlen]; ++mlen)
 	    if (p_pt[mlen] != typebuf.tb_buf[typebuf.tb_off + mlen])
@@ -2659,7 +2684,7 @@ handle_mapping(
 	    del_typebuf(mlen, 0); // remove the chars
 	    set_option_value_give_err((char_u *)"paste",
 						      (long)!p_paste, NULL, 0);
-	    if (!(State & INSERT))
+	    if (!(State & MODE_INSERT))
 	    {
 		msg_col = 0;
 		msg_row = Rows - 1;
@@ -2792,7 +2817,7 @@ handle_mapping(
 		    // to Visual mode temporarily.  Append K_SELECT to switch
 		    // back to Select mode.
 		    if (VIsual_active && VIsual_select
-					     && (current_menu->modes & VISUAL))
+					&& (current_menu->modes & MODE_VISUAL))
 		    {
 			VIsual_select = FALSE;
 			(void)ins_typebuf(K_SELECT_STRING,
@@ -2848,7 +2873,7 @@ handle_mapping(
 	if (++*mapdepth >= p_mmd)
 	{
 	    emsg(_(e_recursive_mapping));
-	    if (State & CMDLINE)
+	    if (State & MODE_CMDLINE)
 		redrawcmdline();
 	    else
 		setcursor();
@@ -2862,7 +2887,7 @@ handle_mapping(
 	 * In Select mode and a Visual mode mapping is used: Switch to Visual
 	 * mode temporarily.  Append K_SELECT to switch back to Select mode.
 	 */
-	if (VIsual_active && VIsual_select && (mp->m_mode & VISUAL))
+	if (VIsual_active && VIsual_select && (mp->m_mode & MODE_VISUAL))
 	{
 	    VIsual_select = FALSE;
 	    (void)ins_typebuf(K_SELECT_STRING, REMAP_NONE, 0, TRUE, FALSE);
@@ -2913,7 +2938,7 @@ handle_mapping(
 		buf[2] = KE_IGNORE;
 		buf[3] = NUL;
 		map_str = vim_strsave(buf);
-		if (State & CMDLINE)
+		if (State & MODE_CMDLINE)
 		{
 		    // redraw the command below the error
 		    msg_didout = TRUE;
@@ -2942,6 +2967,10 @@ handle_mapping(
 	{
 	    int noremap;
 
+#ifdef FEAT_EVAL
+	    last_used_map = mp;
+	    last_used_sid = -1;
+#endif
 	    if (save_m_noremap != REMAP_YES)
 		noremap = save_m_noremap;
 	    else if (
@@ -2960,7 +2989,6 @@ handle_mapping(
 #ifdef FEAT_EVAL
 	    if (save_m_expr)
 		vim_free(map_str);
-	    last_used_map = mp;
 #endif
 	}
 #ifdef FEAT_EVAL
@@ -3040,8 +3068,9 @@ check_end_reg_executing(int advance)
 vgetorpeek(int advance)
 {
     int		c, c1;
-    int		timedout = FALSE;	// waited for more than 1 second
-					// for mapping to complete
+    int		timedout = FALSE;	// waited for more than 'timeoutlen'
+					// for mapping to complete or
+					// 'ttimeoutlen' for complete key code
     int		mapdepth = 0;		// check for recursive mapping
     int		mode_deleted = FALSE;   // set when mode has been deleted
 #ifdef FEAT_CMDL_INFO
@@ -3071,7 +3100,10 @@ vgetorpeek(int advance)
     ++vgetc_busy;
 
     if (advance)
+    {
 	KeyStuffed = FALSE;
+	typebuf_was_empty = FALSE;
+    }
 
     init_typebuf();
     start_stuff();
@@ -3139,7 +3171,7 @@ vgetorpeek(int advance)
 		     * really insert a CTRL-C.
 		     */
 		    if ((c || typebuf.tb_maplen)
-					      && (State & (INSERT + CMDLINE)))
+				     && (State & (MODE_INSERT | MODE_CMDLINE)))
 			c = ESC;
 		    else
 			c = Ctrl_C;
@@ -3223,13 +3255,13 @@ vgetorpeek(int advance)
 			&& !no_mapping
 			&& ex_normal_busy == 0
 			&& typebuf.tb_maplen == 0
-			&& (State & INSERT)
+			&& (State & MODE_INSERT)
 			&& (p_timeout
 			    || (keylen == KEYLEN_PART_KEY && p_ttimeout))
 			&& (c = inchar(typebuf.tb_buf + typebuf.tb_off
 					       + typebuf.tb_len, 3, 25L)) == 0)
 		{
-		    colnr_T	col = 0, vcol;
+		    colnr_T	col = 0;
 		    char_u	*ptr;
 
 		    if (mode_displayed)
@@ -3239,12 +3271,12 @@ vgetorpeek(int advance)
 		    }
 #ifdef FEAT_GUI
 		    // may show a different cursor shape
-		    if (gui.in_use && State != NORMAL && !cmd_silent)
+		    if (gui.in_use && State != MODE_NORMAL && !cmd_silent)
 		    {
 			int	    save_State;
 
 			save_State = State;
-			State = NORMAL;
+			State = MODE_NORMAL;
 			gui_update_cursor(TRUE, FALSE);
 			State = save_State;
 			shape_changed = TRUE;
@@ -3261,24 +3293,30 @@ vgetorpeek(int advance)
 			{
 			    if (did_ai)
 			    {
+				chartabsize_T cts;
+
 				/*
 				 * We are expecting to truncate the trailing
 				 * white-space, so find the last non-white
 				 * character -- webb
 				 */
-				col = vcol = curwin->w_wcol = 0;
+				curwin->w_wcol = 0;
 				ptr = ml_get_curline();
-				while (col < curwin->w_cursor.col)
+				init_chartabsize_arg(&cts, curwin,
+					  curwin->w_cursor.lnum, 0, ptr, ptr);
+				while (cts.cts_ptr < ptr + curwin->w_cursor.col)
 				{
-				    if (!VIM_ISWHITE(ptr[col]))
-					curwin->w_wcol = vcol;
-				    vcol += lbr_chartabsize(ptr, ptr + col,
-							       vcol);
+				    if (!VIM_ISWHITE(*cts.cts_ptr))
+					curwin->w_wcol = cts.cts_vcol;
+				    cts.cts_vcol += lbr_chartabsize(&cts);
 				    if (has_mbyte)
-					col += (*mb_ptr2len)(ptr + col);
+					cts.cts_ptr +=
+						   (*mb_ptr2len)(cts.cts_ptr);
 				    else
-					++col;
+					++cts.cts_ptr;
 				}
+				clear_chartabsize_arg(&cts);
+
 				curwin->w_wrow = curwin->w_cline_row
 					   + curwin->w_wcol / curwin->w_width;
 				curwin->w_wcol %= curwin->w_width;
@@ -3353,13 +3391,13 @@ vgetorpeek(int advance)
 		    // For the cmdline window: Alternate between ESC and
 		    // CTRL-C: ESC for most situations and CTRL-C to close the
 		    // cmdline window.
-		    if (p_im && (State & INSERT))
+		    if (p_im && (State & MODE_INSERT))
 			c = Ctrl_L;
 #ifdef FEAT_TERMINAL
 		    else if (terminal_is_active())
 			c = K_CANCEL;
 #endif
-		    else if ((State & CMDLINE)
+		    else if ((State & MODE_CMDLINE)
 #ifdef FEAT_CMDWIN
 			    || (cmdwin_type > 0 && tc == ESC)
 #endif
@@ -3370,6 +3408,10 @@ vgetorpeek(int advance)
 #ifdef FEAT_CMDWIN
 		    tc = c;
 #endif
+		    // set a flag to indicate this wasn't a normal char
+		    if (advance)
+			typebuf_was_empty = TRUE;
+
 		    // return from main_loop()
 		    if (pending_exmode_active)
 			exmode_active = EXMODE_NORMAL;
@@ -3390,8 +3432,9 @@ vgetorpeek(int advance)
 		// changed text so far. Also for when 'lazyredraw' is set and
 		// redrawing was postponed because there was something in the
 		// input buffer (e.g., termresponse).
-		if (((State & INSERT) != 0 || p_lz) && (State & CMDLINE) == 0
-			  && advance && must_redraw != 0 && !need_wait_return)
+		if (((State & MODE_INSERT) != 0 || p_lz)
+			&& (State & MODE_CMDLINE) == 0
+			&& advance && must_redraw != 0 && !need_wait_return)
 		{
 		    update_screen(0);
 		    setcursor(); // put cursor back where it belongs
@@ -3408,11 +3451,12 @@ vgetorpeek(int advance)
 		c1 = 0;
 		if (typebuf.tb_len > 0 && advance && !exmode_active)
 		{
-		    if (((State & (NORMAL | INSERT)) || State == LANGMAP)
-			    && State != HITRETURN)
+		    if (((State & (MODE_NORMAL | MODE_INSERT))
+						      || State == MODE_LANGMAP)
+			    && State != MODE_HITRETURN)
 		    {
 			// this looks nice when typing a dead character map
-			if (State & INSERT
+			if (State & MODE_INSERT
 			    && ptr2cells(typebuf.tb_buf + typebuf.tb_off
 						   + typebuf.tb_len - 1) == 1)
 			{
@@ -3439,7 +3483,7 @@ vgetorpeek(int advance)
 		    }
 
 		    // this looks nice when typing a dead character map
-		    if ((State & CMDLINE)
+		    if ((State & MODE_CMDLINE)
 #if defined(FEAT_CRYPT) || defined(FEAT_EVAL)
 			    && cmdline_star == 0
 #endif
@@ -3456,8 +3500,8 @@ vgetorpeek(int advance)
  * get a character: 3. from the user - get it
  */
 		if (typebuf.tb_len == 0)
-		    // timedout may have been set while waiting for a mapping
-		    // that has a <Nop> RHS.
+		    // timedout may have been set if a mapping with empty RHS
+		    // fully matched while longer mappings timed out.
 		    timedout = FALSE;
 
 		if (advance)
@@ -3486,9 +3530,9 @@ vgetorpeek(int advance)
 #endif
 		if (c1 == 1)
 		{
-		    if (State & INSERT)
+		    if (State & MODE_INSERT)
 			edit_unputchar();
-		    if (State & CMDLINE)
+		    if (State & MODE_CMDLINE)
 			unputcmdline();
 		    else
 			setcursor();	// put cursor back where it belongs
@@ -3529,7 +3573,7 @@ vgetorpeek(int advance)
      *	 if we return an ESC to exit insert mode, the message is deleted
      *	 if we don't return an ESC but deleted the message before, redisplay it
      */
-    if (advance && p_smd && msg_silent == 0 && (State & INSERT))
+    if (advance && p_smd && msg_silent == 0 && (State & MODE_INSERT))
     {
 	if (c == ESC && !mode_deleted && !no_mapping && mode_displayed)
 	{
@@ -3617,7 +3661,7 @@ inchar(
      * recursive loop may result (write error in swapfile, hit-return, timeout
      * on char wait, flush swapfile, write error....).
      */
-    if (State != HITRETURN)
+    if (State != MODE_HITRETURN)
     {
 	did_outofmem_msg = FALSE;   // display out of memory message (again)
 	did_swapwrite_msg = FALSE;  // display swap file write error again
@@ -3900,6 +3944,29 @@ getcmdkeycmd(
     return (char_u *)line_ga.ga_data;
 }
 
+#if defined(FEAT_EVAL) || defined(PROTO)
+/*
+ * If there was a mapping put info about it in the redo buffer, so that "."
+ * will use the same script context.  We only need the SID.
+ */
+    void
+may_add_last_used_map_to_redobuff(void)
+{
+    char_u buf[3 + 20];
+
+    if (last_used_map == NULL || last_used_map->m_script_ctx.sc_sid < 0)
+	return;
+
+    // <K_SID>{nr};
+    buf[0] = K_SPECIAL;
+    buf[1] = KS_EXTRA;
+    buf[2] = KE_SID;
+    vim_snprintf((char *)buf + 3, 20, "%d;",
+					   last_used_map->m_script_ctx.sc_sid);
+    add_buff(&redobuff, buf, -1L);
+}
+#endif
+
     int
 do_cmdkey_command(int key UNUSED, int flags)
 {
@@ -3907,10 +3974,18 @@ do_cmdkey_command(int key UNUSED, int flags)
 #ifdef FEAT_EVAL
     sctx_T  save_current_sctx = {-1, 0, 0, 0};
 
-    if (key == K_SCRIPT_COMMAND && last_used_map != NULL)
+    if (key == K_SCRIPT_COMMAND
+		  && (last_used_map != NULL || SCRIPT_ID_VALID(last_used_sid)))
     {
 	save_current_sctx = current_sctx;
-	current_sctx = last_used_map->m_script_ctx;
+	if (last_used_map != NULL)
+	    current_sctx = last_used_map->m_script_ctx;
+	else
+	{
+	    current_sctx.sc_sid = last_used_sid;
+	    current_sctx.sc_lnum = 0;
+	    current_sctx.sc_version = SCRIPT_ITEM(last_used_sid)->sn_version;
+	}
     }
 #endif
 
@@ -3929,6 +4004,9 @@ do_cmdkey_command(int key UNUSED, int flags)
 reset_last_used_map(mapblock_T *mp)
 {
     if (last_used_map == mp)
+    {
 	last_used_map = NULL;
+	last_used_sid = -1;
+    }
 }
 #endif

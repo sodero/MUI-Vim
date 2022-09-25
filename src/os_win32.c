@@ -100,6 +100,8 @@ typedef char * LPCSTR;
 typedef char * LPWSTR;
 typedef int ACCESS_MASK;
 typedef int BOOL;
+typedef int BOOLEAN;
+typedef int CALLBACK;
 typedef int COLORREF;
 typedef int CONSOLE_CURSOR_INFO;
 typedef int COORD;
@@ -241,27 +243,6 @@ static char_u *exe_path = NULL;
 
 static BOOL win8_or_later = FALSE;
 
-#if !defined(FEAT_GUI_MSWIN) || defined(VIMDLL)
-// Dynamic loading for portability
-typedef struct _DYN_CONSOLE_SCREEN_BUFFER_INFOEX
-{
-    ULONG cbSize;
-    COORD dwSize;
-    COORD dwCursorPosition;
-    WORD wAttributes;
-    SMALL_RECT srWindow;
-    COORD dwMaximumWindowSize;
-    WORD wPopupAttributes;
-    BOOL bFullscreenSupported;
-    COLORREF ColorTable[16];
-} DYN_CONSOLE_SCREEN_BUFFER_INFOEX, *PDYN_CONSOLE_SCREEN_BUFFER_INFOEX;
-typedef BOOL (WINAPI *PfnGetConsoleScreenBufferInfoEx)(HANDLE, PDYN_CONSOLE_SCREEN_BUFFER_INFOEX);
-static PfnGetConsoleScreenBufferInfoEx pGetConsoleScreenBufferInfoEx;
-typedef BOOL (WINAPI *PfnSetConsoleScreenBufferInfoEx)(HANDLE, PDYN_CONSOLE_SCREEN_BUFFER_INFOEX);
-static PfnSetConsoleScreenBufferInfoEx pSetConsoleScreenBufferInfoEx;
-static BOOL has_csbiex = FALSE;
-#endif
-
 /*
  * Get version number including build number
  */
@@ -272,11 +253,12 @@ typedef BOOL (WINAPI *PfnRtlGetVersion)(LPOSVERSIONINFOW);
     static DWORD
 get_build_number(void)
 {
-    OSVERSIONINFOW	osver = {sizeof(OSVERSIONINFOW)};
+    OSVERSIONINFOW	osver;
     HMODULE		hNtdll;
     PfnRtlGetVersion	pRtlGetVersion;
     DWORD		ver = MAKE_VER(0, 0, 0);
 
+    osver.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
     hNtdll = GetModuleHandle("ntdll.dll");
     if (hNtdll != NULL)
     {
@@ -324,7 +306,7 @@ make_ambiwidth_event(
 read_console_input(
     HANDLE	    hInput,
     INPUT_RECORD    *lpBuffer,
-    DWORD	    nLength,
+    int		    nLength,
     LPDWORD	    lpEvents)
 {
     enum
@@ -422,7 +404,7 @@ peek_console_input(
     DWORD	    nLength UNUSED,
     LPDWORD	    lpEvents)
 {
-    return read_console_input(hInput, lpBuffer, (DWORD)-1, lpEvents);
+    return read_console_input(hInput, lpBuffer, -1, lpEvents);
 }
 
 # ifdef FEAT_CLIENTSERVER
@@ -434,7 +416,7 @@ msg_wait_for_multiple_objects(
     DWORD    dwMilliseconds,
     DWORD    dwWakeMask)
 {
-    if (read_console_input(NULL, NULL, (DWORD)-2, NULL))
+    if (read_console_input(NULL, NULL, -2, NULL))
 	return WAIT_OBJECT_0;
     return MsgWaitForMultipleObjects(nCount, pHandles, fWaitAll,
 				     dwMilliseconds, dwWakeMask);
@@ -447,7 +429,7 @@ wait_for_single_object(
     HANDLE hHandle,
     DWORD dwMilliseconds)
 {
-    if (read_console_input(NULL, NULL, (DWORD)-2, NULL))
+    if (read_console_input(NULL, NULL, -2, NULL))
 	return WAIT_OBJECT_0;
     return WaitForSingleObject(hHandle, dwMilliseconds);
 }
@@ -759,8 +741,8 @@ dyn_libintl_init(void)
     }
 
     // The bind_textdomain_codeset() function is optional.
-    dyn_libintl_bind_textdomain_codeset = (void *)GetProcAddress(hLibintlDLL,
-						   "bind_textdomain_codeset");
+    dyn_libintl_bind_textdomain_codeset = (char *(*)(const char *, const char *))
+			GetProcAddress(hLibintlDLL, "bind_textdomain_codeset");
     if (dyn_libintl_bind_textdomain_codeset == NULL)
 	dyn_libintl_bind_textdomain_codeset =
 					 null_libintl_bind_textdomain_codeset;
@@ -768,7 +750,8 @@ dyn_libintl_init(void)
     // _wputenv() function for the libintl.dll is optional.
     hmsvcrt = find_imported_module_by_funcname(hLibintlDLL, "getenv");
     if (hmsvcrt != NULL)
-	dyn_libintl_wputenv = (void *)GetProcAddress(hmsvcrt, "_wputenv");
+	dyn_libintl_wputenv = (int (*)(const wchar_t *))
+					GetProcAddress(hmsvcrt, "_wputenv");
     if (dyn_libintl_wputenv == NULL || dyn_libintl_wputenv == _wputenv)
 	dyn_libintl_wputenv = null_libintl_wputenv;
 
@@ -1201,8 +1184,8 @@ static int g_fMouseActive = FALSE;  // mouse enabled
 static int g_nMouseClick = -1;	    // mouse status
 static int g_xMouse;		    // mouse x coordinate
 static int g_yMouse;		    // mouse y coordinate
-static DWORD g_cmodein = 0;         // Original console input mode
-static DWORD g_cmodeout = 0;        // Original console output mode
+static DWORD g_cmodein = 0;	    // Original console input mode
+static DWORD g_cmodeout = 0;	    // Original console output mode
 
 /*
  * Enable or disable mouse input
@@ -1524,13 +1507,27 @@ decode_mouse_event(
     static void
 mch_set_cursor_shape(int thickness)
 {
-    CONSOLE_CURSOR_INFO ConsoleCursorInfo;
-    ConsoleCursorInfo.dwSize = thickness;
-    ConsoleCursorInfo.bVisible = s_cursor_visible;
+    if (USE_VTP || USE_WT)
+    {
+	if (*T_CSI == NUL)
+	{
+	    // If 't_SI' is not set, use the default cursor styles.
+	    if (thickness < 50)
+		vtp_printf("\033[3 q");	// underline
+	    else
+		vtp_printf("\033[0 q");	// default
+	}
+    }
+    else
+    {
+	CONSOLE_CURSOR_INFO ConsoleCursorInfo;
+	ConsoleCursorInfo.dwSize = thickness;
+	ConsoleCursorInfo.bVisible = s_cursor_visible;
 
-    SetConsoleCursorInfo(g_hConOut, &ConsoleCursorInfo);
-    if (s_cursor_visible)
-	SetConsoleCursorPosition(g_hConOut, g_coord);
+	SetConsoleCursorInfo(g_hConOut, &ConsoleCursorInfo);
+	if (s_cursor_visible)
+	    SetConsoleCursorPosition(g_hConOut, g_coord);
+    }
 }
 
     void
@@ -1679,7 +1676,7 @@ WaitForChar(long msec, int ignore_input)
 # ifdef FEAT_MBYTE_IME
 	// May have to redraw if the cursor ends up in the wrong place.
 	// Only when not peeking.
-	if (State & CMDLINE && msg_row == Rows - 1 && msec != 0)
+	if (State == MODE_CMDLINE && msg_row == Rows - 1 && msec != 0)
 	{
 	    CONSOLE_SCREEN_BUFFER_INFO csbi;
 
@@ -1689,7 +1686,7 @@ WaitForChar(long msec, int ignore_input)
 		{
 		    // The screen is now messed up, must redraw the command
 		    // line and later all the windows.
-		    redraw_all_later(CLEAR);
+		    redraw_all_later(UPD_CLEAR);
 		    compute_cmdrow();
 		    redrawcmd();
 		}
@@ -1926,7 +1923,7 @@ mch_inchar(
     // to get and still room in the buffer (up to two bytes for a char and
     // three bytes for a modifier).
     while ((typeaheadlen == 0 || WaitForChar(0L, FALSE))
-		         && typeaheadlen + 5 + TYPEAHEADSPACE <= TYPEAHEADLEN)
+			  && typeaheadlen + 5 + TYPEAHEADSPACE <= TYPEAHEADLEN)
     {
 	if (typebuf_changed(tb_change_cnt))
 	{
@@ -2127,13 +2124,27 @@ theend:
     static int
 executable_file(char *name, char_u **path)
 {
-    if (mch_getperm((char_u *)name) != -1 && !mch_isdir((char_u *)name))
+    int attrs = win32_getattrs((char_u *)name);
+
+    // The file doesn't exist or is a folder.
+    if (attrs == -1 || (attrs & FILE_ATTRIBUTE_DIRECTORY))
+	return FALSE;
+    // Check if the file is an AppExecLink, a special alias used by Windows
+    // Store for its apps.
+    if (attrs & FILE_ATTRIBUTE_REPARSE_POINT)
     {
+	char_u	*res = resolve_appexeclink((char_u *)name);
+	if (res == NULL)
+	    return FALSE;
+	// The path is already absolute.
 	if (path != NULL)
-	    *path = FullName_save((char_u *)name, FALSE);
-	return TRUE;
+	    *path = res;
+	else
+	    vim_free(res);
     }
-    return FALSE;
+    else if (path != NULL)
+	*path = FullName_save((char_u *)name, FALSE);
+    return TRUE;
 }
 
 /*
@@ -2338,11 +2349,11 @@ theend:
  * worth allowing these to make debugging of issues easier.
  */
     static void
-bad_param_handler(const wchar_t *expression,
-    const wchar_t *function,
-    const wchar_t *file,
-    unsigned int line,
-    uintptr_t pReserved)
+bad_param_handler(const wchar_t *expression UNUSED,
+    const wchar_t *function UNUSED,
+    const wchar_t *file UNUSED,
+    unsigned int line UNUSED,
+    uintptr_t pReserved UNUSED)
 {
 }
 
@@ -2802,7 +2813,11 @@ SaveConsoleTitleAndIcon(void)
 	return;
 
     // Extract the first icon contained in the Vim executable.
-    if (mch_icon_load((HANDLE *)&g_hVimIcon) == FAIL || g_hVimIcon == NULL)
+    if (
+# ifdef FEAT_LIBCALL
+	    mch_icon_load((HANDLE *)&g_hVimIcon) == FAIL ||
+# endif
+	    g_hVimIcon == NULL)
 	g_hVimIcon = ExtractIcon(NULL, (LPCSTR)exe_name, 0);
     if (g_hVimIcon != NULL)
 	g_fCanChangeIcon = TRUE;
@@ -3480,7 +3495,7 @@ mch_writable(char_u *name)
  * the allocated memory.
  */
     int
-mch_can_exe(char_u *name, char_u **path, int use_path)
+mch_can_exe(char_u *name, char_u **path, int use_path UNUSED)
 {
     return executable_exists((char *)name, path, TRUE, TRUE);
 }
@@ -4209,7 +4224,7 @@ sub_process_writer(LPVOID param)
 		      s == NULL ? l : (DWORD)(s - (lp + written)),
 		      &len, NULL);
 	}
-	if (len == (int)l)
+	if (len == l)
 	{
 	    // Finished a line, add a NL, unless this line should not have
 	    // one.
@@ -6466,7 +6481,7 @@ mch_write(
 	// sequence may be inserted asynchronously.
 	if (len < 0)
 	{
-	    redraw_all_later(CLEAR);
+	    redraw_all_later(UPD_CLEAR);
 	    return;
 	}
 
@@ -6602,7 +6617,7 @@ mch_write(
 		    p = sp;
 
 		// If restoreFG and FG are connected, the restoreFG can be
-	        // omitted.
+		// omitted.
 		if (sgrn2((sp = sgrnc(p, 39)), 38))
 		    p = sp;
 
@@ -6751,6 +6766,21 @@ notsgr:
 		fputc('\n', fdDump);
 	    }
 # endif
+	}
+	else if (s[0] == ESC && len >= 3-1 && s[1] == '[')
+	{
+	    int l = 2;
+
+	    if (isdigit(s[l]))
+		l++;
+	    if (s[l] == ' ' && s[l + 1] == 'q')
+	    {
+		// DECSCUSR (cursor style) sequences
+		if (USE_VTP || USE_WT)
+		    vtp_printf("%.*s", l + 2, s);   // Pass through
+		s += l + 2;
+		len -= l + 1;
+	    }
 	}
 	else
 	{
@@ -7314,6 +7344,7 @@ typedef struct _FILE_EA_INFORMATION_ {
     ULONG EaSize;
 } FILE_EA_INFORMATION_, *PFILE_EA_INFORMATION_;
 
+#ifndef PROTO
 typedef NTSTATUS (NTAPI *PfnNtOpenFile)(
 	PHANDLE FileHandle,
 	ACCESS_MASK DesiredAccess,
@@ -7324,10 +7355,10 @@ typedef NTSTATUS (NTAPI *PfnNtOpenFile)(
 typedef NTSTATUS (NTAPI *PfnNtClose)(
 	HANDLE Handle);
 typedef NTSTATUS (NTAPI *PfnNtSetEaFile)(
-	HANDLE           FileHandle,
-	PIO_STATUS_BLOCK IoStatusBlock,
-	PVOID            Buffer,
-	ULONG            Length);
+	HANDLE		    FileHandle,
+	PIO_STATUS_BLOCK    IoStatusBlock,
+	PVOID		    Buffer,
+	ULONG		    Length);
 typedef NTSTATUS (NTAPI *PfnNtQueryEaFile)(
 	HANDLE FileHandle,
 	PIO_STATUS_BLOCK IoStatusBlock,
@@ -7339,10 +7370,10 @@ typedef NTSTATUS (NTAPI *PfnNtQueryEaFile)(
 	PULONG EaIndex,
 	BOOLEAN RestartScan);
 typedef NTSTATUS (NTAPI *PfnNtQueryInformationFile)(
-	HANDLE                 FileHandle,
-	PIO_STATUS_BLOCK       IoStatusBlock,
-	PVOID                  FileInformation,
-	ULONG                  Length,
+	HANDLE			FileHandle,
+	PIO_STATUS_BLOCK	IoStatusBlock,
+	PVOID			FileInformation,
+	ULONG			Length,
 	FILE_INFORMATION_CLASS FileInformationClass);
 typedef VOID (NTAPI *PfnRtlInitUnicodeString)(
 	PUNICODE_STRING DestinationString,
@@ -7354,6 +7385,7 @@ PfnNtSetEaFile pNtSetEaFile = NULL;
 PfnNtQueryEaFile pNtQueryEaFile = NULL;
 PfnNtQueryInformationFile pNtQueryInformationFile = NULL;
 PfnRtlInitUnicodeString pRtlInitUnicodeString = NULL;
+#endif
 
 /*
  * Load ntdll.dll functions.
@@ -7829,41 +7861,28 @@ vtp_flag_init(void)
     static void
 vtp_init(void)
 {
-    HMODULE hKerneldll;
-    DYN_CONSOLE_SCREEN_BUFFER_INFOEX csbi;
+    CONSOLE_SCREEN_BUFFER_INFOEX csbi;
 # ifdef FEAT_TERMGUICOLORS
-    COLORREF fg, bg;
+    COLORREF fg;
 # endif
 
-    // Use functions supported from Vista
-    hKerneldll = GetModuleHandle("kernel32.dll");
-    if (hKerneldll != NULL)
-    {
-	pGetConsoleScreenBufferInfoEx =
-		(PfnGetConsoleScreenBufferInfoEx)GetProcAddress(
-		hKerneldll, "GetConsoleScreenBufferInfoEx");
-	pSetConsoleScreenBufferInfoEx =
-		(PfnSetConsoleScreenBufferInfoEx)GetProcAddress(
-		hKerneldll, "SetConsoleScreenBufferInfoEx");
-	if (pGetConsoleScreenBufferInfoEx != NULL
-		&& pSetConsoleScreenBufferInfoEx != NULL)
-	    has_csbiex = TRUE;
-    }
-
     csbi.cbSize = sizeof(csbi);
-    if (has_csbiex)
-	pGetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
     save_console_bg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_bg];
     save_console_fg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_fg];
     store_console_bg_rgb = save_console_bg_rgb;
     store_console_fg_rgb = save_console_fg_rgb;
 
 # ifdef FEAT_TERMGUICOLORS
-    bg = (COLORREF)csbi.ColorTable[g_color_index_bg];
+    if (!USE_WT)
+    {
+	COLORREF bg;
+	bg = (COLORREF)csbi.ColorTable[g_color_index_bg];
+	bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
+	default_console_color_bg = bg;
+    }
     fg = (COLORREF)csbi.ColorTable[g_color_index_fg];
-    bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
     fg = (GetRValue(fg) << 16) | (GetGValue(fg) << 8) | GetBValue(fg);
-    default_console_color_bg = bg;
     default_console_color_fg = fg;
 # endif
 
@@ -7929,7 +7948,7 @@ vtp_sgr_bulks(
     if (argc == 0)
     {
 	sgrfgr = sgrbgr = -1;
-	vtp_printf("033[m");
+	vtp_printf("\033[m");
 	return;
     }
 
@@ -8077,7 +8096,7 @@ ctermtoxterm(
 set_console_color_rgb(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-    DYN_CONSOLE_SCREEN_BUFFER_INFOEX csbi;
+    CONSOLE_SCREEN_BUFFER_INFOEX csbi;
     guicolor_T	fg, bg;
     int		ctermfg, ctermbg;
 
@@ -8097,8 +8116,7 @@ set_console_color_rgb(void)
     bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
 
     csbi.cbSize = sizeof(csbi);
-    if (has_csbiex)
-	pGetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 
     csbi.cbSize = sizeof(csbi);
     csbi.srWindow.Right += 1;
@@ -8107,8 +8125,7 @@ set_console_color_rgb(void)
     store_console_fg_rgb = csbi.ColorTable[g_color_index_fg];
     csbi.ColorTable[g_color_index_bg] = (COLORREF)bg;
     csbi.ColorTable[g_color_index_fg] = (COLORREF)fg;
-    if (has_csbiex)
-	pSetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    SetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 # endif
 }
 
@@ -8144,10 +8161,20 @@ get_default_console_color(
 	ctermbg = -1;
 	if (id > 0)
 	    syn_id2cterm_bg(id, &ctermfg, &ctermbg);
-	guibg = ctermbg != -1 ? ctermtoxterm(ctermbg)
+	if (USE_WT)
+	{
+	    cterm_normal_bg_gui_color = guibg =
+			    ctermbg != -1 ? ctermtoxterm(ctermbg) : INVALCOLOR;
+	    if (ctermbg < 0)
+		ctermbg = 0;
+	}
+	else
+	{
+	    guibg = ctermbg != -1 ? ctermtoxterm(ctermbg)
 						    : default_console_color_bg;
-	cterm_normal_bg_gui_color = guibg;
-	ctermbg = ctermbg < 0 ? 0 : ctermbg;
+	    cterm_normal_bg_gui_color = guibg;
+	    ctermbg = ctermbg < 0 ? 0 : ctermbg;
+	}
     }
 
     *cterm_fg = ctermfg;
@@ -8164,22 +8191,20 @@ get_default_console_color(
 reset_console_color_rgb(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-    DYN_CONSOLE_SCREEN_BUFFER_INFOEX csbi;
+    CONSOLE_SCREEN_BUFFER_INFOEX csbi;
 
     if (USE_WT)
 	return;
 
     csbi.cbSize = sizeof(csbi);
-    if (has_csbiex)
-	pGetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 
     csbi.cbSize = sizeof(csbi);
     csbi.srWindow.Right += 1;
     csbi.srWindow.Bottom += 1;
     csbi.ColorTable[g_color_index_bg] = (COLORREF)store_console_bg_rgb;
     csbi.ColorTable[g_color_index_fg] = (COLORREF)store_console_fg_rgb;
-    if (has_csbiex)
-	pSetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    SetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 # endif
 }
 
@@ -8190,19 +8215,17 @@ reset_console_color_rgb(void)
 restore_console_color_rgb(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-    DYN_CONSOLE_SCREEN_BUFFER_INFOEX csbi;
+    CONSOLE_SCREEN_BUFFER_INFOEX csbi;
 
     csbi.cbSize = sizeof(csbi);
-    if (has_csbiex)
-	pGetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 
     csbi.cbSize = sizeof(csbi);
     csbi.srWindow.Right += 1;
     csbi.srWindow.Bottom += 1;
     csbi.ColorTable[g_color_index_bg] = (COLORREF)save_console_bg_rgb;
     csbi.ColorTable[g_color_index_fg] = (COLORREF)save_console_fg_rgb;
-    if (has_csbiex)
-	pSetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    SetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 # endif
 }
 
@@ -8304,3 +8327,84 @@ GetWin32Error(void)
     }
     return msg;
 }
+
+#if defined(FEAT_RELTIME) || defined(PROTO)
+static HANDLE   timer_handle;
+static int      timer_active = FALSE;
+
+/*
+ * Calls to start_timeout alternate the return value pointer between the two
+ * entries in timeout_flags. If the previously active timeout is very close to
+ * expiring when start_timeout() is called then a race condition means that the
+ * set_flag() function may still be invoked after the previous timer is
+ * deleted. Ping-ponging between the two flags prevents this causing 'fake'
+ * timeouts.
+ */
+static sig_atomic_t timeout_flags[2];
+static int	    timeout_flag_idx = 0;
+static sig_atomic_t *timeout_flag = &timeout_flags[0];
+
+
+    static void CALLBACK
+set_flag(void *param, BOOLEAN unused2 UNUSED)
+{
+    int *timeout_flag = (int *)param;
+
+    *timeout_flag = TRUE;
+}
+
+/*
+ * Stop any active timeout.
+ */
+    void
+stop_timeout(void)
+{
+    if (timer_active)
+    {
+        BOOL ret = DeleteTimerQueueTimer(NULL, timer_handle, NULL);
+	timer_active = FALSE;
+	if (!ret && GetLastError() != ERROR_IO_PENDING)
+	{
+	    semsg(_(e_could_not_clear_timeout_str), GetWin32Error());
+	}
+    }
+    *timeout_flag = FALSE;
+}
+
+/*
+ * Start the timeout timer.
+ *
+ * The period is defined in milliseconds.
+ *
+ * The return value is a pointer to a flag that is initialised to 0.  If the
+ * timeout expires, the flag is set to 1. This will only return pointers to
+ * static memory; i.e. any pointer returned by this function may always be
+ * safely dereferenced.
+ *
+ * This function is not expected to fail, but if it does it still returns a
+ * valid flag pointer; the flag will remain stuck at zero.
+ */
+    volatile sig_atomic_t *
+start_timeout(long msec)
+{
+    BOOL ret;
+
+    timeout_flag = &timeout_flags[timeout_flag_idx];
+
+    stop_timeout();
+    ret = CreateTimerQueueTimer(
+	    &timer_handle, NULL, set_flag, timeout_flag,
+	    (DWORD)msec, 0, WT_EXECUTEDEFAULT);
+    if (!ret)
+    {
+	semsg(_(e_could_not_set_timeout_str), GetWin32Error());
+    }
+    else
+    {
+	timeout_flag_idx = (timeout_flag_idx + 1) % 2;
+	timer_active = TRUE;
+	*timeout_flag = FALSE;
+    }
+    return timeout_flag;
+}
+#endif
