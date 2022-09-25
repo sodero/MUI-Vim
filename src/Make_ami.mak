@@ -86,7 +86,7 @@ LDFLAGS = -ldebug
 else
 ifeq ($(UNM),MorphOS)
 CFLAGS += -noixemul
-LDFLAGS = -ldebug -noixemul
+LDFLAGS = -ldebug -lm -noixemul
 else
 CFLAGS += -DNO_ARP
 endif
