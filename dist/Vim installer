@@ -1,5 +1,5 @@
 ; Vim
-; $VER: Vim 8.2
+; $VER: Vim 9.0
 
 (set @app-name "Vim")
 (set @default-dest (getassign "VIM"))
