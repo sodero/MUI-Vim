@@ -991,7 +991,7 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock)
+    if (lock != NULL)
     {
 	UnLock(lock);
 	return 0;
@@ -1173,7 +1173,8 @@ mch_settmode(tmode_T tmode)
  * Return FAIL for failure, OK otherwise
  */
 #if defined(__AROS__) || defined(__MORPHOS__)
-int mch_get_shellsize(void)
+    int
+mch_get_shellsize(void)
 {
 #ifdef FEAT_GUI
     if (gui.in_use || gui.starting)
@@ -1688,7 +1689,7 @@ mch_expandpath(
     LONG		Result;
     char_u		*starbuf, *sp, *dp;
     int			start_len;
-    int			matches = 0;
+    int			matches;
 #ifdef __amigaos4__
     struct TagItem	AnchorTags[] = {
 	{ADO_Strlen, ANCHOR_BUF_SIZE},
