@@ -12,7 +12,7 @@ func Test_internalfunc_arg_error()
     enddef
     defcompile
   END
-  call writefile(l, 'Xinvalidarg')
+  call writefile(l, 'Xinvalidarg', 'D')
   call assert_fails('so Xinvalidarg', 'E118:', '', 1, 'FArgErr')
   let l =<< trim END
     def! FArgErr(): float
@@ -22,7 +22,6 @@ func Test_internalfunc_arg_error()
   END
   call writefile(l, 'Xinvalidarg')
   call assert_fails('so Xinvalidarg', 'E119:', '', 1, 'FArgErr')
-  call delete('Xinvalidarg')
 endfunc
 
 " Test for builtin functions returning different types
@@ -52,7 +51,7 @@ func Test_InternalFuncRetType()
       return environ()
     enddef
   END
-  call writefile(lines, 'Xscript')
+  call writefile(lines, 'Xscript', 'D')
   source Xscript
 
   call RetFloat()->assert_equal(2.0)
@@ -61,7 +60,6 @@ func Test_InternalFuncRetType()
   call RetListDictAny()->assert_notequal([])
   call RetDictNumber()->assert_notequal({})
   call RetDictString()->assert_notequal({})
-  call delete('Xscript')
 endfunc
 
 def Test_abs()
@@ -183,6 +181,28 @@ def Test_add_list()
   END
   v9.CheckScriptFailure(lines, 'E1012: Type mismatch; expected string but got number', 3)
 enddef
+
+def Test_add_const()
+  var lines =<< trim END
+      const l = [1, 2]
+      add(l, 3)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      final l = [1, 2]
+      add(l, 3)
+      assert_equal([1, 2, 3], l)
+  END
+  v9.CheckDefSuccess(lines)
+
+  lines =<< trim END
+      const b = 0z0102
+      add(b,  0z03)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const blob')
+enddef
+
 
 def Test_and()
   v9.CheckDefAndScriptFailure(['and("x", 0x2)'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1210: Number required for argument 1'])
@@ -1181,6 +1201,36 @@ def Test_extend_with_error_function()
   v9.CheckScriptFailure(lines, 'E1001: Variable not found: m')
 enddef
 
+def Test_extend_const()
+  var lines =<< trim END
+      const l = [1, 2]
+      extend(l, [3])
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      const d = {a: 1, b: 2}
+      extend(d, {c: 3})
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const dict<number>')
+
+  lines =<< trim END
+      final d = {a: 1, b: 2}
+      extend(d, {c: 3})
+      assert_equal({a: 1, b: 2, c: 3}, d)
+  END
+  v9.CheckDefSuccess(lines)
+
+  # item in a for loop is final
+  lines =<< trim END
+      var l: list<dict<any>> = [{n: 1}]
+      for item in l
+        item->extend({x: 2})
+      endfor
+  END
+  v9.CheckDefSuccess(lines)
+enddef
+
 def Test_extendnew()
   assert_equal([1, 2, 'a'], extendnew([1, 2], ['a']))
   assert_equal({one: 1, two: 'a'}, extendnew({one: 1}, {two: 'a'}))
@@ -1474,6 +1524,20 @@ def Test_filter_missing_argument()
   var dict = {aa: [1], ab: [2], ac: [3], de: [4]}
   var res = dict->filter((k, _) => k =~ 'a' && k !~ 'b')
   res->assert_equal({aa: [1], ac: [3]})
+enddef
+
+def Test_filter_const()
+  var lines =<< trim END
+      const l = [1, 2, 3]
+      filter(l, 'v:val == 2')
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      const d = {a: 1, b: 2}
+      filter(d, 'v:val == 2')
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const dict<number>')
 enddef
 
 def Test_foldclosed()
@@ -1918,7 +1982,7 @@ def Test_getscriptinfo()
     def g:Xscript_def_func2()
     enddef
   END
-  writefile(lines1, 'X22script92')
+  writefile(lines1, 'X22script92', 'D')
 
   var lines2 =<< trim END
     source X22script92
@@ -1940,7 +2004,6 @@ def Test_getscriptinfo()
     endfor
   END
   v9.CheckDefAndScriptSuccess(lines2)
-  delete('X22script92')
 enddef
 
 def Test_gettabinfo()
@@ -2493,6 +2556,20 @@ def Test_map_failure()
       map(g:gd, (k, v) => true)
   END
   v9.CheckDefExecAndScriptFailure(lines, 'E1012: Type mismatch; expected number but got bool')
+enddef
+
+def Test_map_const()
+  var lines =<< trim END
+      const l = [1, 2, 3]
+      map(l, 'SomeFunc')
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      const d = {a: 1, b: 2}
+      map(d, 'SomeFunc')
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const dict<number>')
 enddef
 
 def Test_map_function_arg()
@@ -3158,7 +3235,7 @@ enddef
 
 def Test_readblob()
   var blob = 0z12341234
-  writefile(blob, 'Xreadblob')
+  writefile(blob, 'Xreadblob', 'D')
   var read: blob = readblob('Xreadblob')
   assert_equal(blob, read)
 
@@ -3167,12 +3244,11 @@ def Test_readblob()
   END
   v9.CheckDefAndScriptFailure(lines, 'E1012: Type mismatch; expected list<string> but got blob', 1)
   v9.CheckDefExecAndScriptFailure(['readblob("")'], 'E484: Can''t open file <empty>')
-  delete('Xreadblob')
 enddef
 
 def Test_readfile()
   var text = ['aaa', 'bbb', 'ccc']
-  writefile(text, 'Xreadfile')
+  writefile(text, 'Xreadfile', 'D')
   var read: list<string> = readfile('Xreadfile')
   assert_equal(text, read)
   assert_equal([7, 7, 7], readfile('Xreadfile')->map((_, _) => 7))
@@ -3181,7 +3257,6 @@ def Test_readfile()
       var read: dict<string> = readfile('Xreadfile')
   END
   v9.CheckDefAndScriptFailure(lines, 'E1012: Type mismatch; expected dict<string> but got list<string>', 1)
-  delete('Xreadfile')
 
   v9.CheckDefAndScriptFailure(['readfile("a", 0z10)'], ['E1013: Argument 2: type mismatch, expected string but got blob', 'E1174: String required for argument 2'])
   v9.CheckDefAndScriptFailure(['readfile("a", "b", "c")'], ['E1013: Argument 3: type mismatch, expected number but got string', 'E1210: Number required for argument 3'])
@@ -3282,10 +3357,30 @@ def Test_remote_startserver()
   v9.CheckDefAndScriptFailure(['remote_startserver({})'], ['E1013: Argument 1: type mismatch, expected string but got dict<unknown>', 'E1174: String required for argument 1'])
 enddef
 
-def Test_remove_const_list()
+def Test_remove_literal_list()
   var l: list<number> = [1, 2, 3, 4]
   assert_equal([1, 2], remove(l, 0, 1))
   assert_equal([3, 4], l)
+enddef
+
+def Test_remove_const()
+  var lines =<< trim END
+      const l = [1, 2, 3, 4]
+      remove(l, 1)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      const d = {a: 1, b: 2}
+      remove(d, 'a')
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const dict<number>')
+
+  lines =<< trim END
+      const b = 0z010203
+      remove(b, 1)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const blob')
 enddef
 
 def Test_remove()
@@ -3365,6 +3460,20 @@ def Test_reverse_return_type()
     res += n
   endfor
   res->assert_equal(6)
+enddef
+
+def Test_reverse_const()
+  var lines =<< trim END
+      const l = [1, 2, 3, 4]
+      reverse(l)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+
+  lines =<< trim END
+      const b = 0z010203
+      reverse(b)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const blob')
 enddef
 
 def Test_rubyeval()
@@ -4001,6 +4110,14 @@ def Test_sort_argument()
   v9.CheckScriptSuccess(lines)
 enddef
 
+def Test_sort_const()
+  var lines =<< trim END
+      const l = [1, 2, 3, 4]
+      sort(l)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+enddef
+
 def Test_sort_compare_func_fails()
   v9.CheckDefAndScriptFailure(['sort("a")'], ['E1013: Argument 1: type mismatch, expected list<any> but got string', 'E1211: List required for argument 1'])
   v9.CheckDefAndScriptFailure(['sort([1], "", [1])'], ['E1013: Argument 3: type mismatch, expected dict<any> but got list<number>', 'E1206: Dictionary required for argument 3'])
@@ -4009,9 +4126,8 @@ def Test_sort_compare_func_fails()
     vim9script
     echo ['a', 'b', 'c']->sort((a: number, b: number) => 0)
   END
-  writefile(lines, 'Xbadsort')
+  writefile(lines, 'Xbadsort', 'D')
   assert_fails('source Xbadsort', ['E1013:', 'E702:'])
-  delete('Xbadsort')
 
   lines =<< trim END
       var l = [1, 2, 3]
@@ -4602,6 +4718,14 @@ def Test_uniq()
   v9.CheckDefFailure(['var l: list<number> = uniq(["a", "b"])'], 'E1012: Type mismatch; expected list<number> but got list<string>')
 enddef
 
+def Test_uniq_const()
+  var lines =<< trim END
+      const l = [1, 2, 3, 4]
+      uniq(l)
+  END
+  v9.CheckDefFailure(lines, 'E1307: Argument 1: Trying to modify a const list<number>')
+enddef
+
 def Test_values()
   v9.CheckDefAndScriptFailure(['values([])'], ['E1013: Argument 1: type mismatch, expected dict<any> but got list<unknown>', 'E1206: Dictionary required for argument 1'])
   assert_equal([], {}->values())
@@ -4692,7 +4816,7 @@ func Test_win_gotoid_in_mapping()
 	  call feedkeys("\<F3>\<LeftMouse>\<LeftRelease>", "xt")
         endfunc
     END
-    call writefile(lines, 'Xgotoscript')
+    call writefile(lines, 'Xgotoscript', 'D')
     let buf = RunVimInTerminal('-S Xgotoscript', #{rows: 15, wait_for_ruler: 0})
     " wait longer here, since we didn't wait for the ruler
     call VerifyScreenDump(buf, 'Test_win_gotoid_1', #{wait: 3000})
@@ -4703,7 +4827,6 @@ func Test_win_gotoid_in_mapping()
     call VerifyScreenDump(buf, 'Test_win_gotoid_3', {})
 
     call StopVimInTerminal(buf)
-    call delete('Xgotoscript')
   endif
 endfunc
 

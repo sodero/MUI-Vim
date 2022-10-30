@@ -82,6 +82,23 @@ func Test_lambda_vim9cmd_linebreak()
   call v9.CheckDefAndScriptSuccess(lines)
 endfunc
 
+def Test_lamba_compiled_linebreak()
+  var lines =<< trim END
+      vim9script
+
+      def Echo(what: any)
+        assert_equal('hello world', what)
+      enddef
+      def That()
+        printf("hello ")
+          ->((x) => x .. "world")()
+          ->Echo()
+      enddef
+      That()
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
+
 func Test_lambda_with_partial()
   let l:Cb = function({... -> ['zero', a:1, a:2, a:3]}, ['one', 'two'])
   call assert_equal(['zero', 'one', 'two', 'three'], l:Cb('three'))
@@ -354,7 +371,7 @@ func Test_closure_error()
       return 1
     endfunc
   END
-  call writefile(l, 'Xscript')
+  call writefile(l, 'Xscript', 'D')
   let caught_932 = 0
   try
     source Xscript
@@ -362,7 +379,6 @@ func Test_closure_error()
     let caught_932 = 1
   endtry
   call assert_equal(1, caught_932)
-  call delete('Xscript')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

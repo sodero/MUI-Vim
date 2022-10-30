@@ -44,14 +44,6 @@ CFLAGS += \
 	-DFEAT_HUGE
 else
 
-# Vim 'big' build
-ifeq ($(BUILD),big)
-CFLAGS += \
-	-DFEAT_BROWSE \
-	-DFEAT_MOUSE \
-	-DFEAT_BIG
-else
-
 # Vim 'normal' build
 ifeq ($(BUILD),normal)
 CFLAGS +=\
@@ -60,15 +52,14 @@ CFLAGS +=\
 	-DFEAT_NORMAL
 else
 
-# Vim 'small' build
+# Vim 'small' build - now an alias for 'tiny'
 ifeq ($(BUILD),small)
-CFLAGS += -DFEAT_SMALL
+CFLAGS += -DFEAT_TINY
 else
 
 # Vim 'tiny' build
 ifeq ($(BUILD),tiny)
 CFLAGS += -DFEAT_TINY
-endif
 endif
 endif
 endif

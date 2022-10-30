@@ -4210,6 +4210,25 @@ def Test_numbered_function_reference()
   unlet g:mydict
 enddef
 
+def Test_numbered_function_call()
+  var lines =<< trim END
+      let s:legacyscript = {}
+      func s:legacyscript.Helper() abort
+        return "Success"
+      endfunc
+      let g:legacyscript = deepcopy(s:legacyscript)
+
+      let g:legacy_result = eval("g:legacyscript.Helper()")
+      vim9cmd g:vim9_result = eval("g:legacyscript.Helper()")
+  END
+  v9.CheckScriptSuccess(lines)
+  assert_equal('Success', g:legacy_result)
+  assert_equal('Success', g:vim9_result)
+
+  unlet g:legacy_result
+  unlet g:vim9_result
+enddef
+
 def Test_go_beyond_end_of_cmd()
   # this was reading the byte after the end of the line
   var lines =<< trim END
@@ -4318,6 +4337,33 @@ def Test_defer()
   assert_equal(['in One', 'in Two', 'end Two', 'two2', 'two1', 'two0', 'end One', 'one'], g:deferred)
   unlet g:deferred
   assert_equal('', glob('XdeferFile'))
+enddef
+
+def Test_invalid_redir()
+  var lines =<< trim END
+      def Tone()
+        if 1
+          redi =>@ 0
+          redi END
+        endif
+      enddef
+      defcompile
+  END
+  v9.CheckScriptFailure(lines, 'E354:')
+  delfunc g:Tone
+
+  # this was reading past the end of the line
+  lines =<< trim END
+      def Ttwo()
+        if 0
+          redi =>@ 0
+          redi END
+        endif
+      enddef
+      defcompile
+  END
+  v9.CheckScriptFailure(lines, 'E354:')
+  delfunc g:Ttwo
 enddef
 
 " The following messes up syntax highlight, keep near the end.

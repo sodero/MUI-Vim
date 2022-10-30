@@ -710,7 +710,8 @@ handle_closure_in_use(ectx_T *ectx, int free_arguments)
 	    return FAIL;
 
 	funcstack->fs_var_offset = argcount + STACK_FRAME_SIZE;
-	funcstack->fs_ga.ga_len = funcstack->fs_var_offset + dfunc->df_varcount;
+	funcstack->fs_ga.ga_len = funcstack->fs_var_offset
+							  + dfunc->df_varcount;
 	stack = ALLOC_CLEAR_MULT(typval_T, funcstack->fs_ga.ga_len);
 	funcstack->fs_ga.ga_data = stack;
 	if (stack == NULL)
@@ -1266,7 +1267,8 @@ call_ufunc(
 
     if (error != FCERR_NONE)
     {
-	user_func_error(error, printable_func_name(ufunc), &funcexe);
+	user_func_error(error, printable_func_name(ufunc),
+							 funcexe.fe_found_var);
 	return FAIL;
     }
     if (did_emsg > did_emsg_before)
@@ -3267,7 +3269,7 @@ exec_instructions(ectx_T *ectx)
 	    case ISN_ECHOCONSOLE:
 	    case ISN_ECHOERR:
 		{
-		    int		count = iptr->isn_arg.number;
+		    int		count;
 		    garray_T	ga;
 		    char_u	buf[NUMBUFLEN];
 		    char_u	*p;
@@ -3275,6 +3277,10 @@ exec_instructions(ectx_T *ectx)
 		    int		failed = FALSE;
 		    int		idx;
 
+		    if (iptr->isn_type == ISN_ECHOWINDOW)
+			count = iptr->isn_arg.echowin.ewin_count;
+		    else
+			count = iptr->isn_arg.number;
 		    ga_init2(&ga, 1, 80);
 		    for (idx = 0; idx < count; ++idx)
 		    {
@@ -3337,7 +3343,8 @@ exec_instructions(ectx_T *ectx)
 #ifdef HAS_MESSAGE_WINDOW
 			    else if (iptr->isn_type == ISN_ECHOWINDOW)
 			    {
-				start_echowindow();
+				start_echowindow(
+					      iptr->isn_arg.echowin.ewin_time);
 				msg_attr(ga.ga_data, echo_attr);
 				end_echowindow();
 			    }
@@ -4243,7 +4250,7 @@ exec_instructions(ectx_T *ectx)
 		    if (jump)
 			ectx->ec_iidx = iptr->isn_arg.whileloop.while_end;
 
-		    // Store the current funccal count, may be used by
+		    // Store the current funcref count, may be used by
 		    // ISN_ENDLOOP later
 		    tv = STACK_TV_VAR(
 				    iptr->isn_arg.whileloop.while_funcref_idx);
@@ -5881,7 +5888,11 @@ call_def_function(
 failed_early:
     // Free all arguments and local variables.
     for (idx = 0; idx < ectx.ec_stack.ga_len; ++idx)
-	clear_tv(STACK_TV(idx));
+    {
+	tv = STACK_TV(idx);
+	if (tv->v_type != VAR_NUMBER && tv->v_type != VAR_UNKNOWN)
+	    clear_tv(tv);
+    }
     ex_nesting_level = orig_nesting_level;
 
     vim_free(ectx.ec_stack.ga_data);
@@ -6088,8 +6099,13 @@ list_instructions(char *pfx, isn_T *instr, int instr_count, ufunc_T *ufunc)
 					  (varnumber_T)(iptr->isn_arg.number));
 		break;
 	    case ISN_ECHOWINDOW:
-		smsg("%s%4d ECHOWINDOW %lld", pfx, current,
-					  (varnumber_T)(iptr->isn_arg.number));
+		if (iptr->isn_arg.echowin.ewin_time > 0)
+		    smsg("%s%4d ECHOWINDOW %d (%ld sec)", pfx, current,
+				      iptr->isn_arg.echowin.ewin_count,
+				      iptr->isn_arg.echowin.ewin_time);
+		else
+		    smsg("%s%4d ECHOWINDOW %d", pfx, current,
+					     iptr->isn_arg.echowin.ewin_count);
 		break;
 	    case ISN_ECHOCONSOLE:
 		smsg("%s%4d ECHOCONSOLE %lld", pfx, current,
@@ -6371,11 +6387,11 @@ list_instructions(char *pfx, isn_T *instr, int instr_count, ufunc_T *ufunc)
 		break;
 	    case ISN_NEWLIST:
 		smsg("%s%4d NEWLIST size %lld", pfx, current,
-					    (varnumber_T)(iptr->isn_arg.number));
+					  (varnumber_T)(iptr->isn_arg.number));
 		break;
 	    case ISN_NEWDICT:
 		smsg("%s%4d NEWDICT size %lld", pfx, current,
-					    (varnumber_T)(iptr->isn_arg.number));
+					  (varnumber_T)(iptr->isn_arg.number));
 		break;
 	    case ISN_NEWPARTIAL:
 		smsg("%s%4d NEWPARTIAL", pfx, current);

@@ -150,7 +150,7 @@ coladvance2(
 
 	    if ((addspaces || finetune) && !VIsual_active)
 	    {
-		curwin->w_curswant = linetabsize(line) + one_more;
+		curwin->w_curswant = linetabsize_str(line) + one_more;
 		if (curwin->w_curswant > 0)
 		    --curwin->w_curswant;
 	    }
@@ -166,7 +166,7 @@ coladvance2(
 		&& wcol >= (colnr_T)width
 		&& width > 0)
 	{
-	    csize = linetabsize(line);
+	    csize = linetabsize_str(line);
 	    if (csize > 0)
 		csize--;
 
@@ -1795,7 +1795,7 @@ call_shell(char_u *cmd, int opt)
     {
 	verbose_enter();
 	smsg(_("Calling shell to execute: \"%s\""), cmd == NULL ? p_sh : cmd);
-	out_char('\n');
+	msg_putchar_attr('\n', 0);
 	cursor_on();
 	verbose_leave();
     }

@@ -457,6 +457,12 @@ typedef struct {
     int		defer_argcount;	    // number of arguments
 } deferins_T;
 
+// arguments to ISN_ECHOWINDOW
+typedef struct {
+    int		ewin_count;	    // number of arguments
+    long	ewin_time;	    // time argument (msec)
+} echowin_T;
+
 /*
  * Instruction
  */
@@ -507,6 +513,7 @@ struct isn_S {
 	getitem_T	    getitem;
 	debug_T		    debug;
 	deferins_T	    defer;
+	echowin_T	    echowin;
     } isn_arg;
 };
 
@@ -697,7 +704,9 @@ typedef struct {
     int		lv_loop_depth;	// depth for variable inside a loop or -1
     int		lv_loop_idx;	// index of first variable inside a loop or -1
     int		lv_from_outer;	// nesting level, using ctx_outer scope
-    int		lv_const;	// when TRUE cannot be assigned to
+    int		lv_const;	// ASSIGN_VAR (can be assigned to),
+				// ASSIGN_FINAL (no assignment) or ASSIGN_CONST
+				// (value cannot be changed)
     int		lv_arg;		// when TRUE this is an argument
 } lvar_T;
 

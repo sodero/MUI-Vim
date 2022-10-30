@@ -1533,6 +1533,8 @@ generate_LISTAPPEND(cctx_T *cctx)
     // For checking the item type we use the declared type of the list and the
     // current type of the added item, adding a string to [1, 2] is OK.
     list_type = get_decl_type_on_stack(cctx, 1);
+    if (arg_type_modifiable(list_type, 1) == FAIL)
+	return FAIL;
     item_type = get_type_on_stack(cctx, 0);
     expected = list_type->tt_member;
     if (need_type(item_type, expected, -1, 0, cctx, FALSE, FALSE) == FAIL)
@@ -1554,7 +1556,9 @@ generate_BLOBAPPEND(cctx_T *cctx)
 {
     type_T	*item_type;
 
-    // Caller already checked that blob_type is a blob.
+    // Caller already checked that blob_type is a blob, check it is modifiable.
+    if (arg_type_modifiable(get_decl_type_on_stack(cctx, 1), 1) == FAIL)
+	return FAIL;
     item_type = get_type_on_stack(cctx, 0);
     if (need_type(item_type, &t_number, -1, 0, cctx, FALSE, FALSE) == FAIL)
 	return FAIL;
@@ -1827,7 +1831,8 @@ generate_STRINGMEMBER(cctx_T *cctx, char_u *name, size_t len)
 
     // check for dict type
     type = get_type_on_stack(cctx, 0);
-    if (type->tt_type != VAR_DICT && type != &t_any && type != &t_unknown)
+    if (type->tt_type != VAR_DICT
+		   && type->tt_type != VAR_ANY && type->tt_type != VAR_UNKNOWN)
     {
 	char *tofree;
 
@@ -1839,7 +1844,7 @@ generate_STRINGMEMBER(cctx_T *cctx, char_u *name, size_t len)
     // change dict type to dict member type
     if (type->tt_type == VAR_DICT)
     {
-	type_T *ntype = type->tt_member == &t_unknown
+	type_T *ntype = type->tt_member->tt_type == VAR_UNKNOWN
 						    ? &t_any : type->tt_member;
 	set_type_on_stack(cctx, ntype, 0);
     }
@@ -1872,10 +1877,25 @@ generate_MULT_EXPR(cctx_T *cctx, isntype_T isn_type, int count)
 {
     isn_T	*isn;
 
+    RETURN_OK_IF_SKIP(cctx);
     if ((isn = generate_instr_drop(cctx, isn_type, count)) == NULL)
 	return FAIL;
     isn->isn_arg.number = count;
+    return OK;
+}
 
+/*
+ * Generate an ISN_ECHOWINDOW instruction
+ */
+    int
+generate_ECHOWINDOW(cctx_T *cctx, int count, long time)
+{
+    isn_T	*isn;
+
+    if ((isn = generate_instr_drop(cctx, ISN_ECHOWINDOW, count)) == NULL)
+	return FAIL;
+    isn->isn_arg.echowin.ewin_count = count;
+    isn->isn_arg.echowin.ewin_time = time;
     return OK;
 }
 
