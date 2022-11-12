@@ -939,9 +939,13 @@ endfunc
 func Test_append()
   enew!
   split
-  call append(0, ["foo"])
-  call append(1, [])
-  call append(1, test_null_list())
+  call assert_equal(0, append(1, []))
+  call assert_equal(0, append(1, test_null_list()))
+  call assert_equal(0, append(0, ["foo"]))
+  call assert_equal(0, append(1, []))
+  call assert_equal(0, append(1, test_null_list()))
+  call assert_equal(0, append(8, []))
+  call assert_equal(0, append(9, test_null_list()))
   call assert_equal(['foo', ''], getline(1, '$'))
   split
   only
@@ -1480,7 +1484,8 @@ func Test_col()
   call assert_equal(0, col([1, 100]))
   call assert_equal(0, col([1]))
   call assert_equal(0, col(test_null_list()))
-  call assert_fails('let c = col({})', 'E731:')
+  call assert_fails('let c = col({})', 'E1222:')
+  call assert_fails('let c = col(".", [])', 'E1210:')
 
   " test for getting the visual start column
   func T()
@@ -1509,6 +1514,15 @@ func Test_col()
   call cursor(1, 10)
   call assert_equal(4, col('.'))
   set virtualedit&
+
+  " Test for getting the column number in another window
+  let winid = win_getid()
+  new
+  call win_execute(winid, 'normal 1G$')
+  call assert_equal(3, col('.', winid))
+  call win_execute(winid, 'normal 2G')
+  call assert_equal(8, col('$', winid))
+  call assert_equal(0, col('.', 5001))
 
   bw!
 endfunc
@@ -2938,6 +2952,25 @@ func Test_builtin_check()
   let g:bar = 123
   call extend(g:, #{bar: { -> "foo" }}, "keep")
   call assert_fails('call extend(g:, #{bar: { -> "foo" }}, "force")', 'E704:')
+  unlet g:bar
+
+  call assert_fails('call extend(l:, #{foo: { -> "foo" }})', 'E704:')
+  let bar = 123
+  call extend(l:, #{bar: { -> "foo" }}, "keep")
+  call assert_fails('call extend(l:, #{bar: { -> "foo" }}, "force")', 'E704:')
+  unlet bar
+
+  call assert_fails('call extend(g:, #{foo: function("extend")})', 'E704:')
+  let g:bar = 123
+  call extend(g:, #{bar: function("extend")}, "keep")
+  call assert_fails('call extend(g:, #{bar: function("extend")}, "force")', 'E704:')
+  unlet g:bar
+
+  call assert_fails('call extend(l:, #{foo: function("extend")})', 'E704:')
+  let bar = 123
+  call extend(l:, #{bar: function("extend")}, "keep")
+  call assert_fails('call extend(l:, #{bar: function("extend")}, "force")', 'E704:')
+  unlet bar
 endfunc
 
 func Test_funcref_to_string()

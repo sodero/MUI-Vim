@@ -158,7 +158,7 @@ static termrequest_T *all_termrequests[] = {
 // received.  To avoid redrawing too often, only redraw when t_8u is not reset
 // and it was supposed to be written.  Unless t_8u was set explicitly.
 // FALSE -> don't output t_8u yet
-// MAYBE -> tried outputing t_8u while FALSE
+// MAYBE -> tried outputting t_8u while FALSE
 // OK    -> can write t_8u
 int write_t_8u_state = FALSE;
 # endif
@@ -3098,7 +3098,7 @@ term_rgb_color(char_u *s, guicolor_T rgb)
     vim_snprintf(buf, MAX_COLOR_STR_LEN,
 				  (char *)s, RED(rgb), GREEN(rgb), BLUE(rgb));
 #ifdef FEAT_VTP
-    if (use_wt())
+    if (has_vtp_working())
     {
 	out_flush();
 	buf[1] = '[';
@@ -3112,7 +3112,8 @@ term_rgb_color(char_u *s, guicolor_T rgb)
     void
 term_fg_rgb_color(guicolor_T rgb)
 {
-    term_rgb_color(T_8F, rgb);
+    if (rgb != INVALCOLOR)
+	term_rgb_color(T_8F, rgb);
 }
 
     void
@@ -5630,8 +5631,8 @@ check_termcode(
 			    // no match for "code;*X" with "code;"
 			    continue;
 			else if (termcodes[idx].code[modslen] == '@'
-							 && tp[modslen] != '1')
-			    // no match for "<Esc>[@" with "<Esc>[1"
+				     && (tp[modslen] != '1' || tp[modslen + 1] != ';'))
+			    // no match for "<Esc>[@" with "<Esc>[1;"
 			    continue;
 			else
 			{

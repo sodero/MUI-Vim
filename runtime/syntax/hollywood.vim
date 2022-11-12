@@ -1,9 +1,8 @@
 " Vim syntax file
 " Language:     Hollywood 9.1
-" Maintainer:   Tom Crecelius <holly@net-eclipse.net>
-" Contributors: Ola Söder <rolfkopman@gmail.com>
+" Maintainer:   Ola Söder <rolfkopman@gmail.com>
 " First Author: Tom Crecelius <holly@net-eclipse.net>
-" Last Change:  2022 October 23
+" Last Change:  2022 Nov 09
 " Highlighting Issues:
 " Depending on your colour schema, Strings or Comments might be highlighted in
 " a way, you don't like. If so, try one of the following settings after
