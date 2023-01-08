@@ -148,6 +148,7 @@ SRC += \
 	json.c \
 	list.c \
 	locale.c \
+	logfile.c \
 	main.c \
 	mark.c \
 	map.c \
@@ -198,6 +199,7 @@ SRC += \
 	userfunc.c \
 	version.c \
 	viminfo.c \
+	vim9class.c \
 	vim9cmds.c \
 	vim9compile.c \
 	vim9execute.c \

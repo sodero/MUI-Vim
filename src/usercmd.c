@@ -31,6 +31,9 @@ typedef struct ucmd
 // List of all user commands.
 static garray_T ucmds = {0, 0, sizeof(ucmd_T), 4, NULL};
 
+// When non-zero it is not allowed to add or remove user commands
+static int ucmd_locked = 0;
+
 #define USER_CMD(i) (&((ucmd_T *)(ucmds.ga_data))[i])
 #define USER_CMD_GA(gap, i) (&((ucmd_T *)((gap)->ga_data))[i])
 
@@ -499,6 +502,9 @@ uc_list(char_u *name, size_t name_len)
     long	a;
     garray_T	*gap;
 
+    // don't allow for adding or removing user commands here
+    ++ucmd_locked;
+
     // In cmdwin, the alternative buffer should be used.
     gap = &prevwin_curwin()->w_buffer->b_ucmds;
     for (;;)
@@ -656,6 +662,8 @@ uc_list(char_u *name, size_t name_len)
 
     if (!found)
 	msg(_("No user-defined commands found"));
+
+    --ucmd_locked;
 }
 
     char *
@@ -1159,7 +1167,7 @@ ex_command(exarg_T *eap)
 	end = skiptowhite(p);
 	if (uc_scan_attr(p, end - p, &argt, &def, &flags, &compl,
 					   &compl_arg, &addr_type_arg) == FAIL)
-	    return;
+	    goto theend;
 	p = skipwhite(end);
     }
 
@@ -1171,7 +1179,7 @@ ex_command(exarg_T *eap)
     if (!ends_excmd2(eap->arg, p) && !VIM_ISWHITE(*p))
     {
 	emsg(_(e_invalid_command_name));
-	return;
+	goto theend;
     }
     end = p;
     name_len = (int)(end - name);
@@ -1180,13 +1188,19 @@ ex_command(exarg_T *eap)
     // we are listing commands
     p = skipwhite(end);
     if (!has_attr && ends_excmd2(eap->arg, p))
+    {
 	uc_list(name, end - name);
+    }
     else if (!ASCII_ISUPPER(*name))
+    {
 	emsg(_(e_user_defined_commands_must_start_with_an_uppercase_letter));
+    }
     else if ((name_len == 1 && *name == 'X')
 	  || (name_len <= 4
 		  && STRNCMP(name, "Next", name_len > 4 ? 4 : name_len) == 0))
+    {
 	emsg(_(e_reserved_name_cannot_be_used_for_user_defined_command));
+    }
     else if (compl > 0 && (argt & EX_EXTRA) == 0)
     {
 	// Some plugins rely on silently ignoring the mistake, only make this
@@ -1207,7 +1221,12 @@ ex_command(exarg_T *eap)
 	uc_add_command(name, end - name, p, argt, def, flags, compl, compl_arg,
 						  addr_type_arg, eap->forceit);
 	vim_free(tofree);
+
+	return;  // success
     }
+
+theend:
+    vim_free(compl_arg);
 }
 
 /*
@@ -1223,6 +1242,21 @@ ex_comclear(exarg_T *eap UNUSED)
 }
 
 /*
+ * If ucmd_locked is set give an error and return TRUE.
+ * Otherwise return FALSE.
+ */
+    static int
+is_ucmd_locked(void)
+{
+    if (ucmd_locked > 0)
+    {
+	emsg(_(e_cannot_change_user_commands_while_listing));
+	return TRUE;
+    }
+    return FALSE;
+}
+
+/*
  * Clear all user commands for "gap".
  */
     void
@@ -1230,6 +1264,9 @@ uc_clear(garray_T *gap)
 {
     int		i;
     ucmd_T	*cmd;
+
+    if (is_ucmd_locked())
+	return;
 
     for (i = 0; i < gap->ga_len; ++i)
     {
@@ -1284,6 +1321,9 @@ ex_delcommand(exarg_T *eap)
 		    : e_no_such_user_defined_command_str), arg);
 	return;
     }
+
+    if (is_ucmd_locked())
+	return;
 
     vim_free(cmd->uc_name);
     vim_free(cmd->uc_rep);

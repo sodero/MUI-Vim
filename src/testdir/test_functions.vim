@@ -1622,6 +1622,19 @@ func Test_inputlist()
   call assert_fails('call inputlist(test_null_list())', 'E686:')
 endfunc
 
+func Test_range_inputlist()
+  " flush out any garbage left in the buffer
+  while getchar(0)
+  endwhile
+
+  call feedkeys(":let result = inputlist(range(10))\<CR>1\<CR>", 'x')
+  call assert_equal(1, result)
+  call feedkeys(":let result = inputlist(range(3, 10))\<CR>1\<CR>", 'x')
+  call assert_equal(1, result)
+
+  unlet result
+endfunc
+
 func Test_balloon_show()
   CheckFeature balloon_eval
 
@@ -2550,12 +2563,6 @@ func Test_range()
   call assert_equal(1, index(range(1, 5), 2))
   call assert_fails("echo index([1, 2], 1, [])", 'E745:')
 
-  " inputlist()
-  call feedkeys(":let result = inputlist(range(10))\<CR>1\<CR>", 'x')
-  call assert_equal(1, result)
-  call feedkeys(":let result = inputlist(range(3, 10))\<CR>1\<CR>", 'x')
-  call assert_equal(1, result)
-
   " insert()
   call assert_equal([42, 1, 2, 3, 4, 5], insert(range(1, 5), 42))
   call assert_equal([42, 1, 2, 3, 4, 5], insert(range(1, 5), 42, 0))
@@ -2890,6 +2897,12 @@ func Test_getmousepos()
   bwipe!
 endfunc
 
+func Test_getmouseshape()
+  CheckFeature mouseshape
+
+  call assert_equal('arrow', getmouseshape())
+endfunc
+
 " Test for glob()
 func Test_glob()
   call assert_equal('', glob(test_null_string()))
@@ -3025,5 +3038,32 @@ func Test_virtcol()
   call assert_equal([4, 8], virtcol('.', v:true))
   bwipe!
 endfunc
+
+func Test_delfunc_while_listing()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+      set nocompatible
+      for i in range(1, 999)
+        exe 'func ' .. 'MyFunc' .. i .. '()'
+        endfunc
+      endfor
+      au CmdlineLeave : call timer_start(0, {-> execute('delfunc MyFunc622')})
+  END
+  call writefile(lines, 'Xfunctionclear', 'D')
+  let buf = RunVimInTerminal('-S Xfunctionclear', {'rows': 12})
+
+  " This was using freed memory.  The height of the terminal must be so that
+  " the next function to be listed with "j" is the one that is deleted in the
+  " timer callback, tricky!
+  call term_sendkeys(buf, ":func /MyFunc\<CR>")
+  call TermWait(buf, 50)
+  call term_sendkeys(buf, "j")
+  call TermWait(buf, 50)
+  call term_sendkeys(buf, "\<CR>")
+
+  call StopVimInTerminal(buf)
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab
