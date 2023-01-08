@@ -67,8 +67,8 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2022-NOT-YET@{UB}
-- Update to VIM 9.0.UNKNOWN.
+@{B}2023-01-08@{UB}
+- Update to VIM 9.0.1158.
 - Hollywood syntax highlightning updated (9.1).
 
 @{B}2022-09-25@{UB}
