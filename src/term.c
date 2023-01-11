@@ -1332,7 +1332,6 @@ static tcap_entry_T builtin_debug[] = {
  * MorphOS
  */
 static tcap_entry_T builtin_morphos[] = {
-    {(int)KS_NAME,	"morphos"},
     {(int)KS_CE,	"\033[K"},
     {(int)KS_CD,	"\033[J"},
     {(int)KS_AL,	"\033[L"},
