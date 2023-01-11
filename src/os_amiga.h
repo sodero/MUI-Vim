@@ -35,6 +35,7 @@
 # endif
 # define HAVE_STDARG_H
 # define HAVE_STDINT_H
+# define HAVE_MATH_H
 # define HAVE_TGETENT
 # define HAVE_TERMCAP
 # define OSPEED_EXTERN
