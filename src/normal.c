@@ -3738,7 +3738,8 @@ nv_scroll(cmdarg_T *cap)
 		{
 		    (void)hasFolding(curwin->w_cursor.lnum,
 						&curwin->w_cursor.lnum, NULL);
-		    --curwin->w_cursor.lnum;
+		    if (curwin->w_cursor.lnum > curwin->w_topline)
+			--curwin->w_cursor.lnum;
 		}
 	    }
 	    else
@@ -5481,7 +5482,9 @@ nv_visual(cmdarg_T *cap)
 		if (resel_VIsual_line_count <= 1)
 		{
 		    update_curswant_force();
-		    curwin->w_curswant += resel_VIsual_vcol * cap->count0 - 1;
+		    curwin->w_curswant += resel_VIsual_vcol * cap->count0;
+		    if (*p_sel != 'e')
+			--curwin->w_curswant;
 		}
 		else
 		    curwin->w_curswant = resel_VIsual_vcol;

@@ -3426,4 +3426,20 @@ EXTERN char e_duplicate_implements[]
 	INIT(= N_("E1350: Duplicate \"implements\""));
 EXTERN char e_duplicate_interface_after_implements_str[]
 	INIT(= N_("E1351: Duplicate interface after \"implements\": %s"));
+EXTERN char e_duplicate_extends[]
+	INIT(= N_("E1352: Duplicate \"extends\""));
+EXTERN char e_class_name_not_found_str[]
+	INIT(= N_("E1353: Class name not found: %s"));
+EXTERN char e_cannot_extend_str[]
+	INIT(= N_("E1354: Cannot extend %s"));
+EXTERN char e_duplicate_function_str[]
+	INIT(= N_("E1355: Duplicate function: %s"));
+EXTERN char e_super_must_be_followed_by_dot[]
+	INIT(= N_("E1356: \"super\" must be followed by a dot"));
+EXTERN char e_using_super_not_in_class_function[]
+	INIT(= N_("E1357: Using \"super\" not in a class function"));
+EXTERN char e_using_super_not_in_child_class[]
+	INIT(= N_("E1358: Using \"super\" not in a child class"));
+EXTERN char e_cannot_define_new_function_in_abstract_class[]
+	INIT(= N_("E1359: Cannot define a \"new\" function in an abstract class"));
 #endif
