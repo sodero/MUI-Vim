@@ -644,26 +644,6 @@ mch_input_isatty(void)
 }
 
 /*
- * mch_deduplicate_root(): Remove root slash from amiga root since this
- *                         is redundant at best. It will cause problems
- *                         when used in combination with non root assigns.
- */
-void mch_deduplicate_root(char_u *fname)
-{
-    int i = 1, j = STRLEN(fname) - 1;
-
-    for(i = 1; i < j - 1; ++i)
-    {
-        if (fname[i] == ':' && fname[i + 1] == '/')
-        {
-            while(++i < j) fname[i] = fname[i + 1];
-            fname[i] = 0;
-            break;
-        }
-    }
-}
-
-/*
  * Get the FileInfoBlock for file "fname"
  * The returned structure has to be free()d.
  * Returns NULL on error.
@@ -679,9 +659,6 @@ get_fib(char_u *fname)
 	FreeDosObject(DOS_FIB, fib);
 	return NULL;
     }
-
-    // Do we really need this?
-    mch_deduplicate_root(fname);
 
     BPTR lock = Lock(fname, ACCESS_READ);
 
