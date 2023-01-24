@@ -113,26 +113,12 @@ static char version[] __attribute__((used)) =
     void
 win_resize_on(void)
 {
-#ifdef FEAT_GUI
-    if (gui.in_use || gui.starting)
-    {
-        // Stay quiet
-        return;
-    }
-#endif
     OUT_STR_NF("\033[12{");
 }
 
     void
 win_resize_off(void)
 {
-#ifdef FEAT_GUI
-    if (gui.in_use || gui.starting)
-    {
-        // Stay quiet
-        return;
-    }
-#endif
     OUT_STR_NF("\033[12}");
 }
 
@@ -1852,8 +1838,26 @@ mch_has_wildcard(char_u *p)
     int
 mch_is_console(char_u *name)
 {
-    return STRCMP(name, "amiga") == 0 ||
-	   STRCMP(name, "morphos") == 0;
+#ifdef FEAT_GUI
+    if(gui.in_use || gui.starting)
+    {
+	return FALSE;
+    }
+#endif
+
+    if(STRCMP(name, "amiga") == 0)
+    {
+	return TRUE;
+    }
+
+#ifdef __MORPHOS__
+    if(STRCMP(name, "morphos") == 0)
+    {
+	return TRUE;
+    }
+#endif
+
+    return FALSE;
 }
 
 /*
