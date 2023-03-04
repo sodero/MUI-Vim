@@ -232,7 +232,8 @@ static guicolor_T store_console_bg_rgb;
 static guicolor_T store_console_fg_rgb;
 static int default_console_color_bg = 0x000000; // black
 static int default_console_color_fg = 0xc0c0c0; // white
-#  define USE_VTP		(vtp_working && is_term_win32())
+#  define USE_VTP		(vtp_working && is_term_win32() \
+						 && (p_tgc || t_colors >= 256))
 #  define USE_WT		(wt_working)
 # else
 #  define USE_VTP		0
@@ -253,7 +254,7 @@ static void restore_console_color_rgb(void);
 static int suppress_winsize = 1;	// don't fiddle with console
 #endif
 
-static char_u *exe_path = NULL;
+static WCHAR *exe_pathw = NULL;
 
 static BOOL win8_or_later = FALSE;
 static BOOL win10_22H2_or_later = FALSE;
@@ -278,15 +279,15 @@ get_build_number(void)
 
     osver.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
     hNtdll = GetModuleHandle("ntdll.dll");
-    if (hNtdll != NULL)
-    {
-	pRtlGetVersion =
-	    (PfnRtlGetVersion)GetProcAddress(hNtdll, "RtlGetVersion");
-	pRtlGetVersion(&osver);
-	ver = MAKE_VER(min(osver.dwMajorVersion, 255),
-		       min(osver.dwMinorVersion, 255),
-		       min(osver.dwBuildNumber, 32767));
-    }
+    if (hNtdll == NULL)
+	return ver;
+
+    pRtlGetVersion =
+	(PfnRtlGetVersion)GetProcAddress(hNtdll, "RtlGetVersion");
+    pRtlGetVersion(&osver);
+    ver = MAKE_VER(min(osver.dwMajorVersion, 255),
+	    min(osver.dwMinorVersion, 255),
+	    min(osver.dwBuildNumber, 32767));
     return ver;
 }
 
@@ -461,47 +462,66 @@ wait_for_single_object(
 # endif
 #endif   // !FEAT_GUI_MSWIN || VIMDLL
 
-    static void
-get_exe_name(void)
+    void
+mch_get_exe_name(void)
 {
     // Maximum length of $PATH is more than MAXPATHL.  8191 is often mentioned
     // as the maximum length that works (plus a NUL byte).
 #define MAX_ENV_PATH_LEN 8192
     char	temp[MAX_ENV_PATH_LEN];
     char_u	*p;
+    WCHAR	buf[MAX_PATH];
+    int		updated = FALSE;
+    static int	enc_prev = -1;
 
-    if (exe_name == NULL)
+    if (exe_name == NULL || exe_pathw == NULL || enc_prev != enc_codepage)
     {
 	// store the name of the executable, may be used for $VIM
-	GetModuleFileName(NULL, temp, MAX_ENV_PATH_LEN - 1);
-	if (*temp != NUL)
-	    exe_name = FullName_save((char_u *)temp, FALSE);
-    }
-
-    if (exe_path == NULL && exe_name != NULL)
-    {
-	exe_path = vim_strnsave(exe_name, gettail_sep(exe_name) - exe_name);
-	if (exe_path != NULL)
+	GetModuleFileNameW(NULL, buf, MAX_PATH);
+	if (*buf != NUL)
 	{
-	    // Append our starting directory to $PATH, so that when doing
-	    // "!xxd" it's found in our starting directory.  Needed because
-	    // SearchPath() also looks there.
-	    p = mch_getenv("PATH");
-	    if (p == NULL
-		       || STRLEN(p) + STRLEN(exe_path) + 2 < MAX_ENV_PATH_LEN)
-	    {
-		if (p == NULL || *p == NUL)
-		    temp[0] = NUL;
-		else
-		{
-		    STRCPY(temp, p);
-		    STRCAT(temp, ";");
-		}
-		STRCAT(temp, exe_path);
-		vim_setenv((char_u *)"PATH", (char_u *)temp);
-	    }
+	    if (enc_codepage == -1)
+		enc_codepage = GetACP();
+	    if (exe_name != NULL)
+		vim_free(exe_name);
+	    exe_name = utf16_to_enc(buf, NULL);
+	    enc_prev = enc_codepage;
+
+	    WCHAR *wp = wcsrchr(buf, '\\');
+	    if (wp != NULL)
+		*wp = NUL;
+	    if (exe_pathw != NULL)
+		vim_free(exe_pathw);
+	    exe_pathw = _wcsdup(buf);
+	    updated = TRUE;
 	}
     }
+
+    if (exe_pathw == NULL || !updated)
+	return;
+
+    char_u  *exe_path = utf16_to_enc(exe_pathw, NULL);
+    if (exe_path == NULL)
+	return;
+
+    // Append our starting directory to $PATH, so that when doing
+    // "!xxd" it's found in our starting directory.  Needed because
+    // SearchPath() also looks there.
+    p = mch_getenv("PATH");
+    if (p == NULL
+	    || STRLEN(p) + STRLEN(exe_path) + 2 < MAX_ENV_PATH_LEN)
+    {
+	if (p == NULL || *p == NUL)
+	    temp[0] = NUL;
+	else
+	{
+	    STRCPY(temp, p);
+	    STRCAT(temp, ";");
+	}
+	STRCAT(temp, exe_path);
+	vim_setenv((char_u *)"PATH", (char_u *)temp);
+    }
+    vim_free(exe_path);
 }
 
 /*
@@ -533,27 +553,27 @@ vimLoadLib(const char *name)
 
     // No need to load any library when registering OLE.
     if (found_register_arg)
-	return dll;
+	return NULL;
 
     // NOTE: Do not use mch_dirname() and mch_chdir() here, they may call
     // vimLoadLib() recursively, which causes a stack overflow.
-    if (exe_path == NULL)
-	get_exe_name();
-    if (exe_path != NULL)
-    {
-	WCHAR old_dirw[MAXPATHL];
+    if (exe_pathw == NULL)
+	mch_get_exe_name();
 
-	if (GetCurrentDirectoryW(MAXPATHL, old_dirw) != 0)
-	{
-	    // Change directory to where the executable is, both to make
-	    // sure we find a .dll there and to avoid looking for a .dll
-	    // in the current directory.
-	    SetCurrentDirectory((LPCSTR)exe_path);
-	    dll = LoadLibrary(name);
-	    SetCurrentDirectoryW(old_dirw);
-	    return dll;
-	}
-    }
+    if (exe_pathw == NULL)
+	return NULL;
+
+    WCHAR old_dirw[MAXPATHL];
+
+    if (GetCurrentDirectoryW(MAXPATHL, old_dirw) == 0)
+	return NULL;
+
+    // Change directory to where the executable is, both to make
+    // sure we find a .dll there and to avoid looking for a .dll
+    // in the current directory.
+    SetCurrentDirectoryW(exe_pathw);
+    dll = LoadLibrary(name);
+    SetCurrentDirectoryW(old_dirw);
     return dll;
 }
 
@@ -907,31 +927,31 @@ PlatformId(void)
 {
     static int done = FALSE;
 
-    if (!done)
-    {
-	OSVERSIONINFO ovi;
+    if (done)
+	return;
 
-	ovi.dwOSVersionInfoSize = sizeof(ovi);
-	GetVersionEx(&ovi);
+    OSVERSIONINFO ovi;
+
+    ovi.dwOSVersionInfoSize = sizeof(ovi);
+    GetVersionEx(&ovi);
 
 #ifdef FEAT_EVAL
-	vim_snprintf(windowsVersion, sizeof(windowsVersion), "%d.%d",
-		(int)ovi.dwMajorVersion, (int)ovi.dwMinorVersion);
+    vim_snprintf(windowsVersion, sizeof(windowsVersion), "%d.%d",
+	    (int)ovi.dwMajorVersion, (int)ovi.dwMinorVersion);
 #endif
-	if ((ovi.dwMajorVersion == 6 && ovi.dwMinorVersion >= 2)
-		|| ovi.dwMajorVersion > 6)
-	    win8_or_later = TRUE;
+    if ((ovi.dwMajorVersion == 6 && ovi.dwMinorVersion >= 2)
+	    || ovi.dwMajorVersion > 6)
+	win8_or_later = TRUE;
 
-	if ((ovi.dwMajorVersion == 10 && ovi.dwBuildNumber >= 19045)
-		|| ovi.dwMajorVersion > 10)
-	    win10_22H2_or_later = TRUE;
+    if ((ovi.dwMajorVersion == 10 && ovi.dwBuildNumber >= 19045)
+	    || ovi.dwMajorVersion > 10)
+	win10_22H2_or_later = TRUE;
 
 #ifdef HAVE_ACL
-	// Enable privilege for getting or setting SACLs.
-	win32_enable_privilege(SE_SECURITY_NAME, TRUE);
+    // Enable privilege for getting or setting SACLs.
+    win32_enable_privilege(SE_SECURITY_NAME, TRUE);
 #endif
-	done = TRUE;
-    }
+    done = TRUE;
 }
 #ifdef _MSC_VER
 # pragma warning(pop)
@@ -3051,40 +3071,38 @@ FitConsoleWindow(
     COORD dwWindowSize;
     BOOL NeedAdjust = FALSE;
 
-    if (GetConsoleScreenBufferInfo(g_hConOut, &csbi))
-    {
-	/*
-	 * A buffer resize will fail if the current console window does
-	 * not lie completely within that buffer.  To avoid this, we might
-	 * have to move and possibly shrink the window.
-	 */
-	if (csbi.srWindow.Right >= dwBufferSize.X)
-	{
-	    dwWindowSize.X = SRWIDTH(csbi.srWindow);
-	    if (dwWindowSize.X > dwBufferSize.X)
-		dwWindowSize.X = dwBufferSize.X;
-	    csbi.srWindow.Right = dwBufferSize.X - 1;
-	    csbi.srWindow.Left = dwBufferSize.X - dwWindowSize.X;
-	    NeedAdjust = TRUE;
-	}
-	if (csbi.srWindow.Bottom >= dwBufferSize.Y)
-	{
-	    dwWindowSize.Y = SRHEIGHT(csbi.srWindow);
-	    if (dwWindowSize.Y > dwBufferSize.Y)
-		dwWindowSize.Y = dwBufferSize.Y;
-	    csbi.srWindow.Bottom = dwBufferSize.Y - 1;
-	    csbi.srWindow.Top = dwBufferSize.Y - dwWindowSize.Y;
-	    NeedAdjust = TRUE;
-	}
-	if (NeedAdjust && WantAdjust)
-	{
-	    if (!SetConsoleWindowInfo(g_hConOut, TRUE, &csbi.srWindow))
-		return FALSE;
-	}
-	return TRUE;
-    }
+    if (!GetConsoleScreenBufferInfo(g_hConOut, &csbi))
+	return FALSE;
 
-    return FALSE;
+    /*
+     * A buffer resize will fail if the current console window does
+     * not lie completely within that buffer.  To avoid this, we might
+     * have to move and possibly shrink the window.
+     */
+    if (csbi.srWindow.Right >= dwBufferSize.X)
+    {
+	dwWindowSize.X = SRWIDTH(csbi.srWindow);
+	if (dwWindowSize.X > dwBufferSize.X)
+	    dwWindowSize.X = dwBufferSize.X;
+	csbi.srWindow.Right = dwBufferSize.X - 1;
+	csbi.srWindow.Left = dwBufferSize.X - dwWindowSize.X;
+	NeedAdjust = TRUE;
+    }
+    if (csbi.srWindow.Bottom >= dwBufferSize.Y)
+    {
+	dwWindowSize.Y = SRHEIGHT(csbi.srWindow);
+	if (dwWindowSize.Y > dwBufferSize.Y)
+	    dwWindowSize.Y = dwBufferSize.Y;
+	csbi.srWindow.Bottom = dwBufferSize.Y - 1;
+	csbi.srWindow.Top = dwBufferSize.Y - dwWindowSize.Y;
+	NeedAdjust = TRUE;
+    }
+    if (NeedAdjust && WantAdjust)
+    {
+	if (!SetConsoleWindowInfo(g_hConOut, TRUE, &csbi.srWindow))
+	    return FALSE;
+    }
+    return TRUE;
 }
 
 typedef struct ConsoleBufferStruct
@@ -3428,7 +3446,6 @@ mch_init_c(void)
 
     wt_init();
     vtp_flag_init();
-    vtp_init();
 # ifdef FEAT_RESTORE_ORIG_SCREEN
     // Save the initial console buffer for later restoration
     SaveConsoleBuffer(&g_cbOrig);
@@ -3464,6 +3481,11 @@ mch_init_c(void)
 	SetConsoleIcon(g_hWnd, g_hVimIcon, g_hVimIcon);
 
     ui_get_shellsize();
+
+    vtp_init();
+    // Switch to a new alternate screen buffer.
+    if (use_alternate_screen_buffer)
+	vtp_printf("\033[?1049h");
 
 # ifdef MCH_WRITE_DUMP
     fdDump = fopen("dump", "wt");
@@ -3583,7 +3605,7 @@ mch_check_win(
     int argc UNUSED,
     char **argv UNUSED)
 {
-    get_exe_name();
+    mch_get_exe_name();
 
 #if defined(FEAT_GUI_MSWIN) && !defined(VIMDLL)
     return OK;	    // GUI always has a tty
@@ -3674,17 +3696,15 @@ mch_get_host_name(
     WCHAR wszHostName[256 + 1];
     DWORD wcch = ARRAY_LENGTH(wszHostName);
 
-    if (GetComputerNameW(wszHostName, &wcch))
-    {
-	char_u  *p = utf16_to_enc(wszHostName, NULL);
+    if (!GetComputerNameW(wszHostName, &wcch))
+	return;
 
-	if (p != NULL)
-	{
-	    vim_strncpy(s, p, len - 1);
-	    vim_free(p);
-	    return;
-	}
-    }
+    char_u  *p = utf16_to_enc(wszHostName, NULL);
+    if (p == NULL)
+	return;
+
+    vim_strncpy(s, p, len - 1);
+    vim_free(p);
 }
 
 
@@ -3732,32 +3752,31 @@ mch_dirname(
      * But the Win32s known bug list says that getcwd() doesn't work
      * so use the Win32 system call instead. <Negri>
      */
-    if (GetCurrentDirectoryW(_MAX_PATH, wbuf) != 0)
+    if (GetCurrentDirectoryW(_MAX_PATH, wbuf) == 0)
+	return FAIL;
+
+    WCHAR   wcbuf[_MAX_PATH + 1];
+    char_u  *p = NULL;
+
+    if (GetLongPathNameW(wbuf, wcbuf, _MAX_PATH) != 0)
     {
-	WCHAR   wcbuf[_MAX_PATH + 1];
-	char_u  *p = NULL;
-
-	if (GetLongPathNameW(wbuf, wcbuf, _MAX_PATH) != 0)
+	p = utf16_to_enc(wcbuf, NULL);
+	if (STRLEN(p) >= (size_t)len)
 	{
-	    p = utf16_to_enc(wcbuf, NULL);
-	    if (STRLEN(p) >= (size_t)len)
-	    {
-		// long path name is too long, fall back to short one
-		vim_free(p);
-		p = NULL;
-	    }
-	}
-	if (p == NULL)
-	    p = utf16_to_enc(wbuf, NULL);
-
-	if (p != NULL)
-	{
-	    vim_strncpy(buf, p, len - 1);
+	    // long path name is too long, fall back to short one
 	    vim_free(p);
-	    return OK;
+	    p = NULL;
 	}
     }
-    return FAIL;
+    if (p == NULL)
+	p = utf16_to_enc(wbuf, NULL);
+
+    if (p == NULL)
+	return FAIL;
+
+    vim_strncpy(buf, p, len - 1);
+    vim_free(p);
+    return OK;
 }
 
 /*
@@ -3974,14 +3993,14 @@ win32_fileinfo(char_u *fname, BY_HANDLE_FILE_INFORMATION *info)
 	    NULL);		// handle to template file
     vim_free(wn);
 
-    if (hFile != INVALID_HANDLE_VALUE)
-    {
-	if (GetFileInformationByHandle(hFile, info) != 0)
-	    res = FILEINFO_OK;
-	else
-	    res = FILEINFO_INFO_FAIL;
-	CloseHandle(hFile);
-    }
+    if (hFile == INVALID_HANDLE_VALUE)
+	return FILEINFO_READ_FAIL;
+
+    if (GetFileInformationByHandle(hFile, info) != 0)
+	res = FILEINFO_OK;
+    else
+	res = FILEINFO_INFO_FAIL;
+    CloseHandle(hFile);
 
     return res;
 }
@@ -4441,6 +4460,9 @@ ResizeConBuf(
     HANDLE  hConsole,
     COORD   coordScreen)
 {
+    if (use_alternate_screen_buffer)
+	return;
+
     if (!SetConsoleScreenBufferSize(hConsole, coordScreen))
     {
 # ifdef MCH_WRITE_DUMP
@@ -5729,7 +5751,7 @@ win32_build_env(dict_T *env, garray_T *gap, int is_terminal)
 		    size_t	lkey = wcslen(wkey);
 		    size_t	lval = wcslen(wval);
 
-		    if (ga_grow(gap, (int)(lkey + lval + 2)) != OK)
+		    if (ga_grow(gap, (int)(lkey + lval + 2)) == FAIL)
 			continue;
 		    for (n = 0; n < lkey; n++)
 			*((WCHAR*)gap->ga_data + gap->ga_len++) = wkey[n];
@@ -6170,12 +6192,12 @@ mch_signal_job(job_T *job, char_u *how)
     void
 mch_clear_job(job_T *job)
 {
-    if (job->jv_status != JOB_FAILED)
-    {
-	if (job->jv_job_object != NULL)
-	    CloseHandle(job->jv_job_object);
-	CloseHandle(job->jv_proc_info.hProcess);
-    }
+    if (job->jv_status == JOB_FAILED)
+	return;
+
+    if (job->jv_job_object != NULL)
+	CloseHandle(job->jv_job_object);
+    CloseHandle(job->jv_proc_info.hProcess);
 }
 #endif
 
@@ -6192,12 +6214,6 @@ termcap_mode_start(void)
 
     if (g_fTermcapMode)
 	return;
-
-    // VTP uses alternate screen buffer.
-    // Switch to a new alternate screen buffer.
-    // But, not if running in a nested terminal
-    if (use_alternate_screen_buffer)
-	vtp_printf("\033[?1049h");
 
     SaveConsoleBuffer(&g_cbNonTermcap);
 
@@ -6277,7 +6293,6 @@ termcap_mode_end(void)
     RestoreConsoleBuffer(cb, p_rs);
     restore_console_color_rgb();
 
-    // VTP uses alternate screen buffer.
     // Switch back to main screen buffer.
     if (exiting && use_alternate_screen_buffer)
 	vtp_printf("\033[?1049l");
@@ -6289,9 +6304,8 @@ termcap_mode_end(void)
 	 */
 	coord.X = 0;
 	coord.Y = (SHORT) (p_rs ? cb->Info.dwCursorPosition.Y : (Rows - 1));
-	if (!vtp_working)
-	    FillConsoleOutputCharacter(g_hConOut, ' ',
-		    cb->Info.dwSize.X, coord, &dwDummy);
+	FillConsoleOutputCharacter(g_hConOut, ' ',
+		cb->Info.dwSize.X, coord, &dwDummy);
 	/*
 	 * The following is just for aesthetics.  If we are exiting without
 	 * restoring the screen, then we want to have a prompt string
@@ -6501,11 +6515,7 @@ insert_lines(unsigned cLines)
     clip.Bottom = g_srScrollRegion.Bottom;
 
     fill.Char.AsciiChar = ' ';
-    if (!(vtp_working
-# ifdef FEAT_TERMGUICOLORS
-		&& (p_tgc || t_colors >= 256)
-# endif
-	 ))
+    if (!USE_VTP)
 	fill.Attributes = g_attrCurrent;
     else
 	fill.Attributes = g_attrDefault;
@@ -6629,11 +6639,7 @@ gotoxy(
     if (x < 1 || x > (unsigned)Columns || y < 1 || y > (unsigned)Rows)
 	return;
 
-    if (!(vtp_working
-# ifdef FEAT_TERMGUICOLORS
-		&& (p_tgc || t_colors >= 256)
-# endif
-	 ))
+    if (!USE_VTP)
     {
 	// There are reports of double-width characters not displayed
 	// correctly.  This workaround should fix it, similar to how it's done
@@ -6780,20 +6786,30 @@ visual_bell(void)
     WORD    attrFlash = ~g_attrCurrent & 0xff;
 
     DWORD   dwDummy;
-    LPWORD  oldattrs = ALLOC_MULT(WORD, Rows * Columns);
+    LPWORD  oldattrs = NULL;
 
-    if (oldattrs == NULL)
-	return;
-    ReadConsoleOutputAttribute(g_hConOut, oldattrs, Rows * Columns,
+# ifdef FEAT_TERMGUICOLORS
+    if (!(p_tgc || t_colors >= 256))
+# endif
+    {
+	oldattrs = ALLOC_MULT(WORD, Rows * Columns);
+	if (oldattrs == NULL)
+	    return;
+	ReadConsoleOutputAttribute(g_hConOut, oldattrs, Rows * Columns,
 			       coordOrigin, &dwDummy);
+    }
+
     FillConsoleOutputAttribute(g_hConOut, attrFlash, Rows * Columns,
 			       coordOrigin, &dwDummy);
 
     Sleep(15);	    // wait for 15 msec
-    if (!vtp_working)
+
+    if (oldattrs != NULL)
+    {
 	WriteConsoleOutputAttribute(g_hConOut, oldattrs, Rows * Columns,
 				coordOrigin, &dwDummy);
-    vim_free(oldattrs);
+	vim_free(oldattrs);
+    }
 }
 
 
@@ -6877,11 +6893,7 @@ write_chars(
 	}
     }
 
-    if (!(vtp_working
-# ifdef FEAT_TERMGUICOLORS
-	    && (p_tgc || t_colors >= 256)
-# endif
-	))
+    if (!USE_VTP)
     {
 	FillConsoleOutputAttribute(g_hConOut, g_attrCurrent, cells,
 				    coord, &written);
@@ -6921,11 +6933,7 @@ write_chars(
     }
 
     // Cursor under VTP is always in the correct position, no need to reset.
-    if (!(vtp_working
-# ifdef FEAT_TERMGUICOLORS
-		&& (p_tgc || t_colors >= 256)
-# endif
-	 ))
+    if (!USE_VTP)
 	gotoxy(g_coord.X + 1, g_coord.Y + 1);
 
     return written;
@@ -7221,11 +7229,7 @@ notsgr:
 			normvideo();
 		    else if (argc == 1)
 		    {
-			if (vtp_working
-# ifdef FEAT_TERMGUICOLORS
-				&& (p_tgc || t_colors >= 256)
-# endif
-			   )
+			if (USE_VTP)
 			    textcolor((WORD)arg1);
 			else
 			    textattr((WORD)arg1);
@@ -7988,32 +7992,32 @@ load_ntdll(void)
 {
     static int	loaded = -1;
 
-    if (loaded == -1)
+    if (loaded != -1)
+	return (BOOL) loaded;
+
+    HMODULE hNtdll = GetModuleHandle("ntdll.dll");
+    if (hNtdll != NULL)
     {
-	HMODULE hNtdll = GetModuleHandle("ntdll.dll");
-	if (hNtdll != NULL)
-	{
-	    pNtOpenFile = (PfnNtOpenFile) GetProcAddress(hNtdll, "NtOpenFile");
-	    pNtClose = (PfnNtClose) GetProcAddress(hNtdll, "NtClose");
-	    pNtSetEaFile = (PfnNtSetEaFile)
-		GetProcAddress(hNtdll, "NtSetEaFile");
-	    pNtQueryEaFile = (PfnNtQueryEaFile)
-		GetProcAddress(hNtdll, "NtQueryEaFile");
-	    pNtQueryInformationFile = (PfnNtQueryInformationFile)
-		GetProcAddress(hNtdll, "NtQueryInformationFile");
-	    pRtlInitUnicodeString = (PfnRtlInitUnicodeString)
-		GetProcAddress(hNtdll, "RtlInitUnicodeString");
-	}
-	if (pNtOpenFile == NULL
-		|| pNtClose == NULL
-		|| pNtSetEaFile == NULL
-		|| pNtQueryEaFile == NULL
-		|| pNtQueryInformationFile == NULL
-		|| pRtlInitUnicodeString == NULL)
-	    loaded = FALSE;
-	else
-	    loaded = TRUE;
+	pNtOpenFile = (PfnNtOpenFile) GetProcAddress(hNtdll, "NtOpenFile");
+	pNtClose = (PfnNtClose) GetProcAddress(hNtdll, "NtClose");
+	pNtSetEaFile = (PfnNtSetEaFile)
+	    GetProcAddress(hNtdll, "NtSetEaFile");
+	pNtQueryEaFile = (PfnNtQueryEaFile)
+	    GetProcAddress(hNtdll, "NtQueryEaFile");
+	pNtQueryInformationFile = (PfnNtQueryInformationFile)
+	    GetProcAddress(hNtdll, "NtQueryInformationFile");
+	pRtlInitUnicodeString = (PfnRtlInitUnicodeString)
+	    GetProcAddress(hNtdll, "RtlInitUnicodeString");
     }
+    if (pNtOpenFile == NULL
+	    || pNtClose == NULL
+	    || pNtSetEaFile == NULL
+	    || pNtQueryEaFile == NULL
+	    || pNtQueryInformationFile == NULL
+	    || pRtlInitUnicodeString == NULL)
+	loaded = FALSE;
+    else
+	loaded = TRUE;
     return (BOOL) loaded;
 }
 
@@ -8190,11 +8194,11 @@ get_cmd_argsW(char ***argvp)
     void
 free_cmd_argsW(void)
 {
-    if (ArglistW != NULL)
-    {
-	GlobalFree(ArglistW);
-	ArglistW = NULL;
-    }
+    if (ArglistW == NULL)
+	return;
+
+    GlobalFree(ArglistW);
+    ArglistW = NULL;
 }
 
 /*
@@ -8434,6 +8438,11 @@ vtp_flag_init(void)
 	mode |= (ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 	if (SetConsoleMode(out, mode) == 0)
 	    vtp_working = 0;
+
+	// VTP uses alternate screen buffer.
+	// But, not if running in a nested terminal
+	use_alternate_screen_buffer = win10_22H2_or_later && p_rs && vtp_working
+						&& !mch_getenv("VIM_TERMINAL");
     }
 #endif
 
@@ -8461,29 +8470,24 @@ vtp_flag_init(void)
 vtp_init(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-    if (!vtp_working)
-    {
-	CONSOLE_SCREEN_BUFFER_INFOEX csbi;
-	csbi.cbSize = sizeof(csbi);
-	GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
-	save_console_bg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_bg];
-	save_console_fg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_fg];
-	store_console_bg_rgb = save_console_bg_rgb;
-	store_console_fg_rgb = save_console_fg_rgb;
+    CONSOLE_SCREEN_BUFFER_INFOEX csbi;
+    csbi.cbSize = sizeof(csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    save_console_bg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_bg];
+    save_console_fg_rgb = (guicolor_T)csbi.ColorTable[g_color_index_fg];
+    store_console_bg_rgb = save_console_bg_rgb;
+    store_console_fg_rgb = save_console_fg_rgb;
 
-	COLORREF bg;
-	bg = (COLORREF)csbi.ColorTable[g_color_index_bg];
-	bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
-	default_console_color_bg = bg;
+    COLORREF bg;
+    bg = (COLORREF)csbi.ColorTable[g_color_index_bg];
+    bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
+    default_console_color_bg = bg;
 
-	COLORREF fg;
-	fg = (COLORREF)csbi.ColorTable[g_color_index_fg];
-	fg = (GetRValue(fg) << 16) | (GetGValue(fg) << 8) | GetBValue(fg);
-	default_console_color_fg = fg;
-    }
+    COLORREF fg;
+    fg = (COLORREF)csbi.ColorTable[g_color_index_fg];
+    fg = (GetRValue(fg) << 16) | (GetGValue(fg) << 8) | GetBValue(fg);
+    default_console_color_fg = fg;
 # endif
-    use_alternate_screen_buffer = win10_22H2_or_later && p_rs && vtp_working
-						&& !mch_getenv("VIM_TERMINAL");
     set_console_color_rgb();
 }
 
@@ -8704,23 +8708,23 @@ set_console_color_rgb(void)
 	return;
     }
 
-    if (!conpty_working)
-    {
-	fg = (GetRValue(fg) << 16) | (GetGValue(fg) << 8) | GetBValue(fg);
-	bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
+    if (use_alternate_screen_buffer)
+	return;
 
-	csbi.cbSize = sizeof(csbi);
-	GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+    fg = (GetRValue(fg) << 16) | (GetGValue(fg) << 8) | GetBValue(fg);
+    bg = (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg);
 
-	csbi.cbSize = sizeof(csbi);
-	csbi.srWindow.Right += 1;
-	csbi.srWindow.Bottom += 1;
-	store_console_bg_rgb = csbi.ColorTable[g_color_index_bg];
-	store_console_fg_rgb = csbi.ColorTable[g_color_index_fg];
-	csbi.ColorTable[g_color_index_bg] = (COLORREF)bg;
-	csbi.ColorTable[g_color_index_fg] = (COLORREF)fg;
-	SetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
-    }
+    csbi.cbSize = sizeof(csbi);
+    GetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
+
+    csbi.cbSize = sizeof(csbi);
+    csbi.srWindow.Right += 1;
+    csbi.srWindow.Bottom += 1;
+    store_console_bg_rgb = csbi.ColorTable[g_color_index_bg];
+    store_console_fg_rgb = csbi.ColorTable[g_color_index_fg];
+    csbi.ColorTable[g_color_index_bg] = (COLORREF)bg;
+    csbi.ColorTable[g_color_index_fg] = (COLORREF)fg;
+    SetConsoleScreenBufferInfoEx(g_hConOut, &csbi);
 # endif
 }
 
@@ -8747,39 +8751,24 @@ get_default_console_color(
 	ctermfg = -1;
 	if (id > 0)
 	    syn_id2cterm_bg(id, &ctermfg, &dummynull);
-	if (vtp_working)
-	{
-	    cterm_normal_fg_gui_color = guifg =
-			    ctermfg != -1 ? ctermtoxterm(ctermfg) : INVALCOLOR;
-	    ctermfg = ctermfg < 0 ? 0 : ctermfg;
-	}
+	if (ctermfg != -1)
+	    guifg = ctermtoxterm(ctermfg);
 	else
-	{
-	    guifg = ctermfg != -1 ? ctermtoxterm(ctermfg)
-						    : default_console_color_fg;
-	    cterm_normal_fg_gui_color = guifg;
-	    ctermfg = ctermfg < 0 ? 0 : ctermfg;
-	}
+	    guifg = USE_WT ? INVALCOLOR : default_console_color_fg;
+	cterm_normal_fg_gui_color = guifg;
+	ctermfg = ctermfg < 0 ? 0 : ctermfg;
     }
     if (guibg == INVALCOLOR)
     {
 	ctermbg = -1;
 	if (id > 0)
 	    syn_id2cterm_bg(id, &dummynull, &ctermbg);
-	if (vtp_working)
-	{
-	    cterm_normal_bg_gui_color = guibg =
-			    ctermbg != -1 ? ctermtoxterm(ctermbg) : INVALCOLOR;
-	    if (ctermbg < 0)
-		ctermbg = 0;
-	}
+	if (ctermbg != -1)
+	    guibg = ctermtoxterm(ctermbg);
 	else
-	{
-	    guibg = ctermbg != -1 ? ctermtoxterm(ctermbg)
-						    : default_console_color_bg;
-	    cterm_normal_bg_gui_color = guibg;
-	    ctermbg = ctermbg < 0 ? 0 : ctermbg;
-	}
+	    guibg = USE_WT ? INVALCOLOR : default_console_color_bg;
+	cterm_normal_bg_gui_color = guibg;
+	ctermbg = ctermbg < 0 ? 0 : ctermbg;
     }
 
     *cterm_fg = ctermfg;
@@ -8796,8 +8785,7 @@ get_default_console_color(
 reset_console_color_rgb(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-
-    if (vtp_working)
+    if (use_alternate_screen_buffer)
 	return;
 
     CONSOLE_SCREEN_BUFFER_INFOEX csbi;
@@ -8821,7 +8809,7 @@ reset_console_color_rgb(void)
 restore_console_color_rgb(void)
 {
 # ifdef FEAT_TERMGUICOLORS
-    if (vtp_working)
+    if (use_alternate_screen_buffer)
 	return;
 
     CONSOLE_SCREEN_BUFFER_INFOEX csbi;
@@ -8895,24 +8883,27 @@ get_conpty_fix_type(void)
     void
 resize_console_buf(void)
 {
+    if (use_alternate_screen_buffer)
+	return;
+
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     COORD coord;
     SMALL_RECT newsize;
 
-    if (GetConsoleScreenBufferInfo(g_hConOut, &csbi))
-    {
-	coord.X = SRWIDTH(csbi.srWindow);
-	coord.Y = SRHEIGHT(csbi.srWindow);
-	SetConsoleScreenBufferSize(g_hConOut, coord);
+    if (!GetConsoleScreenBufferInfo(g_hConOut, &csbi))
+	return;
 
-	newsize.Left = 0;
-	newsize.Top = 0;
-	newsize.Right = coord.X - 1;
-	newsize.Bottom = coord.Y - 1;
-	SetConsoleWindowInfo(g_hConOut, TRUE, &newsize);
+    coord.X = SRWIDTH(csbi.srWindow);
+    coord.Y = SRHEIGHT(csbi.srWindow);
+    SetConsoleScreenBufferSize(g_hConOut, coord);
 
-	SetConsoleScreenBufferSize(g_hConOut, coord);
-    }
+    newsize.Left = 0;
+    newsize.Top = 0;
+    newsize.Right = coord.X - 1;
+    newsize.Bottom = coord.Y - 1;
+    SetConsoleWindowInfo(g_hConOut, TRUE, &newsize);
+
+    SetConsoleScreenBufferSize(g_hConOut, coord);
 }
 #endif
 
@@ -8926,14 +8917,14 @@ GetWin32Error(void)
 	    NULL, GetLastError(), 0, (LPSTR)&msg, 0, NULL);
     if (oldmsg != NULL)
 	LocalFree(oldmsg);
-    if (msg != NULL)
-    {
-	// remove trailing \r\n
-	char *pcrlf = strstr(msg, "\r\n");
-	if (pcrlf != NULL)
-	    *pcrlf = '\0';
-	oldmsg = msg;
-    }
+    if (msg == NULL)
+	return NULL;
+
+    // remove trailing \r\n
+    char *pcrlf = strstr(msg, "\r\n");
+    if (pcrlf != NULL)
+	*pcrlf = '\0';
+    oldmsg = msg;
     return msg;
 }
 

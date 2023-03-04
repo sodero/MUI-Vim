@@ -1662,7 +1662,7 @@ merge_modifyOtherKeys(int c_arg, int *modifiers)
 	    && c >= 0 && c <= 127)
     {
 	c += 0x80;
-	*modifiers &= ~(MOD_MASK_META|MOD_MASK_ALT);
+	*modifiers &= ~(MOD_MASK_META | MOD_MASK_ALT);
     }
     return c;
 }
@@ -3328,15 +3328,15 @@ vgetorpeek(int advance)
 		    {
 			if (curwin->w_wcol > 0)
 			{
-			    if (did_ai)
+			    // After auto-indenting and no text is following,
+			    // we are expecting to truncate the trailing
+			    // white-space, so find the last non-white
+			    // character -- webb
+			    if (did_ai && *skipwhite(ml_get_curline()
+						+ curwin->w_cursor.col) == NUL)
 			    {
 				chartabsize_T cts;
 
-				/*
-				 * We are expecting to truncate the trailing
-				 * white-space, so find the last non-white
-				 * character -- webb
-				 */
 				curwin->w_wcol = 0;
 				ptr = ml_get_curline();
 				init_chartabsize_arg(&cts, curwin,
@@ -3890,7 +3890,7 @@ getcmdkeycmd(
     got_int = FALSE;
     while (c1 != NUL && !aborted)
     {
-	if (ga_grow(&line_ga, 32) != OK)
+	if (ga_grow(&line_ga, 32) == FAIL)
 	{
 	    aborted = TRUE;
 	    break;
@@ -3974,23 +3974,30 @@ getcmdkeycmd(
 
 #if defined(FEAT_EVAL) || defined(PROTO)
 /*
- * If there was a mapping put info about it in the redo buffer, so that "."
- * will use the same script context.  We only need the SID.
+ * If there was a mapping we get its SID.  Otherwise, use "last_used_sid", it
+ * is set when redo'ing.
+ * Put this SID in the redo buffer, so that "." will use the same script
+ * context.
  */
     void
 may_add_last_used_map_to_redobuff(void)
 {
-    char_u buf[3 + 20];
+    char_u  buf[3 + 20];
+    int	    sid = -1;
 
-    if (last_used_map == NULL || last_used_map->m_script_ctx.sc_sid < 0)
+    if (last_used_map != NULL)
+	sid = last_used_map->m_script_ctx.sc_sid;
+    if (sid < 0)
+	sid = last_used_sid;
+
+    if (sid < 0)
 	return;
 
     // <K_SID>{nr};
     buf[0] = K_SPECIAL;
     buf[1] = KS_EXTRA;
     buf[2] = KE_SID;
-    vim_snprintf((char *)buf + 3, 20, "%d;",
-					   last_used_map->m_script_ctx.sc_sid);
+    vim_snprintf((char *)buf + 3, 20, "%d;", sid);
     add_buff(&redobuff, buf, -1L);
 }
 #endif

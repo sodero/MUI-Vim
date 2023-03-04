@@ -430,268 +430,276 @@ EXTERN int	garbage_collect_at_exit INIT(= FALSE);
 #define t_number_bool		(static_types[14])
 #define t_const_number_bool	(static_types[15])
 
-#define t_float			(static_types[16])
-#define t_const_float		(static_types[17])
+// t_number_float - number that can be used as a float
+#define t_number_float		(static_types[16])
+#define t_const_number_float	(static_types[17])
 
-#define t_string		(static_types[18])
-#define t_const_string		(static_types[19])
+#define t_float			(static_types[18])
+#define t_const_float		(static_types[19])
 
-#define t_blob			(static_types[20])
-#define t_const_blob		(static_types[21])
+#define t_string		(static_types[20])
+#define t_const_string		(static_types[21])
 
-#define t_blob_null		(static_types[22])
-#define t_const_blob_null	(static_types[23])
+#define t_blob			(static_types[22])
+#define t_const_blob		(static_types[23])
 
-#define t_job			(static_types[24])
-#define t_const_job		(static_types[25])
+#define t_blob_null		(static_types[24])
+#define t_const_blob_null	(static_types[25])
 
-#define t_channel		(static_types[26])
-#define t_const_channel		(static_types[27])
+#define t_job			(static_types[26])
+#define t_const_job		(static_types[27])
+
+#define t_channel		(static_types[28])
+#define t_const_channel		(static_types[29])
 
 // t_number_or_string - Special value used for @#.
-#define t_number_or_string	(static_types[28])
-#define t_const_number_or_string (static_types[29])
+#define t_number_or_string	(static_types[30])
+#define t_const_number_or_string (static_types[31])
 
 // t_func_unknown - function with any arguments and no or unknown return value
-#define t_func_unknown		(static_types[30])
-#define t_const_func_unknown	(static_types[31])
+#define t_func_unknown		(static_types[32])
+#define t_const_func_unknown	(static_types[33])
 
 // t_func_void - function with any arguments and no return value
-#define t_func_void		(static_types[32])
-#define t_const_func_void	(static_types[33])
+#define t_func_void		(static_types[34])
+#define t_const_func_void	(static_types[35])
 
-#define t_func_any		(static_types[34])
-#define t_const_func_any	(static_types[35])
+#define t_func_any		(static_types[36])
+#define t_const_func_any	(static_types[37])
 
-#define t_func_number		(static_types[36])
-#define t_const_func_number	(static_types[37])
+#define t_func_number		(static_types[38])
+#define t_const_func_number	(static_types[39])
 
-#define t_func_string		(static_types[38])
-#define t_const_func_string	(static_types[39])
+#define t_func_string		(static_types[40])
+#define t_const_func_string	(static_types[41])
 
-#define t_func_bool		(static_types[40])
-#define t_const_func_bool	(static_types[41])
+#define t_func_bool		(static_types[42])
+#define t_const_func_bool	(static_types[43])
 
 // t_func_0_void - function without arguments and nor return value
-#define t_func_0_void		(static_types[42])
-#define t_const_func_0_void	(static_types[43])
+#define t_func_0_void		(static_types[44])
+#define t_const_func_0_void	(static_types[45])
 
-#define t_func_0_any		(static_types[44])
-#define t_const_func_0_any	(static_types[45])
+#define t_func_0_any		(static_types[46])
+#define t_const_func_0_any	(static_types[47])
 
-#define t_func_0_number		(static_types[46])
-#define t_const_func_0_number	(static_types[47])
+#define t_func_0_number		(static_types[48])
+#define t_const_func_0_number	(static_types[49])
 
-#define t_func_0_string		(static_types[48])
-#define t_const_func_0_string	(static_types[49])
+#define t_func_0_string		(static_types[50])
+#define t_const_func_0_string	(static_types[51])
 
-#define t_list_any		(static_types[50])
-#define t_const_list_any	(static_types[51])
+#define t_list_any		(static_types[52])
+#define t_const_list_any	(static_types[53])
 
-#define t_dict_any		(static_types[52])
-#define t_const_dict_any	(static_types[53])
+#define t_dict_any		(static_types[54])
+#define t_const_dict_any	(static_types[55])
 
-#define t_list_empty		(static_types[54])
-#define t_const_list_empty	(static_types[55])
+#define t_list_empty		(static_types[56])
+#define t_const_list_empty	(static_types[57])
 
-#define t_dict_empty		(static_types[56])
-#define t_const_dict_empty	(static_types[57])
+#define t_dict_empty		(static_types[58])
+#define t_const_dict_empty	(static_types[59])
 
-#define t_list_bool		(static_types[58])
-#define t_const_list_bool	(static_types[59])
+#define t_list_bool		(static_types[60])
+#define t_const_list_bool	(static_types[61])
 
-#define t_list_number		(static_types[60])
-#define t_const_list_number	(static_types[61])
+#define t_list_number		(static_types[62])
+#define t_const_list_number	(static_types[63])
 
-#define t_list_string		(static_types[62])
-#define t_const_list_string	(static_types[63])
+#define t_list_string		(static_types[64])
+#define t_const_list_string	(static_types[65])
 
-#define t_list_job		(static_types[64])
-#define t_const_list_job	(static_types[65])
+#define t_list_job		(static_types[66])
+#define t_const_list_job	(static_types[67])
 
-#define t_list_dict_any		(static_types[66])
-#define t_const_list_dict_any	(static_types[67])
+#define t_list_dict_any		(static_types[68])
+#define t_const_list_dict_any	(static_types[69])
 
-#define t_list_list_any		(static_types[68])
-#define t_const_list_list_any	(static_types[69])
+#define t_list_list_any		(static_types[70])
+#define t_const_list_list_any	(static_types[71])
 
-#define t_list_list_string	(static_types[70])
-#define t_const_list_list_string (static_types[71])
+#define t_list_list_string	(static_types[72])
+#define t_const_list_list_string (static_types[73])
 
-#define t_dict_bool		(static_types[72])
-#define t_const_dict_bool	(static_types[73])
+#define t_dict_bool		(static_types[74])
+#define t_const_dict_bool	(static_types[75])
 
-#define t_dict_number		(static_types[74])
-#define t_const_dict_number	(static_types[75])
+#define t_dict_number		(static_types[76])
+#define t_const_dict_number	(static_types[77])
 
-#define t_dict_string		(static_types[76])
-#define t_const_dict_string	(static_types[77])
+#define t_dict_string		(static_types[78])
+#define t_const_dict_string	(static_types[79])
 
-#define t_super			(static_types[78])
-#define t_const_super		(static_types[79])
+#define t_super			(static_types[80])
+#define t_const_super		(static_types[81])
 
-EXTERN type_T static_types[80]
+EXTERN type_T static_types[82]
 #ifdef DO_INIT
 = {
     // 0: t_unknown
-    {VAR_UNKNOWN, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_UNKNOWN, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_UNKNOWN, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_UNKNOWN, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 2: t_any
-    {VAR_ANY, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_ANY, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_ANY, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_ANY, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 4: t_void
-    {VAR_VOID, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_VOID, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_VOID, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_VOID, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 6: t_bool
-    {VAR_BOOL, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_BOOL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_BOOL, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_BOOL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 8: t_null
-    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 10: t_none
-    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_SPECIAL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 12: t_number
-    {VAR_NUMBER, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
     // 14: t_number_bool
-    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_BOOL_OK, NULL, NULL},
-    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_BOOL_OK|TTFLAG_CONST, NULL, NULL},
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_BOOL_OK, NULL, NULL, NULL},
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_BOOL_OK|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 16: t_float
-    {VAR_FLOAT, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_FLOAT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 16: t_number_float
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_FLOAT_OK, NULL, NULL, NULL},
+    {VAR_NUMBER, 0, 0, TTFLAG_STATIC|TTFLAG_FLOAT_OK|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 18: t_string
-    {VAR_STRING, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_STRING, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 18: t_float
+    {VAR_FLOAT, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_FLOAT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 20: t_blob
-    {VAR_BLOB, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_BLOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 20: t_string
+    {VAR_STRING, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_STRING, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 22: t_blob_null
-    {VAR_BLOB, 0, 0, TTFLAG_STATIC, &t_void, NULL},
-    {VAR_BLOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL},
+    // 22: t_blob
+    {VAR_BLOB, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_BLOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 24: t_job
-    {VAR_JOB, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_JOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 24: t_blob_null
+    {VAR_BLOB, 0, 0, TTFLAG_STATIC, &t_void, NULL, NULL},
+    {VAR_BLOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL, NULL},
 
-    // 26: t_channel
-    {VAR_CHANNEL, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_CHANNEL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 26: t_job
+    {VAR_JOB, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_JOB, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 28: t_number_or_string
-    {VAR_STRING, 0, 0, TTFLAG_STATIC, NULL, NULL},
-    {VAR_STRING, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL},
+    // 28: t_channel
+    {VAR_CHANNEL, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_CHANNEL, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 30: t_func_unknown
-    {VAR_FUNC, -1, -1, TTFLAG_STATIC, &t_unknown, NULL},
-    {VAR_FUNC, -1, -1, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL},
+    // 30: t_number_or_string
+    {VAR_STRING, 0, 0, TTFLAG_STATIC, NULL, NULL, NULL},
+    {VAR_STRING, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, NULL, NULL, NULL},
 
-    // 32: t_func_void
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_void, NULL},
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL},
+    // 32: t_func_unknown
+    {VAR_FUNC, -1, -1, TTFLAG_STATIC, &t_unknown, NULL, NULL},
+    {VAR_FUNC, -1, -1, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL, NULL},
 
-    // 34: t_func_any
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_any, NULL},
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL},
+    // 34: t_func_void
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_void, NULL, NULL},
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL, NULL},
 
-    // 36: t_func_number
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_number, NULL},
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL},
+    // 36: t_func_any
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_any, NULL, NULL},
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL, NULL},
 
-    // 38: t_func_string
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_string, NULL},
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL},
+    // 38: t_func_number
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_number, NULL, NULL},
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL, NULL},
 
-    // 40: t_func_bool
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_bool, NULL},
-    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL},
+    // 40: t_func_string
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_string, NULL, NULL},
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL, NULL},
 
-    // 42: t_func_0_void
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_void, NULL},
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL},
+    // 42: t_func_bool
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC, &t_bool, NULL, NULL},
+    {VAR_FUNC, -1, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL, NULL},
 
-    // 44: t_func_0_any
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_any, NULL},
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL},
+    // 44: t_func_0_void
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_void, NULL, NULL},
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_void, NULL, NULL},
 
-    // 46: t_func_0_number
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_number, NULL},
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL},
+    // 46: t_func_0_any
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_any, NULL, NULL},
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL, NULL},
 
-    // 48: t_func_0_string
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_string, NULL},
-    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL},
+    // 48: t_func_0_number
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_number, NULL, NULL},
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL, NULL},
 
-    // 50: t_list_any
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_any, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL},
+    // 50: t_func_0_string
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC, &t_string, NULL, NULL},
+    {VAR_FUNC, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL, NULL},
 
-    // 52: t_dict_any
-    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_any, NULL},
-    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL},
+    // 52: t_list_any
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_any, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL, NULL},
 
-    // 54: t_list_empty
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_unknown, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL},
+    // 54: t_dict_any
+    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_any, NULL, NULL},
+    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_any, NULL, NULL},
 
-    // 56: t_dict_empty
-    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_unknown, NULL},
-    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL},
+    // 56: t_list_empty
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_unknown, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL, NULL},
 
-    // 58: t_list_bool
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_bool, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL},
+    // 58: t_dict_empty
+    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_unknown, NULL, NULL},
+    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_unknown, NULL, NULL},
 
-    // 60: t_list_number
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_number, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL},
+    // 60: t_list_bool
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_bool, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL, NULL},
 
-    // 62: t_list_string
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_string, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL},
+    // 62: t_list_number
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_number, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL, NULL},
 
-    // 64: t_list_job
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_job, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_job, NULL},
+    // 64: t_list_string
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_string, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL, NULL},
 
-    // 66: t_list_dict_any
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_dict_any, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_dict_any, NULL},
+    // 66: t_list_job
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_job, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_job, NULL, NULL},
 
-    // 68: t_list_list_any
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_list_any, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_list_any, NULL},
+    // 68: t_list_dict_any
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_dict_any, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_dict_any, NULL, NULL},
 
-    // 70: t_list_list_string
-    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_list_string, NULL},
-    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_list_string, NULL},
+    // 70: t_list_list_any
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_list_any, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_list_any, NULL, NULL},
 
-    // 72: t_dict_bool
-    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_bool, NULL},
-    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL},
+    // 72: t_list_list_string
+    {VAR_LIST, 0, 0, TTFLAG_STATIC, &t_list_string, NULL, NULL},
+    {VAR_LIST, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_list_string, NULL, NULL},
 
-    // 74: t_dict_number
-    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_number, NULL},
-    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL},
+    // 74: t_dict_bool
+    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_bool, NULL, NULL},
+    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL, NULL},
 
-    // 76: t_dict_string
-    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_string, NULL},
-    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL},
+    // 76: t_dict_number
+    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_number, NULL, NULL},
+    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_number, NULL, NULL},
 
-    // 78: t_super (VAR_CLASS with tt_member set to &t_bool
-    {VAR_CLASS, 0, 0, TTFLAG_STATIC, &t_bool, NULL},
-    {VAR_CLASS, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL},
+    // 78: t_dict_string
+    {VAR_DICT, 0, 0, TTFLAG_STATIC, &t_string, NULL, NULL},
+    {VAR_DICT, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_string, NULL, NULL},
+
+    // 80: t_super (VAR_CLASS with tt_member set to &t_bool
+    {VAR_CLASS, 0, 0, TTFLAG_STATIC, &t_bool, NULL, NULL},
+    {VAR_CLASS, 0, 0, TTFLAG_STATIC|TTFLAG_CONST, &t_bool, NULL, NULL},
 }
 #endif
 ;

@@ -585,7 +585,7 @@ check_map_filter_arg2(type_T *type, argcontext_T *context, int is_map)
 {
     type_T *expected_member = NULL;
     type_T *(args[2]);
-    type_T t_func_exp = {VAR_FUNC, 2, 0, 0, NULL, args};
+    type_T t_func_exp = {VAR_FUNC, 2, 0, 0, NULL, NULL, args};
 
     if (context->arg_types[0].type_curr->tt_type == VAR_LIST
 	    || context->arg_types[0].type_curr->tt_type == VAR_DICT)
@@ -699,7 +699,7 @@ arg_sort_how(type_T *type, type_T *decl_type UNUSED, argcontext_T *context)
     if (type->tt_type == VAR_FUNC)
     {
 	type_T *(args[2]);
-	type_T t_func_exp = {VAR_FUNC, 2, 0, 0, &t_number, args};
+	type_T t_func_exp = {VAR_FUNC, 2, 0, 0, &t_number, NULL, args};
 
 	if (context->arg_types[0].type_curr->tt_type == VAR_LIST)
 	    args[0] = context->arg_types[0].type_curr->tt_member;
@@ -1953,6 +1953,8 @@ static funcentry_T global_functions[] =
 			ret_string,	    f_getbufoneline},
     {"getbufvar",	2, 3, FEARG_1,	    arg3_buffer_string_any,
 			ret_any,	    f_getbufvar},
+    {"getcellwidths",	0, 0, 0,	    NULL,
+			ret_list_any,	    f_getcellwidths},
     {"getchangelist",	0, 1, FEARG_1,	    arg1_buffer,
 			ret_list_any,	    f_getchangelist},
     {"getchar",		0, 1, 0,	    arg1_bool,
@@ -2870,6 +2872,10 @@ get_function_name(expand_T *xp, int idx)
     }
     if (++intidx < (int)ARRAY_LENGTH(global_functions))
     {
+	// Skip if the function doesn't have an implementation (feature not
+	// implemented).
+	if (global_functions[intidx].f_func == NULL)
+	    return (char_u *)"";
 	STRCPY(IObuff, global_functions[intidx].f_name);
 	STRCAT(IObuff, "(");
 	if (global_functions[intidx].f_max_argc == 0)
@@ -3050,8 +3056,8 @@ internal_func_is_map(int idx)
     int
 check_internal_func(int idx, int argcount)
 {
-    int	    res;
-    char    *name;
+    funcerror_T	    res;
+    char	    *name;
 
     if (argcount < global_functions[idx].f_min_argc)
 	res = FCERR_TOOFEW;
@@ -3068,7 +3074,7 @@ check_internal_func(int idx, int argcount)
     return -1;
 }
 
-    int
+    funcerror_T
 call_internal_func(
 	char_u	    *name,
 	int	    argcount,
@@ -3101,7 +3107,7 @@ call_internal_func_by_idx(
 /*
  * Invoke a method for base->method().
  */
-    int
+    funcerror_T
 call_internal_method(
 	char_u	    *name,
 	int	    argcount,
@@ -3960,7 +3966,7 @@ execute_redir_str(char_u *value, int value_len)
 	len = (int)STRLEN(value);	// Append the entire string
     else
 	len = value_len;		// Append only "value_len" characters
-    if (ga_grow(&redir_execute_ga, len) != OK)
+    if (ga_grow(&redir_execute_ga, len) == FAIL)
 	return;
 
     mch_memmove((char *)redir_execute_ga.ga_data
@@ -8788,7 +8794,8 @@ search_cmn(typval_T *argvars, pos_T *match_pos, int *flagsp)
 	if (subpatnum == FAIL || !use_skip)
 	    // didn't find it or no skip argument
 	    break;
-	firstpos = pos;
+	if (firstpos.lnum == 0)
+	    firstpos = pos;
 
 	// If the skip expression matches, ignore this match.
 	{
@@ -9933,7 +9940,7 @@ f_spellbadword(typval_T *argvars UNUSED, typval_T *rettv)
 
     if (!curwin->w_p_spell)
     {
-	did_set_spelllang(curwin);
+	parse_spelllang(curwin);
 	curwin->w_p_spell = TRUE;
     }
 
@@ -10023,7 +10030,7 @@ f_spellsuggest(typval_T *argvars UNUSED, typval_T *rettv)
 
     if (!curwin->w_p_spell)
     {
-	did_set_spelllang(curwin);
+	parse_spelllang(curwin);
 	curwin->w_p_spell = TRUE;
     }
 

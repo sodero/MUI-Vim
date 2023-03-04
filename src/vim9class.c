@@ -197,13 +197,41 @@ add_members_to_class(
 }
 
 /*
+ * Convert a member index "idx" of interface "itf" to the member index of class
+ * "cl" implementing that interface.
+ */
+    int
+object_index_from_itf_index(class_T *itf, int is_method, int idx, class_T *cl)
+{
+    if (idx > (is_method ? itf->class_obj_method_count
+						: itf->class_obj_member_count))
+    {
+	siemsg("index %d out of range for interface %s", idx, itf->class_name);
+	return 0;
+    }
+    itf2class_T *i2c;
+    for (i2c = itf->class_itf2class; i2c != NULL; i2c = i2c->i2c_next)
+	if (i2c->i2c_class == cl && i2c->i2c_is_method == is_method)
+	    break;
+    if (i2c == NULL)
+    {
+	siemsg("class %s not found on interface %s",
+					      cl->class_name, itf->class_name);
+	return 0;
+    }
+    int *table = (int *)(i2c + 1);
+    return table[idx];
+}
+
+/*
  * Handle ":class" and ":abstract class" up to ":endclass".
  * Handle ":interface" up to ":endinterface".
  */
     void
 ex_class(exarg_T *eap)
 {
-    int is_class = eap->cmdidx == CMD_class;  // FALSE for :interface
+    int	    is_class = eap->cmdidx == CMD_class;  // FALSE for :interface
+    long    start_lnum = SOURCING_LNUM;
 
     char_u *arg = eap->arg;
     int is_abstract = eap->cmdidx == CMD_abstract;
@@ -397,7 +425,7 @@ early_ret:
 	char *wrong_name = is_class ? "endinterface" : "endclass";
 	if (checkforcmd(&p, wrong_name, is_class ? 5 : 4))
 	{
-	    semsg(_(e_invalid_command_str), line);
+	    semsg(_(e_invalid_command_str_expected_str), line, end_name);
 	    break;
 	}
 
@@ -763,22 +791,10 @@ early_ret:
 	if (cl->class_name == NULL)
 	    goto cleanup;
 
-	cl->class_extends = extends_cl;
-
-	if (ga_impl.ga_len > 0)
+	if (extends_cl != NULL)
 	{
-	    // Move the "implements" names into the class.
-	    cl->class_interface_count = ga_impl.ga_len;
-	    cl->class_interfaces = ALLOC_MULT(char_u *, ga_impl.ga_len);
-	    if (cl->class_interfaces == NULL)
-		goto cleanup;
-	    for (int i = 0; i < ga_impl.ga_len; ++i)
-		cl->class_interfaces[i] = ((char_u **)ga_impl.ga_data)[i];
-	    VIM_CLEAR(ga_impl.ga_data);
-	    ga_impl.ga_len = 0;
-
-	    cl->class_interfaces_cl = intf_classes;
-	    intf_classes = NULL;
+	    cl->class_extends = extends_cl;
+	    extends_cl->class_flags |= CLASS_EXTENDED;
 	}
 
 	// Add class and object members to "cl".
@@ -797,6 +813,105 @@ early_ret:
 				 &cl->class_obj_members,
 				 &cl->class_obj_member_count) == FAIL)
 	    goto cleanup;
+
+	if (ga_impl.ga_len > 0)
+	{
+	    // Move the "implements" names into the class.
+	    cl->class_interface_count = ga_impl.ga_len;
+	    cl->class_interfaces = ALLOC_MULT(char_u *, ga_impl.ga_len);
+	    if (cl->class_interfaces == NULL)
+		goto cleanup;
+	    for (int i = 0; i < ga_impl.ga_len; ++i)
+		cl->class_interfaces[i] = ((char_u **)ga_impl.ga_data)[i];
+	    VIM_CLEAR(ga_impl.ga_data);
+	    ga_impl.ga_len = 0;
+
+	    cl->class_interfaces_cl = intf_classes;
+	    intf_classes = NULL;
+	}
+
+	if (cl->class_interface_count > 0 || extends_cl != NULL)
+	{
+	    // For each interface add a lookuptable for the member index on the
+	    // interface to the member index in this class.
+	    // And a lookuptable for the object method index on the interface
+	    // to the object method index in this class.
+	    // Also do this for the extended class, if any.
+	    for (int i = 0; i <= cl->class_interface_count; ++i)
+	    {
+		class_T *ifcl = i < cl->class_interface_count
+					    ? cl->class_interfaces_cl[i]
+					    : extends_cl;
+		if (ifcl == NULL)
+		    continue;
+
+		// Table for members.
+		itf2class_T *if2cl = alloc_clear(sizeof(itf2class_T)
+				 + ifcl->class_obj_member_count * sizeof(int));
+		if (if2cl == NULL)
+		    goto cleanup;
+		if2cl->i2c_next = ifcl->class_itf2class;
+		ifcl->class_itf2class = if2cl;
+		if2cl->i2c_class = cl;
+		if2cl->i2c_is_method = FALSE;
+
+		for (int if_i = 0; if_i < ifcl->class_obj_member_count; ++if_i)
+		    for (int cl_i = 0; cl_i < cl->class_obj_member_count;
+									++cl_i)
+		    {
+			if (STRCMP(ifcl->class_obj_members[if_i].ocm_name,
+				    cl->class_obj_members[cl_i].ocm_name) == 0)
+			{
+			    int *table = (int *)(if2cl + 1);
+			    table[if_i] = cl_i;
+			    break;
+			}
+		    }
+
+		// Table for methods.
+		if2cl = alloc_clear(sizeof(itf2class_T)
+				 + ifcl->class_obj_method_count * sizeof(int));
+		if (if2cl == NULL)
+		    goto cleanup;
+		if2cl->i2c_next = ifcl->class_itf2class;
+		ifcl->class_itf2class = if2cl;
+		if2cl->i2c_class = cl;
+		if2cl->i2c_is_method = TRUE;
+
+		for (int if_i = 0; if_i < ifcl->class_obj_method_count; ++if_i)
+		{
+		    int done = FALSE;
+		    for (int cl_i = 0; cl_i < objmethods.ga_len; ++cl_i)
+		    {
+			if (STRCMP(ifcl->class_obj_methods[if_i]->uf_name,
+			       ((ufunc_T **)objmethods.ga_data)[cl_i]->uf_name)
+									  == 0)
+			{
+			    int *table = (int *)(if2cl + 1);
+			    table[if_i] = cl_i;
+			    done = TRUE;
+			    break;
+			}
+		    }
+
+		    if (!done && extends_cl != NULL)
+		    {
+			for (int cl_i = 0;
+			     cl_i < extends_cl->class_obj_member_count; ++cl_i)
+			{
+			    if (STRCMP(ifcl->class_obj_methods[if_i]->uf_name,
+				   extends_cl->class_obj_methods[cl_i]->uf_name)
+									  == 0)
+			    {
+				int *table = (int *)(if2cl + 1);
+				table[if_i] = cl_i;
+				break;
+			    }
+			}
+		    }
+		}
+	    }
+	}
 
 	if (is_class && cl->class_class_member_count > 0)
 	{
@@ -876,7 +991,7 @@ early_ret:
 		if (nf->uf_ret_type != NULL)
 		{
 		    nf->uf_ret_type->tt_type = VAR_OBJECT;
-		    nf->uf_ret_type->tt_member = (type_T *)cl;
+		    nf->uf_ret_type->tt_class = cl;
 		    nf->uf_ret_type->tt_argcount = 0;
 		    nf->uf_ret_type->tt_args = NULL;
 		}
@@ -969,9 +1084,9 @@ early_ret:
 	}
 
 	cl->class_type.tt_type = VAR_CLASS;
-	cl->class_type.tt_member = (type_T *)cl;
+	cl->class_type.tt_class = cl;
 	cl->class_object_type.tt_type = VAR_OBJECT;
-	cl->class_object_type.tt_member = (type_T *)cl;
+	cl->class_object_type.tt_class = cl;
 	cl->class_type_list = type_list;
 
 	// TODO:
@@ -983,8 +1098,9 @@ early_ret:
 	tv.v_type = VAR_CLASS;
 	tv.vval.v_class = cl;
 	is_export = class_export;
+	SOURCING_LNUM = start_lnum;
 	set_var_const(cl->class_name, current_sctx.sc_sid,
-					     NULL, &tv, FALSE, ASSIGN_DECL, 0);
+						       NULL, &tv, FALSE, 0, 0);
 	return;
     }
 
@@ -1120,9 +1236,6 @@ class_object_index(
     evalarg_T	*evalarg,
     int		verbose UNUSED)	// give error messages
 {
-    // int		evaluate = evalarg != NULL
-    //				      && (evalarg->eval_flags & EVAL_EVALUATE);
-
     if (VIM_ISWHITE((*arg)[1]))
     {
 	semsg(_(e_no_white_space_allowed_after_str_str), ".", *arg);
@@ -1136,8 +1249,19 @@ class_object_index(
 	return FAIL;
     size_t len = name_end - name;
 
-    class_T *cl = rettv->v_type == VAR_CLASS ? rettv->vval.v_class
-					     : rettv->vval.v_object->obj_class;
+    class_T *cl;
+    if (rettv->v_type == VAR_CLASS)
+	cl = rettv->vval.v_class;
+    else // VAR_OBJECT
+    {
+	if (rettv->vval.v_object == NULL)
+	{
+	    emsg(_(e_using_null_object));
+	    return FAIL;
+	}
+	cl = rettv->vval.v_object->obj_class;
+    }
+
     if (*name_end == '(')
     {
 	int on_class = rettv->v_type == VAR_CLASS;
@@ -1336,6 +1460,19 @@ class_member_index(char_u *name, size_t len, class_T **cl_ret, cctx_T *cctx)
 }
 
 /*
+ * Return TRUE if current context "cctx_arg" is inside class "cl".
+ * Return FALSE if not.
+ */
+    int
+inside_class(cctx_T *cctx_arg, class_T *cl)
+{
+    for (cctx_T *cctx = cctx_arg; cctx != NULL; cctx = cctx->ctx_outer)
+	if (cctx->ctx_ufunc != NULL && cctx->ctx_ufunc->uf_class == cl)
+	    return TRUE;
+    return FALSE;
+}
+
+/*
  * Make a copy of an object.
  */
     void
@@ -1410,6 +1547,13 @@ class_unref(class_T *cl)
 	}
 	vim_free(cl->class_interfaces);
 	vim_free(cl->class_interfaces_cl);
+
+	itf2class_T *next;
+	for (itf2class_T *i2c = cl->class_itf2class; i2c != NULL; i2c = next)
+	{
+	    next = i2c->i2c_next;
+	    vim_free(i2c);
+	}
 
 	for (int i = 0; i < cl->class_class_member_count; ++i)
 	{

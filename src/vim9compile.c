@@ -66,6 +66,7 @@ lookup_local(char_u *name, size_t len, lvar_T *lvar, cctx_T *cctx)
 	if (lvar != NULL)
 	{
 	    CLEAR_POINTER(lvar);
+	    lvar->lv_loop_depth = -1;
 	    lvar->lv_name = (char_u *)(is_super ? "super" : "this");
 	    if (cctx->ctx_ufunc->uf_class != NULL)
 	    {
@@ -290,7 +291,7 @@ update_script_var_block_id(char_u *name, int block_id)
  * Return TRUE if the script context is Vim9 script.
  */
     int
-script_is_vim9()
+script_is_vim9(void)
 {
     return SCRIPT_ITEM(current_sctx.sc_sid)->sn_version == SCRIPT_VERSION_VIM9;
 }
@@ -332,7 +333,7 @@ script_var_exists(char_u *name, size_t len, cctx_T *cctx, cstack_T *cstack)
 
 /*
  * Return TRUE if "name" is a local variable, argument, script variable or
- * imported.
+ * imported.  Also if "name" is "this" and in a class method.
  */
     static int
 variable_exists(char_u *name, size_t len, cctx_T *cctx)
@@ -1067,7 +1068,7 @@ compile_nested_function(exarg_T *eap, cctx_T *cctx, garray_T *lines_to_free)
 					    ASSIGN_CONST, ufunc->uf_func_type);
 	if (lvar == NULL)
 	    goto theend;
-	if (generate_FUNCREF(cctx, ufunc, &funcref_isn) == FAIL)
+	if (generate_FUNCREF(cctx, ufunc, NULL, 0, &funcref_isn) == FAIL)
 	    goto theend;
 	r = generate_STORE(cctx, ISN_STORE, lvar->lv_idx, NULL);
     }
@@ -1740,11 +1741,16 @@ compile_lhs(
 
     if (lhs->lhs_dest != dest_option && lhs->lhs_dest != dest_func_option)
     {
-	if (is_decl && *var_end == ':')
+	if (is_decl && *skipwhite(var_end) == ':')
 	{
 	    char_u *p;
 
 	    // parse optional type: "let var: type = expr"
+	    if (VIM_ISWHITE(*var_end))
+	    {
+		semsg(_(e_no_white_space_allowed_before_colon_str), var_end);
+		return FAIL;
+	    }
 	    if (!VIM_ISWHITE(var_end[1]))
 	    {
 		semsg(_(e_white_space_required_after_str_str), ":", var_end);
@@ -1842,20 +1848,28 @@ compile_lhs(
 	    lhs->lhs_type = &t_any;
 	}
 
-	if (lhs->lhs_type == NULL || lhs->lhs_type->tt_member == NULL)
+	int use_class = lhs->lhs_type != NULL
+			    && (lhs->lhs_type->tt_type == VAR_CLASS
+				       || lhs->lhs_type->tt_type == VAR_OBJECT);
+	if (lhs->lhs_type == NULL
+		|| (use_class ? lhs->lhs_type->tt_class == NULL
+					   : lhs->lhs_type->tt_member == NULL))
+	{
 	    lhs->lhs_member_type = &t_any;
-	else if (lhs->lhs_type->tt_type == VAR_CLASS
-		|| lhs->lhs_type->tt_type == VAR_OBJECT)
+	}
+	else if (use_class)
 	{
 	    // for an object or class member get the type of the member
-	    class_T *cl = (class_T *)lhs->lhs_type->tt_member;
+	    class_T *cl = lhs->lhs_type->tt_class;
 	    lhs->lhs_member_type = class_member_type(cl, after + 1,
 					   lhs->lhs_end, &lhs->lhs_member_idx);
 	    if (lhs->lhs_member_idx < 0)
 		return FAIL;
 	}
 	else
+	{
 	    lhs->lhs_member_type = lhs->lhs_type->tt_member;
+	}
     }
     return OK;
 }
@@ -2005,13 +2019,13 @@ compile_load_lhs(
 	size_t	    varlen = lhs->lhs_varlen;
 	int	    c = var_start[varlen];
 	int	    lines_len = cctx->ctx_ufunc->uf_lines.ga_len;
-	char_u	    *p = var_start;
 	int	    res;
 
 	// Evaluate "ll[expr]" of "ll[expr][idx]".  End the line with a NUL and
 	// limit the lines array length to avoid skipping to a following line.
 	var_start[varlen] = NUL;
 	cctx->ctx_ufunc->uf_lines.ga_len = cctx->ctx_lnum + 1;
+	char_u *p = var_start;
 	res = compile_expr0(&p, cctx);
 	var_start[varlen] = c;
 	cctx->ctx_ufunc->uf_lines.ga_len = lines_len;
@@ -2025,10 +2039,15 @@ compile_load_lhs(
 
 	lhs->lhs_type = cctx->ctx_type_stack.ga_len == 0 ? &t_void
 						  : get_type_on_stack(cctx, 0);
-	// now we can properly check the type
-	if (rhs_type != NULL && lhs->lhs_type->tt_member != NULL
+	// Now we can properly check the type.  The variable is indexed, thus
+	// we need the member type.  For a class or object we don't know the
+	// type yet, it depends on what member is used.
+	vartype_T vartype = lhs->lhs_type->tt_type;
+	type_T *member_type = lhs->lhs_type->tt_member;
+	if (rhs_type != NULL && member_type != NULL
+		&& vartype != VAR_OBJECT && vartype != VAR_CLASS
 		&& rhs_type != &t_void
-		&& need_type(rhs_type, lhs->lhs_type->tt_member, FALSE,
+		&& need_type(rhs_type, member_type, FALSE,
 					    -2, 0, cctx, FALSE, FALSE) == FAIL)
 	    return FAIL;
     }
@@ -2048,7 +2067,7 @@ compile_load_lhs_with_index(lhs_T *lhs, char_u *var_start, cctx_T *cctx)
     {
 	// "this.value": load "this" object and get the value at index
 	// for an object or class member get the type of the member
-	class_T *cl = (class_T *)lhs->lhs_type->tt_member;
+	class_T *cl = lhs->lhs_type->tt_class;
 	type_T *type = class_member_type(cl, var_start + 5,
 					   lhs->lhs_end, &lhs->lhs_member_idx);
 	if (lhs->lhs_member_idx < 0)
@@ -2056,6 +2075,8 @@ compile_load_lhs_with_index(lhs_T *lhs, char_u *var_start, cctx_T *cctx)
 
 	if (generate_LOAD(cctx, ISN_LOAD, 0, NULL, lhs->lhs_type) == FAIL)
 	    return FAIL;
+	if (cl->class_flags & CLASS_INTERFACE)
+	    return generate_GET_ITF_MEMBER(cctx, cl, lhs->lhs_member_idx, type);
 	return generate_GET_OBJ_MEMBER(cctx, lhs->lhs_member_idx, type);
     }
 
@@ -2176,7 +2197,22 @@ compile_assign_unlet(
 
 		if (isn == NULL)
 		    return FAIL;
-		isn->isn_arg.vartype = dest_type;
+		isn->isn_arg.storeindex.si_vartype = dest_type;
+		isn->isn_arg.storeindex.si_class = NULL;
+
+		if (dest_type == VAR_OBJECT)
+		{
+		    class_T *cl = lhs->lhs_type->tt_class;
+
+		    if (cl->class_flags & CLASS_INTERFACE)
+		    {
+			// "this.value": load "this" object and get the value
+			// at index for an object or class member get the type
+			// of the member
+			isn->isn_arg.storeindex.si_class = cl;
+			++cl->class_refcount;
+		    }
+		}
 	    }
 	}
 	else if (range)
@@ -3163,6 +3199,16 @@ compile_def_function(
     }
     ufunc->uf_args_visible = ufunc->uf_args.ga_len;
 
+    // Compiling a function in an interface is done to get the function type.
+    // No code is actually compiled.
+    if (ufunc->uf_class != NULL
+			   && (ufunc->uf_class->class_flags & CLASS_INTERFACE))
+    {
+	ufunc->uf_def_status = UF_NOT_COMPILED;
+	ret = OK;
+	goto erret;
+    }
+
     /*
      * Loop over all the lines of the function and generate instructions.
      */
@@ -3687,7 +3733,7 @@ nextline:
 	    iemsg("Type stack underflow");
 	    goto erret;
 	}
-    }
+    } // END of the loop over all the function body lines.
 
     if (cctx.ctx_scope != NULL)
     {
@@ -3921,18 +3967,18 @@ delete_def_function_contents(dfunc_T *dfunc, int mark_deleted)
     void
 unlink_def_function(ufunc_T *ufunc)
 {
-    if (ufunc->uf_dfunc_idx > 0)
-    {
-	dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data)
-							 + ufunc->uf_dfunc_idx;
+    if (ufunc->uf_dfunc_idx <= 0)
+	return;
 
-	if (--dfunc->df_refcount <= 0)
-	    delete_def_function_contents(dfunc, TRUE);
-	ufunc->uf_def_status = UF_NOT_COMPILED;
-	ufunc->uf_dfunc_idx = 0;
-	if (dfunc->df_ufunc == ufunc)
-	    dfunc->df_ufunc = NULL;
-    }
+    dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data)
+	+ ufunc->uf_dfunc_idx;
+
+    if (--dfunc->df_refcount <= 0)
+	delete_def_function_contents(dfunc, TRUE);
+    ufunc->uf_def_status = UF_NOT_COMPILED;
+    ufunc->uf_dfunc_idx = 0;
+    if (dfunc->df_ufunc == ufunc)
+	dfunc->df_ufunc = NULL;
 }
 
 /*
@@ -3941,13 +3987,13 @@ unlink_def_function(ufunc_T *ufunc)
     void
 link_def_function(ufunc_T *ufunc)
 {
-    if (ufunc->uf_dfunc_idx > 0)
-    {
-	dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data)
-							 + ufunc->uf_dfunc_idx;
+    if (ufunc->uf_dfunc_idx <= 0)
+	return;
 
-	++dfunc->df_refcount;
-    }
+    dfunc_T *dfunc = ((dfunc_T *)def_functions.ga_data)
+	+ ufunc->uf_dfunc_idx;
+
+    ++dfunc->df_refcount;
 }
 
 #if defined(EXITFREE) || defined(PROTO)

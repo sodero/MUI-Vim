@@ -34,10 +34,11 @@ typedef enum {
     ISN_INSTR,	    // instructions compiled from expression
     ISN_CONSTRUCT,  // construct an object, using contstruct_T
     ISN_GET_OBJ_MEMBER, // object member, index is isn_arg.number
+    ISN_GET_ITF_MEMBER, // interface member, index is isn_arg.classmember
     ISN_STORE_THIS, // store value in "this" object member, index is
 		    // isn_arg.number
-    ISN_LOAD_CLASSMEMBER,  // load class member, using classmember_T
-    ISN_STORE_CLASSMEMBER,  // store in class member, using classmember_T
+    ISN_LOAD_CLASSMEMBER,  // load class member, using isn_arg.classmember
+    ISN_STORE_CLASSMEMBER,  // store in class member, using isn_arg.classmember
 
     // get and set variables
     ISN_LOAD,	    // push local variable isn_arg.number
@@ -77,8 +78,8 @@ typedef enum {
     // ISN_STOREOTHER, // pop into other script variable isn_arg.other.
 
     ISN_STORENR,    // store number into local variable isn_arg.storenr.stnr_idx
-    ISN_STOREINDEX,	// store into list or dictionary, type isn_arg.vartype,
-			// value/index/variable on stack
+    ISN_STOREINDEX,	// store into list or dictionary, using
+			// isn_arg.storeindex; value/index/variable on stack
     ISN_STORERANGE,	// store into blob,
 			// value/index 1/index 2/variable on stack
 
@@ -100,6 +101,8 @@ typedef enum {
     ISN_PUSHFUNC,	// push func isn_arg.string
     ISN_PUSHCHANNEL,	// push NULL channel
     ISN_PUSHJOB,	// push NULL job
+    ISN_PUSHOBJ,	// push NULL object
+    ISN_PUSHCLASS,	// push class, uses isn_arg.classarg
     ISN_NEWLIST,	// push list from stack items, size is isn_arg.number
 			// -1 for null_list
     ISN_NEWDICT,	// push dict from stack items, size is isn_arg.number
@@ -111,6 +114,7 @@ typedef enum {
     // function call
     ISN_BCALL,	    // call builtin function isn_arg.bfunc
     ISN_DCALL,	    // call def function isn_arg.dfunc
+    ISN_METHODCALL, // call method on interface, uses isn_arg.mfunc
     ISN_UCALL,	    // call user function or funcref/partial isn_arg.ufunc
     ISN_PCALL,	    // call partial, use isn_arg.pfunc
     ISN_PCALL_END,  // cleanup after ISN_PCALL with cpf_top set
@@ -121,6 +125,7 @@ typedef enum {
     ISN_NEWFUNC,    // create a global function from a lambda function
     ISN_DEF,	    // list functions
     ISN_DEFER,	    // :defer  argument count is isn_arg.number
+    ISN_DEFEROBJ,   // idem, function is an object method
 
     // expression operations
     ISN_JUMP,	    // jump if condition is matched isn_arg.jump
@@ -231,6 +236,13 @@ typedef struct {
     int	    cdf_idx;	    // index in "def_functions" for ISN_DCALL
     int	    cdf_argcount;   // number of arguments on top of stack
 } cdfunc_T;
+
+// arguments to ISN_METHODCALL
+typedef struct {
+    class_T *cmf_itf;	    // interface used
+    int	    cmf_idx;	    // index in "def_functions" for ISN_DCALL
+    int	    cmf_argcount;   // number of arguments on top of stack
+} cmfunc_T;
 
 // arguments to ISN_PCALL
 typedef struct {
@@ -370,6 +382,8 @@ typedef struct {
 typedef struct {
     char_u	  *fre_func_name;	// function name for legacy function
     loopvarinfo_T fre_loopvar_info;	// info about variables inside loops
+    class_T	  *fre_class;		// class for a method
+    int		  fre_method_idx;	// method index on "fre_class"
 } funcref_extra_T;
 
 // arguments to ISN_FUNCREF
@@ -480,11 +494,16 @@ typedef struct {
     class_T	*construct_class;   // class the object is created from
 } construct_T;
 
-// arguments to ISN_STORE_CLASSMEMBER and ISN_LOAD_CLASSMEMBER
+// arguments to ISN_STORE_CLASSMEMBER, ISN_LOAD_CLASSMEMBER, ISN_GET_ITF_MEMBER
 typedef struct {
     class_T	*cm_class;
     int		cm_idx;
 } classmember_T;
+// arguments to ISN_STOREINDEX
+typedef struct {
+    vartype_T	si_vartype;
+    class_T	*si_class;
+} storeindex_T;
 
 /*
  * Instruction
@@ -501,6 +520,7 @@ struct isn_S {
 	channel_T	    *channel;
 	job_T		    *job;
 	partial_T	    *partial;
+	class_T		    *classarg;
 	jump_T		    jump;
 	jumparg_T	    jumparg;
 	forloop_T	    forloop;
@@ -510,6 +530,7 @@ struct isn_S {
 	trycont_T	    trycont;
 	cbfunc_T	    bfunc;
 	cdfunc_T	    dfunc;
+	cmfunc_T	    *mfunc;
 	cpfunc_T	    pfunc;
 	cufunc_T	    ufunc;
 	echo_T		    echo;
@@ -539,6 +560,7 @@ struct isn_S {
 	echowin_T	    echowin;
 	construct_T	    construct;
 	classmember_T	    classmember;
+	storeindex_T	    storeindex;
     } isn_arg;
 };
 

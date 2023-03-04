@@ -1182,6 +1182,8 @@ EXTERN char e_invalid_command[]
 	INIT(= N_("E476: Invalid command"));
 EXTERN char e_invalid_command_str[]
 	INIT(= N_("E476: Invalid command: %s"));
+EXTERN char e_invalid_command_str_expected_str[]
+	INIT(= N_("E476: Invalid command: %s, expected %s"));
 EXTERN char e_no_bang_allowed[]
 	INIT(= N_("E477: No ! allowed"));
 EXTERN char e_dont_panic[]
@@ -2841,8 +2843,8 @@ EXTERN char e_list_item_nr_cell_width_invalid[]
 	INIT(= N_("E1112: List item %d cell width invalid"));
 EXTERN char e_overlapping_ranges_for_nr[]
 	INIT(= N_("E1113: Overlapping ranges for 0x%lx"));
-EXTERN char e_only_values_of_0x100_and_higher_supported[]
-	INIT(= N_("E1114: Only values of 0x100 and higher supported"));
+EXTERN char e_only_values_of_0x80_and_higher_supported[]
+	INIT(= N_("E1114: Only values of 0x80 and higher supported"));
 EXTERN char e_assert_fails_fourth_argument[]
 	INIT(= N_("E1115: \"assert_fails()\" fourth argument must be a number"));
 EXTERN char e_assert_fails_fifth_argument[]
@@ -3442,4 +3444,14 @@ EXTERN char e_using_super_not_in_child_class[]
 	INIT(= N_("E1358: Using \"super\" not in a child class"));
 EXTERN char e_cannot_define_new_function_in_abstract_class[]
 	INIT(= N_("E1359: Cannot define a \"new\" function in an abstract class"));
+EXTERN char e_using_null_object[]
+	INIT(= N_("E1360: Using a null object"));
+#endif
+EXTERN char e_cannot_use_color_none_did_you_mean_none[]
+	INIT(= N_("E1361: Cannot use color \"none\", did you mean \"NONE\"?"));
+#ifdef FEAT_EVAL
+EXTERN char e_cannot_use_non_null_object[]
+	INIT(= N_("E1362: Cannot use a non-null object"));
+EXTERN char e_incomplete_type[]
+	INIT(= N_("E1363: Incomplete type"));
 #endif

@@ -274,7 +274,7 @@ func Test_changing_cmdheight()
   call term_sendkeys(buf, ":set cmdheight-=2\<CR>")
   call VerifyScreenDump(buf, 'Test_changing_cmdheight_4', {})
 
-  " reducing window size and then setting cmdheight 
+  " reducing window size and then setting cmdheight
   call term_sendkeys(buf, ":resize -1\<CR>")
   call term_sendkeys(buf, ":set cmdheight=1\<CR>")
   call VerifyScreenDump(buf, 'Test_changing_cmdheight_5', {})
@@ -327,17 +327,21 @@ func Test_map_completion()
   call assert_equal('"map <Left>', getreg(':'))
   call feedkeys(":map <A-Left>\<Tab>\<Home>\"\<CR>", 'xt')
   call assert_equal("\"map <A-Left>\<Tab>", getreg(':'))
+  call feedkeys(":map <M-Left>\<Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal("\"map <M-Left>x", getreg(':'))
   unmap ,f
   unmap ,g
   unmap <Left>
   unmap <A-Left>x
 
-  set cpo-=< cpo-=B cpo-=k
+  set cpo-=< cpo-=k
   map <Left> left
   call feedkeys(":map <L\<Tab>\<Home>\"\<CR>", 'xt')
   call assert_equal('"map <Left>', getreg(':'))
   call feedkeys(":map <M\<Tab>\<Home>\"\<CR>", 'xt')
   call assert_equal("\"map <M\<Tab>", getreg(':'))
+  call feedkeys(":map \<C-V>\<C-V><M\<Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal("\"map \<C-V><Middle>x", getreg(':'))
   unmap <Left>
 
   set cpo+=<
@@ -435,6 +439,7 @@ func Test_getcompletion()
     call assert_true(matchcount > 0)
     let matchcount = len(getcompletion('File.', 'menu'))
     call assert_true(matchcount > 0)
+    source $VIMRUNTIME/delmenu.vim
   endif
 
   let l = getcompletion('v:n', 'var')
@@ -488,6 +493,12 @@ func Test_getcompletion()
   call assert_true(index(l, 'taglist(') >= 0)
   let l = getcompletion('paint', 'function')
   call assert_equal([], l)
+
+  if !has('ruby')
+    " global_functions[] has an entry but it doesn't have an implementation
+    let l = getcompletion('ruby', 'function')
+    call assert_equal([], l)
+  endif
 
   let Flambda = {-> 'hello'}
   let l = getcompletion('', 'function')
@@ -2899,20 +2910,25 @@ func Test_fuzzy_completion_abbr()
   call assert_equal("\"iabbr WaitForCompletion", @:)
   call feedkeys(":iabbr a1z\<Tab>\<C-B>\"\<CR>", 'tx')
   call assert_equal("\"iabbr a1z\t", @:)
+
   iunabbrev WaitForCompletion
   set wildoptions&
 endfunc
 
 " menu name fuzzy completion
 func Test_fuzzy_completion_menu()
-  CheckGui
+  CheckFeature menu
+
+  source $VIMRUNTIME/menu.vim
   set wildoptions&
   call feedkeys(":menu pup\<Tab>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"menu pup', @:)
   set wildoptions=fuzzy
   call feedkeys(":menu pup\<Tab>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"menu PopUp.', @:)
+
   set wildoptions&
+  source $VIMRUNTIME/delmenu.vim
 endfunc
 
 " :messages suboptions fuzzy completion

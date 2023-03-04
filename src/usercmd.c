@@ -86,6 +86,7 @@ static struct
 #endif
     {EXPAND_SETTINGS, "option"},
     {EXPAND_PACKADD, "packadd"},
+    {EXPAND_RUNTIME, "runtime"},
     {EXPAND_SHELLCMD, "shellcmd"},
 #if defined(FEAT_SIGNS)
     {EXPAND_SIGN, "sign"},
@@ -1057,7 +1058,7 @@ uc_add_command(
     // Extend the array unless we're replacing an existing command
     if (cmp != 0)
     {
-	if (ga_grow(gap, 1) != OK)
+	if (ga_grow(gap, 1) == FAIL)
 	    goto fail;
 	if ((p = vim_strnsave(name, name_len)) == NULL)
 	    goto fail;
@@ -1837,7 +1838,7 @@ do_ucmd(exarg_T *eap)
     if (eap->cmdidx == CMD_USER)
 	cmd = USER_CMD(eap->useridx);
     else
-	cmd = USER_CMD_GA(&curbuf->b_ucmds, eap->useridx);
+	cmd = USER_CMD_GA(&prevwin_curwin()->w_buffer->b_ucmds, eap->useridx);
 
     /*
      * Replace <> in the command by the arguments.

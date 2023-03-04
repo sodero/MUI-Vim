@@ -37,11 +37,11 @@ get_type_ptr(garray_T *type_gap)
     if (ga_grow(type_gap, 1) == FAIL)
 	return NULL;
     type = ALLOC_CLEAR_ONE(type_T);
-    if (type != NULL)
-    {
-	((type_T **)type_gap->ga_data)[type_gap->ga_len] = type;
-	++type_gap->ga_len;
-    }
+    if (type == NULL)
+	return NULL;
+
+    ((type_T **)type_gap->ga_data)[type_gap->ga_len] = type;
+    ++type_gap->ga_len;
     return type;
 }
 
@@ -86,11 +86,9 @@ copy_type_deep_rec(type_T *type, garray_T *type_gap, garray_T *seen_types)
     ((type_T **)seen_types->ga_data)[seen_types->ga_len * 2 + 1] = copy;
     ++seen_types->ga_len;
 
-    if (copy->tt_member != NULL
-	    && copy->tt_type != VAR_OBJECT && copy->tt_type != VAR_CLASS)
+    if (copy->tt_member != NULL)
 	copy->tt_member = copy_type_deep_rec(copy->tt_member,
 							 type_gap, seen_types);
-
     if (type->tt_args != NULL)
 	for (int i = 0; i < type->tt_argcount; ++i)
 	    copy->tt_args[i] = copy_type_deep_rec(copy->tt_args[i],
@@ -144,11 +142,7 @@ alloc_type(type_T *type)
     *ret = *type;
 
     if (ret->tt_member != NULL)
-    {
-	// tt_member points to the class_T for VAR_CLASS and VAR_OBJECT
-	if (type->tt_type != VAR_CLASS && type->tt_type != VAR_OBJECT)
-	    ret->tt_member = alloc_type(ret->tt_member);
-    }
+	ret->tt_member = alloc_type(ret->tt_member);
 
     if (type->tt_args != NULL)
     {
@@ -180,9 +174,7 @@ free_type(type_T *type)
 	vim_free(type->tt_args);
     }
 
-    // for an object and class tt_member is a pointer to the class
-    if (type->tt_type != VAR_OBJECT && type->tt_type != VAR_CLASS)
-	free_type(type->tt_member);
+    free_type(type->tt_member);
 
     vim_free(type);
 }
@@ -419,6 +411,7 @@ typval2type_int(typval_T *tv, int copyID, garray_T *type_gap, int flags)
 {
     type_T  *type;
     type_T  *member_type = NULL;
+    class_T *class_type = NULL;
     int	    argcount = 0;
     int	    min_argcount = 0;
 
@@ -584,9 +577,9 @@ typval2type_int(typval_T *tv, int copyID, garray_T *type_gap, int flags)
     }
 
     if (tv->v_type == VAR_CLASS)
-	member_type = (type_T *)tv->vval.v_class;
+	class_type = tv->vval.v_class;
     else if (tv->v_type == VAR_OBJECT && tv->vval.v_object != NULL)
-	member_type = (type_T *)tv->vval.v_object->obj_class;
+	class_type = tv->vval.v_object->obj_class;
 
     type = get_type_ptr(type_gap);
     if (type == NULL)
@@ -601,6 +594,7 @@ typval2type_int(typval_T *tv, int copyID, garray_T *type_gap, int flags)
 	type->tt_min_argcount -= tv->vval.v_partial->pt_argc;
     }
     type->tt_member = member_type;
+    type->tt_class = class_type;
 
     return type;
 }
@@ -628,12 +622,17 @@ typval2type(typval_T *tv, int copyID, garray_T *type_gap, int flags)
 {
     type_T *type = typval2type_int(tv, copyID, type_gap, flags);
 
-    if (type != NULL && type != &t_bool
-	    && (tv->v_type == VAR_NUMBER
-		    && (tv->vval.v_number == 0 || tv->vval.v_number == 1)))
-	// Number 0 and 1 and expression with "&&" or "||" can also be used for
-	// bool.
+    if (type == NULL)
+	return NULL;
+
+    if (type != &t_bool && (tv->v_type == VAR_NUMBER
+		&& (tv->vval.v_number == 0 || tv->vval.v_number == 1)))
+	// Number 0 and 1 and expression with "&&" or "||" can also be used
+	// for bool.
 	type = &t_number_bool;
+    else if (type != &t_float && tv->v_type == VAR_NUMBER)
+	// A number can also be used for float.
+	type = &t_number_float;
     return type;
 }
 
@@ -821,9 +820,10 @@ check_type_maybe(
 		// Using number 0 or 1 for bool is OK.
 		return OK;
 	    if (expected->tt_type == VAR_FLOAT
-		    && (expected->tt_flags & TTFLAG_NUMBER_OK)
-					&& actual->tt_type == VAR_NUMBER)
-		// Using number where float is expected is OK here.
+		    && actual->tt_type == VAR_NUMBER
+		    && ((expected->tt_flags & TTFLAG_NUMBER_OK)
+			     || (actual->tt_flags & TTFLAG_FLOAT_OK)))
+		// Using a number where a float is expected is OK here.
 		return OK;
 	    if (give_msg)
 		type_mismatch_where(expected, actual, where);
@@ -878,17 +878,20 @@ check_type_maybe(
 	}
 	else if (expected->tt_type == VAR_OBJECT)
 	{
+	    if (actual->tt_type == VAR_ANY)
+		return MAYBE;	// use runtime type check
+	    if (actual->tt_type != VAR_OBJECT)
+		return FAIL;	// don't use tt_class
+
 	    // check the class, base class or an implemented interface matches
 	    class_T *cl;
-	    for (cl = (class_T *)actual->tt_member; cl != NULL;
-							cl = cl->class_extends)
+	    for (cl = actual->tt_class; cl != NULL; cl = cl->class_extends)
 	    {
-		if ((class_T *)expected->tt_member == cl)
+		if (expected->tt_class == cl)
 		    break;
 		int i;
 		for (i = cl->class_interface_count - 1; i >= 0; --i)
-		    if ((class_T *)expected->tt_member
-						 == cl->class_interfaces_cl[i])
+		    if (expected->tt_class == cl->class_interfaces_cl[i])
 			break;
 		if (i >= 0)
 		    break;
@@ -1310,7 +1313,7 @@ parse_type(char_u **arg, garray_T *type_gap, int give_error)
 		// Although the name is that of a class or interface, the type
 		// uses will be an object.
 		type->tt_type = VAR_OBJECT;
-		type->tt_member = (type_T *)tv.vval.v_class;
+		type->tt_class = tv.vval.v_class;
 		clear_tv(&tv);
 
 		*arg += len;
@@ -1648,7 +1651,8 @@ type_name(type_T *type, char **tofree)
 
     if (type->tt_type == VAR_OBJECT || type->tt_type == VAR_CLASS)
     {
-	char_u *class_name = ((class_T *)type->tt_member)->class_name;
+	char_u *class_name = type->tt_class == NULL ? (char_u *)"Unknown"
+				    : type->tt_class->class_name;
 	size_t len = STRLEN(name) + STRLEN(class_name) + 3;
 	*tofree = alloc(len);
 	if (*tofree != NULL)

@@ -824,7 +824,7 @@ cmd_with_count(
  * Otherwise return OK.
  */
     static int
-check_split_disallowed()
+check_split_disallowed(void)
 {
     if (split_disallowed > 0)
     {
@@ -2469,37 +2469,36 @@ close_last_window_tabpage(
     int		free_buf,
     tabpage_T   *prev_curtab)
 {
-    if (ONE_WINDOW)
-    {
-	buf_T	*old_curbuf = curbuf;
+    if (!ONE_WINDOW)
+	return FALSE;
 
-	/*
-	 * Closing the last window in a tab page.  First go to another tab
-	 * page and then close the window and the tab page.  This avoids that
-	 * curwin and curtab are invalid while we are freeing memory, they may
-	 * be used in GUI events.
-	 * Don't trigger autocommands yet, they may use wrong values, so do
-	 * that below.
-	 */
-	goto_tabpage_tp(alt_tabpage(), FALSE, TRUE);
+    buf_T	*old_curbuf = curbuf;
 
-	// Safety check: Autocommands may have closed the window when jumping
-	// to the other tab page.
-	if (valid_tabpage(prev_curtab) && prev_curtab->tp_firstwin == win)
-	    win_close_othertab(win, free_buf, prev_curtab);
+    /*
+     * Closing the last window in a tab page.  First go to another tab
+     * page and then close the window and the tab page.  This avoids that
+     * curwin and curtab are invalid while we are freeing memory, they may
+     * be used in GUI events.
+     * Don't trigger autocommands yet, they may use wrong values, so do
+     * that below.
+     */
+    goto_tabpage_tp(alt_tabpage(), FALSE, TRUE);
+
+    // Safety check: Autocommands may have closed the window when jumping
+    // to the other tab page.
+    if (valid_tabpage(prev_curtab) && prev_curtab->tp_firstwin == win)
+	win_close_othertab(win, free_buf, prev_curtab);
 #ifdef FEAT_JOB_CHANNEL
-	entering_window(curwin);
+    entering_window(curwin);
 #endif
-	// Since goto_tabpage_tp above did not trigger *Enter autocommands, do
-	// that now.
-	apply_autocmds(EVENT_TABCLOSED, NULL, NULL, FALSE, curbuf);
-	apply_autocmds(EVENT_WINENTER, NULL, NULL, FALSE, curbuf);
-	apply_autocmds(EVENT_TABENTER, NULL, NULL, FALSE, curbuf);
-	if (old_curbuf != curbuf)
-	    apply_autocmds(EVENT_BUFENTER, NULL, NULL, FALSE, curbuf);
-	return TRUE;
-    }
-    return FALSE;
+    // Since goto_tabpage_tp above did not trigger *Enter autocommands, do
+    // that now.
+    apply_autocmds(EVENT_TABCLOSED, NULL, NULL, FALSE, curbuf);
+    apply_autocmds(EVENT_WINENTER, NULL, NULL, FALSE, curbuf);
+    apply_autocmds(EVENT_TABENTER, NULL, NULL, FALSE, curbuf);
+    if (old_curbuf != curbuf)
+	apply_autocmds(EVENT_BUFENTER, NULL, NULL, FALSE, curbuf);
+    return TRUE;
 }
 
 /*
@@ -4205,15 +4204,14 @@ win_alloc_popup_win(void)
     win_T *wp;
 
     wp = win_alloc(NULL, TRUE);
-    if (wp != NULL)
-    {
-	// We need to initialize options with something, using the current
-	// window makes most sense.
-	win_init_some(wp, curwin);
+    if (wp == NULL)
+	return NULL;
+    // We need to initialize options with something, using the current
+    // window makes most sense.
+    win_init_some(wp, curwin);
 
-	RESET_BINDING(wp);
-	new_frame(wp);
-    }
+    RESET_BINDING(wp);
+    new_frame(wp);
     return wp;
 }
 
@@ -4287,11 +4285,10 @@ new_frame(win_T *wp)
     frame_T *frp = ALLOC_CLEAR_ONE(frame_T);
 
     wp->w_frame = frp;
-    if (frp != NULL)
-    {
-	frp->fr_layout = FR_LEAF;
-	frp->fr_win = wp;
-    }
+    if (frp == NULL)
+	return;
+    frp->fr_layout = FR_LEAF;
+    frp->fr_win = wp;
 }
 
 /*
@@ -4489,13 +4486,12 @@ may_open_tabpage(void)
     int		n = (cmdmod.cmod_tab == 0)
 				       ? postponed_split_tab : cmdmod.cmod_tab;
 
-    if (n != 0)
-    {
-	cmdmod.cmod_tab = 0;	    // reset it to avoid doing it twice
-	postponed_split_tab = 0;
-	return win_new_tabpage(n);
-    }
-    return FAIL;
+    if (n == 0)
+	return FAIL;
+
+    cmdmod.cmod_tab = 0;	    // reset it to avoid doing it twice
+    postponed_split_tab = 0;
+    return win_new_tabpage(n);
 }
 
 /*
@@ -4880,12 +4876,11 @@ goto_tabpage_tp(
     int
 goto_tabpage_lastused(void)
 {
-    if (valid_tabpage(lastused_tabpage))
-    {
-	goto_tabpage_tp(lastused_tabpage, TRUE, TRUE);
-	return OK;
-    }
-    return FAIL;
+    if (!valid_tabpage(lastused_tabpage))
+	return FAIL;
+
+    goto_tabpage_tp(lastused_tabpage, TRUE, TRUE);
+    return OK;
 }
 
 /*
@@ -5278,15 +5273,15 @@ win_enter_ext(win_T *wp, int flags)
     int		curwin_invalid = (flags & WEE_CURWIN_INVALID);
     int		did_decrement = FALSE;
 
-    if (wp == curwin && !curwin_invalid)	// nothing to do
+    if (wp == curwin && curwin_invalid == 0)	// nothing to do
 	return FALSE;
 
 #ifdef FEAT_JOB_CHANNEL
-    if (!curwin_invalid)
+    if (curwin_invalid == 0)
 	leaving_window(curwin);
 #endif
 
-    if (!curwin_invalid && (flags & WEE_TRIGGER_LEAVE_AUTOCMDS))
+    if (curwin_invalid == 0 && (flags & WEE_TRIGGER_LEAVE_AUTOCMDS))
     {
 	/*
 	 * Be careful: If autocommands delete the window, return now.
@@ -5314,13 +5309,13 @@ win_enter_ext(win_T *wp, int flags)
 
     // Might need to scroll the old window before switching, e.g., when the
     // cursor was moved.
-    if (*p_spk == 'c')
+    if (*p_spk == 'c' && curwin_invalid == 0)
 	update_topline();
 
     // may have to copy the buffer options when 'cpo' contains 'S'
     if (wp->w_buffer != curbuf)
 	buf_copy_options(wp->w_buffer, BCO_ENTER | BCO_NOHELP);
-    if (!curwin_invalid)
+    if (curwin_invalid == 0)
     {
 	prevwin = curwin;	// remember for CTRL-W p
 	curwin->w_redr_status = TRUE;
@@ -5333,7 +5328,10 @@ win_enter_ext(win_T *wp, int flags)
     if (*p_spk == 'c')		// assume cursor position needs updating
 	changed_line_abv_curs();
     else
-	win_fix_cursor(TRUE);
+	// Make sure the cursor position is valid, either by moving the cursor
+	// or by scrolling the text.
+	win_fix_cursor(
+		get_real_state() & (MODE_NORMAL|MODE_CMDLINE|MODE_TERMINAL));
 
     // Now it is OK to parse messages again, which may be needed in
     // autocommands.
@@ -5907,17 +5905,17 @@ win_size_save(garray_T *gap)
     win_T	*wp;
 
     ga_init2(gap, sizeof(int), 1);
-    if (ga_grow(gap, win_count() * 2 + 1) == OK)
-    {
-	// first entry is value of 'lines'
-	((int *)gap->ga_data)[gap->ga_len++] = Rows;
+    if (ga_grow(gap, win_count() * 2 + 1) == FAIL)
+	return;
 
-	FOR_ALL_WINDOWS(wp)
-	{
-	    ((int *)gap->ga_data)[gap->ga_len++] =
-					       wp->w_width + wp->w_vsep_width;
-	    ((int *)gap->ga_data)[gap->ga_len++] = wp->w_height;
-	}
+    // first entry is value of 'lines'
+    ((int *)gap->ga_data)[gap->ga_len++] = Rows;
+
+    FOR_ALL_WINDOWS(wp)
+    {
+	((int *)gap->ga_data)[gap->ga_len++] =
+	    wp->w_width + wp->w_vsep_width;
+	((int *)gap->ga_data)[gap->ga_len++] = wp->w_height;
     }
 }
 
@@ -6016,7 +6014,7 @@ frame_comp_pos(frame_T *topfrp, int *row, int *col)
  * Make the current window show at least one line and one column.
  */
     void
-win_ensure_size()
+win_ensure_size(void)
 {
     if (curwin->w_height == 0)
 	win_setheight(1);
@@ -6787,7 +6785,8 @@ win_fix_scroll(int resize)
 /*
  * Make sure the cursor position is valid for 'splitkeep'.
  * If it is not, put the cursor position in the jumplist and move it.
- * If we are not in normal mode, scroll to make valid instead.
+ * If we are not in normal mode ("normal" is zero), make it valid by scrolling
+ * instead.
  */
     static void
 win_fix_cursor(int normal)
@@ -7358,7 +7357,7 @@ check_lnums_nested(int do_curwin)
  * check_lnums() must have been called first!
  */
     void
-reset_lnums()
+reset_lnums(void)
 {
     win_T	*wp;
     tabpage_T	*tp;
@@ -7429,12 +7428,11 @@ clear_snapshot(tabpage_T *tp, int idx)
     static void
 clear_snapshot_rec(frame_T *fr)
 {
-    if (fr != NULL)
-    {
-	clear_snapshot_rec(fr->fr_next);
-	clear_snapshot_rec(fr->fr_child);
-	vim_free(fr);
-    }
+    if (fr == NULL)
+	return;
+    clear_snapshot_rec(fr->fr_next);
+    clear_snapshot_rec(fr->fr_child);
+    vim_free(fr);
 }
 
 /*

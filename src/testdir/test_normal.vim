@@ -262,6 +262,7 @@ func Test_formatexpr_scriptlocal_func()
   endfunc
   set formatexpr=s:Format()
   call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
   new | only
   call setline(1, range(1, 40))
   let g:FormatArgs = []
@@ -270,6 +271,7 @@ func Test_formatexpr_scriptlocal_func()
   bw!
   set formatexpr=<SID>Format()
   call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
   new | only
   call setline(1, range(1, 40))
   let g:FormatArgs = []
@@ -277,6 +279,7 @@ func Test_formatexpr_scriptlocal_func()
   call assert_equal([4, 2], g:FormatArgs)
   bw!
   let &formatexpr = 's:Format()'
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
   new | only
   call setline(1, range(1, 40))
   let g:FormatArgs = []
@@ -284,12 +287,55 @@ func Test_formatexpr_scriptlocal_func()
   call assert_equal([6, 2], g:FormatArgs)
   bw!
   let &formatexpr = '<SID>Format()'
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
   new | only
   call setline(1, range(1, 40))
   let g:FormatArgs = []
   normal! 8GVjgq
   call assert_equal([8, 2], g:FormatArgs)
+  bw!
   setlocal formatexpr=
+  setglobal formatexpr=s:Format()
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
+  call assert_equal('', &formatexpr)
+  new
+  call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call setline(1, range(1, 40))
+  let g:FormatArgs = []
+  normal! 10GVjgq
+  call assert_equal([10, 2], g:FormatArgs)
+  bw!
+  setglobal formatexpr=<SID>Format()
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
+  call assert_equal('', &formatexpr)
+  new
+  call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call setline(1, range(1, 40))
+  let g:FormatArgs = []
+  normal! 12GVjgq
+  call assert_equal([12, 2], g:FormatArgs)
+  bw!
+  let &g:formatexpr = 's:Format()'
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
+  call assert_equal('', &formatexpr)
+  new
+  call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call setline(1, range(1, 40))
+  let g:FormatArgs = []
+  normal! 14GVjgq
+  call assert_equal([14, 2], g:FormatArgs)
+  bw!
+  let &g:formatexpr = '<SID>Format()'
+  call assert_equal(expand('<SID>') .. 'Format()', &g:formatexpr)
+  call assert_equal('', &formatexpr)
+  new
+  call assert_equal(expand('<SID>') .. 'Format()', &formatexpr)
+  call setline(1, range(1, 40))
+  let g:FormatArgs = []
+  normal! 16GVjgq
+  call assert_equal([16, 2], g:FormatArgs)
+  bw!
+  set formatexpr=
   delfunc s:Format
   bw!
 endfunc
@@ -2163,7 +2209,7 @@ func Test_normal29_brace()
     a character like this:
     .NH
     End of text here
-  
+
   [DATA]
   call assert_equal(expected, getline(1, '$'))
 
@@ -3227,9 +3273,9 @@ func Test_delete_until_paragraph()
 endfunc
 
 " Test for the gr (virtual replace) command
-" Test for the bug fixed by 7.4.387
 func Test_gr_command()
   enew!
+  " Test for the bug fixed by 7.4.387
   let save_cpo = &cpo
   call append(0, ['First line', 'Second line', 'Third line'])
   exe "normal i\<C-G>u"
@@ -3242,10 +3288,12 @@ func Test_gr_command()
   normal 4gro
   call assert_equal('ooooecond line', getline(2))
   let &cpo = save_cpo
+
   normal! ggvegrx
   call assert_equal('xxxxx line', getline(1))
   exe "normal! gggr\<C-V>122"
   call assert_equal('zxxxx line', getline(1))
+
   set virtualedit=all
   normal! 15|grl
   call assert_equal('zxxxx line    l', getline(1))
@@ -3253,8 +3301,25 @@ func Test_gr_command()
   set nomodifiable
   call assert_fails('normal! grx', 'E21:')
   call assert_fails('normal! gRx', 'E21:')
+  call assert_nobeep("normal! gr\<Esc>")
   set modifiable&
-  enew!
+
+  call assert_nobeep("normal! gr\<Esc>")
+  call assert_beeps("normal! cgr\<Esc>")
+
+  call assert_equal('zxxxx line    l', getline(1))
+  exe "normal! 2|gr\<C-V>\<Esc>"
+  call assert_equal("z\<Esc>xx line    l", getline(1))
+
+  call setline(1, 'abcdef')
+  exe "normal! 0gr\<C-O>lx"
+  call assert_equal("\<C-O>def", getline(1))
+
+  call setline(1, 'abcdef')
+  exe "normal! 0gr\<C-G>lx"
+  call assert_equal("\<C-G>def", getline(1))
+
+  bwipe!
 endfunc
 
 func Test_nv_hat_count()

@@ -150,6 +150,26 @@ generate_GET_OBJ_MEMBER(cctx_T *cctx, int idx, type_T *type)
 }
 
 /*
+ * Generate ISN_GET_ITF_MEMBER - access member of interface at bottom of stack
+ * by index.
+ */
+    int
+generate_GET_ITF_MEMBER(cctx_T *cctx, class_T *itf, int idx, type_T *type)
+{
+    RETURN_OK_IF_SKIP(cctx);
+
+    // drop the object type
+    isn_T *isn = generate_instr_drop(cctx, ISN_GET_ITF_MEMBER, 1);
+    if (isn == NULL)
+	return FAIL;
+
+    isn->isn_arg.classmember.cm_class = itf;
+    ++itf->class_refcount;
+    isn->isn_arg.classmember.cm_idx = idx;
+    return push_type_stack2(cctx, type, &t_any);
+}
+
+/*
  * Generate ISN_STORE_THIS - store value in member of "this" object with member
  * index "idx".
  */
@@ -636,6 +656,35 @@ generate_SETTYPE(
 }
 
 /*
+ * Generate an ISN_PUSHOBJ instruction.  Object is always NULL.
+ */
+    static int
+generate_PUSHOBJ(cctx_T *cctx)
+{
+    RETURN_OK_IF_SKIP(cctx);
+    if (generate_instr_type(cctx, ISN_PUSHOBJ, &t_any) == NULL)
+	return FAIL;
+    return OK;
+}
+
+/*
+ * Generate an ISN_PUSHCLASS instruction.  "class" can be NULL.
+ */
+    static int
+generate_PUSHCLASS(cctx_T *cctx, class_T *class)
+{
+    RETURN_OK_IF_SKIP(cctx);
+    isn_T *isn = generate_instr_type(cctx, ISN_PUSHCLASS,
+				  class == NULL ? &t_any : &class->class_type);
+    if (isn == NULL)
+	return FAIL;
+    isn->isn_arg.classarg = class;
+    if (class != NULL)
+	++class->class_refcount;
+    return OK;
+}
+
+/*
  * Generate a PUSH instruction for "tv".
  * "tv" will be consumed or cleared.
  */
@@ -697,6 +746,17 @@ generate_tv_PUSH(cctx_T *cctx, typval_T *tv)
 	case VAR_STRING:
 	    generate_PUSHS(cctx, &tv->vval.v_string);
 	    tv->vval.v_string = NULL;
+	    break;
+	case VAR_OBJECT:
+	    if (tv->vval.v_object != NULL)
+	    {
+		emsg(_(e_cannot_use_non_null_object));
+		return FAIL;
+	    }
+	    generate_PUSHOBJ(cctx);
+	    break;
+	case VAR_CLASS:
+	    generate_PUSHCLASS(cctx, tv->vval.v_class);
 	    break;
 	default:
 	    siemsg("constant type %d not supported", tv->v_type);
@@ -1308,14 +1368,16 @@ generate_NEWDICT(cctx_T *cctx, int count, int use_null)
 
 /*
  * Generate an ISN_FUNCREF instruction.
+ * For "obj.Method" "cl" is the class of the object (can be an interface or a
+ * base class) and "fi" the index of the method on that class.
  * "isnp" is set to the instruction, so that fr_dfunc_idx can be set later.
- * If variables were declared inside a loop "loop_var_idx" is the index of the
- * first one and "loop_var_count" the number of variables declared.
  */
     int
 generate_FUNCREF(
 	cctx_T	    *cctx,
 	ufunc_T	    *ufunc,
+	class_T	    *cl,
+	int	    fi,
 	isn_T	    **isnp)
 {
     isn_T	    *isn;
@@ -1331,18 +1393,29 @@ generate_FUNCREF(
 	*isnp = isn;
 
     has_vars = get_loop_var_info(cctx, &loopinfo);
-    if (ufunc->uf_def_status == UF_NOT_COMPILED || has_vars)
+    if (ufunc->uf_def_status == UF_NOT_COMPILED || has_vars || cl != NULL)
     {
 	extra = ALLOC_CLEAR_ONE(funcref_extra_T);
 	if (extra == NULL)
 	    return FAIL;
 	isn->isn_arg.funcref.fr_extra = extra;
 	extra->fre_loopvar_info = loopinfo;
+	if (cl != NULL)
+	{
+	    extra->fre_class = cl;
+	    ++cl->class_refcount;
+	    extra->fre_method_idx = fi;
+	}
     }
-    if (ufunc->uf_def_status == UF_NOT_COMPILED)
+    if (ufunc->uf_def_status == UF_NOT_COMPILED || cl != NULL)
 	extra->fre_func_name = vim_strsave(ufunc->uf_name);
-    else
+    if (ufunc->uf_def_status != UF_NOT_COMPILED && cl == NULL)
+    {
+	if (isnp == NULL && ufunc->uf_def_status == UF_TO_BE_COMPILED)
+	    // compile the function now, we need the uf_dfunc_idx value
+	    (void)compile_def_function(ufunc, FALSE, CT_NONE, NULL);
 	isn->isn_arg.funcref.fr_dfunc_idx = ufunc->uf_dfunc_idx;
+    }
 
     // Reserve an extra variable to keep track of the number of closures
     // created.
@@ -1686,11 +1759,18 @@ generate_BLOBAPPEND(cctx_T *cctx)
 }
 
 /*
- * Generate an ISN_DCALL or ISN_UCALL instruction.
+ * Generate an ISN_DCALL, ISN_UCALL or ISN_METHODCALL instruction.
+ * When calling a method on an object, of which we know the interface only,
+ * then "cl" is the interface and "mi" the method index on the interface.
  * Return FAIL if the number of arguments is wrong.
  */
     int
-generate_CALL(cctx_T *cctx, ufunc_T *ufunc, int pushed_argcount)
+generate_CALL(
+	cctx_T	    *cctx,
+	ufunc_T	    *ufunc,
+	class_T	    *cl,
+	int	    mi,
+	int	    pushed_argcount)
 {
     isn_T	*isn;
     int		regular_args = ufunc->uf_args.ga_len;
@@ -1760,11 +1840,21 @@ generate_CALL(cctx_T *cctx, ufunc_T *ufunc, int pushed_argcount)
 	return FAIL;
     }
 
-    if ((isn = generate_instr(cctx,
-		    ufunc->uf_def_status != UF_NOT_COMPILED ? ISN_DCALL
-							 : ISN_UCALL)) == NULL)
+    if ((isn = generate_instr(cctx, cl != NULL ? ISN_METHODCALL
+			  : ufunc->uf_def_status != UF_NOT_COMPILED
+					     ? ISN_DCALL : ISN_UCALL)) == NULL)
 	return FAIL;
-    if (isn->isn_type == ISN_DCALL)
+    if (cl != NULL /* isn->isn_type == ISN_METHODCALL */)
+    {
+	isn->isn_arg.mfunc = ALLOC_ONE(cmfunc_T);
+	if (isn->isn_arg.mfunc == NULL)
+	    return FAIL;
+	isn->isn_arg.mfunc->cmf_itf = cl;
+	++cl->class_refcount;
+	isn->isn_arg.mfunc->cmf_idx = mi;
+	isn->isn_arg.mfunc->cmf_argcount = argcount;
+    }
+    else if (isn->isn_type == ISN_DCALL)
     {
 	isn->isn_arg.dfunc.cdf_idx = ufunc->uf_dfunc_idx;
 	isn->isn_arg.dfunc.cdf_argcount = argcount;
@@ -1887,7 +1977,8 @@ generate_PCALL(
 	ret_type = &t_any;
     else if (type->tt_type == VAR_FUNC || type->tt_type == VAR_PARTIAL)
     {
-	if (check_func_args_from_type(cctx, type, argcount, at_top, name) == FAIL)
+	if (check_func_args_from_type(cctx, type, argcount, at_top, name)
+								       == FAIL)
 	    return FAIL;
 
 	ret_type = type->tt_member;
@@ -1922,14 +2013,17 @@ generate_PCALL(
 
 /*
  * Generate an ISN_DEFER instruction.
+ * "obj_method" is one for "obj.Method()", zero otherwise.
  */
     int
-generate_DEFER(cctx_T *cctx, int var_idx, int argcount)
+generate_DEFER(cctx_T *cctx, int var_idx, int obj_method, int argcount)
 {
     isn_T *isn;
 
     RETURN_OK_IF_SKIP(cctx);
-    if ((isn = generate_instr_drop(cctx, ISN_DEFER, argcount + 1)) == NULL)
+    if ((isn = generate_instr_drop(cctx,
+		    obj_method == 0 ? ISN_DEFER : ISN_DEFEROBJ,
+		    argcount + 1)) == NULL)
 	return FAIL;
     isn->isn_arg.defer.defer_var_idx = var_idx;
     isn->isn_arg.defer.defer_argcount = argcount;
@@ -2286,41 +2380,41 @@ generate_store_lhs(cctx_T *cctx, lhs_T *lhs, int instr_count, int is_decl)
 			    lhs->lhs_opt_flags, lhs->lhs_vimvaridx,
 			    lhs->lhs_type, lhs->lhs_name, lhs);
 
-    if (lhs->lhs_lvar != NULL)
+    if (lhs->lhs_lvar == NULL)
+	return OK;
+
+    garray_T	*instr = &cctx->ctx_instr;
+    isn_T		*isn = ((isn_T *)instr->ga_data) + instr->ga_len - 1;
+
+    // Optimization: turn "var = 123" from ISN_PUSHNR + ISN_STORE into
+    // ISN_STORENR.
+    // And "var = 0" does not need any instruction.
+    if (lhs->lhs_lvar->lv_from_outer == 0
+	    && instr->ga_len == instr_count + 1
+	    && isn->isn_type == ISN_PUSHNR)
     {
-	garray_T	*instr = &cctx->ctx_instr;
-	isn_T		*isn = ((isn_T *)instr->ga_data) + instr->ga_len - 1;
+	varnumber_T val = isn->isn_arg.number;
+	garray_T    *stack = &cctx->ctx_type_stack;
 
-	// Optimization: turn "var = 123" from ISN_PUSHNR + ISN_STORE into
-	// ISN_STORENR.
-	// And "var = 0" does not need any instruction.
-	if (lhs->lhs_lvar->lv_from_outer == 0
-		&& instr->ga_len == instr_count + 1
-		&& isn->isn_type == ISN_PUSHNR)
+	if (val == 0 && is_decl && !inside_loop_scope(cctx))
 	{
-	    varnumber_T val = isn->isn_arg.number;
-	    garray_T    *stack = &cctx->ctx_type_stack;
-
-	    if (val == 0 && is_decl && !inside_loop_scope(cctx))
-	    {
-		// zero is the default value, no need to do anything
-		--instr->ga_len;
-	    }
-	    else
-	    {
-		isn->isn_type = ISN_STORENR;
-		isn->isn_arg.storenr.stnr_idx = lhs->lhs_lvar->lv_idx;
-		isn->isn_arg.storenr.stnr_val = val;
-	    }
-	    if (stack->ga_len > 0)
-		--stack->ga_len;
+	    // zero is the default value, no need to do anything
+	    --instr->ga_len;
 	}
-	else if (lhs->lhs_lvar->lv_from_outer > 0)
-	    generate_STOREOUTER(cctx, lhs->lhs_lvar->lv_idx,
-		     lhs->lhs_lvar->lv_from_outer, lhs->lhs_lvar->lv_loop_idx);
 	else
-	    generate_STORE(cctx, ISN_STORE, lhs->lhs_lvar->lv_idx, NULL);
+	{
+	    isn->isn_type = ISN_STORENR;
+	    isn->isn_arg.storenr.stnr_idx = lhs->lhs_lvar->lv_idx;
+	    isn->isn_arg.storenr.stnr_val = val;
+	}
+	if (stack->ga_len > 0)
+	    --stack->ga_len;
     }
+    else if (lhs->lhs_lvar->lv_from_outer > 0)
+	generate_STOREOUTER(cctx, lhs->lhs_lvar->lv_idx,
+		lhs->lhs_lvar->lv_from_outer, lhs->lhs_lvar->lv_loop_idx);
+    else
+	generate_STORE(cctx, ISN_STORE, lhs->lhs_lvar->lv_idx, NULL);
     return OK;
 }
 
@@ -2414,6 +2508,10 @@ delete_instr(isn_T *isn)
 	    blob_unref(isn->isn_arg.blob);
 	    break;
 
+	case ISN_PUSHCLASS:
+	    class_unref(isn->isn_arg.classarg);
+	    break;
+
 	case ISN_UCALL:
 	    vim_free(isn->isn_arg.ufunc.cuf_name);
 	    break;
@@ -2441,6 +2539,8 @@ delete_instr(isn_T *isn)
 			func_unref(name);
 			vim_free(name);
 		    }
+		    if (extra->fre_class != NULL)
+			class_unref(extra->fre_class);
 		    vim_free(extra);
 		}
 	    }
@@ -2454,6 +2554,14 @@ delete_instr(isn_T *isn)
 		if (dfunc->df_ufunc != NULL
 			&& func_name_refcount(dfunc->df_ufunc->uf_name))
 		    func_ptr_unref(dfunc->df_ufunc);
+	    }
+	    break;
+
+	case ISN_METHODCALL:
+	    {
+		cmfunc_T  *mfunc = isn->isn_arg.mfunc;
+		class_unref(mfunc->cmf_itf);
+		vim_free(mfunc);
 	    }
 	    break;
 
@@ -2497,7 +2605,12 @@ delete_instr(isn_T *isn)
 
 	case ISN_LOAD_CLASSMEMBER:
 	case ISN_STORE_CLASSMEMBER:
+	case ISN_GET_ITF_MEMBER:
 	    class_unref(isn->isn_arg.classmember.cm_class);
+	    break;
+
+	case ISN_STOREINDEX:
+	    class_unref(isn->isn_arg.storeindex.si_class);
 	    break;
 
 	case ISN_TRY:
@@ -2543,6 +2656,7 @@ delete_instr(isn_T *isn)
 	case ISN_COND2BOOL:
 	case ISN_DEBUG:
 	case ISN_DEFER:
+	case ISN_DEFEROBJ:
 	case ISN_DROP:
 	case ISN_ECHO:
 	case ISN_ECHOCONSOLE:
@@ -2590,6 +2704,7 @@ delete_instr(isn_T *isn)
 	case ISN_PUSHF:
 	case ISN_PUSHJOB:
 	case ISN_PUSHNR:
+	case ISN_PUSHOBJ:
 	case ISN_PUSHSPEC:
 	case ISN_PUT:
 	case ISN_REDIREND:
@@ -2601,7 +2716,6 @@ delete_instr(isn_T *isn)
 	case ISN_SLICE:
 	case ISN_SOURCE:
 	case ISN_STORE:
-	case ISN_STOREINDEX:
 	case ISN_STORENR:
 	case ISN_STOREOUTER:
 	case ISN_STORE_THIS:

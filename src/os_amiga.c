@@ -222,13 +222,13 @@ mch_avail_mem(int special)
     void
 mch_delay(long msec, int flags)
 {
-    if (msec > 0)
-    {
-	if (flags & MCH_DELAY_IGNOREINPUT)
-	    Delay(msec / 20L);	    // Delay works with 20 msec intervals
-	else
-	    WaitForChar(raw_in, msec * 1000L);
-    }
+    if (msec <= 0)
+	return;
+
+    if (flags & MCH_DELAY_IGNOREINPUT)
+	Delay(msec / 20L);	    // Delay works with 20 msec intervals
+    else
+	WaitForChar(raw_in, msec * 1000L);
 }
 
 /*
@@ -686,19 +686,19 @@ fname_case(
     size_t flen;
     struct FileInfoBlock *fib = get_fib(name);
 
-    if (fib != NULL)
-    {
-	flen = STRLEN(name);
-	// TODO: Check if this fix applies to AmigaOS < 4 too.
-#ifdef __amigaos4__
-	if (fib->fib_DirEntryType == ST_ROOT)
-	    strcat(fib->fib_FileName, ":");
-#endif
-	if (flen == strlen(fib->fib_FileName))	// safety check
-	    mch_memmove(name, fib->fib_FileName, flen);
+    if (fib == NULL)
+	return;
 
-	FreeDosObject(DOS_FIB, fib);
-    }
+    flen = STRLEN(name);
+    // TODO: Check if this fix applies to AmigaOS < 4 too.
+#ifdef __amigaos4__
+    if (fib->fib_DirEntryType == ST_ROOT)
+	strcat(fib->fib_FileName, ":");
+#endif
+    if (flen == strlen(fib->fib_FileName))	// safety check
+	mch_memmove(name, fib->fib_FileName, flen);
+
+    FreeDosObject(DOS_FIB, fib);
 }
 
 /*
@@ -954,12 +954,11 @@ mch_mkdir(char_u *name)
     BPTR	lock;
 
     lock = CreateDir(name);
-    if (lock != NULL)
-    {
-	UnLock(lock);
-	return 0;
-    }
-    return -1;
+    if (lock == NULL)
+	return -1;
+
+    UnLock(lock);
+    return 0;
 }
 
 /*
@@ -1275,17 +1274,17 @@ out:
     void
 mch_set_shellsize(void)
 {
-    if (term_console)
-    {
-	size_set = TRUE;
-	out_char(CSI);
-	out_num((long)Rows);
-	out_char('t');
-	out_char(CSI);
-	out_num((long)Columns);
-	out_char('u');
-	out_flush();
-    }
+    if (!term_console)
+	return;
+
+    size_set = TRUE;
+    out_char(CSI);
+    out_num((long)Rows);
+    out_char('t');
+    out_char(CSI);
+    out_num((long)Columns);
+    out_char('u');
+    out_flush();
 }
 
 /*
@@ -1353,7 +1352,8 @@ dos_packet(
     // Allocate space for a packet, make it public and clear it
     packet = (struct StandardPacket *)
 	AllocMem((long) sizeof(struct StandardPacket), MEMF_PUBLIC | MEMF_CLEAR);
-    if (!packet) {
+    if (!packet)
+    {
 	DeletePort(replyport);
 	return (0);
     }

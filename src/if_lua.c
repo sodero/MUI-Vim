@@ -657,9 +657,11 @@ luaV_totypval(lua_State *L, int pos, typval_T *tv)
 
 	    lua_pushvalue(L, pos);
 	    lua_tableref = luaL_ref(L, LUA_REGISTRYINDEX);
-	    if (lua_getmetatable(L, pos)) {
+	    if (lua_getmetatable(L, pos))
+	    {
 		lua_getfield(L, -1, LUA___CALL);
-		if (lua_isfunction(L, -1)) {
+		if (lua_isfunction(L, -1))
+		{
 		    char_u *name;
 		    int lua_funcref = luaL_ref(L, LUA_REGISTRYINDEX);
 		    luaV_CFuncState *state = ALLOC_CLEAR_ONE(luaV_CFuncState);
@@ -827,7 +829,8 @@ luaV_msgfunc(lua_State *L, msgfunc_T mf)
 	luatyp *o = NULL; \
 	if (obj == NULL) \
 	    lua_pushnil(L); \
-	else { \
+	else \
+	{ \
 	    luaV_getudata(L, obj); \
 	    if (lua_isnil(L, -1)) /* not interned? */ \
 	    { \
@@ -2733,7 +2736,7 @@ set_ref_in_lua(int copyID)
 }
 
     void
-update_package_paths_in_lua()
+update_package_paths_in_lua(void)
 {
     if (!lua_isopen())
 	return;
@@ -2773,11 +2776,11 @@ luaV_call_lua_func(
     if (lua_pcall(funcstate->L, luaargcount, 1, 0))
     {
 	luaV_emsg(funcstate->L);
-	return FCERR_OTHER;
+	return (int)FCERR_OTHER;
     }
 
     luaV_checktypval(funcstate->L, -1, rettv, "get return value");
-    return FCERR_NONE;
+    return (int)FCERR_NONE;
 }
 
 /*
