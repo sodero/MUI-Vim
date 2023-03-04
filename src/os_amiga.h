@@ -42,6 +42,8 @@
 # define UP_BC_PC_EXTERN
 # define HAVE_GETTIMEOFDAY
 # define HAVE_SYS_TIME_H
+# define HAVE_ISNAN
+# define HAVE_ISINF
 #endif // !HAVE_CONFIG_H
 
 #ifndef	DFLT_ERRORFILE
