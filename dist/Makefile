@@ -89,6 +89,7 @@ $(DST)/$(DST).info: | $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
 	cp "Vim installer" $(DST)
 	cp *.guide $(DST)
+	cp *.png $(DST)
 
 $(DST).info: | $(DST)/$(DST).info
 	mv $(DST)/$(DST).info .
