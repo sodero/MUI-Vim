@@ -31,6 +31,15 @@
 # define KPrintF DebugPrintF
 #endif
 
+// XXX These are included from os_amiga.h
+// #include <exec/types.h>
+// #include <libraries/dos.h>
+// #include <libraries/dosextens.h>
+// #include <proto/exec.h>
+// #include <proto/dos.h>
+// #include <proto/intuition.h>
+
+#include <exec/memory.h>
 #include <workbench/startup.h>
 #include <dos/dostags.h>	    // for 2.0 functions
 #include <dos/dosasl.h>

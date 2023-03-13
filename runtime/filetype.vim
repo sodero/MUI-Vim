@@ -280,6 +280,9 @@ endif
 au BufNewFile,BufRead *.c			call dist#ft#FTlpc()
 au BufNewFile,BufRead *.lpc,*.ulpc		setf lpc
 
+" Cairo
+au BufNewFile,BufRead *.cairo			setf cairo
+
 " Calendar
 au BufNewFile,BufRead calendar			setf calendar
 
@@ -1402,6 +1405,9 @@ au BufNewFile,BufRead *.occ			setf occam
 " Octave
 au BufNewFile,BufRead octave.conf,.octaverc,octaverc	setf octave
 
+" Odin
+au BufNewFile,BufRead *.odin			setf odin
+
 " Omnimark
 au BufNewFile,BufRead *.xom,*.xin		setf omnimark
 
@@ -2111,6 +2117,9 @@ au BufNewFile,BufRead tags			setf tags
 
 " TAK
 au BufNewFile,BufRead *.tak			setf tak
+
+" Unx Tal
+au BufNewFile,BufRead *.tal			setf tal
 
 " Task
 au BufRead,BufNewFile {pending,completed,undo}.data  setf taskdata
