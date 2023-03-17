@@ -1652,8 +1652,14 @@ au BufNewFile,BufRead *.ptl,*.pyi,SConstruct		   setf python
 " QL
 au BufRead,BufNewFile *.ql,*.qll		setf ql
 
+" QMLdir
+au BufRead,BufNewFile qmldir			setf qmldir
+
 " Quarto
 au BufRead,BufNewFile *.qmd			setf quarto
+
+" Racket (formerly detected as "scheme")
+au BufNewFile,BufRead *.rkt,*.rktd,*.rktl	setf racket
 
 " Radiance
 au BufNewFile,BufRead *.rad,*.mat		setf radiance
@@ -1734,6 +1740,9 @@ au BufNewFile,BufRead *.rnc			setf rnc
 
 " Relax NG XML
 au BufNewFile,BufRead *.rng			setf rng
+
+" ILE RPG
+au BufNewFile,BufRead *.rpgle,*.rpgleinc	setf rpgle
 
 " RPL/2
 au BufNewFile,BufRead *.rpl			setf rpl
@@ -1922,8 +1931,8 @@ au BufNewFile,BufRead .zprofile,*/etc/zprofile,.zfbfmarks  setf zsh
 au BufNewFile,BufRead .zshrc,.zshenv,.zlogin,.zlogout,.zcompdump setf zsh
 au BufNewFile,BufRead *.zsh			setf zsh
 
-" Scheme
-au BufNewFile,BufRead *.scm,*.ss,*.sld,*.rkt,*.rktd,*.rktl	setf scheme
+" Scheme ("racket" patterns are now separate, see above)
+au BufNewFile,BufRead *.scm,*.ss,*.sld		setf scheme
 
 " Screen RC
 au BufNewFile,BufRead .screenrc,screenrc	setf screen
@@ -2107,6 +2116,9 @@ au BufNewFile,BufRead *.svg			setf svg
 
 " Surface
 au BufRead,BufNewFile *.sface			setf surface
+
+" LLVM TableGen
+au BufNewFile,BufRead *.td			setf tablegen
 
 " Tads (or Nroff or Perl test file)
 au BufNewFile,BufRead *.t
