@@ -539,10 +539,6 @@ extern char *(*dyn_libintl_textdomain)(const char *domainname);
 extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #endif
 
-/* INSERT is defined on Amiga */
-# ifdef INSERT
-#  undef INSERT
-# endif
 
 /*
  * The _() stuff is for using gettext().  It is a no-op when libintl.h is not
