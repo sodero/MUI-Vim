@@ -63,7 +63,7 @@ Hollywood syntax highlighting.
 
 @ENDNODE
 
-@nodE "Changelog" "Changelog"
+@NODE "Changelog" "Changelog"
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
