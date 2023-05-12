@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2023 Feb 25
+" Last Change:	2023 Mar 28
 
 " Listen very carefully, I will say this only once
 if exists("did_load_filetypes")
@@ -276,6 +276,9 @@ if has("fname_case")
   autocmd BufRead,BufNewFile *.BUILD,BUILD		setf bzl
 endif
 
+" Busted (Lua unit testing framework - configuration files)
+au BufNewFile,BufRead .busted			setf lua
+
 " C or lpc
 au BufNewFile,BufRead *.c			call dist#ft#FTlpc()
 au BufNewFile,BufRead *.lpc,*.ulpc		setf lpc
@@ -340,6 +343,10 @@ au BufNewFile,BufRead *.cxx,*.c++,*.hh,*.hxx,*.hpp,*.ipp,*.moc,*.tcc,*.inl setf 
 if has("fname_case")
   au BufNewFile,BufRead *.C,*.H setf cpp
 endif
+
+" C++ 20 modules (clang)
+" https://clang.llvm.org/docs/StandardCPlusPlusModules.html#file-name-requirement
+au BufNewFile,BufRead *.cppm,*.ccm,*.cxxm,*.c++m setf cpp
 
 " .h files can be C, Ch C++, ObjC or ObjC++.
 " Set c_syntax_for_h if you want C, ch_syntax_for_h if you want Ch. ObjC is
@@ -441,6 +448,9 @@ au BufNewFile,BufRead *.cook			setf cook
 " If support for XDCC Catcher is needed in the future, the contents of the file
 " needs to be inspected.
 au BufNewFile,BufRead *.cql			setf cqlang
+
+" Crystal
+au BufNewFile,BufRead *.cr			setf crystal
 
 " CSV Files
 au BufNewFile,BufRead *.csv			setf csv
@@ -653,6 +663,9 @@ au BufNewFile,BufRead filter-rules		setf elmfilt
 " Elsa - https://github.com/ucsd-progsys/elsa
 au BufNewFile,BufRead *.lc			setf elsa
 
+" EdgeDB Schema Definition Language
+au BufNewFile,BufRead *.esdl			setf esdl
+
 " ESMTP rc file
 au BufNewFile,BufRead *esmtprc			setf esmtprc
 
@@ -838,7 +851,7 @@ au BufNewFile,BufRead *.graphql,*.graphqls,*.gql			setf graphql
 au BufNewFile,BufRead *.gretl			setf gretl
 
 " Groovy
-au BufNewFile,BufRead *.gradle,*.groovy		setf groovy
+au BufNewFile,BufRead *.gradle,*.groovy,Jenkinsfile		setf groovy
 
 " GNU Server Pages
 au BufNewFile,BufRead *.gsp			setf gsp
@@ -1109,6 +1122,9 @@ au BufNewFile,BufRead *.ldif			setf ldif
 " Ld loader
 au BufNewFile,BufRead *.ld			setf ld
 
+" Lean
+au BufNewFile,BufRead *.lean			setf lean
+
 " Ledger
 au BufRead,BufNewFile *.ldg,*.ledger,*.journal			setf ledger
 
@@ -1156,6 +1172,9 @@ au BufNewFile,BufRead *.lite,*.lt		setf lite
 " LiteStep RC files
 au BufNewFile,BufRead */LiteStep/*/*.rc		setf litestep
 
+" Livebook
+au BufNewFile,BufRead *.livemd			setf livebook
+
 " Login access
 au BufNewFile,BufRead */etc/login.access	setf loginaccess
 
@@ -1173,6 +1192,9 @@ au BufNewFile,BufRead *.lou,*.lout		setf lout
 
 " Lua
 au BufNewFile,BufRead *.lua			setf lua
+
+" Luau
+au BufNewFile,BufRead *.luau		setf luau
 
 " Luacheck
 au BufNewFile,BufRead .luacheckrc		setf lua
@@ -1393,6 +1415,9 @@ au BufNewFile,BufRead *.nse			setf lua
 " NSIS
 au BufNewFile,BufRead *.nsi,*.nsh		setf nsis
 
+" Nu
+au BufNewFile,BufRead {env,config}.nu		setf nu
+
 " Oblivion Language and Oblivion Script Extender
 au BufNewFile,BufRead *.obl,*.obse,*.oblivion,*.obscript  setf obse
 
@@ -1541,6 +1566,9 @@ au BufNewFile,BufRead *.plp			setf plp
 
 " PO and PO template (GNU gettext)
 au BufNewFile,BufRead *.po,*.pot		setf po
+
+" Pony
+au BufNewFile,BufRead *.pony			setf pony
 
 " Postfix main config
 au BufNewFile,BufRead main.cf,main.cf.proto	setf pfmain
@@ -1799,6 +1827,9 @@ au BufNewFile,BufRead Cargo.lock,*/.cargo/config,*/.cargo/credentials	setf toml
 " S-lang (or shader language, or SmallLisp)
 au BufNewFile,BufRead *.sl			setf slang
 
+" Sage
+au BufNewFile,BufRead *.sage			setf sage
+
 " Samba config
 au BufNewFile,BufRead smb.conf			setf samba
 
@@ -2033,7 +2064,10 @@ au BufNewFile,BufRead *.spy,*.spi		setf spyce
 au BufNewFile,BufRead squid.conf		setf squid
 
 " SQL for Oracle Designer
-au BufNewFile,BufRead *.tyb,*.typ,*.tyc,*.pkb,*.pks	setf sql
+au BufNewFile,BufRead *.tyb,*.tyc,*.pkb,*.pks	setf sql
+
+" *.typ can be either SQL or Typst files
+au BufNewFile,BufRead *.typ			call dist#ft#FTtyp()
 
 " SQL
 au BufNewFile,BufRead *.sql			call dist#ft#SQL()
@@ -2281,8 +2315,8 @@ au BufNewFile,BufRead *.vr,*.vri,*.vrh		setf vera
 " Vagrant (uses Ruby syntax)
 au BufNewFile,BufRead Vagrantfile		setf ruby
 
-" Verilog HDL
-au BufNewFile,BufRead *.v			setf verilog
+" Verilog HDL, V or Coq
+au BufNewFile,BufRead *.v			call dist#ft#FTv()
 
 " Verilog-AMS HDL
 au BufNewFile,BufRead *.va,*.vams		setf verilogams
@@ -2331,7 +2365,11 @@ au BufNewFile,BufRead *.vroom			setf vroom
 au BufNewFile,BufRead *.vue			setf vue
 
 " WebAssembly
-au BufNewFile,BufRead *.wast,*.wat		setf wast
+au BufNewFile,BufRead *.wat			setf wat
+au BufNewFile,BufRead *.wast		setf wast
+
+" WebAssembly Interface Type (WIT)
+au BufNewFile,BufRead *.wit			setf wit
 
 " Webmacro
 au BufNewFile,BufRead *.wm			setf webmacro

@@ -904,7 +904,7 @@ get_literal_key(char_u **arg)
 eval_dict(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int literal)
 {
     int		evaluate = evalarg == NULL ? FALSE
-					 : evalarg->eval_flags & EVAL_EVALUATE;
+				       : (evalarg->eval_flags & EVAL_EVALUATE);
     dict_T	*d = NULL;
     typval_T	tvkey;
     typval_T	tv;
@@ -1305,7 +1305,7 @@ dict_extend_func(
 	action = (char_u *)"force";
 
     if (type != NULL && check_typval_arg_type(type, &argvars[1],
-		func_name, 2) == FAIL)
+							 func_name, 2) == FAIL)
 	return;
     dict_extend(d1, d2, action, func_name);
 
@@ -1333,7 +1333,6 @@ dict_filter_map(
 	typval_T	*expr,
 	typval_T	*rettv)
 {
-    int		prev_lock;
     dict_T	*d_ret = NULL;
     hashtab_T	*ht;
     hashitem_T	*hi;
@@ -1353,8 +1352,6 @@ dict_filter_map(
 			&& value_check_lock(d->dv_lock, arg_errmsg, TRUE)))
 	return;
 
-    prev_lock = d->dv_lock;
-
     if (filtermap == FILTERMAP_MAPNEW)
     {
 	if (rettv_dict_alloc(rettv) == FAIL)
@@ -1362,10 +1359,11 @@ dict_filter_map(
 	d_ret = rettv->vval.v_dict;
     }
 
-    // Create one funccal_T for all eval_expr_typval() calls.
+    // Create one funccall_T for all eval_expr_typval() calls.
     fc = eval_expr_get_funccal(expr, &newtv);
 
-    if (filtermap != FILTERMAP_FILTER && d->dv_lock == 0)
+    int prev_lock = d->dv_lock;
+    if (d->dv_lock == 0)
 	d->dv_lock = VAR_LOCKED;
     ht = &d->dv_hashtab;
     hash_lock(ht);
