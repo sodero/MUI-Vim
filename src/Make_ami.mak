@@ -73,7 +73,6 @@ CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__ -mcrt=clib2
 else
 ifeq ($(UNM),AROS)
 CFLAGS += -DHAVE_FSYNC
-LDFLAGS = -ldebug
 else
 ifeq ($(UNM),MorphOS)
 CFLAGS += -noixemul
