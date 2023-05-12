@@ -52,8 +52,6 @@ struct Library *MUIMasterBase = NULL;
 struct MUIMasterIFace *IMUIMaster = NULL;
 struct Library *CyberGfxBase = NULL;
 struct CyberGfxIFace *ICyberGfx = NULL;
-struct Library *KeymapBase = NULL;
-struct KeymapIFace *IKeymap = NULL;
 #endif
 
 //------------------------------------------------------------------------------
@@ -3296,14 +3294,7 @@ static int gui_os4_init(void)
     ICyberGfx= (struct CyberGfxIFace*) GetInterface(CyberGfxBase,"main", 1,
         NULL);
 
-    if(unlikely(!(KeymapBase = OpenLibrary("keymap.library", 50))))
-    {
-        VimMessage("Error", "Failed to open keymap.library.", "OK");
-        return FALSE;
-    }
-
-    IKeymap = (struct KeymapIFace*) GetInterface(KeymapBase, "main", 1, NULL);
-    return (IMUIMaster && ICyberGfx && IKeymap) ? OK : FAIL;
+    return (IMUIMaster && ICyberGfx) ? OK : FAIL;
 }
 #endif
 
@@ -3564,12 +3555,6 @@ void gui_mch_exit(int rc UNUSED)
     {
         DropInterface((struct Interface *) ICyberGfx);
         CloseLibrary((struct Library *) CyberGfxBase);
-    }
-
-    if(likely(IKeymap))
-    {
-        DropInterface((struct Interface*) IKeymap);
-        CloseLibrary((struct Library *) KeymapBase);
     }
 #endif
 }
