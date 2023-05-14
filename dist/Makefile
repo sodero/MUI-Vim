@@ -2,41 +2,21 @@
 # Host settings
 #------------------------------------------------------------------------------------------
 LHA?=lha
+CPU?=$(shell uname -m | tr -d ower)
 UNM?=$(shell uname)
-ARC?=$(shell uname -m | tr -d ower)
-ANM:=$(ARC)-$(shell echo $(UNM) | tr A-Z a-z)
-#- AmigaOS --------------------------------------------------------------------------------
+ANM:=$(CPU)-$(shell echo $(UNM) | tr A-Z a-z)
 ifeq ($(UNM),AmigaOS)
-ANM:=$(ARC)-amigaos
-ifeq ($(shell uname),AmigaOS)
-# Native compilation (use default compression)
 LHAFLAGS?=-r a
-endif
-#- AROS -----------------------------------------------------------------------------------
-else ifeq ($(UNM),AROS)
-# Native or cross.
-ANM:=$(ARC)-aros
-#- MorphOS --------------------------------------------------------------------------------
 else ifeq ($(UNM),MorphOS)
-ANM:=$(ARC)-morphos
-ifeq ($(shell uname),MorphOS)
-# Native compilation (use default compression)
 LHAFLAGS?=-r a
-endif
-#-This is just for testing purposes--------------------------------------------------------
-else ifeq ($(UNM),Darwin)
-ANM:=$(ARC)-darwin
-SED:=gsed
-#-This is just for testing purposes--------------------------------------------------------
-else ifeq ($(UNM),Linux)
-ANM:=$(ARC)-linux
 else
-#-This is just for testing purposes--------------------------------------------------------
-ANM:=$(ARC)-unknown
-UNM:="Unknown"
-endif
-#- Fallback LHA flags (use lha5 for maximum compatibility) --------------------------------
 LHAFLAGS?=ao5
+endif
+ifeq ($(UNM),Darwin)
+SED?=gsed
+else
+SED?=sed
+endif
 
 #------------------------------------------------------------------------------------------
 # General settings
@@ -47,7 +27,6 @@ VIM:=$(SRC)/vim
 VI:=$(SRC)/vi
 EXT:=extras
 DST:=Vim
-SED?=sed
 VER?=0
 REV?=0
 
