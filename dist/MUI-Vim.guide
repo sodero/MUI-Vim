@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 9.0.1546 (23.06.01) english
+@$VER: MUI-Vim.guide 9.0.1546 (23.05.18) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,7 +67,7 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2023-06-01@{UB}
+@{B}2023-05-18@{UB}
 - Update to VIM 9.0.1546.
 - Hollywood syntax highlightning updated (10.0).
 
