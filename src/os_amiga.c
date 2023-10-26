@@ -31,15 +31,6 @@
 # define KPrintF DebugPrintF
 #endif
 
-// XXX These are included from os_amiga.h
-// #include <exec/types.h>
-// #include <libraries/dos.h>
-// #include <libraries/dosextens.h>
-// #include <proto/exec.h>
-// #include <proto/dos.h>
-// #include <proto/intuition.h>
-
-#include <exec/memory.h>
 #include <workbench/startup.h>
 #include <dos/dostags.h>	    // for 2.0 functions
 #include <dos/dosasl.h>
@@ -911,11 +902,22 @@ lock2name(BPTR lock, char_u *buf, long len)
     long
 mch_getperm(char_u *name)
 {
+#ifdef __SELIB__
+    struct stat statb;
+
+    if(stat((char *) name, &statb))
+    {
+	return -1;
+    }
+
+    return statb.st_mode;
+#else
     struct FileInfoBlock *fib = get_fib(name);
     long retval = fib ? (long) fib->fib_Protection : -1;
 
     FreeDosObject(DOS_FIB, fib);
     return retval;
+#endif
 }
 
 /*
@@ -926,8 +928,12 @@ mch_getperm(char_u *name)
     int
 mch_setperm(char_u *name, long perm)
 {
-    perm &= ~FIBF_ARCHIVE;		// reset archived bit
+#ifdef __SELIB__
+    return chmod((char *) name, (mode_t) perm) == 0 ? OK : FAIL;
+#else
+    perm &= ~FIBF_ARCHIVE;        // reset archived bit
     return (SetProtection((UBYTE *)name, (long)perm) ? OK : FAIL);
+#endif
 }
 
 /*
