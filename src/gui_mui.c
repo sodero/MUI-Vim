@@ -2979,6 +2979,7 @@ guicolor_T gui_mch_get_color(char_u *name)
         {"DarkBlue",          0x00000080},
         {"Blue",              0x000000FF},
         {"LightBlue",         0x00ADD8E6},
+        {"DodgerBlue",        0x001E90FF},
         {"DarkGreen",         0x00008000},
         {"Green",             0x0000FF00},
         {"LightGreen",        0x0090EE90},
