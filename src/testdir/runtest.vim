@@ -215,7 +215,7 @@ endfunc
 for name in s:GetSwapFileList()
   call delete(name)
 endfor
-unlet name
+unlet! name
 
 
 " Invoked when a test takes too much time.
@@ -277,6 +277,8 @@ func RunTheTest(test)
     endtry
   endif
 
+  let skipped = v:false
+
   au VimLeavePre * call EarlyExit(g:testfunc)
   if a:test =~ 'Test_nocatch_'
     " Function handles errors itself.  This avoids skipping commands after the
@@ -286,6 +288,7 @@ func RunTheTest(test)
     if g:skipped_reason != ''
       call add(s:messages, '    Skipped')
       call add(s:skipped, 'SKIPPED ' . a:test . ': ' . g:skipped_reason)
+      let skipped = v:true
     endif
   else
     try
@@ -293,6 +296,7 @@ func RunTheTest(test)
     catch /^\cskipped/
       call add(s:messages, '    Skipped')
       call add(s:skipped, 'SKIPPED ' . a:test . ': ' . substitute(v:exception, '^\S*\s\+', '',  ''))
+      let skipped = v:true
     catch
       call add(v:errors, 'Caught exception in ' . a:test . ': ' . v:exception . ' @ ' . v:throwpoint)
     endtry
@@ -400,15 +404,35 @@ func RunTheTest(test)
     endif
   endwhile
 
-  " Check if the test has left any swap files behind.  Delete them before
-  " running tests again, they might interfere.
-  let swapfiles = s:GetSwapFileList()
-  if len(swapfiles) > 0
-    call add(s:messages, "Found swap files: " .. string(swapfiles))
-    for name in swapfiles
-      call delete(name)
-    endfor
+  if !skipped
+    " Check if the test has left any swap files behind.  Delete them before
+    " running tests again, they might interfere.
+    let swapfiles = s:GetSwapFileList()
+    if len(swapfiles) > 0
+      call add(s:messages, "Found swap files: " .. string(swapfiles))
+      for name in swapfiles
+        call delete(name)
+      endfor
+    endif
   endif
+endfunc
+
+function Delete_Xtest_Files()
+  for file in glob('X*', v:false, v:true)
+    if file ==? 'XfakeHOME'
+      " Clean up files created by setup.vim
+      call delete('XfakeHOME', 'rf')
+      continue
+    endif
+    " call add(v:errors, file .. " exists when it shouldn't, trying to delete it!")
+    call delete(file)
+    if !empty(glob(file, v:false, v:true))
+      " call add(v:errors, file .. " still exists after trying to delete it!")
+      if has('unix')
+        call system('rm -rf  ' .. file)
+      endif
+    endif
+  endfor
 endfunc
 
 func AfterTheTest(func_name)
@@ -439,12 +463,10 @@ endfunc
 " This function can be called by a test if it wants to abort testing.
 func FinishTesting()
   call AfterTheTest('')
+  call Delete_Xtest_Files()
 
   " Don't write viminfo on exit.
   set viminfo=
-
-  " Clean up files created by setup.vim
-  call delete('XfakeHOME', 'rf')
 
   if s:fail == 0 && s:fail_expected == 0
     " Success, create the .res file so that make knows it's done.

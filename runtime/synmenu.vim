@@ -1,8 +1,9 @@
 " Vim support file to define the syntax selection menu
 " This file is normally sourced from menu.vim.
 "
-" Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2022 Oct 04
+" Maintainer:		The Vim Project <https://github.com/vim/vim>
+" Last Change:		2024 Jan 04
+" Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 " Define the SetSyn function, used for the Syntax menu entries.
 " Set 'filetype' and also 'syntax' if it is manually selected.
@@ -12,6 +13,10 @@ def SetSyn(name: string)
     g:use_fvwm_1 = name == "fvwm1"
     g:use_fvwm_2 = name == "fvwm2"
     filetype = "fvwm"
+  elseif name =~ '^modula2:\w\+$'
+    var dialect: string
+    [filetype, dialect] = split(name, ":")
+    modula2#SetDialect(dialect)
   endif
   if name == "whitespace"
     # do not replace the filetype but add whitespace on top
@@ -46,45 +51,45 @@ an 50.10.180 &Syntax.AB.AfLex :cal SetSyn("aflex")<CR>
 an 50.10.190 &Syntax.AB.ALSA\ config :cal SetSyn("alsaconf")<CR>
 an 50.10.200 &Syntax.AB.Altera\ AHDL :cal SetSyn("ahdl")<CR>
 an 50.10.210 &Syntax.AB.Amiga\ DOS :cal SetSyn("amiga")<CR>
-an 50.50.220 &Syntax.AB.AmigaGuide :cal SetSyn("amigaguide")<CR>
-an 50.10.230 &Syntax.AB.AMPL :cal SetSyn("ampl")<CR>
-an 50.10.240 &Syntax.AB.Ant\ build\ file :cal SetSyn("ant")<CR>
-an 50.10.250 &Syntax.AB.ANTLR :cal SetSyn("antlr")<CR>
-an 50.10.260 &Syntax.AB.Apache\ config :cal SetSyn("apache")<CR>
-an 50.10.270 &Syntax.AB.Apache-style\ config :cal SetSyn("apachestyle")<CR>
-an 50.10.280 &Syntax.AB.Applix\ ELF :cal SetSyn("elf")<CR>
-an 50.10.290 &Syntax.AB.APT\ config :cal SetSyn("aptconf")<CR>
-an 50.10.300 &Syntax.AB.Arc\ Macro\ Language :cal SetSyn("aml")<CR>
-an 50.10.310 &Syntax.AB.Arch\ inventory :cal SetSyn("arch")<CR>
-an 50.10.320 &Syntax.AB.Arduino :cal SetSyn("arduino")<CR>
-an 50.10.330 &Syntax.AB.ART :cal SetSyn("art")<CR>
-an 50.10.340 &Syntax.AB.Ascii\ Doc :cal SetSyn("asciidoc")<CR>
-an 50.10.350 &Syntax.AB.ASP\ with\ VBScript :cal SetSyn("aspvbs")<CR>
-an 50.10.360 &Syntax.AB.ASP\ with\ Perl :cal SetSyn("aspperl")<CR>
-an 50.10.370 &Syntax.AB.Assembly.680x0 :cal SetSyn("asm68k")<CR>
-an 50.10.380 &Syntax.AB.Assembly.AVR :cal SetSyn("avra")<CR>
-an 50.10.390 &Syntax.AB.Assembly.Flat :cal SetSyn("fasm")<CR>
-an 50.10.400 &Syntax.AB.Assembly.GNU :cal SetSyn("asm")<CR>
-an 50.10.410 &Syntax.AB.Assembly.GNU\ H-8300 :cal SetSyn("asmh8300")<CR>
-an 50.10.420 &Syntax.AB.Assembly.Intel\ IA-64 :cal SetSyn("ia64")<CR>
-an 50.10.430 &Syntax.AB.Assembly.Microsoft :cal SetSyn("masm")<CR>
-an 50.10.440 &Syntax.AB.Assembly.Netwide :cal SetSyn("nasm")<CR>
-an 50.10.450 &Syntax.AB.Assembly.PIC :cal SetSyn("pic")<CR>
-an 50.10.460 &Syntax.AB.Assembly.Turbo :cal SetSyn("tasm")<CR>
-an 50.10.470 &Syntax.AB.Assembly.VAX\ Macro\ Assembly :cal SetSyn("vmasm")<CR>
-an 50.10.480 &Syntax.AB.Assembly.Z-80 :cal SetSyn("z8a")<CR>
-an 50.10.490 &Syntax.AB.Assembly.xa\ 6502\ cross\ assember :cal SetSyn("a65")<CR>
-an 50.10.500 &Syntax.AB.ASN\.1 :cal SetSyn("asn")<CR>
-an 50.10.510 &Syntax.AB.Asterisk\ config :cal SetSyn("asterisk")<CR>
-an 50.10.520 &Syntax.AB.Asterisk\ voicemail\ config :cal SetSyn("asteriskvm")<CR>
-an 50.10.530 &Syntax.AB.Atlas :cal SetSyn("atlas")<CR>
-an 50.10.540 &Syntax.AB.Autodoc :cal SetSyn("autodoc")<CR>
-an 50.10.550 &Syntax.AB.AutoHotKey :cal SetSyn("autohotkey")<CR>
-an 50.10.560 &Syntax.AB.AutoIt :cal SetSyn("autoit")<CR>
-an 50.10.570 &Syntax.AB.Automake :cal SetSyn("automake")<CR>
-an 50.10.580 &Syntax.AB.Avenue :cal SetSyn("ave")<CR>
-an 50.10.590 &Syntax.AB.Awk :cal SetSyn("awk")<CR>
-an 50.10.600 &Syntax.AB.AYacc :cal SetSyn("ayacc")<CR>
+an 50.10.215 &Syntax.AB.AmigaGuide :cal SetSyn("amigaguide")<CR>
+an 50.10.220 &Syntax.AB.AMPL :cal SetSyn("ampl")<CR>
+an 50.10.230 &Syntax.AB.Ant\ build\ file :cal SetSyn("ant")<CR>
+an 50.10.240 &Syntax.AB.ANTLR :cal SetSyn("antlr")<CR>
+an 50.10.250 &Syntax.AB.Apache\ config :cal SetSyn("apache")<CR>
+an 50.10.260 &Syntax.AB.Apache-style\ config :cal SetSyn("apachestyle")<CR>
+an 50.10.270 &Syntax.AB.Applix\ ELF :cal SetSyn("elf")<CR>
+an 50.10.280 &Syntax.AB.APT\ config :cal SetSyn("aptconf")<CR>
+an 50.10.290 &Syntax.AB.Arc\ Macro\ Language :cal SetSyn("aml")<CR>
+an 50.10.300 &Syntax.AB.Arch\ inventory :cal SetSyn("arch")<CR>
+an 50.10.310 &Syntax.AB.Arduino :cal SetSyn("arduino")<CR>
+an 50.10.320 &Syntax.AB.ART :cal SetSyn("art")<CR>
+an 50.10.330 &Syntax.AB.Ascii\ Doc :cal SetSyn("asciidoc")<CR>
+an 50.10.340 &Syntax.AB.ASP\ with\ VBScript :cal SetSyn("aspvbs")<CR>
+an 50.10.350 &Syntax.AB.ASP\ with\ Perl :cal SetSyn("aspperl")<CR>
+an 50.10.360 &Syntax.AB.Assembly.680x0 :cal SetSyn("asm68k")<CR>
+an 50.10.370 &Syntax.AB.Assembly.AVR :cal SetSyn("avra")<CR>
+an 50.10.380 &Syntax.AB.Assembly.Flat :cal SetSyn("fasm")<CR>
+an 50.10.390 &Syntax.AB.Assembly.GNU :cal SetSyn("asm")<CR>
+an 50.10.400 &Syntax.AB.Assembly.GNU\ H-8300 :cal SetSyn("asmh8300")<CR>
+an 50.10.410 &Syntax.AB.Assembly.Intel\ IA-64 :cal SetSyn("ia64")<CR>
+an 50.10.420 &Syntax.AB.Assembly.Microsoft :cal SetSyn("masm")<CR>
+an 50.10.430 &Syntax.AB.Assembly.Netwide :cal SetSyn("nasm")<CR>
+an 50.10.440 &Syntax.AB.Assembly.PIC :cal SetSyn("pic")<CR>
+an 50.10.450 &Syntax.AB.Assembly.Turbo :cal SetSyn("tasm")<CR>
+an 50.10.460 &Syntax.AB.Assembly.VAX\ Macro\ Assembly :cal SetSyn("vmasm")<CR>
+an 50.10.470 &Syntax.AB.Assembly.Z-80 :cal SetSyn("z8a")<CR>
+an 50.10.480 &Syntax.AB.Assembly.xa\ 6502\ cross\ assembler :cal SetSyn("a65")<CR>
+an 50.10.490 &Syntax.AB.ASN\.1 :cal SetSyn("asn")<CR>
+an 50.10.500 &Syntax.AB.Asterisk\ config :cal SetSyn("asterisk")<CR>
+an 50.10.510 &Syntax.AB.Asterisk\ voicemail\ config :cal SetSyn("asteriskvm")<CR>
+an 50.10.520 &Syntax.AB.Atlas :cal SetSyn("atlas")<CR>
+an 50.10.530 &Syntax.AB.Autodoc :cal SetSyn("autodoc")<CR>
+an 50.10.540 &Syntax.AB.AutoHotKey :cal SetSyn("autohotkey")<CR>
+an 50.10.550 &Syntax.AB.AutoIt :cal SetSyn("autoit")<CR>
+an 50.10.560 &Syntax.AB.Automake :cal SetSyn("automake")<CR>
+an 50.10.570 &Syntax.AB.Avenue :cal SetSyn("ave")<CR>
+an 50.10.580 &Syntax.AB.Awk :cal SetSyn("awk")<CR>
+an 50.10.590 &Syntax.AB.AYacc :cal SetSyn("ayacc")<CR>
 an 50.10.610 &Syntax.AB.B :cal SetSyn("b")<CR>
 an 50.10.620 &Syntax.AB.Baan :cal SetSyn("baan")<CR>
 an 50.10.630 &Syntax.AB.Bash :cal SetSyn("bash")<CR>
@@ -304,7 +309,7 @@ an 50.50.710 &Syntax.HIJK.Kimwitu++ :cal SetSyn("kwt")<CR>
 an 50.50.720 &Syntax.HIJK.Kivy :cal SetSyn("kivy")<CR>
 an 50.50.730 &Syntax.HIJK.KixTart :cal SetSyn("kix")<CR>
 an 50.60.100 &Syntax.L.Lace :cal SetSyn("lace")<CR>
-an 50.60.110 &Syntax.L.LamdaProlog :cal SetSyn("lprolog")<CR>
+an 50.60.110 &Syntax.L.LambdaProlog :cal SetSyn("lprolog")<CR>
 an 50.60.120 &Syntax.L.Latte :cal SetSyn("latte")<CR>
 an 50.60.130 &Syntax.L.Ld\ script :cal SetSyn("ld")<CR>
 an 50.60.140 &Syntax.L.LDAP.LDIF :cal SetSyn("ldif")<CR>
@@ -360,25 +365,27 @@ an 50.70.340 &Syntax.M.MMIX :cal SetSyn("mmix")<CR>
 an 50.70.350 &Syntax.M.Modconf :cal SetSyn("modconf")<CR>
 an 50.70.360 &Syntax.M.Model :cal SetSyn("model")<CR>
 an 50.70.370 &Syntax.M.Modsim\ III :cal SetSyn("modsim3")<CR>
-an 50.70.380 &Syntax.M.Modula\ 2 :cal SetSyn("modula2")<CR>
-an 50.70.390 &Syntax.M.Modula\ 3 :cal SetSyn("modula3")<CR>
-an 50.70.400 &Syntax.M.Monk :cal SetSyn("monk")<CR>
-an 50.70.410 &Syntax.M.Motorola\ S-Record :cal SetSyn("srec")<CR>
-an 50.70.420 &Syntax.M.Mplayer\ config :cal SetSyn("mplayerconf")<CR>
-an 50.70.430 &Syntax.M.MOO :cal SetSyn("moo")<CR>
-an 50.70.440 &Syntax.M.Mrxvtrc :cal SetSyn("mrxvtrc")<CR>
-an 50.70.450 &Syntax.M.MS-DOS/Windows.4DOS\ \.bat\ file :cal SetSyn("btm")<CR>
-an 50.70.460 &Syntax.M.MS-DOS/Windows.\.bat\/\.cmd\ file :cal SetSyn("dosbatch")<CR>
-an 50.70.470 &Syntax.M.MS-DOS/Windows.\.ini\ file :cal SetSyn("dosini")<CR>
-an 50.70.480 &Syntax.M.MS-DOS/Windows.Message\ text :cal SetSyn("msmessages")<CR>
-an 50.70.490 &Syntax.M.MS-DOS/Windows.Module\ Definition :cal SetSyn("def")<CR>
-an 50.70.500 &Syntax.M.MS-DOS/Windows.Registry :cal SetSyn("registry")<CR>
-an 50.70.510 &Syntax.M.MS-DOS/Windows.Resource\ file :cal SetSyn("rc")<CR>
-an 50.70.520 &Syntax.M.Msql :cal SetSyn("msql")<CR>
-an 50.70.530 &Syntax.M.MuPAD :cal SetSyn("mupad")<CR>
-an 50.70.540 &Syntax.M.Murphi :cal SetSyn("murphi")<CR>
-an 50.70.550 &Syntax.M.MUSHcode :cal SetSyn("mush")<CR>
-an 50.70.560 &Syntax.M.Muttrc :cal SetSyn("muttrc")<CR>
+an 50.70.380 &Syntax.M.Modula-2.R10\ (2010) :cal SetSyn("modula2:r10")<CR>
+an 50.70.390 &Syntax.M.Modula-2.ISO\ (1994) :cal SetSyn("modula2:iso")<CR>
+an 50.70.400 &Syntax.M.Modula-2.PIM\ (1985) :cal SetSyn("modula2:pim")<CR>
+an 50.70.410 &Syntax.M.Modula-3 :cal SetSyn("modula3")<CR>
+an 50.70.420 &Syntax.M.Monk :cal SetSyn("monk")<CR>
+an 50.70.430 &Syntax.M.Motorola\ S-Record :cal SetSyn("srec")<CR>
+an 50.70.440 &Syntax.M.Mplayer\ config :cal SetSyn("mplayerconf")<CR>
+an 50.70.450 &Syntax.M.MOO :cal SetSyn("moo")<CR>
+an 50.70.460 &Syntax.M.Mrxvtrc :cal SetSyn("mrxvtrc")<CR>
+an 50.70.470 &Syntax.M.MS-DOS/Windows.4DOS\ \.bat\ file :cal SetSyn("btm")<CR>
+an 50.70.480 &Syntax.M.MS-DOS/Windows.\.bat\/\.cmd\ file :cal SetSyn("dosbatch")<CR>
+an 50.70.490 &Syntax.M.MS-DOS/Windows.\.ini\ file :cal SetSyn("dosini")<CR>
+an 50.70.500 &Syntax.M.MS-DOS/Windows.Message\ text :cal SetSyn("msmessages")<CR>
+an 50.70.510 &Syntax.M.MS-DOS/Windows.Module\ Definition :cal SetSyn("def")<CR>
+an 50.70.520 &Syntax.M.MS-DOS/Windows.Registry :cal SetSyn("registry")<CR>
+an 50.70.530 &Syntax.M.MS-DOS/Windows.Resource\ file :cal SetSyn("rc")<CR>
+an 50.70.540 &Syntax.M.Msql :cal SetSyn("msql")<CR>
+an 50.70.550 &Syntax.M.MuPAD :cal SetSyn("mupad")<CR>
+an 50.70.560 &Syntax.M.Murphi :cal SetSyn("murphi")<CR>
+an 50.70.570 &Syntax.M.MUSHcode :cal SetSyn("mush")<CR>
+an 50.70.580 &Syntax.M.Muttrc :cal SetSyn("muttrc")<CR>
 an 50.80.100 &Syntax.NO.N1QL :cal SetSyn("n1ql")<CR>
 an 50.80.110 &Syntax.NO.Nanorc :cal SetSyn("nanorc")<CR>
 an 50.80.120 &Syntax.NO.Nastran\ input/DMAP :cal SetSyn("nastran")<CR>
@@ -619,7 +626,7 @@ an 50.160.330 &Syntax.UV.VSE\ JCL :cal SetSyn("vsejcl")<CR>
 an 50.170.100 &Syntax.WXYZ.WEB.CWEB :cal SetSyn("cweb")<CR>
 an 50.170.110 &Syntax.WXYZ.WEB.WEB :cal SetSyn("web")<CR>
 an 50.170.120 &Syntax.WXYZ.WEB.WEB\ Changes :cal SetSyn("change")<CR>
-an 50.170.130 &Syntax.WXYZ.WebAssembly :cal SetSyn("wast")<CR>
+an 50.170.130 &Syntax.WXYZ.WebAssembly :cal SetSyn("wat")<CR>
 an 50.170.140 &Syntax.WXYZ.Webmacro :cal SetSyn("webmacro")<CR>
 an 50.170.150 &Syntax.WXYZ.Website\ MetaLanguage :cal SetSyn("wml")<CR>
 an 50.170.170 &Syntax.WXYZ.wDiff :cal SetSyn("wdiff")<CR>
@@ -646,6 +653,7 @@ an 50.170.390 &Syntax.WXYZ.XFree86\ Config :cal SetSyn("xf86conf")<CR>
 an 50.170.410 &Syntax.WXYZ.YAML :cal SetSyn("yaml")<CR>
 an 50.170.420 &Syntax.WXYZ.Yacc :cal SetSyn("yacc")<CR>
 an 50.170.440 &Syntax.WXYZ.Zimbu :cal SetSyn("zimbu")<CR>
+an 50.170.450 &Syntax.WXYZ.Zserio :cal SetSyn("zserio")<CR>
 
 " The End Of The Syntax Menu
 

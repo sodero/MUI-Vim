@@ -870,7 +870,7 @@ start_redo(long count, int old_redo)
 	{
 	    c = read_redo(FALSE, old_redo);
 	    add_char_buff(&readbuf2, c);
-	    if (!isdigit(c))
+	    if (!SAFE_isdigit(c))
 		break;
 	}
 	c = read_redo(FALSE, old_redo);
@@ -1336,6 +1336,16 @@ gotchars(char_u *chars, int len)
     // Since characters have been typed, consider the following to be in
     // another mapping.  Search string will be kept in history.
     ++maptick;
+}
+
+/*
+ * Record a <Nop> key.
+ */
+    void
+gotchars_nop(void)
+{
+    char_u nop_buf[3] = { K_SPECIAL, KS_EXTRA, KE_NOP };
+    gotchars(nop_buf, 3);
 }
 
 /*
@@ -1863,7 +1873,7 @@ vgetc(void)
 
 		    // Handle <SID>{sid};  Do up to 20 digits for safety.
 		    last_used_sid = 0;
-		    for (j = 0; j < 20 && isdigit(c = vgetorpeek(TRUE)); ++j)
+		    for (j = 0; j < 20 && SAFE_isdigit(c = vgetorpeek(TRUE)); ++j)
 			last_used_sid = last_used_sid * 10 + (c - '0');
 		    last_used_map = NULL;
 		    continue;
@@ -2501,7 +2511,7 @@ check_simplify_modifier(int max_offset)
  * modifyOtherKeys level 2 is enabled or the kitty keyboard protocol is
  * enabled.
  */
-    static int
+    int
 key_protocol_enabled(void)
 {
     // If xterm has responded to XTQMODKEYS it overrules seenModifyOtherKeys.
@@ -3656,14 +3666,9 @@ vgetorpeek(int advance)
 #endif
     if (timedout && c == ESC)
     {
-	char_u nop_buf[3];
-
 	// When recording there will be no timeout.  Add a <Nop> after the ESC
 	// to avoid that it forms a key code with following characters.
-	nop_buf[0] = K_SPECIAL;
-	nop_buf[1] = KS_EXTRA;
-	nop_buf[2] = KE_NOP;
-	gotchars(nop_buf, 3);
+	gotchars_nop();
     }
 
     --vgetc_busy;
