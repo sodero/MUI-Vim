@@ -2982,6 +2982,7 @@ guicolor_T gui_mch_get_color(char_u *name)
         {"DarkGreen",         0x00008000},
         {"Green",             0x0000FF00},
         {"LightGreen",        0x0090EE90},
+        {"LimeGreen",         0x0078BE21},
         {"DarkCyan",          0x00008080},
         {"Cyan",              0x0000FFFF},
         {"LightCyan",         0x00E0FFFF},
