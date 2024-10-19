@@ -60,6 +60,11 @@
  * 06.10.2023  enable -r -b to reverse bit dumps
  * 12.01.2024  disable auto-conversion for z/OS (MVS)
  * 17.01.2024  use size_t instead of usigned int for code-generation (-i), #13876
+ * 25.01.2024  revert the previous patch (size_t instead of unsigned int)
+ * 10.02.2024  fix buffer-overflow when writing color output to buffer, #14003
+ * 10.05.2024  fix another buffer-overflow when writing colored output to buffer, #14738
+ * 10.09.2024  Support -b and -i together, #15661
+ * 19.10.2024  -e did add an extra space #15899
  *
  * (c) 1990-1998 by Juergen Weigert (jnweiger@gmail.com)
  *
@@ -140,7 +145,7 @@ extern void perror __P((char *));
 # endif
 #endif
 
-char version[] = "xxd 2024-01-17 by Juergen Weigert et al.";
+char version[] = "xxd 2024-10-19 by Juergen Weigert et al.";
 #ifdef WIN32
 char osver[] = " (Win32)";
 #else
@@ -199,16 +204,29 @@ char osver[] = "";
 
 #define TRY_SEEK	/* attempt to use lseek, or skip forward by reading */
 #define COLS 256	/* change here, if you ever need more columns */
-#define LLEN ((2*(int)sizeof(unsigned long)) + 4 + (9*COLS-1) + COLS + 2)
+
+/*
+ * LLEN is the maximum length of a line; other than the visible characters
+ * we need to consider also the escape color sequence prologue/epilogue ,
+ * (11 bytes for each character).
+ */
+#define LLEN \
+    (39            /* addr: ⌈log10(ULONG_MAX)⌉ if "-d" flag given. We assume ULONG_MAX = 2**128 */ \
+    + 2            /* ": " */ \
+    + 13 * COLS    /* hex dump with colors */ \
+    + (COLS - 1)   /* whitespace between groups if "-g1" option given and "-c" maxed out */ \
+    + 2            /* whitespace */ \
+    + 12 * COLS    /* ASCII dump with colors */ \
+    + 2)           /* "\n\0" */
 
 char hexxa[] = "0123456789abcdef0123456789ABCDEF", *hexx = hexxa;
 
 /* the different hextypes known by this program: */
-#define HEX_NORMAL 0
-#define HEX_POSTSCRIPT 1
-#define HEX_CINCLUDE 2
-#define HEX_BITS 3		/* not hex a dump, but bits: 01111001 */
-#define HEX_LITTLEENDIAN 4
+#define HEX_NORMAL         0x00 /* no flags set */
+#define HEX_POSTSCRIPT     0x01
+#define HEX_CINCLUDE       0x02
+#define HEX_BITS           0x04 /* not hex a dump, but bits: 01111001 */
+#define HEX_LITTLEENDIAN   0x08
 
 #define CONDITIONAL_CAPITALIZE(c) (capitalize ? toupper((unsigned char)(c)) : (c))
 
@@ -239,7 +257,7 @@ exit_with_usage(void)
   fprintf(stderr, "    or\n       %s -r [-s [-]offset] [-c cols] [-ps] [infile [outfile]]\n", pname);
   fprintf(stderr, "Options:\n");
   fprintf(stderr, "    -a          toggle autoskip: A single '*' replaces nul-lines. Default off.\n");
-  fprintf(stderr, "    -b          binary digit dump (incompatible with -ps,-i). Default hex.\n");
+  fprintf(stderr, "    -b          binary digit dump (incompatible with -ps). Default hex.\n");
   fprintf(stderr, "    -C          capitalize variable names in C include file style (-i).\n");
   fprintf(stderr, "    -c cols     format <cols> octets per line. Default 16 (-i: 12, -ps: 30).\n");
   fprintf(stderr, "    -E          show characters in EBCDIC. Default ASCII.\n");
@@ -676,11 +694,11 @@ main(int argc, char *argv[])
     {
       pp = argv[1] + (!STRNCMP(argv[1], "--", 2) && argv[1][2]);
 	   if (!STRNCMP(pp, "-a", 2)) autoskip = 1 - autoskip;
-      else if (!STRNCMP(pp, "-b", 2)) hextype = HEX_BITS;
-      else if (!STRNCMP(pp, "-e", 2)) hextype = HEX_LITTLEENDIAN;
+      else if (!STRNCMP(pp, "-b", 2)) hextype |= HEX_BITS;
+      else if (!STRNCMP(pp, "-e", 2)) hextype |= HEX_LITTLEENDIAN;
       else if (!STRNCMP(pp, "-u", 2)) hexx = hexxa + 16;
-      else if (!STRNCMP(pp, "-p", 2)) hextype = HEX_POSTSCRIPT;
-      else if (!STRNCMP(pp, "-i", 2)) hextype = HEX_CINCLUDE;
+      else if (!STRNCMP(pp, "-p", 2)) hextype |= HEX_POSTSCRIPT;
+      else if (!STRNCMP(pp, "-i", 2)) hextype |= HEX_CINCLUDE;
       else if (!STRNCMP(pp, "-C", 2)) capitalize = 1;
       else if (!STRNCMP(pp, "-d", 2)) decimal_offset = 1;
       else if (!STRNCMP(pp, "-r", 2)) revert++;
@@ -840,11 +858,19 @@ main(int argc, char *argv[])
       argc--;
     }
 
+  if (hextype != (HEX_CINCLUDE | HEX_BITS))
+    {
+        /* Allow at most one bit to be set in hextype */
+        if (hextype & (hextype - 1))
+            error_exit(1, "only one of -b, -e, -u, -p, -i can be used");
+    }
+
   if (!colsgiven || (!cols && hextype != HEX_POSTSCRIPT))
     switch (hextype)
       {
       case HEX_POSTSCRIPT:	cols = 30; break;
       case HEX_CINCLUDE:	cols = 12; break;
+      case HEX_CINCLUDE | HEX_BITS:
       case HEX_BITS:		cols = 6; break;
       case HEX_NORMAL:
       case HEX_LITTLEENDIAN:
@@ -854,6 +880,7 @@ main(int argc, char *argv[])
   if (octspergrp < 0)
     switch (hextype)
       {
+      case HEX_CINCLUDE | HEX_BITS:
       case HEX_BITS:		octspergrp = 1; break;
       case HEX_NORMAL:		octspergrp = 2; break;
       case HEX_LITTLEENDIAN:	octspergrp = 4; break;
@@ -950,7 +977,7 @@ main(int argc, char *argv[])
 	}
     }
 
-  if (hextype == HEX_CINCLUDE)
+  if (hextype & HEX_CINCLUDE)
     {
       /* A user-set variable name overrides fp == stdin */
       if (varname == NULL && fp != stdin)
@@ -966,11 +993,28 @@ main(int argc, char *argv[])
 
       p = 0;
       while ((length < 0 || p < length) && (c = getc_or_die(fp)) != EOF)
-	{
-	  FPRINTF_OR_DIE((fpo, (hexx == hexxa) ? "%s0x%02x" : "%s0X%02X",
+        {
+          if (hextype & HEX_BITS)
+	    {
+              if (p == 0)
+                fputs_or_die("  ", fpo);
+              else if (p % cols == 0)
+                fputs_or_die(",\n  ", fpo);
+              else
+                fputs_or_die(", ", fpo);
+
+              FPRINTF_OR_DIE((fpo, "0b"));
+              for (int j = 7; j >= 0; j--)
+                putc_or_die((c & (1 << j)) ? '1' : '0', fpo);
+              p++;
+	    }
+          else
+	    {
+	      FPRINTF_OR_DIE((fpo, (hexx == hexxa) ? "%s0x%02x" : "%s0X%02X",
 		(p % cols) ? ", " : (!p ? "  " : ",\n  "), c));
-	  p++;
-	}
+	      p++;
+	    }
+        }
 
       if (p)
 	fputs_or_die("\n", fpo);
@@ -978,7 +1022,7 @@ main(int argc, char *argv[])
       if (varname != NULL)
 	{
 	  fputs_or_die("};\n", fpo);
-	  FPRINTF_OR_DIE((fpo, "size_t %s", isdigit((unsigned char)varname[0]) ? "__" : ""));
+	  FPRINTF_OR_DIE((fpo, "unsigned int %s", isdigit((unsigned char)varname[0]) ? "__" : ""));
 	  for (e = 0; (c = varname[e]) != 0; e++)
 	    putc_or_die(isalnum((unsigned char)c) ? CONDITIONAL_CAPITALIZE(c) : '_', fpo);
 	  FPRINTF_OR_DIE((fpo, "_%s = %d;\n", capitalize ? "LEN" : "len", p));
@@ -1067,9 +1111,6 @@ main(int argc, char *argv[])
           else
             c = addrlen + 3 + (grplen * cols - 1)/octspergrp + p*12;
 
-          if (hextype == HEX_LITTLEENDIAN)
-            c += 1;
-
           COLOR_PROLOGUE
           begin_coloring_char(l,&c,e,ebcdic);
 #if defined(__MVS__) && __CHARSET_LIB == 0
@@ -1083,20 +1124,14 @@ main(int argc, char *argv[])
           l[c++] = (e > 31 && e < 127) ? e : '.';
 #endif
           COLOR_EPILOGUE
-          n++;
-          if (++p == cols)
-            {
-              l[c++] = '\n';
-              l[c++] = '\0';
-              xxdline(fpo, l, autoskip ? nonzero : 1);
-              nonzero = 0;
-              p = 0;
-            }
         }
       else /*no colors*/
         {
           if (ebcdic)
             e = (e < 64) ? '.' : etoa64[e-64];
+
+          if (hextype == HEX_LITTLEENDIAN)
+            c -= 1;
 
           c += addrlen + 3 + p;
           l[c++] =
@@ -1106,16 +1141,16 @@ main(int argc, char *argv[])
               (e > 31 && e < 127)
 #endif
               ? e : '.';
-          n++;
-          if (++p == cols)
-            {
-              l[c++] = '\n';
-              l[c] = '\0';
-              xxdline(fpo, l, autoskip ? nonzero : 1);
-              nonzero = 0;
-              p = 0;
-            }
         }
+        n++;
+        if (++p == cols)
+          {
+            l[c++] = '\n';
+            l[c] = '\0';
+            xxdline(fpo, l, autoskip ? nonzero : 1);
+            nonzero = 0;
+            p = 0;
+          }
     }
   if (p)
     {
@@ -1123,8 +1158,6 @@ main(int argc, char *argv[])
       l[c] = '\0';
       if (color)
         {
-          c++;
-
           x = p;
           if (hextype == HEX_LITTLEENDIAN)
             {

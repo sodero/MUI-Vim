@@ -109,8 +109,8 @@ SRC += \
 	cindent.c \
 	clientserver.c \
 	clipboard.c \
-	cmdhist.c \
 	cmdexpand.c \
+	cmdhist.c \
 	crypt.c \
 	crypt_zip.c \
 	debugger.c \
@@ -136,6 +136,7 @@ SRC += \
 	float.c \
 	fold.c \
 	getchar.c \
+	gc.c \
 	gui_xim.c \
 	hardcopy.c \
 	hashtab.c \
@@ -149,8 +150,8 @@ SRC += \
 	locale.c \
 	logfile.c \
 	main.c \
-	mark.c \
 	map.c \
+	mark.c \
 	match.c \
 	mbyte.c \
 	memfile.c \

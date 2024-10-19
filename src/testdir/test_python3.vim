@@ -88,10 +88,25 @@ func Test_AAA_python3_setup()
 endfunc
 
 func Test_py3do()
-  " Check deleting lines does not trigger an ml_get error.
   new
+
+  " Check deleting lines does not trigger an ml_get error.
   call setline(1, ['one', 'two', 'three'])
   py3do vim.command("%d_")
+  call assert_equal([''], getline(1, '$'))
+
+  call setline(1, ['one', 'two', 'three'])
+  py3do vim.command("1,2d_")
+  call assert_equal(['three'], getline(1, '$'))
+
+  call setline(1, ['one', 'two', 'three'])
+  py3do vim.command("2,3d_"); return "REPLACED"
+  call assert_equal(['REPLACED'], getline(1, '$'))
+
+  call setline(1, ['one', 'two', 'three'])
+  2,3py3do vim.command("1,2d_"); return "REPLACED"
+  call assert_equal(['three'], getline(1, '$'))
+
   bwipe!
 
   " Check switching to another buffer does not trigger an ml_get error.
@@ -4014,30 +4029,34 @@ func Test_python3_iter_ref()
       v = create_list()
       base_ref_count = sys.getrefcount(v)
       for el in v:
-          vim.vars['list_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
+        vim.vars['list_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
 
       create_dict = vim.Function('Create_vim_dict')
       v = create_dict()
       base_ref_count = sys.getrefcount(v)
       for el in v:
-          vim.vars['dict_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
+        vim.vars['dict_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
 
       v = vim.buffers
       base_ref_count = sys.getrefcount(v)
       for el in v:
-          vim.vars['bufmap_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
+        vim.vars['bufmap_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
 
       v = vim.options
       base_ref_count = sys.getrefcount(v)
       for el in v:
-          vim.vars['options_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
+        vim.vars['options_iter_ref_count_increase'] = sys.getrefcount(v) - base_ref_count
 
     test_python3_iter_ref()
   EOF
 
   call assert_equal(1, g:list_iter_ref_count_increase)
   call assert_equal(1, g:dict_iter_ref_count_increase)
-  call assert_equal(1, g:bufmap_iter_ref_count_increase)
+  if py3eval('sys.version_info[:2] < (3, 13)')
+    call assert_equal(1, g:bufmap_iter_ref_count_increase)
+  else
+    call assert_equal(0, g:bufmap_iter_ref_count_increase)
+  endif
   call assert_equal(1, g:options_iter_ref_count_increase)
 endfunc
 

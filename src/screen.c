@@ -18,8 +18,7 @@
  *		     displayed (excluding text written by external commands).
  * ScreenAttrs[off]  Contains the associated attributes.
  * ScreenCols[off]   Contains the virtual columns in the line. -1 means not
- *		     available or before buffer text, MAXCOL means after the
- *		     end of the line.
+ *		     available or before buffer text.
  *
  * LineOffset[row]   Contains the offset into ScreenLines*[], ScreenAttrs[]
  *		     and ScreenCols[] for each line.
@@ -452,6 +451,10 @@ skip_for_popup(int row, int col)
  * SLF_RIGHTLEFT    rightleft window:
  *    When TRUE and "clear_width" > 0, clear columns 0 to "endcol"
  *    When FALSE and "clear_width" > 0, clear columns "endcol" to "clear_width"
+ * SLF_INC_VCOL:
+ *    When FALSE, use "last_vcol" for ScreenCols[] of the columns to clear.
+ *    When TRUE, use an increasing sequence starting from "last_vcol + 1" for
+ *    ScreenCols[] of the columns to clear.
  */
     void
 screen_line(
@@ -460,6 +463,7 @@ screen_line(
 	int	coloff,
 	int	endcol,
 	int	clear_width,
+	colnr_T	last_vcol,
 	int	flags UNUSED)
 {
     unsigned	    off_from;
@@ -504,6 +508,8 @@ screen_line(
 	// Clear rest first, because it's left of the text.
 	if (clear_width > 0)
 	{
+	    int clear_start = col;
+
 	    while (col <= endcol && ScreenLines[off_to] == ' '
 		    && ScreenAttrs[off_to] == 0
 				  && (!enc_utf8 || ScreenLinesUC[off_to] == 0))
@@ -514,6 +520,10 @@ screen_line(
 	    if (col <= endcol)
 		screen_fill(row, row + 1, col + coloff,
 					    endcol + coloff + 1, ' ', ' ', 0);
+
+	    for (int i = endcol; i >= clear_start; i--)
+		ScreenCols[off_to + (i - col)] =
+		    (flags & SLF_INC_VCOL) ? ++last_vcol : last_vcol;
 	}
 	col = endcol + 1;
 	off_to = LineOffset[row] + col + coloff;
@@ -775,7 +785,8 @@ screen_line(
 						  && ScreenAttrs[off_to] == 0
 				  && (!enc_utf8 || ScreenLinesUC[off_to] == 0))
 	{
-	    ScreenCols[off_to] = MAXCOL;
+	    ScreenCols[off_to] =
+			      (flags & SLF_INC_VCOL) ? ++last_vcol : last_vcol;
 	    ++off_to;
 	    ++col;
 	}
@@ -830,7 +841,8 @@ screen_line(
 								 ' ', ' ', 0);
 	    while (col < clear_width)
 	    {
-		ScreenCols[off_to++] = MAXCOL;
+		ScreenCols[off_to++]
+			    = (flags & SLF_INC_VCOL) ? ++last_vcol : last_vcol;
 		++col;
 	    }
 	}
@@ -1969,7 +1981,21 @@ screen_char(unsigned off, int row, int col)
     {
 	char_u	    buf[MB_MAXBYTES + 1];
 
-	if (utf_ambiguous_width(ScreenLinesUC[off]))
+	if (
+#ifdef FEAT_GUI
+	    !gui.in_use &&
+#endif
+	    get_cellwidth(ScreenLinesUC[off]) > 1
+	    )
+	{
+	    // If the width is set to 2 with setcellwidths()
+	    // clear the two screen cells. If the character is actually
+	    // single width it won't change the second cell.
+	    out_str((char_u *)"  ");
+	    term_windgoto(row, col);
+	    screen_cur_col = 9999;
+	}
+	else if (utf_ambiguous_width(ScreenLinesUC[off]))
 	{
 	    if (*p_ambw == 'd'
 #ifdef FEAT_GUI
@@ -2569,6 +2595,25 @@ give_up:
 	    new_LineOffset[new_row] = new_row * Columns;
 	    new_LineWraps[new_row] = FALSE;
 
+	    (void)vim_memset(new_ScreenLines + new_row * Columns,
+				  ' ', (size_t)Columns * sizeof(schar_T));
+	    if (enc_utf8)
+	    {
+		(void)vim_memset(new_ScreenLinesUC + new_row * Columns,
+				   0, (size_t)Columns * sizeof(u8char_T));
+		for (int i = 0; i < p_mco; ++i)
+		    (void)vim_memset(new_ScreenLinesC[i]
+						      + new_row * Columns,
+				   0, (size_t)Columns * sizeof(u8char_T));
+	    }
+	    if (enc_dbcs == DBCS_JPNU)
+		(void)vim_memset(new_ScreenLines2 + new_row * Columns,
+				   0, (size_t)Columns * sizeof(schar_T));
+	    (void)vim_memset(new_ScreenAttrs + new_row * Columns,
+				    0, (size_t)Columns * sizeof(sattr_T));
+	    (void)vim_memset(new_ScreenCols + new_row * Columns,
+				    0, (size_t)Columns * sizeof(colnr_T));
+
 	    /*
 	     * If the screen is not going to be cleared, copy as much as
 	     * possible from the old screen to the new one and clear the rest
@@ -2577,24 +2622,6 @@ give_up:
 	     */
 	    if (!doclear)
 	    {
-		(void)vim_memset(new_ScreenLines + new_row * Columns,
-				      ' ', (size_t)Columns * sizeof(schar_T));
-		if (enc_utf8)
-		{
-		    (void)vim_memset(new_ScreenLinesUC + new_row * Columns,
-				       0, (size_t)Columns * sizeof(u8char_T));
-		    for (int i = 0; i < p_mco; ++i)
-			(void)vim_memset(new_ScreenLinesC[i]
-							  + new_row * Columns,
-				       0, (size_t)Columns * sizeof(u8char_T));
-		}
-		if (enc_dbcs == DBCS_JPNU)
-		    (void)vim_memset(new_ScreenLines2 + new_row * Columns,
-				       0, (size_t)Columns * sizeof(schar_T));
-		(void)vim_memset(new_ScreenAttrs + new_row * Columns,
-					0, (size_t)Columns * sizeof(sattr_T));
-		(void)vim_memset(new_ScreenCols + new_row * Columns,
-					0, (size_t)Columns * sizeof(colnr_T));
 		old_row = new_row + (screen_Rows - Rows);
 		if (old_row >= 0 && ScreenLines != NULL)
 		{
@@ -4535,7 +4562,7 @@ comp_col(void)
 	if (!last_has_status)
 	    sc_col = ru_col;
     }
-    if (p_sc)
+    if (p_sc && *p_sloc == 'l')
     {
 	sc_col += SHOWCMD_COLS;
 	if (!p_ru || last_has_status)	    // no need for separating space

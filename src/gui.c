@@ -455,8 +455,12 @@ gui_init_check(void)
     gui.scrollbar_width = gui.scrollbar_height = SB_DEFAULT_WIDTH;
     gui.prev_wrap = -1;
 
-#ifdef FEAT_GUI_GTK
-    CLEAR_FIELD(gui.ligatures_map);
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
+    // Note: gui_set_ligatures() might already have been called e.g. from .vimrc,
+    // and in that case we don't want to overwrite ligatures map that has already
+    // been correctly populated (as that would lead to a cleared ligatures maps).
+    if (*p_guiligatures == NUL)
+	CLEAR_FIELD(gui.ligatures_map);
 #endif
 
 #if defined(ALWAYS_USE_GUI) || defined(VIMDLL)
@@ -1074,7 +1078,7 @@ gui_get_wide_font(void)
     return OK;
 }
 
-#if defined(FEAT_GUI_GTK) || defined(PROTO)
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN) || defined(PROTO)
 /*
  * Set list of ascii characters that combined can create ligature.
  * Store them in char map for quick access from gui_gtk2_draw_string.
@@ -1599,8 +1603,11 @@ again:
     // Only comparing Rows and Columns may be sufficient, but let's stay on
     // the safe side.
     if (gui.num_rows != screen_Rows || gui.num_cols != screen_Columns
-	    || gui.num_rows != Rows || gui.num_cols != Columns)
+	    || gui.num_rows != Rows || gui.num_cols != Columns || gui.force_redraw)
+    {
 	shell_resized();
+	gui.force_redraw = 0;
+    }
 
 #ifdef FEAT_GUI_HAIKU
     vim_unlock_screen();
@@ -2698,7 +2705,7 @@ gui_undraw_cursor(void)
     int startcol = gui.cursor_col > 0 ? gui.cursor_col - 1 : gui.cursor_col;
     int endcol = gui.cursor_col;
 
-#ifdef FEAT_GUI_GTK
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
     gui_adjust_undraw_cursor_for_ligatures(&startcol, &endcol);
 #endif
     gui_redraw_block(gui.cursor_row, startcol,
@@ -3990,7 +3997,7 @@ gui_drag_scrollbar(scrollbar_T *sb, long value, int still_dragging)
     if (hold_gui_events)
 	return;
 
-    if (cmdwin_type != 0 && sb->wp != curwin)
+    if (cmdwin_type != 0 && sb->wp != cmdwin_win)
 	return;
 
     if (still_dragging)
@@ -5315,7 +5322,7 @@ gui_do_findrepl(
 	i = msg_scroll;
 	if (down)
 	{
-	    (void)do_search(NULL, '/', '/', ga.ga_data, 1L, searchflags, NULL);
+	    (void)do_search(NULL, '/', '/', ga.ga_data, STRLEN(ga.ga_data), 1L, searchflags, NULL);
 	}
 	else
 	{
@@ -5323,7 +5330,7 @@ gui_do_findrepl(
 	    // direction
 	    p = vim_strsave_escaped(ga.ga_data, (char_u *)"?");
 	    if (p != NULL)
-		(void)do_search(NULL, '?', '?', p, 1L, searchflags, NULL);
+		(void)do_search(NULL, '?', '?', p, STRLEN(p), 1L, searchflags, NULL);
 	    vim_free(p);
 	}
 

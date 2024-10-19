@@ -5,9 +5,9 @@
 
 # Testing may be done with a debug build 
 !IF EXIST(..\\vimd.exe) && !EXIST(..\\vim.exe)
-VIMPROG = ..\\vimd
+VIMPROG = ..\\vimd.exe
 !ELSE
-VIMPROG = ..\\vim
+VIMPROG = ..\\vim.exe
 !ENDIF
 
 
@@ -42,7 +42,7 @@ report:
 		else ( echo No failures reported > test_result.log )
 	$(VIMPROG) -u NONE $(COMMON_ARGS) -S summarize.vim messages
 	-if exist starttime del starttime
-	@echo.
+	@echo:
 	@echo Test results:
 	@cmd /c type test_result.log
 	@if exist test.log ( echo TEST FAILURE & exit /b 1 ) \
@@ -56,7 +56,7 @@ $(NEW_TESTS):
 	-if exist test.log del test.log
 	-if exist messages del messages
 	-if exist starttime del starttime
-	@$(MAKE) -nologo -f Make_mvc.mak $@.res VIMPROG=$(VIMPROG)
+	@$(MAKE) -nologo -f Make_mvc.mak VIMPROG=$(VIMPROG) $@.res
 	@type messages
 	@if exist test.log exit 1
 
@@ -151,8 +151,9 @@ test_gui_init.res: test_gui_init.vim
 	$(VIMPROG) -u gui_preinit.vim -U gui_init.vim $(NO_PLUGINS) -S runtest.vim $*.vim
 	@del vimcmd
 
-opt_test.vim: ../optiondefs.h gen_opt_test.vim
-	$(VIMPROG) -u NONE -S gen_opt_test.vim --noplugin --not-a-term ../optiondefs.h
+opt_test.vim: gen_opt_test.vim ../optiondefs.h
+	$(VIMPROG) -e -s -u NONE $(COMMON_ARGS) --nofork -S $**
+	@if exist test.log ( type test.log & exit /b 1 )
 
 test_bench_regexp.res: test_bench_regexp.vim
 	-if exist benchmark.out del benchmark.out

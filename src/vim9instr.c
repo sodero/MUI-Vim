@@ -191,10 +191,12 @@ generate_STORE_THIS(cctx_T *cctx, int idx)
 /*
  * If type at "offset" isn't already VAR_STRING then generate ISN_2STRING.
  * But only for simple types.
- * When "tolerant" is TRUE convert most types to string, e.g. a List.
+ * When tostring_flags has TOSTRING_TOLERANT, convert a List to a series of
+ * strings.  When tostring_flags has TOSTRING_INTERPOLATE, convert a List or a
+ * Dict to the corresponding textual representation.
  */
     int
-may_generate_2STRING(int offset, int tolerant, cctx_T *cctx)
+may_generate_2STRING(int offset, int tostring_flags, cctx_T *cctx)
 {
     isn_T	*isn;
     isntype_T	isntype = ISN_2STRING;
@@ -222,11 +224,14 @@ may_generate_2STRING(int offset, int tolerant, cctx_T *cctx)
 
 	// conversion possible when tolerant
 	case VAR_LIST:
-			 if (tolerant)
+	case VAR_DICT:
+			 if (tostring_flags & TOSTRING_TOLERANT)
 			 {
 			     isntype = ISN_2STRING_ANY;
 			     break;
 			 }
+			 if (tostring_flags & TOSTRING_INTERPOLATE)
+			     break;
 			 // FALLTHROUGH
 
 	// conversion not possible
@@ -234,7 +239,6 @@ may_generate_2STRING(int offset, int tolerant, cctx_T *cctx)
 	case VAR_BLOB:
 	case VAR_FUNC:
 	case VAR_PARTIAL:
-	case VAR_DICT:
 	case VAR_JOB:
 	case VAR_CHANNEL:
 	case VAR_INSTR:
@@ -249,7 +253,7 @@ may_generate_2STRING(int offset, int tolerant, cctx_T *cctx)
     if ((isn = generate_instr(cctx, isntype)) == NULL)
 	return FAIL;
     isn->isn_arg.tostring.offset = offset;
-    isn->isn_arg.tostring.tolerant = tolerant;
+    isn->isn_arg.tostring.flags = tostring_flags;
 
     return OK;
 }
@@ -1801,6 +1805,8 @@ generate_BLOBAPPEND(cctx_T *cctx)
  * Generate an ISN_DCALL, ISN_UCALL or ISN_METHODCALL instruction.
  * When calling a method on an object, of which we know the interface only,
  * then "cl" is the interface and "mi" the method index on the interface.
+ * save is_super in the "isn->isn_arg"; it flags execution to use mfunc
+ * directly to determine ufunc.
  * Return FAIL if the number of arguments is wrong.
  */
     int
@@ -1809,7 +1815,8 @@ generate_CALL(
 	ufunc_T	    *ufunc,
 	class_T	    *cl,
 	int	    mi,
-	int	    pushed_argcount)
+	int	    pushed_argcount,
+	int	    is_super)
 {
     isn_T	*isn;
     int		regular_args = ufunc->uf_args.ga_len;
@@ -1894,6 +1901,7 @@ generate_CALL(
 	++cl->class_refcount;
 	isn->isn_arg.mfunc->cmf_idx = mi;
 	isn->isn_arg.mfunc->cmf_argcount = argcount;
+	isn->isn_arg.mfunc->cmf_is_super = is_super;
     }
     else if (isn->isn_type == ISN_DCALL)
     {
@@ -2390,6 +2398,7 @@ generate_store_var(
 	case dest_vimvar:
 	    return generate_STORE(cctx, ISN_STOREV, vimvaridx, NULL);
 	case dest_script:
+	case dest_script_v9:
 	    {
 		int	    scriptvar_idx = lhs->lhs_scriptvar_idx;
 		int	    scriptvar_sid = lhs->lhs_scriptvar_sid;
@@ -2397,10 +2406,14 @@ generate_store_var(
 		{
 		    isntype_T   isn_type = ISN_STORES;
 
+		    // If "sn_import_autoload", generate ISN_STOREEXPORT (not
+		    // ISN_STORES) if destination is in a vim9script or if
+		    // there is no "sn_autoload_prefix".
 		    if (SCRIPT_ID_VALID(scriptvar_sid)
 			     && SCRIPT_ITEM(scriptvar_sid)->sn_import_autoload
-			     && SCRIPT_ITEM(scriptvar_sid)->sn_autoload_prefix
-								       == NULL)
+			     && ((SCRIPT_ITEM(scriptvar_sid)
+						  ->sn_autoload_prefix == NULL)
+				|| lhs->lhs_dest == dest_script_v9))
 		    {
 			// "import autoload './dir/script.vim'" - load script
 			// first

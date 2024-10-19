@@ -2001,6 +2001,12 @@ func Test_xx08_kitty_response()
         \ kitty: 'y',
         \ }, terminalprops())
 
+  call feedkeys("\<Esc>[?1u") " simulate the kitty keyboard protocol is enabled
+  call feedkeys(':' .. GetEscCodeCSIu('V', '5') .. GetEscCodeCSIuWithoutModifier("\<Esc>") .. "\<C-B>\"\<CR>", 'Lx!')
+  call assert_equal("\"\<Esc>", @:)
+  call feedkeys(':' .. GetEscCodeCSIu('V', '5') .. GetEscCodeCSIu("\<Esc>", '129') .. "\<C-B>\"\<CR>", 'Lx!')
+  call assert_equal("\"\<Esc>", @:)
+
   set t_RV=
   call test_override('term_props', 0)
 endfunc
@@ -2256,6 +2262,17 @@ func Test_modifyOtherKeys_mapped()
 
   iunmap '
   iunmap <C-W><C-A>
+
+  " clean buffer
+  %d _
+  imap B b
+  imap BBB blimp
+  let input = repeat(GetEscCodeCSI27('B', 2), 3)
+  call feedkeys("a" .. input .. "\<Esc>", 'Lx!')
+  call assert_equal('blimp', getline(1))
+  " cleanup
+  iunmap BBB
+  iunmap B
   set timeoutlen&
 endfunc
 

@@ -446,6 +446,7 @@ term_start(
     buf_T	*newbuf;
     int		vertical = opt->jo_vertical || (cmdmod.cmod_split & WSP_VERT);
     jobopt_T	orig_opt;  // only partly filled
+    pos_T	save_cursor;
 
     if (check_restricted() || check_secure())
 	return NULL;
@@ -518,6 +519,7 @@ term_start(
 	old_curbuf = curbuf;
 	--curbuf->b_nwindows;
 	curbuf = buf;
+	save_cursor = curwin->w_cursor;
 	curwin->w_buffer = buf;
 	++curbuf->b_nwindows;
     }
@@ -538,9 +540,16 @@ term_start(
 	    split_ea.addr_count = 1;
 	}
 
+	int cmod_split_modified = FALSE;
 	if (vertical)
+	{
+	    if (!(cmdmod.cmod_split & WSP_VERT))
+		cmod_split_modified = TRUE;
 	    cmdmod.cmod_split |= WSP_VERT;
+	}
 	ex_splitview(&split_ea);
+	if (cmod_split_modified)
+	    cmdmod.cmod_split &= ~WSP_VERT;
 	if (curwin == old_curwin)
 	{
 	    // split failed
@@ -756,6 +765,7 @@ term_start(
 	    --curbuf->b_nwindows;
 	    curbuf = old_curbuf;
 	    curwin->w_buffer = curbuf;
+	    curwin->w_cursor = save_cursor;
 	    ++curbuf->b_nwindows;
 	}
 	else if (vgetc_busy
@@ -3444,6 +3454,10 @@ limit_scrollback(term_T *term, garray_T *gap, int update_buffer)
 	    sizeof(sb_line_T) * gap->ga_len);
     if (update_buffer)
 	term->tl_scrollback_scrolled -= todo;
+
+    // make sure cursor is on a valid line
+    if (curbuf == term->tl_buffer)
+	check_cursor();
 }
 
 /*
@@ -3636,7 +3650,7 @@ term_after_channel_closed(term_T *term)
 	if (term->tl_finish == TL_FINISH_CLOSE)
 	{
 	    aco_save_T	aco;
-	    int		do_set_w_closing = term->tl_buffer->b_nwindows == 0;
+	    int		do_set_w_locked = term->tl_buffer->b_nwindows == 0;
 #ifdef FEAT_PROP_POPUP
 	    win_T	*pwin = NULL;
 
@@ -3667,12 +3681,12 @@ term_after_channel_closed(term_T *term)
 	    {
 		// Avoid closing the window if we temporarily use it.
 		if (is_aucmd_win(curwin))
-		    do_set_w_closing = TRUE;
-		if (do_set_w_closing)
-		    curwin->w_closing = TRUE;
+		    do_set_w_locked = TRUE;
+		if (do_set_w_locked)
+		    curwin->w_locked = TRUE;
 		do_bufdel(DOBUF_WIPE, (char_u *)"", 1, fnum, fnum, FALSE);
-		if (do_set_w_closing)
-		    curwin->w_closing = FALSE;
+		if (do_set_w_locked)
+		    curwin->w_locked = FALSE;
 		aucmd_restbuf(&aco);
 	    }
 #ifdef FEAT_PROP_POPUP
@@ -3965,7 +3979,8 @@ update_system_term(term_T *term)
 	else
 	    pos.col = 0;
 
-	screen_line(curwin, term->tl_toprow + pos.row, 0, pos.col, Columns, 0);
+	screen_line(curwin, term->tl_toprow + pos.row, 0, pos.col, Columns, -1,
+									    0);
     }
 
     term->tl_dirty_row_start = MAX_ROW;
@@ -4088,7 +4103,7 @@ term_update_window(win_T *wp)
 #ifdef FEAT_MENU
 				+ winbar_height(wp)
 #endif
-				, wp->w_wincol, pos.col, wp->w_width,
+				, wp->w_wincol, pos.col, wp->w_width, -1,
 #ifdef FEAT_PROP_POPUP
 				popup_is_popup(wp) ? SLF_POPUP :
 #endif
@@ -6163,8 +6178,16 @@ f_term_getjob(typval_T *argvars, typval_T *rettv)
     buf = term_get_buf(argvars, "term_getjob()");
     if (buf == NULL)
     {
-	rettv->v_type = VAR_SPECIAL;
-	rettv->vval.v_number = VVAL_NULL;
+	if (in_vim9script())
+	{
+	    rettv->v_type = VAR_JOB;
+	    rettv->vval.v_job = NULL;
+	}
+	else
+	{
+	    rettv->v_type = VAR_SPECIAL;
+	    rettv->vval.v_number = VVAL_NULL;
+	}
 	return;
     }
 
@@ -6283,7 +6306,7 @@ f_term_getsize(typval_T *argvars, typval_T *rettv)
  * "term_setsize(buf, rows, cols)" function
  */
     void
-f_term_setsize(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
+f_term_setsize(typval_T *argvars, typval_T *rettv UNUSED)
 {
     buf_T	*buf;
     term_T	*term;

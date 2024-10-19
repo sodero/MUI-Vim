@@ -458,7 +458,7 @@ func s:InvokeSomeCommand()
   SomeCommand
 endfunc
 
-def Test_autocommand_block()
+def Test_command_block()
   com SomeCommand {
       g:someVar = 'some'
     }
@@ -469,7 +469,121 @@ def Test_autocommand_block()
   unlet g:someVar
 enddef
 
-def Test_command_block()
+" Test for using heredoc in a :command command block
+def Test_command_block_heredoc()
+  var lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        g:someVar =<< trim END
+          aaa
+          bbb
+        END
+      }
+    SomeCommand
+    assert_equal(['aaa', 'bbb'], g:someVar)
+    def Foo()
+      g:someVar = []
+      SomeCommand
+      assert_equal(['aaa', 'bbb'], g:someVar)
+    enddef
+    Foo()
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess( lines)
+
+  # Execute a command with heredoc in a block
+  lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        g:someVar =<< trim END
+          aaa
+          bbb
+        END
+      }
+    execute('SomeCommand')
+    assert_equal(['aaa', 'bbb'], g:someVar)
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess(lines)
+
+  # Heredoc with comment
+  lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        g:someVar =<< trim END # comment
+          aaa
+          bbb
+        END
+      }
+    execute('SomeCommand')
+    assert_equal(['aaa', 'bbb'], g:someVar)
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess(lines)
+
+  # heredoc evaluation
+  lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        var suffix = '---'
+        g:someVar =<< trim eval END
+          ccc{suffix}
+          ddd
+        END
+      }
+    SomeCommand
+    assert_equal(['ccc---', 'ddd'], g:someVar)
+    def Foo()
+      g:someVar = []
+      SomeCommand
+      assert_equal(['ccc---', 'ddd'], g:someVar)
+    enddef
+    Foo()
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess(lines)
+
+  # command following heredoc
+  lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        var l =<< trim END
+          eee
+          fff
+        END
+        g:someVar = l
+      }
+    SomeCommand
+    assert_equal(['eee', 'fff'], g:someVar)
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess(lines)
+
+  # Error in heredoc
+  lines =<< trim CODE
+    vim9script
+    com SomeCommand {
+        g:someVar =<< trim END
+          eee
+          fff
+      }
+    try
+      SomeCommand
+    catch
+      assert_match("E990: Missing end marker 'END'", v:exception)
+    endtry
+    delcommand SomeCommand
+    unlet g:someVar
+  CODE
+  v9.CheckSourceSuccess(lines)
+enddef
+
+def Test_autocommand_block()
   au BufNew *.xml {
       g:otherVar = 'other'
     }
@@ -2045,6 +2159,18 @@ def Test_echo_cmd()
   assert_match('^two$', g:Screenline(&lines))
 
   v9.CheckDefFailure(['echo "xxx"# comment'], 'E488:')
+
+  # Test for echoing a script local function name
+  var lines =<< trim END
+    vim9script
+    def ScriptLocalEcho()
+    enddef
+    echo ScriptLocalEcho
+  END
+  new
+  setline(1, lines)
+  assert_match('<SNR>\d\+_ScriptLocalEcho', execute('source')->split("\n")[0])
+  bw!
 enddef
 
 def Test_echomsg_cmd()
@@ -2396,8 +2522,20 @@ def Test_for_loop()
         reslist->add('x')
       endfor
       assert_equal(['x', 'x', 'x'], reslist)
+
+      # Test for trying to use the loop variable "_" inside the loop
+      for _ in "a"
+        assert_fails('echo _', 'E1181: Cannot use an underscore here')
+      endfor
   END
   v9.CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+    for i : number : [1, 2]
+      echo i
+    endfor
+  END
+  v9.CheckSourceDefAndScriptFailure(lines, 'E1059: No white space allowed before colon: : [1, 2]', 1)
 enddef
 
 def Test_for_loop_list_of_lists()
@@ -3869,7 +4007,7 @@ def Test_restoring_cpo()
   edit XanotherScript
   so %
   assert_equal('aABceFsMny>', &cpo)
-  assert_equal('aABceFs', g:cpoval)
+  assert_equal('aABceFsz', g:cpoval)
   :1del
   setline(1, 'let g:cpoval = &cpo')
   w
@@ -3910,10 +4048,10 @@ def Test_restoring_cpo()
     exe "silent !" .. cmd
 
     assert_equal([
-        'before: aABceFs',
-        'after: aABceFsM',
-        'later: aABceFsM',
-        'vim9: aABceFs'], readfile('Xrporesult'))
+        'before: aABceFsz',
+        'after: aABceFszM',
+        'later: aABceFszM',
+        'vim9: aABceFsz'], readfile('Xrporesult'))
 
     $HOME = save_HOME
     delete('Xrporesult')
@@ -4437,11 +4575,11 @@ def Run_Test_debug_with_lambda()
       Func()
   END
   writefile(lines, 'XdebugFunc', 'D')
-  var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 6, wait_for_ruler: 0})
-  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 6)))
+  var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 10, wait_for_ruler: 0})
+  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 10)))
 
   term_sendkeys(buf, "cont\<CR>")
-  g:WaitForAssert(() => assert_match('\[0\]', term_getline(buf, 5)))
+  g:WaitForAssert(() => assert_match('\[0\]', term_getline(buf, 9)))
 
   g:StopVimInTerminal(buf)
 enddef
@@ -4472,12 +4610,12 @@ def Run_Test_debug_running_out_of_lines()
       Crash()
   END
   writefile(lines, 'XdebugFunc', 'D')
-  var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 6, wait_for_ruler: 0})
-  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 6)))
+  var buf = g:RunVimInTerminal('-S XdebugFunc', {rows: 10, wait_for_ruler: 0})
+  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 10)))
 
   term_sendkeys(buf, "next\<CR>")
   g:TermWait(buf)
-  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 6)))
+  g:WaitForAssert(() => assert_match('^>', term_getline(buf, 10)))
 
   term_sendkeys(buf, "cont\<CR>")
   g:TermWait(buf)
@@ -4888,7 +5026,7 @@ def Test_invalid_type_in_for()
     enddef
     defcompile
   END
-  v9.CheckSourceFailure(lines, 'E1010: Type not recognized: x in range(10)', 1)
+  v9.CheckSourceFailure(lines, 'E1010: Type not recognized: x', 1)
 enddef
 
 " Test for using a line break between the variable name and the type in a for
@@ -4906,7 +5044,7 @@ def Test_for_stmt_space_before_type()
   v9.CheckSourceFailure(lines, 'E1059: No white space allowed before colon: :number in range(10)', 2)
 enddef
 
-" This test used to cause an use-after-free memory access
+" This test used to cause a use-after-free memory access
 def Test_for_empty_line_after_lambda()
   var lines =<< trim END
     vim9script
@@ -4929,6 +5067,70 @@ def Test_for_empty_line_after_lambda()
     assert_equal('[1, 1] [2, 2]', v:statusmsg)
   END
   v9.CheckSourceSuccess(lines)
+enddef
+
+" Test for evaluating a lambda block from a string
+def Test_eval_lambda_block()
+  var lines =<< trim END
+    vim9script
+    var Fn = eval("(x: number): number => {\nreturn x * 2\n}")
+    assert_equal(6, Fn(3))
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
+" Test for using various null values
+def Test_null_values()
+  var lines =<< trim END
+    var nullValues = [
+      [null, 1, 'null', 7, 'special'],
+      [null_blob, 1, '0z', 10, 'blob'],
+      [null_dict, 1, '{}', 4, 'dict<any>'],
+      [null_function, 1, "function('')", 2, 'func(...): unknown'],
+      [null_list, 1, '[]', 3, 'list<any>'],
+      [null_object, 1, 'object of [unknown]', 13, 'object<Unknown>'],
+      [null_partial, 1, "function('')", 2, 'func(...): unknown'],
+      [null_string, 1, "''", 1, 'string']
+    ]
+    if has('channel')
+      nullValues->add([null_channel, 1, 'channel fail', 9, 'channel'])
+    endif
+    if has('job')
+      nullValues->add([null_job, 1, 'no process', 8, 'job'])
+    endif
+
+    for [Val, emptyExp, stringExp, typeExp, typenameExp] in nullValues
+      assert_equal(emptyExp, empty(Val))
+      assert_equal(stringExp, string(Val))
+      assert_equal(typeExp, type(Val))
+      assert_equal(typenameExp, typename(Val))
+      assert_equal(Val, copy(Val))
+      assert_equal(-1, test_refcount(Val))
+    endfor
+  END
+  v9.CheckSourceDefAndScriptSuccess(lines)
+enddef
+
+" Test for using an unknown type in a typecast
+def Test_unknown_type_in_typecast()
+  var lines =<< trim END
+    vim9script
+    var a = <MyType>b
+  END
+  v9.CheckSourceFailure(lines, 'E1010: Type not recognized: MyType', 2)
+
+  lines =<< trim END
+    vim9script
+    var Fn = <funcx(number, number): number>b
+  END
+  v9.CheckSourceFailure(lines, 'E1010: Type not recognized: funcx(number, number): number', 2)
+
+  # Wrong type in a type cast
+  lines =<< trim END
+    vim9script
+    var i: number = <number>true
+  END
+  v9.CheckSourceFailure(lines, 'E1012: Type mismatch; expected number but got bool', 2)
 enddef
 
 " Keep this last, it messes up highlighting.

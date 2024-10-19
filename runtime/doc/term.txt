@@ -1,4 +1,4 @@
-*term.txt*      For Vim version 9.1.  Last change: 2024 Jan 15
+*term.txt*      For Vim version 9.1.  Last change: 2024 Oct 05
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -292,11 +292,11 @@ entry in /etc/termcap and everything should work.
 On some systems (at least on FreeBSD with XFree86 3.1.2) the codes that the
 <End> and <Home> keys send contain a <Nul> character.  To make these keys send
 the proper key code, add these lines to your ~/.Xdefaults file:
-
-*VT100.Translations:		#override \n\
-		<Key>Home: string("0x1b") string("[7~") \n\
-		<Key>End: string("0x1b") string("[8~")
-
+>
+	*VT100.Translations:		#override \n\
+			<Key>Home: string("0x1b") string("[7~") \n\
+			<Key>End: string("0x1b") string("[8~")
+<
 						*xterm-8bit* *xterm-8-bit*
 Xterm can be run in a mode where it uses 8-bit escape sequences.  The CSI code
 is used instead of <Esc>[.  The advantage is that an <Esc> can quickly be
@@ -345,7 +345,7 @@ versions (and will then also end up in terminfo/termcap).
 
 						*xterm-kitty* *kitty-terminal*
 The Kitty terminal is a special case.  Mainly because it works differently
-from most other terminals, but also because, instead of trying the fit in and
+from most other terminals, but also because, instead of trying to fit in and
 make it behave like other terminals by default, it dictates how applications
 need to work when using Kitty.  This makes it very difficult for Vim to work
 in a Kitty terminal.  Some exceptions have been hard coded, but it is not at
@@ -382,8 +382,8 @@ The options are listed below.  The associated termcap code is always equal to
 the last two characters of the option name.  Only one termcap code is
 required: Cursor motion, 't_cm'.
 
-The options 't_da', 't_db', 't_ms', 't_xs', 't_xn' represent flags in the
-termcap.  When the termcap flag is present, the option will be set to "y".
+The options 't_da', 't_db', 't_ms', 't_xs', 't_xn', 't_xo' represent flags in
+the termcap.  When the termcap flag is present, the option will be set to "y".
 But any non-empty string means that the flag is set.  An empty string means
 that the flag is not set.  't_CS' works like this too, but it isn't a termcap
 flag.
@@ -441,6 +441,11 @@ OUTPUT CODES						*terminal-output-codes*
 								*t_xn* *'t_xn'*
 	t_xn	if non-empty, writing a character at the last screen cell
 		does not cause scrolling
+								*t_xo* *'t_xo'*
+	t_xo	if non-empty, terminal uses xon/xoff handshaking, mapping
+		CTRL-S will not be possible then, since it is used for flow
+		control (used by vt420 terminal).  Setting this flag has only
+		an effect when starting Vim.
 	t_ZH	italics mode					*t_ZH* *'t_ZH'*
 	t_ZR	italics end					*t_ZR* *'t_ZR'*
 
@@ -714,9 +719,9 @@ If this feature is enabled by the 't_fe' sequence, special key sequences are
 sent from the terminal to Vim every time the terminal gains or loses focus.
 Vim fires focus events (|FocusGained|/|FocusLost|) by handling them accordingly.
 Focus event tracking is disabled by a 't_fd' sequence when exiting "raw" mode.
-If you would like to disable this feature, add the following to your .vimrc:
-	`set t_fd=`
-	`set t_fe=`
+If you would like to disable this feature, add the following to your .vimrc: >
+	set t_fd=
+	set t_fe=
 If your terminal does support this but Vim does not recognize the terminal,
 you may have to set the options yourself: >
 	let &t_fe = "\<Esc>[?1004h"
@@ -805,13 +810,13 @@ region.  It should be set to an empty string otherwise.
 Note for xterm users: The shifted cursor keys normally don't work.  You can
 	make them work with the xmodmap command and some mappings in Vim.
 
-	Give these commands in the xterm:
+	Give these commands in the xterm: >
 		xmodmap -e "keysym Up = Up F13"
 		xmodmap -e "keysym Down = Down F16"
 		xmodmap -e "keysym Left = Left F18"
 		xmodmap -e "keysym Right = Right F19"
-
-	And use these mappings in Vim:
+<
+	And use these mappings in Vim: >
 		:map <t_F3> <S-Up>
 		:map! <t_F3> <S-Up>
 		:map <t_F6> <S-Down>

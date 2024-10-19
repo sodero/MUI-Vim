@@ -12,7 +12,7 @@ SCRIPTSOURCE = ../../runtime
 # Comment out this line to see the verbose output of tests.
 #
 # Catches SwapExists to avoid hanging at the ATTENTION prompt.
-REDIR_TEST_TO_NULL = --cmd 'au SwapExists * let v:swapchoice = "e"' | LC_ALL=C LANG=C LANGUAGE=C awk '/Executing Test_/{match($$0, "([0-9][0-9]:[0-9][0-9] *)?Executing Test_[^\\)]*\\)"); print substr($$0, RSTART, RLENGTH) "\r"; fflush()}'
+REDIR_TEST_TO_NULL = --cmd 'au SwapExists * let v:swapchoice = "e"' | LC_ALL=C awk '/Executing Test_/{match($$0, "([0-9][0-9]:[0-9][0-9] *)?Executing Test_[^\\)]*\\)"); print substr($$0, RSTART, RLENGTH) "\r"; fflush()}'
 
 # Uncomment this line to use valgrind for memory leaks and extra warnings.
 #   The output goes into a file "valgrind.testN"
@@ -84,12 +84,12 @@ test_vim9:
 
 RM_ON_RUN = test.out X* viminfo
 RM_ON_START = test.ok benchmark.out
-RUN_VIM = VIMRUNTIME=$(SCRIPTSOURCE) $(VALGRIND) $(VIMPROG) -f $(GUI_FLAG) -u unix.vim $(NO_INITS) -s dotest.in
+RUN_VIMPROG = VIMRUNTIME=$(SCRIPTSOURCE) $(VALGRIND) $(VIMPROG) -f $(GUI_FLAG) -u unix.vim $(NO_INITS) -s dotest.in
 
 # Delete files that may interfere with running tests.  This includes some files
 # that may result from working on the tests, not only from running them.
 clean:
-	-rm -rf *.out *.failed *.res *.rej *.orig XfakeHOME Xdir1 Xfind
+	-rm -rf *.out *.failed *.res *.rej *.orig XfakeHOME Xdir1 Xfind failed
 	-rm -f opt_test.vim test_result.log $(CLEANUP_FILES)
 	-rm -rf $(RM_ON_RUN) $(RM_ON_START)
 	-rm -f valgrind.*
@@ -114,7 +114,7 @@ tinytests: $(SCRIPTS_TINY_OUT)
 	@# 200 msec is sufficient, but only modern sleep supports a fraction of
 	@# a second, fall back to a second if it fails.
 	@-/bin/sh -c "sleep .2 > /dev/null 2>&1 || sleep 1"
-	$(RUN_VIM) $*.in $(REDIR_TEST_TO_NULL)
+	$(RUN_VIMPROG) $*.in $(REDIR_TEST_TO_NULL)
 
 	@# Check if the test.out file matches test.ok.
 	@/bin/sh -c "if test -f test.out; then \
@@ -160,8 +160,14 @@ test_gui_init.res: test_gui_init.vim
 	$(RUN_VIMTEST) -u gui_preinit.vim -U gui_init.vim $(NO_PLUGINS) -S runtest.vim $<
 	@rm vimcmd
 
-opt_test.vim: ../optiondefs.h gen_opt_test.vim
-	$(VIMPROG) -u NONE -S gen_opt_test.vim --noplugin --not-a-term ../optiondefs.h
+GEN_OPT_DEPS = gen_opt_test.vim ../optiondefs.h
+
+opt_test.vim: $(GEN_OPT_DEPS)
+	$(VIMPROG) -e -s -u NONE $(NO_INITS) --nofork --gui-dialog-file guidialog -S $(GEN_OPT_DEPS)
+	@if test -f test.log; then \
+		cat test.log; \
+		exit 1; \
+	fi
 
 test_xxd.res:
 	XXD=$(XXDPROG); export XXD; $(RUN_VIMTEST) $(NO_INITS) -S runtest.vim test_xxd.vim

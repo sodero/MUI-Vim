@@ -5877,7 +5877,7 @@ sug_write(spellinfo_T *spin, char_u *fname)
     {
 	// <sugline>: <sugnr> ... NUL
 	line = ml_get_buf(spin->si_spellbuf, lnum, FALSE);
-	len = (int)STRLEN(line) + 1;
+	len = ml_get_buf_len(spin->si_spellbuf, lnum) + 1;
 	if (fwrite(line, (size_t)len, (size_t)1, fd) == 0)
 	{
 	    emsg(_(e_error_while_writing));
@@ -6434,7 +6434,13 @@ init_spellfile(void)
 		l = (int)STRLEN(buf);
 		vim_snprintf((char *)buf + l, MAXPATHL - l, "/spell");
 		if (filewritable(buf) != 2)
-		    vim_mkdir(buf, 0755);
+		{
+		    if (vim_mkdir(buf, 0755) != 0)
+		    {
+			vim_free(buf);
+			return;
+		    }
+		}
 
 		l = (int)STRLEN(buf);
 		vim_snprintf((char *)buf + l, MAXPATHL - l,

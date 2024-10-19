@@ -424,7 +424,7 @@ func Test_breakindent12()
 	\ "~               ",
 	\ ]
   call s:compare_lines(expect, lines)
-  call s:close_windows('set nuw=4 listchars=')
+  call s:close_windows('set nuw=4 listchars&')
 endfunc
 
 func Test_breakindent12_vartabs()
@@ -439,7 +439,7 @@ func Test_breakindent12_vartabs()
 	\ "~               ",
 	\ ]
   call s:compare_lines(expect, lines)
-  call s:close_windows('set nuw=4 listchars= vts&')
+  call s:close_windows('set nuw=4 listchars& vts&')
 endfunc
 
 func Test_breakindent13()
@@ -733,7 +733,7 @@ func Test_breakindent20_list()
 	\ "shall make no law   ",
 	\ ]
   call s:compare_lines(expect, lines)
-  " set minimum indent
+  " set minimum text width
   setl briopt=min:5
   redraw!
   let lines = s:screen_lines2(1, 6, 20)
@@ -797,18 +797,73 @@ func Test_breakindent20_list()
 	\ ]
   let lines = s:screen_lines2(1, 9, 20)
   call s:compare_lines(expect, lines)
+
+  " check with TABs
+  call setline(1, ["\t1.\tCongress shall make no law",
+        \ "\t2.) Congress shall make no law",
+        \ "\t3.] Congress shall make no law"])
+  setl tabstop=4 list listchars=tab:<->
+  norm! 1gg
+  redraw!
+  let expect = [
+	\ "<-->1.<>Congress    ",
+	\ "        shall make  ",
+	\ "        no law      ",
+	\ "<-->2.) Congress    ",
+	\ "        shall make  ",
+	\ "        no law      ",
+	\ "<-->3.] Congress    ",
+	\ "        shall make  ",
+	\ "        no law      ",
+	\ ]
+  let lines = s:screen_lines2(1, 9, 20)
+  call s:compare_lines(expect, lines)
+
+  setl tabstop=2 nolist
+  redraw!
+  let expect = [
+	\ "  1.  Congress      ",
+	\ "      shall make no ",
+	\ "      law           ",
+	\ "  2.) Congress      ",
+	\ "      shall make no ",
+	\ "      law           ",
+	\ "  3.] Congress      ",
+	\ "      shall make no ",
+	\ "      law           ",
+	\ ]
+  let lines = s:screen_lines2(1, 9, 20)
+  call s:compare_lines(expect, lines)
+
+  setl tabstop& list listchars=space:_
+  redraw!
+  let expect = [
+	\ "^I1.^ICongress_     ",
+	\ "      shall_make_no_",
+	\ "      law           ",
+	\ "^I2.)_Congress_     ",
+	\ "      shall_make_no_",
+	\ "      law           ",
+	\ "^I3.]_Congress_     ",
+	\ "      shall_make_no_",
+	\ "      law           ",
+	\ ]
+  let lines = s:screen_lines2(1, 9, 20)
+  call s:compare_lines(expect, lines)
+
   " check formatlistpat indent with different list levels
-  let &l:flp = '^\s*\*\+\s\+'
+  let &l:flp = '^\s*\(\*\|•\)\+\s\+'
+  setl list&vim listchars&vim
   %delete _
   call setline(1, ['* Congress shall make no law',
-        \ '*** Congress shall make no law',
+        \ '••• Congress shall make no law',
         \ '**** Congress shall make no law'])
   norm! 1gg
   redraw!
   let expect = [
 	\ "* Congress shall    ",
 	\ "  make no law       ",
-	\ "*** Congress shall  ",
+	\ "••• Congress shall  ",
 	\ "    make no law     ",
 	\ "**** Congress shall ",
 	\ "     make no law    ",
@@ -824,7 +879,7 @@ func Test_breakindent20_list()
   let expect = [
 	\ "* Congress shall    ",
 	\ "> make no law       ",
-	\ "*** Congress shall  ",
+	\ "••• Congress shall  ",
 	\ ">   make no law     ",
 	\ "**** Congress shall ",
 	\ ">    make no law    ",
@@ -840,7 +895,7 @@ func Test_breakindent20_list()
   let expect = [
 	\ "* Congress shall    ",
 	\ ">   make no law     ",
-	\ "*** Congress shall  ",
+	\ "••• Congress shall  ",
 	\ ">     make no law   ",
 	\ "**** Congress shall ",
 	\ ">      make no law  ",
@@ -1086,5 +1141,94 @@ func Test_linebreak_list()
   bwipe!
 endfunc
 
+func Test_breakindent_change_display_uhex()
+  call s:test_windows('setl briopt=min:0 list listchars=eol:$')
+  redraw!
+  let lines = s:screen_lines(line('.'), 20)
+  let expect = [
+        \ "^Iabcdefghijklmnopqr",
+        \ "  stuvwxyzABCDEFGHIJ",
+        \ "  KLMNOP$           "
+        \ ]
+  call s:compare_lines(expect, lines)
+  set display+=uhex
+  redraw!
+  let lines = s:screen_lines(line('.'), 20)
+  let expect = [
+        \ "<09>abcdefghijklmnop",
+        \ "    qrstuvwxyzABCDEF",
+        \ "    GHIJKLMNOP$     "
+        \ ]
+  call s:compare_lines(expect, lines)
+  set display&
+
+  call s:close_windows()
+endfunc
+
+func Test_breakindent_list_split()
+  10new
+  61vsplit
+  setlocal tabstop=8 breakindent list listchars=tab:<->,eol:$
+  put =s:input
+  30vsplit
+  setlocal listchars=eol:$
+  let expect = [
+      \ "^IabcdefghijklmnopqrstuvwxyzAB|<------>abcdefghijklmnopqrstuv",
+      \ "  CDEFGHIJKLMNOP$             |        wxyzABCDEFGHIJKLMNOP$ ",
+      \ "~                             |~                             "
+      \ ]
+  redraw!
+  let lines = s:screen_lines(line('.'), 61)
+  call s:compare_lines(expect, lines)
+  wincmd p
+  redraw!
+  let lines = s:screen_lines(line('.'), 61)
+  call s:compare_lines(expect, lines)
+
+  bwipe!
+endfunc
+
+func Test_breakindent_min_with_signcol()
+  call s:test_windows('setl briopt=min:15 signcolumn=yes')
+  redraw!
+  let expect = [
+        \ "      abcdefghijklmn",
+        \ "     opqrstuvwxyzABC",
+        \ "     DEFGHIJKLMNOP  "
+        \ ]
+  let lines = s:screen_lines(line('.'), 20)
+  call s:compare_lines(expect, lines)
+  setl briopt=min:17
+  redraw!
+  let expect = [
+        \ "      abcdefghijklmn",
+        \ "   opqrstuvwxyzABCDE",
+        \ "   FGHIJKLMNOP      "
+        \ ]
+  let lines = s:screen_lines(line('.'), 20)
+  call s:compare_lines(expect, lines)
+  setl briopt=min:19
+  redraw!
+  let expect = [
+        \ "      abcdefghijklmn",
+        \ "  opqrstuvwxyzABCDEF",
+        \ "  GHIJKLMNOP        "
+        \ ]
+  let lines = s:screen_lines(line('.'), 20)
+  call s:compare_lines(expect, lines)
+
+  call s:close_windows()
+endfunc
+
+func Test_breakindent_with_double_width_wrap()
+  50vnew
+  setlocal tabstop=8 breakindent nolist
+  call setline(1, "\t" .. repeat('a', winwidth(0) - 9) .. '口口口')
+  normal! $g0
+  call assert_equal(2, winline())
+  call assert_equal(9, wincol())
+
+  bwipe!
+endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

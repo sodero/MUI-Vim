@@ -1336,7 +1336,7 @@ no_spell_checking(win_T *wp)
 spell_move_to(
     win_T	*wp,
     int		dir,		// FORWARD or BACKWARD
-    int		allwords,	// TRUE for "[s"/"]s", FALSE for "[S"/"]S"
+    smt_T	behaviour,	// Behaviour of the function
     int		curline,
     hlf_T	*attrp)		// return: attributes of bad word or NULL
 				// (only when "dir" is FORWARD)
@@ -1384,7 +1384,7 @@ spell_move_to(
 
 	line = ml_get_buf(wp->w_buffer, lnum, FALSE);
 
-	len = (int)STRLEN(line);
+	len = ml_get_buf_len(wp->w_buffer, lnum);
 	if (buflen < len + MAXWLEN + 2)
 	{
 	    vim_free(buf);
@@ -1441,7 +1441,9 @@ spell_move_to(
 	    if (attr != HLF_COUNT)
 	    {
 		// We found a bad word.  Check the attribute.
-		if (allwords || attr == HLF_SPB)
+		if (behaviour == SMT_ALL
+				|| (behaviour == SMT_BAD && attr == HLF_SPB)
+				|| (behaviour == SMT_RARE && attr == HLF_SPR))
 		{
 		    // When searching forward only accept a bad word after
 		    // the cursor.
@@ -2248,7 +2250,7 @@ parse_spelllang(win_T *wp)
 	else
 	{
 	    // One entry in 'spellfile'.
-	    copy_option_part(&spf, spf_name, MAXPATHL - 5, ",");
+	    copy_option_part(&spf, spf_name, MAXPATHL - 4, ",");
 	    STRCAT(spf_name, ".spl");
 
 	    // If it was already found above then skip it.
@@ -2953,6 +2955,7 @@ ex_spellrepall(exarg_T *eap UNUSED)
 {
     pos_T	pos = curwin->w_cursor;
     char_u	*frompat;
+    size_t	frompatlen;
     char_u	*line;
     char_u	*p;
     int		save_ws = p_ws;
@@ -2970,7 +2973,7 @@ ex_spellrepall(exarg_T *eap UNUSED)
     frompat = alloc(repl_from_len + 7);
     if (frompat == NULL)
 	return;
-    sprintf((char *)frompat, "\\V\\<%s\\>", repl_from);
+    frompatlen = vim_snprintf((char *)frompat, repl_from_len + 7, "\\V\\<%s\\>", repl_from);
     p_ws = FALSE;
 
     sub_nsubs = 0;
@@ -2978,7 +2981,7 @@ ex_spellrepall(exarg_T *eap UNUSED)
     curwin->w_cursor.lnum = 0;
     while (!got_int)
     {
-	if (do_search(NULL, '/', '/', frompat, 1L, SEARCH_KEEP, NULL) == 0
+	if (do_search(NULL, '/', '/', frompat, frompatlen, 1L, SEARCH_KEEP, NULL) == 0
 						   || u_save_cursor() == FAIL)
 	    break;
 
@@ -2988,7 +2991,7 @@ ex_spellrepall(exarg_T *eap UNUSED)
 	if (addlen <= 0 || STRNCMP(line + curwin->w_cursor.col,
 						   repl_to, repl_to_len) != 0)
 	{
-	    p = alloc(STRLEN(line) + addlen + 1);
+	    p = alloc(ml_get_curline_len() + addlen + 1);
 	    if (p == NULL)
 		break;
 	    mch_memmove(p, line, curwin->w_cursor.col);
@@ -4438,11 +4441,22 @@ valid_spelllang(char_u *val)
     int
 valid_spellfile(char_u *val)
 {
-    char_u *s;
+    char_u	spf_name[MAXPATHL];
+    char_u	*spf;
+    char_u	*s;
+    int		l;
 
-    for (s = val; *s != NUL; ++s)
-	if (!vim_is_fname_char(*s))
+    spf = val;
+    while (*spf != NUL)
+    {
+	l = copy_option_part(&spf, spf_name, MAXPATHL, ",");
+	if (l >= MAXPATHL - 4 || l < 4
+				  || STRCMP(spf_name + l - 4, ".add") != 0)
 	    return FALSE;
+	for (s = spf_name; *s != NUL; ++s)
+	    if (!vim_is_fname_char(*s))
+		return FALSE;
+    }
     return TRUE;
 }
 
@@ -4451,22 +4465,10 @@ valid_spellfile(char_u *val)
  * Return an error message or NULL for success.
  */
     char *
-did_set_spell_option(int is_spellfile)
+did_set_spell_option(void)
 {
     char    *errmsg = NULL;
     win_T   *wp;
-    int	    l;
-
-    if (is_spellfile)
-    {
-	l = (int)STRLEN(curwin->w_s->b_p_spf);
-	if (l > 0 && (l < 4
-			|| STRCMP(curwin->w_s->b_p_spf + l - 4, ".add") != 0))
-	    errmsg = e_invalid_argument;
-    }
-
-    if (errmsg != NULL)
-	return errmsg;
 
     FOR_ALL_WINDOWS(wp)
 	if (wp->w_buffer == curbuf && wp->w_p_spell)

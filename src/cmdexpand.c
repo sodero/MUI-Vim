@@ -46,6 +46,7 @@ cmdline_fuzzy_completion_supported(expand_T *xp)
 	    && xp->xp_context != EXPAND_COLORS
 	    && xp->xp_context != EXPAND_COMPILER
 	    && xp->xp_context != EXPAND_DIRECTORIES
+	    && xp->xp_context != EXPAND_DIRS_IN_CDPATH
 	    && xp->xp_context != EXPAND_FILES
 	    && xp->xp_context != EXPAND_FILES_IN_PATH
 	    && xp->xp_context != EXPAND_FILETYPE
@@ -58,6 +59,7 @@ cmdline_fuzzy_completion_supported(expand_T *xp)
 	    && xp->xp_context != EXPAND_PACKADD
 	    && xp->xp_context != EXPAND_RUNTIME
 	    && xp->xp_context != EXPAND_SHELLCMD
+	    && xp->xp_context != EXPAND_SHELLCMDLINE
 	    && xp->xp_context != EXPAND_TAGS
 	    && xp->xp_context != EXPAND_TAGS_LISTFILES
 	    && xp->xp_context != EXPAND_USER_LIST);
@@ -107,7 +109,8 @@ wildescape(
 	    || xp->xp_context == EXPAND_FILES_IN_PATH
 	    || xp->xp_context == EXPAND_SHELLCMD
 	    || xp->xp_context == EXPAND_BUFFERS
-	    || xp->xp_context == EXPAND_DIRECTORIES)
+	    || xp->xp_context == EXPAND_DIRECTORIES
+	    || xp->xp_context == EXPAND_DIRS_IN_CDPATH)
     {
 	// Insert a backslash into a file name before a space, \, %, #
 	// and wildmatch characters, except '~'.
@@ -357,6 +360,8 @@ cmdline_pum_create(
 	compl_match_array[i].pum_info = NULL;
 	compl_match_array[i].pum_extra = NULL;
 	compl_match_array[i].pum_kind = NULL;
+	compl_match_array[i].pum_user_abbr_hlattr = -1;
+	compl_match_array[i].pum_user_kind_hlattr = -1;
     }
 
     // Compute the popup menu starting column
@@ -435,6 +440,28 @@ cmdline_pum_cleanup(cmdline_info_T *cclp)
 cmdline_compl_startcol(void)
 {
     return compl_startcol;
+}
+
+/*
+ * Returns the current cmdline completion pattern.
+ */
+    char_u *
+cmdline_compl_pattern(void)
+{
+    expand_T	*xp = get_cmdline_info()->xpc;
+
+    return xp == NULL ? NULL : xp->xp_orig;
+}
+
+/*
+ * Returns TRUE if fuzzy cmdline completion is active, FALSE otherwise.
+ */
+    int
+cmdline_compl_is_fuzzy(void)
+{
+    expand_T	*xp = get_cmdline_info()->xpc;
+
+    return xp != NULL && cmdline_fuzzy_completion_supported(xp);
 }
 
 /*
@@ -1382,7 +1409,8 @@ addstar(
     if (context != EXPAND_FILES
 	    && context != EXPAND_FILES_IN_PATH
 	    && context != EXPAND_SHELLCMD
-	    && context != EXPAND_DIRECTORIES)
+	    && context != EXPAND_DIRECTORIES
+	    && context != EXPAND_DIRS_IN_CDPATH)
     {
 	// Matching will be done internally (on something other than files).
 	// So we convert the file-matching-type wildcards into our kind for
@@ -1693,7 +1721,7 @@ set_context_for_wildcard_arg(
 	// characters that end the command and white space.
 	else if (c == '|' || c == '\n' || c == '"' || (VIM_ISWHITE(c)
 #ifdef SPACE_IN_FILENAME
-		    && (!(eap->argt & EX_NOSPC) || usefilter)
+		    && (!(eap != NULL && (eap->argt & EX_NOSPC)) || usefilter)
 #endif
 		    ))
 	{
@@ -1728,7 +1756,10 @@ set_context_for_wildcard_arg(
     xp->xp_context = EXPAND_FILES;
 
     // For a shell command more chars need to be escaped.
-    if (usefilter || eap->cmdidx == CMD_bang || eap->cmdidx == CMD_terminal)
+    if (usefilter
+	    || (eap != NULL
+		&& (eap->cmdidx == CMD_bang || eap->cmdidx == CMD_terminal))
+	    || *complp == EXPAND_SHELLCMDLINE)
     {
 #ifndef BACKSLASH_IN_FILENAME
 	xp->xp_shell = TRUE;
@@ -2116,7 +2147,7 @@ set_context_by_cmdname(
 	case CMD_lcd:
 	case CMD_lchdir:
 	    if (xp->xp_context == EXPAND_FILES)
-		xp->xp_context = EXPAND_DIRECTORIES;
+		xp->xp_context = EXPAND_DIRS_IN_CDPATH;
 	    break;
 	case CMD_help:
 	    xp->xp_context = EXPAND_HELP;
@@ -2823,6 +2854,8 @@ expand_files_and_dirs(
 	flags |= EW_FILE;
     else if (xp->xp_context == EXPAND_FILES_IN_PATH)
 	flags |= (EW_FILE | EW_PATH);
+    else if (xp->xp_context == EXPAND_DIRS_IN_CDPATH)
+	flags = (flags | EW_DIR | EW_CDPATH) & ~EW_FILE;
     else
 	flags = (flags | EW_DIR) & ~EW_FILE;
     if (options & WILD_ICASE)
@@ -3076,7 +3109,8 @@ ExpandFromContext(
 
     if (xp->xp_context == EXPAND_FILES
 	    || xp->xp_context == EXPAND_DIRECTORIES
-	    || xp->xp_context == EXPAND_FILES_IN_PATH)
+	    || xp->xp_context == EXPAND_FILES_IN_PATH
+	    || xp->xp_context == EXPAND_DIRS_IN_CDPATH)
 	return expand_files_and_dirs(xp, pat, matches, numMatches, flags,
 								options);
 
@@ -4175,6 +4209,13 @@ f_getcompletion(typval_T *argvars, typval_T *rettv)
 	if (xpc.xp_context == EXPAND_RUNTIME)
 	{
 	    set_context_in_runtime_cmd(&xpc, xpc.xp_pattern);
+	    xpc.xp_pattern_len = (int)STRLEN(xpc.xp_pattern);
+	}
+	if (xpc.xp_context == EXPAND_SHELLCMDLINE)
+	{
+	    int context = EXPAND_SHELLCMDLINE;
+	    set_context_for_wildcard_arg(NULL, xpc.xp_pattern, FALSE, &xpc,
+								     &context);
 	    xpc.xp_pattern_len = (int)STRLEN(xpc.xp_pattern);
 	}
     }

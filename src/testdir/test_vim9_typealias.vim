@@ -172,6 +172,14 @@ def Test_typealias()
   END
   v9.CheckSourceSuccess(lines)
 
+  # another command follows a type alias
+  lines =<< trim END
+    vim9script
+    type MyType = number | var x = 20
+    assert_equal(20, x)
+  END
+  v9.CheckSourceSuccess(lines)
+
   # Sourcing a script twice (which will free script local variables)
   # Uses "lines" from the previous test
   new
@@ -355,7 +363,7 @@ def Test_typealias_import()
 
     var myNum: A.SomeType = 10
   END
-  v9.CheckScriptFailure(lines, 'E1010: Type not recognized: A.SomeType = 10', 4)
+  v9.CheckScriptFailure(lines, 'E1010: Type not recognized: A.SomeType', 4)
 
   # Use a type alias that is not exported
   lines =<< trim END
@@ -641,7 +649,7 @@ def Test_type_as_func_argument_or_return_value()
   END
   v9.CheckScriptFailure(lines, 'E1407: Cannot use a Typealias as a variable or value', 1)
 
-  # check defered function using typealias as arg
+  # check deferred function using typealias as arg
   lines =<< trim END
     vim9script
     type A = number
@@ -764,7 +772,7 @@ def Test_class_as_func_argument_or_return_value()
   END
   v9.CheckScriptFailure(lines, 'E1405: Class "C" cannot be used as a value', 1)
 
-  # check defered function using class typealias as arg
+  # check deferred function using class typealias as arg
   lines =<< trim END
     vim9script
     class C

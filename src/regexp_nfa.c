@@ -1733,7 +1733,7 @@ nfa_regatom(void)
 			    EMIT((int)n);
 			    break;
 			}
-			else if (c == '\'' && n == 0)
+			else if (no_Magic(c) == '\'' && n == 0)
 			{
 			    // \%'m  \%<'m  \%>'m
 			    EMIT(cmp == '<' ? NFA_MARK_LT :
@@ -5150,7 +5150,7 @@ check_char_class(int class, int c)
 
 	default:
 	    // should not be here :P
-	    siemsg(e_nfa_regexp_invalid_character_class_nr, class);
+	    siemsg(_(e_nfa_regexp_invalid_character_class_nr), class);
 	    return FAIL;
     }
     return FAIL;
@@ -5387,7 +5387,7 @@ recursive_regmatch(
 		    rex.input = rex.line;
 		}
 		else
-		    rex.input = rex.line + STRLEN(rex.line);
+		    rex.input = rex.line + reg_getline_len(rex.lnum);
 	    }
 	    if ((int)(rex.input - rex.line) >= state->val)
 	    {
@@ -5666,7 +5666,12 @@ find_match_text(colnr_T *startcol, int regstart, char_u *match_text)
     for (;;)
     {
 	match = TRUE;
-	len2 = MB_CHAR2LEN(regstart); // skip regstart
+	// skip regstart
+	len2 = MB_CHAR2LEN(regstart);
+	if (enc_utf8 && len2 > 1 && MB_CHAR2LEN(PTR2CHAR(rex.line + col)) != len2)
+	    // because of case-folding of the previously matched text, we may need
+	    // to skip fewer bytes than mb_char2len(regstart)
+	    len2 = mb_char2len(utf_fold(regstart));
 	for (len1 = 0; match_text[len1] != NUL; len1 += MB_CHAR2LEN(c1))
 	{
 	    c1 = PTR2CHAR(match_text + len1);
@@ -6520,7 +6525,8 @@ nfa_regmatch(
 			else
 			    result = FAIL;
 
-			if (t->state->out->out1->c == NFA_END_COMPOSING)
+			if (t->state->out->out1 != NULL
+				&& t->state->out->out1->c == NFA_END_COMPOSING)
 			{
 			    end = t->state->out->out1;
 			    ADD_STATE_IF_MATCH(end);
@@ -6937,8 +6943,7 @@ nfa_regmatch(
 		{
 		    colnr_T pos_col = pos->lnum == rex.lnum + rex.reg_firstlnum
 							  && pos->col == MAXCOL
-				      ? (colnr_T)STRLEN(reg_getline(
-						pos->lnum - rex.reg_firstlnum))
+				      ? reg_getline_len(pos->lnum - rex.reg_firstlnum)
 				      : pos->col;
 
 		    result = (pos->lnum == rex.lnum + rex.reg_firstlnum
@@ -7503,7 +7508,7 @@ nfa_regexec_both(
 
 	// If match_text is set it contains the full text that must match.
 	// Nothing else to try. Doesn't handle combining chars well.
-	if (prog->match_text != NULL && !rex.reg_icombine)
+	if (prog->match_text != NULL && *prog->match_text != NUL && !rex.reg_icombine)
 	{
 	    retval = find_match_text(&col, prog->regstart, prog->match_text);
 	    if (REG_MULTI)
