@@ -1,8 +1,7 @@
 " Tests for various eval things.
 
-source view_util.vim
-source shared.vim
-import './vim9.vim' as v9
+source util/shared.vim
+import './util/vim9.vim' as v9
 
 function s:foo() abort
   try
@@ -124,9 +123,9 @@ func Test_E963()
 endfunc
 
 func Test_for_invalid()
-  call assert_fails("for x in 99", 'E1098:')
-  call assert_fails("for x in function('winnr')", 'E1098:')
-  call assert_fails("for x in {'a': 9}", 'E1098:')
+  call assert_fails("for x in 99", 'E1523:')
+  call assert_fails("for x in function('winnr')", 'E1523:')
+  call assert_fails("for x in {'a': 9}", 'E1523:')
 
   let lines =<< trim END
     for v:maxcol in range(5)

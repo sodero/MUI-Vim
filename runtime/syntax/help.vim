@@ -1,7 +1,7 @@
 " Vim syntax file
-" Language:	Vim help file
-" Maintainer:	The Vim Project <https://github.com/vim/vim>
-" Last Change:	2024 Oct 16
+" Language:		Vim help file
+" Maintainer:		Doug Kearns <dougkearns@gmail.com>
+" Last Change:		2025 Jul 20
 " Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 " Quit when a (custom) syntax file was already loaded
@@ -12,14 +12,38 @@ endif
 let s:cpo_save = &cpo
 set cpo&vim
 
+syn iskeyword @,48-57,_,192-255
+
+if !exists('g:help_example_languages')
+  let g:help_example_languages = #{ vim: 'vim' }
+endif
+
 syn match helpHeadline		"^[A-Z.][-A-Z0-9 .,()_']*?\=\ze\(\s\+\*\|$\)"
 syn match helpSectionDelim	"^===.*===$"
 syn match helpSectionDelim	"^---.*--$"
+
 if has("conceal")
-  syn region helpExample	matchgroup=helpIgnore start=" >$" start="^>$" end="^[^ \t]"me=e-1 end="^<" concealends
-else
-  syn region helpExample	matchgroup=helpIgnore start=" >$" start="^>$" end="^[^ \t]"me=e-1 end="^<"
+  syn region helpExample	matchgroup=helpIgnore
+        \ start="\%(^\| \)>[a-z0-9]*$" end="^[^ \t]"me=e-1 end="^<" concealends
+ else
+   syn region helpExample	matchgroup=helpIgnore
+         \ start="\%(^\| \)>[a-z0-9]*$" end="^[^ \t]"me=e-1 end="^<"
 endif
+
+for [s:lang, s:syntax] in g:help_example_languages->items()
+  unlet! b:current_syntax
+  " silent! to prevent E403
+  execute 'silent! syn include' $'@helpExampleHighlight_{s:lang}'
+        \ $'syntax/{s:syntax}.vim'
+
+  execute $'syn region helpExampleHighlight_{s:lang} matchgroup=helpIgnore'
+        \ $'start=/\%(^\| \)>{s:lang}$/'
+        \ 'end=/^[^ \t]/me=e-1 end=/^</'
+        \ (has("conceal") ? 'concealends' : '')
+        \ $'contains=@helpExampleHighlight_{s:lang} keepend'
+endfor
+unlet! s:lang s:syntax
+
 if has("ebcdic")
   syn match helpHyperTextJump	"\\\@<!|[^"*|]\+|" contains=helpBar
   syn match helpHyperTextEntry	"\*[^"*|]\+\*\s"he=e-1 contains=helpStar
@@ -56,24 +80,32 @@ if has("conceal")
 else
   syn match helpIgnore		"." contained
 endif
-syn keyword helpNote		note Note NOTE note: Note: NOTE: Notes Notes:
-syn match helpNote		"\c(note\(:\|\>\)"ms=s+1
-syn keyword helpWarning		WARNING WARNING: Warning:
-syn keyword helpDeprecated	DEPRECATED DEPRECATED: Deprecated:
-syn match helpSpecial		"\<N\>"
-syn match helpSpecial		"\<N\.$"me=e-1
-syn match helpSpecial		"\<N\.\s"me=e-2
-syn match helpSpecial		"(N\>"ms=s+1
 
+" match 'iskeyword' word boundaries, '!-~,^*,^|,^",192-255'
+let s:iskeyword =  '!#-)+-{}~\d192-\d255'
+let s:start_word = $'\%(^\|[^{s:iskeyword}]\)\@1<='
+let s:end_word =      $'\%([^{s:iskeyword}]\|$\)\@='
+
+exec $'syn match helpNote	"{s:start_word}\%(note\|Note\|NOTE\|Notes\):\={s:end_word}"'
+exec $'syn match helpNote       "\c[[(]note\%(:\|{s:end_word}\)"ms=s+1'
+exec $'syn match helpWarning	"{s:start_word}\%(WARNING:\=\|Warning:\){s:end_word}"'
+exec $'syn match helpDeprecated	"{s:start_word}\%(DEPRECATED:\=\|Deprecated:\){s:end_word}"'
+exec $'syn match helpSpecial	"{s:start_word}N{s:end_word}"'
+exec $'syn match helpSpecial	"{s:start_word}N\.$"me=e-1'
+exec $'syn match helpSpecial	"{s:start_word}N\.\s"me=e-2'
+exec $'syn match helpSpecial	"(N{s:end_word}"ms=s+1'
 syn match helpSpecial		"\[N]"
 " avoid highlighting N  N in quickref.txt
 syn match helpSpecial		"N  N"he=s+1
 syn match helpSpecial		"Nth"me=e-2
 syn match helpSpecial		"N-1"me=e-2
 " highlighting N for :resize in windows.txt
-syn match helpSpecial		"] -N\>"ms=s+3
-syn match helpSpecial		"+N\>"ms=s+1
-syn match helpSpecial		"\[+-]N\>"ms=s+4
+exec $'syn match helpSpecial	"] -N{s:end_word}"ms=s+3'
+exec $'syn match helpSpecial	"+N{s:end_word}"ms=s+1'
+exec $'syn match helpSpecial	"\[+-]N{s:end_word}"ms=s+4'
+
+unlet s:iskeyword s:start_word s:end_word
+
 " highlighting N of cinoptions-values in indent.txt
 syn match helpSpecial		"^\t-\?\zsNs\?\s"me=s+1
 " highlighting N of cinoptions-values in indent.txt
@@ -81,6 +113,7 @@ syn match helpSpecial		"^\t[>enf{}^L:=lbghNEpti+cC/(uUwWkmMjJ)*#P]N\s"ms=s+2,me=
 syn match helpSpecial		"{[-a-zA-Z0-9'"*+/:%#=[\]<>.,]\+}"
 syn match helpSpecial		"\s\[[-a-z^A-Z0-9_]\{2,}]"ms=s+1
 syn match helpSpecial		"<[-a-zA-Z0-9_]\+>"
+syn match helpSpecial		"<buffer=\w\+>"
 syn match helpSpecial		"<[SCM]-.>"
 syn match helpNormal		"<---*>"
 syn match helpSpecial		"\[range]"
@@ -94,6 +127,9 @@ syn match helpSpecial		"\[+num]"
 syn match helpSpecial		"\[-num]"
 syn match helpSpecial		"\[+cmd]"
 syn match helpSpecial		"\[++opt]"
+syn match helpSpecial		"\[++once]"
+syn match helpSpecial		"\[++nested]"
+syn match helpSpecial		"\[++t]"
 syn match helpSpecial		"\[arg]"
 syn match helpSpecial		"\[arguments]"
 syn match helpSpecial		"\[ident]"
@@ -147,6 +183,9 @@ syn match helpDelimiter		"\t[* ]Delimiter\t\+[a-z].*"
 syn match helpSpecialComment	"\t[* ]SpecialComment\t\+[a-z].*"
 syn match helpDebug		"\t[* ]Debug\t\+[a-z].*"
 syn match helpUnderlined	"\t[* ]Underlined\t\+[a-z].*"
+syn match helpBold		"\t[* ]Bold\t\+[a-z].*"
+syn match helpItalic		"\t[* ]Italic\t\+[a-z].*"
+syn match helpBoldItalic	"\t[* ]BoldItalic\t\+[a-z].*"
 syn match helpError		"\t[* ]Error\t\+[a-z].*"
 syn match helpTodo		"\t[* ]Todo\t\+[a-z].*"
 
@@ -161,6 +200,7 @@ let s:i = match(expand("%"), '\.\a\ax$')
 if s:i > 0
   exe "runtime syntax/help_" . strpart(expand("%"), s:i + 1, 2) . ".vim"
 endif
+unlet s:i
 
 syn sync minlines=40
 
@@ -217,6 +257,9 @@ hi def link helpDelimiter	Delimiter
 hi def link helpSpecialComment	SpecialComment
 hi def link helpDebug		Debug
 hi def link helpUnderlined	Underlined
+hi def link helpBold		Bold
+hi def link helpItalic		Italic
+hi def link helpBoldItalic	BoldItalic
 hi def link helpError		Error
 hi def link helpTodo		Todo
 hi def link helpURL		String

@@ -61,14 +61,12 @@ an "input/setup/java.vim" script file with the following lines:
 Both inline setup commands and setup scripts may be used at the same time, the
 script file will be sourced before any VIM_TEST_SETUP commands are executed.
 
-Every line of a source file must not be longer than 1425 (19 x 75) characters.
-
 If there is no further setup required, you can now run all tests:
 
 	make test
 
-Or you can run the tests for a filetype only by passing its file extension as
-another target, e.g. "java", before "test":
+Or you can run the tests for a filetype only by passing its name as another
+target, e.g. "java", before "test":
 
 	make java test
 
@@ -112,12 +110,26 @@ If they look OK, move them to the "dumps" directory:
 If you now run the test again, it will succeed.
 
 
+Limitations for syntax plugin tests
+-----------------------------------
+
+Do not compose ASCII lines that do not fit a 19 by 75 window (1425 columns).
+
+Use multibyte characters, if at all, sparingly (see #16559).  When possible,
+move multibyte characters closer to the end of a line and keep the line short:
+no more than a 75-byte total of displayed characters.  A poorly rendered line
+may otherwise become wrapped when enough of spurious U+FFFD (0xEF 0xBF 0xBD)
+characters claim more columns than are available (75) and then invalidate line
+correspondence under test.  Refrain from mixing non-spurious U+FFFD characters
+with other multibyte characters in the same line.
+
+
 Adjusting a syntax plugin test
 ------------------------------
 
 If you make changes to the syntax plugin, you should add code to the input
 file to see the effect of these changes.  So that the effect of the changes
-are covered by the test.  You can follow these steps:
+is covered by the test.  You can follow these steps:
 
 1. Edit the syntax plugin somewhere in your personal setup.  Use a file
    somewhere to try out the changes.
@@ -133,19 +145,19 @@ are covered by the test.  You can follow these steps:
    Fix the syntax plugin until the result is good.
 2. Edit the input file for your language to add the items you have improved.
    (TODO: how to add another screendump?).
-   Run the tests and you should get failures.  Like with the previous step,
-   carefully check that the new screendumps in the "failed" directory are
-   good.  Update the syntax plugin and the input file until the highlighting
-   is good and you can see the effect of the syntax plugin improvements.  Then
-   move the screendumps from the "failed" to the "dumps" directory.  Now "make
-   test" should succeed.
+   Run the tests and you should get failures.  (You may opt for faster failure
+   by assigning a small number, e.g. "1", to a VIM_SYNTAX_TEST_WAIT_TIME
+   environment variable and gambling away an "uncertain" possibility of
+   success.)  Like with the previous step, carefully check that the new
+   screendumps in the "failed" directory are good.  Update the syntax plugin
+   and the input file until the highlighting is good and you can see the
+   effect of the syntax plugin improvements.  Then move the screendumps from
+   the "failed" to the "dumps" directory.  Now "make test" should succeed.
 3. Prepare a pull request with the modified files:
 	- syntax plugin:    syntax/{name}.vim
 	- Vim setup file:   syntax/testdir/input/setup/{name}.vim (if any)
 	- test input file:  syntax/testdir/input/{name}.{ext}
-	- test dump files:  syntax/testdir/dumps/{name}_00.dump
-			    syntax/testdir/dumps/{name}_01.dump (if any)
-			    ...
+	- test dump files:  syntax/testdir/dumps/{name}_*.dump
 
 As an extra check you can temporarily put back the old syntax plugin and
 verify that the tests fail.  Then you know your changes are covered by the
@@ -198,6 +210,9 @@ You can now examine the extracted screendumps:
 
 Viewing generated screendumps (submitted for a pull request)
 ------------------------------------------------------------
+
+Note: There is also a "git difftool" extension described in
+      src/testdir/commondumps.vim
 
 First, you need to check out the topic branch with the proposed changes and
 write down a difference list between the HEAD commit (index) and its parent
