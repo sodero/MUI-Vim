@@ -3,9 +3,6 @@
 #------------------------------------------------------------------------------------------
 UNM?=$(shell uname)
 ifeq ($(UNM),AmigaOS)
-ifeq ($(shell uname),AmigaOS)
-GOP=-E # Only if we're not cross compiling.
-endif
 MKF:=Make_ami.mak
 else ifeq ($(UNM),AROS)
 MKF:=Make_ami.mak
@@ -55,7 +52,8 @@ $(SRC)/.ver: Makefile
 # Determine patch number
 #------------------------------------------------------------------------------------------
 $(SRC)/.pat: $(SRC)/version.c
-	grep $(GOP) -m1 "^ \{4\}[0-9]\{1,4\}," $< | tr -d "[:space:]," > $@
+	echo $(shell grep -E -m1 "^ \{4\}[0-9]\{1,4\}," $< || \
+	grep -m1 "^ \{4\}[0-9]\{1,4\}," $<) | tr -d "[:space:]," > $@
 
 #------------------------------------------------------------------------------------------
 # Clean up
