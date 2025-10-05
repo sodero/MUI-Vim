@@ -1,0 +1,26 @@
+name: AROS build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Clone MUI-Vim
+      run: git clone https://github.com/sodero/MUI-Vim.git
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/opt/code \
+          -w /opt/code \
+          rolfkopman/arosi386v0env \
+          /bin/sh -c 'rm -f __ok__ && make -C code/src -f Make_ami.mak clean && make -C code/src -f Make_ami.mak && echo 1 > __ok__ || rm __ok__ 2> /dev/null'
