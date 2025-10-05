@@ -8,6 +8,7 @@ on:
 
 jobs:
   build-aros-tiny:
+    name: Tiny - AROS i386 ABI V0
     runs-on: ubuntu-latest
 
     steps:
@@ -20,4 +21,68 @@ jobs:
           -v ${{ github.workspace }}/src:/opt/code \
           -w /opt/code \
           -e BUILD=tiny \
+          rolfkopman/arosi386v0env make -f Make_ami.mak
+
+  build-aros-small:
+    name: Small - AROS i386 ABI V0
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=small \
+          rolfkopman/arosi386v0env make -f Make_ami.mak
+
+  build-aros-normal:
+    name: Normal - AROS i386 ABI V0
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=normal \
+          rolfkopman/arosi386v0env make -f Make_ami.mak
+
+  build-aros-huge:
+    name: Huge - AROS i386 ABI V0
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=huge \
+          rolfkopman/arosi386v0env make -f Make_ami.mak
+
+  build-aros-mui:
+    name: MUI - AROS i386 ABI V0
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=mui \
           rolfkopman/arosi386v0env make -f Make_ami.mak
