@@ -23,4 +23,4 @@ jobs:
           -v ${{ github.workspace }}/MUI-Vim:/opt/code \
           -w /opt/code \
           rolfkopman/arosi386v0env \
-          /bin/sh -c 'rm -f __ok__ && make -C code/src -f Make_ami.mak clean && make -C code/src -f Make_ami.mak && echo 1 > __ok__ || rm __ok__ 2> /dev/null'
+          /bin/sh -c 'rm -f __ok__ && make -C src -f Make_ami.mak clean && make -C src -f Make_ami.mak && echo 1 > __ok__ || rm __ok__ 2> /dev/null'
