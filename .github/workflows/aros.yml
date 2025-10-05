@@ -86,3 +86,83 @@ jobs:
           -w /opt/code \
           -e BUILD=mui \
           rolfkopman/arosi386v0env make -f Make_ami.mak
+
+  build-morphos-tiny:
+    name: Tiny - MorphOS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/gg/code \
+          -w /gg/code \
+          -e BUILD=tiny \
+          rolfkopman/mosenv make -f Make_ami.mak
+
+  build-morphos-small:
+    name: Small - MorphOS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/gg/code \
+          -w /gg/code \
+          -e BUILD=small \
+          rolfkopman/mosenv make -f Make_ami.mak
+
+  build-morphos-normal:
+    name: Normal - MorphOS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/gg/code \
+          -w /gg/code \
+          -e BUILD=normal \
+          rolfkopman/mosenv make -f Make_ami.mak
+
+  build-morphos-huge:
+    name: Huge - MorphOS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/gg/code \
+          -w /gg/code \
+          -e BUILD=huge \
+          rolfkopman/mosenv make -f Make_ami.mak
+
+  build-morphos-mui:
+    name: MUI - MorphOS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/gg/code \
+          -w /gg/code \
+          -e BUILD=mui \
+          rolfkopman/mosenv make -f Make_ami.mak
