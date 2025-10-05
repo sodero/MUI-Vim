@@ -166,3 +166,83 @@ jobs:
           -w /gg/code \
           -e BUILD=mui \
           rolfkopman/mosenv make -f Make_ami.mak
+
+  build-amigaos4-tiny:
+    name: Tiny - AmigaOS4
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=tiny \
+          rolfkopman/os4env make -f Make_ami.mak
+
+  build-amigaos4-small:
+    name: Small - AmigaOS4
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=small \
+          rolfkopman/os4env make -f Make_ami.mak
+
+  build-amigaos4-normal:
+    name: Normal - AmigaOS4
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=normal \
+          rolfkopman/os4env make -f Make_ami.mak
+
+  build-amigaos4-huge:
+    name: Huge - AmigaOS4
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=huge \
+          rolfkopman/os4env make -f Make_ami.mak
+
+  build-amigaos4-mui:
+    name: MUI - AmigaOS4
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Compile
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:/opt/code \
+          -w /opt/code \
+          -e BUILD=mui \
+          rolfkopman/os4env make -f Make_ami.mak
