@@ -1,4 +1,4 @@
-*builtin.txt*	For Vim version 9.1.  Last change: 2025 Sep 27
+*builtin.txt*	For Vim version 9.1.  Last change: 2025 Oct 01
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -1940,7 +1940,7 @@ complete({startcol}, {matches})			*complete()* *E785*
 		func ListMonths()
 		  call complete(col('.'), ['January', 'February', 'March',
 			\ 'April', 'May', 'June', 'July', 'August',
-			\ 'September', \ 'October', 'November', 'December'])
+			\ 'September', 'October', 'November', 'December'])
 		  return ''
 		endfunc
 <
@@ -3008,6 +3008,9 @@ expand({string} [, {nosuf} [, {list}]])				*expand()*
 			:t		tail (last path component only)
 			:r		root (one extension removed)
 			:e		extension only
+
+		More modifiers are supported, for the full list see
+		|filename-modifiers|.
 
 		Example: >
 			:let &tags = expand("%:p:h") .. "/tags"
@@ -12343,9 +12346,9 @@ values({dict})						*values()*
 
 virtcol({expr} [, {list} [, {winid}]])			*virtcol()*
 		The result is a Number, which is the screen column of the file
-		position given with {expr}.  That is, the last screen position
-		occupied by the character at that position, when the screen
-		would be of unlimited width.  When there is a <Tab> at the
+		position given with {expr}.  That is, the total number of
+		screen cells occupied by the part of the line until the end of
+		the character at that position.  When there is a <Tab> at the
 		position, the returned Number will be the column at the end of
 		the <Tab>.  For example, for a <Tab> in column 1, with 'ts'
 		set to 8, it returns 8. |conceal| is ignored.

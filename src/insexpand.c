@@ -854,6 +854,15 @@ is_nearest_active(void)
 }
 
 /*
+ * TRUE if a match is selected (even if it is not inserted).
+ */
+    int
+ins_compl_is_match_selected(void)
+{
+    return compl_shown_match != NULL && !is_first_match(compl_shown_match);
+}
+
+/*
  * Returns TRUE if autocomplete is active and the pre-insert effect targets the
  * longest prefix.
  */
@@ -2511,7 +2520,10 @@ ins_compl_new_leader(void)
 	save_w_wrow = curwin->w_wrow;
 	save_w_leftcol = curwin->w_leftcol;
 	compl_restarting = TRUE;
-	compl_autocomplete = ins_compl_has_autocomplete();
+	if (ins_compl_has_autocomplete())
+	    ins_compl_enable_autocomplete();
+	else
+	    compl_autocomplete = FALSE;
 	if (ins_complete(Ctrl_N, FALSE) == FAIL)
 	    compl_cont_status = 0;
 	compl_restarting = FALSE;
@@ -3100,7 +3112,7 @@ ins_compl_prep(int c)
     if (ctrl_x_mode_not_defined_yet()
 			   || (ctrl_x_mode_normal() && !compl_started))
     {
-	compl_get_longest = (get_cot_flags() & COT_LONGEST) != 0;
+	compl_get_longest = (get_cot_flags() & COT_LONGEST);
 	compl_used_match = TRUE;
     }
 
@@ -5101,7 +5113,7 @@ get_next_default_completion(ins_compl_next_state_T *st, pos_T *start_pos)
 	    ptr = ins_compl_get_next_word_or_line(st->ins_buf,
 		    st->cur_match_pos, &len, &cont_s_ipos);
 	if (ptr == NULL || (ins_compl_has_preinsert()
-		    && STRCMP(ptr, compl_pattern.string) == 0))
+		    && STRCMP(ptr, ins_compl_leader()) == 0))
 	    continue;
 
 	if (is_nearest_active() && in_curbuf)
@@ -6219,6 +6231,7 @@ ins_compl_next(
 		    || (compl_autocomplete && !ins_compl_has_preinsert());
     int	    compl_fuzzy_match = (cur_cot_flags & COT_FUZZY) != 0;
     int	    compl_preinsert = ins_compl_has_preinsert();
+    int	    has_autocomplete_delay = (compl_autocomplete && p_acl > 0);
 
     // When user complete function return -1 for findstart which is next
     // time of 'always', compl_shown_match become NULL.
@@ -6262,7 +6275,11 @@ ins_compl_next(
 
     // Insert the text of the new completion, or the compl_leader.
     if (!started && ins_compl_preinsert_longest())
+    {
 	ins_compl_insert(TRUE, TRUE);
+	if (has_autocomplete_delay)
+	    update_screen(0);  // Show the inserted text right away
+    }
     else if (compl_no_insert && !started && !compl_preinsert)
     {
 	ins_compl_insert_bytes(compl_orig_text.string + get_compl_len(), -1);
@@ -6288,7 +6305,7 @@ ins_compl_next(
 	// may undisplay the popup menu first
 	ins_compl_upd_pum();
 
-	if (pum_enough_matches())
+	if (pum_enough_matches() && !has_autocomplete_delay)
 	    // Will display the popup menu, don't redraw yet to avoid flicker.
 	    pum_call_update_screen();
 	else
@@ -6296,16 +6313,19 @@ ins_compl_next(
 	    // inserted.
 	    update_screen(0);
 
-	// display the updated popup menu
-	ins_compl_show_pum();
-#ifdef FEAT_GUI
-	if (gui.in_use)
+	if (!has_autocomplete_delay)
 	{
-	    // Show the cursor after the match, not after the redrawn text.
-	    setcursor();
-	    out_flush_cursor(FALSE, FALSE);
-	}
+	    // display the updated popup menu
+	    ins_compl_show_pum();
+#ifdef FEAT_GUI
+	    if (gui.in_use)
+	    {
+		// Show the cursor after the match, not after the redrawn text.
+		setcursor();
+		out_flush_cursor(FALSE, FALSE);
+	    }
 #endif
+	}
 
 	// Delete old text to be replaced, since we're still searching and
 	// don't want to match ourselves!
@@ -7359,6 +7379,12 @@ ins_complete(int c, int enable_pum)
 	{
 	    if (char_avail())
 	    {
+		if (ins_compl_preinsert_effect()
+			&& ins_compl_win_active(curwin))
+		{
+		    ins_compl_delete(); // Remove pre-inserted text
+		    compl_ins_end_col = compl_col;
+		}
 		ins_compl_restart();
 		compl_interrupted = TRUE;
 		break;
@@ -7387,6 +7413,7 @@ ins_compl_enable_autocomplete(void)
 {
 #ifdef ELAPSED_FUNC
     compl_autocomplete = TRUE;
+    compl_get_longest = FALSE;
 #endif
 }
 
@@ -7590,40 +7617,52 @@ ins_compl_make_linear(void)
  * cpt_sources_index) from the completion list.
  */
 #ifdef FEAT_COMPL_FUNC
-    static compl_T *
+    static void
 remove_old_matches(void)
 {
-    compl_T *sublist_start = NULL, *sublist_end = NULL, *insert_at = NULL;
-    compl_T *current, *next;
-    int	    compl_shown_removed = FALSE;
+    compl_T *current;
+    int	    shown_match_removed = FALSE;
     int	    forward = (compl_first_match->cp_cpt_source_idx < 0);
+
+    if (cpt_sources_index < 0)
+	return;
 
     compl_direction = forward ? FORWARD : BACKWARD;
     compl_shows_dir = compl_direction;
 
-    // Identify the sublist of old matches that needs removal
-    for (current = compl_first_match; current != NULL; current = current->cp_next)
+    // When 'fuzzy' is enabled, items are not ordered by their original source
+    // order (cpt_sources_index). So, remove items one by one.
+    for (current = compl_first_match; current != NULL; )
     {
-	if (current->cp_cpt_source_idx < cpt_sources_index &&
-		(forward || (!forward && !insert_at)))
-	    insert_at = current;
-
 	if (current->cp_cpt_source_idx == cpt_sources_index)
 	{
-	    if (!sublist_start)
-		sublist_start = current;
-	    sublist_end = current;
-	    if (!compl_shown_removed && compl_shown_match == current)
-		compl_shown_removed = TRUE;
-	}
+	    compl_T *to_delete = current;
 
-	if ((forward && current->cp_cpt_source_idx > cpt_sources_index)
-		|| (!forward && insert_at))
-	    break;
+	    if (!shown_match_removed && compl_shown_match == current)
+		shown_match_removed = TRUE;
+
+	    current = current->cp_next;
+
+	    if (to_delete == compl_first_match)  // node to remove is at head
+	    {
+		compl_first_match = to_delete->cp_next;
+		compl_first_match->cp_prev = NULL;
+	    }
+	    else if (to_delete->cp_next == NULL) // node to remove is at tail
+		to_delete->cp_prev->cp_next = NULL;
+	    else // node is in the moddle
+	    {
+		to_delete->cp_prev->cp_next = to_delete->cp_next;
+		to_delete->cp_next->cp_prev = to_delete->cp_prev;
+	    }
+	    ins_compl_item_free(to_delete);
+	}
+	else
+	    current = current->cp_next;
     }
 
     // Re-assign compl_shown_match if necessary
-    if (compl_shown_removed)
+    if (shown_match_removed)
     {
 	if (forward)
 	    compl_shown_match = compl_first_match;
@@ -7636,27 +7675,19 @@ remove_old_matches(void)
 	}
     }
 
-    if (!sublist_start) // No nodes to remove
-	return insert_at;
-
-    // Update links to remove sublist
-    if (sublist_start->cp_prev)
-	sublist_start->cp_prev->cp_next = sublist_end->cp_next;
-    else
-	compl_first_match = sublist_end->cp_next;
-
-    if (sublist_end->cp_next)
-	sublist_end->cp_next->cp_prev = sublist_start->cp_prev;
-
-    // Free all nodes in the sublist
-    sublist_end->cp_next = NULL;
-    for (current = sublist_start; current != NULL; current = next)
+    // Re-assign compl_curr_match
+    compl_curr_match = compl_first_match;
+    for (current = compl_first_match; current != NULL; )
     {
-	next = current->cp_next;
-	ins_compl_item_free(current);
+	if ((forward ? current->cp_cpt_source_idx < cpt_sources_index
+		    : current->cp_cpt_source_idx > cpt_sources_index))
+	{
+	    compl_curr_match = forward ? current : current->cp_next;
+	    current = current->cp_next;
+	}
+	else
+	    break;
     }
-
-    return insert_at;
 }
 #endif
 
@@ -7668,17 +7699,26 @@ remove_old_matches(void)
     static void
 get_cpt_func_completion_matches(callback_T *cb UNUSED)
 {
-    int	startcol = cpt_sources_array[cpt_sources_index].cs_startcol;
+    cpt_source_T    *cpt_src = &cpt_sources_array[cpt_sources_index];
+    int		    startcol = cpt_src->cs_startcol;
 
     if (startcol == -2 || startcol == -3)
 	return;
 
     if (set_compl_globals(startcol, curwin->w_cursor.col, TRUE) == OK)
     {
+	// Insert the leader string (previously removed) before expansion.
+	// This prevents flicker when `func` (e.g. an LSP client) is slow and
+	// calls 'sleep', which triggers out_flush().
+	if (!cpt_src->cs_refresh_always)
+	    ins_compl_insert_bytes(ins_compl_leader(), -1);
+
 	expand_by_function(0, cpt_compl_pattern.string, cb);
 
-	cpt_sources_array[cpt_sources_index].cs_refresh_always =
-	    compl_opt_refresh_always;
+	if (!cpt_src->cs_refresh_always)
+	    ins_compl_delete();
+
+	cpt_src->cs_refresh_always = compl_opt_refresh_always;
 	compl_opt_refresh_always = FALSE;
     }
 }
@@ -7716,7 +7756,7 @@ cpt_compl_refresh(void)
 	    cb = get_callback_if_cpt_func(p, cpt_sources_index);
 	    if (cb)
 	    {
-		compl_curr_match = remove_old_matches();
+		remove_old_matches();
 		ret = get_userdefined_compl_info(curwin->w_cursor.col, cb,
 			&startcol);
 		if (ret == FAIL)

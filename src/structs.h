@@ -350,6 +350,20 @@ typedef struct
 # define w_p_tws w_onebuf_opt.wo_tws	// 'termwinsize'
 #endif
 
+    // A few options have local flags for P_INSECURE.
+    long_u	wo_wrap_flags;		// flags for 'wrap'
+#define w_p_wrap_flags w_onebuf_opt.wo_wrap_flags
+#ifdef FEAT_STL_OPT
+    long_u	wo_stl_flags;		// flags for 'statusline'
+# define w_p_stl_flags w_onebuf_opt.wo_stl_flags
+#endif
+#ifdef FEAT_EVAL
+    long_u	wo_fde_flags;		// flags for 'foldexpr'
+# define w_p_fde_flags w_onebuf_opt.wo_fde_flags
+    long_u	wo_fdt_flags;		// flags for 'foldtext'
+# define w_p_fdt_flags w_onebuf_opt.wo_fdt_flags
+#endif
+
 #ifdef FEAT_EVAL
     sctx_T	wo_script_ctx[WV_COUNT];	// SCTXs for window-local options
 # define w_p_script_ctx w_onebuf_opt.wo_script_ctx
@@ -3899,6 +3913,7 @@ typedef struct
     int	foldopen;
     int	foldclosed;
     int	foldsep;
+    int	foldinner;
     int	diff;
     int	eob;
     int	lastline;
@@ -4213,14 +4228,6 @@ struct window_S
     // transform a pointer to a "onebuf" option into a "allbuf" option
 #define GLOBAL_WO(p)	((char *)(p) + sizeof(winopt_T))
 
-    // A few options have local flags for P_INSECURE.
-#ifdef FEAT_STL_OPT
-    long_u	w_p_stl_flags;	    // flags for 'statusline'
-#endif
-#ifdef FEAT_EVAL
-    long_u	w_p_fde_flags;	    // flags for 'foldexpr'
-    long_u	w_p_fdt_flags;	    // flags for 'foldtext'
-#endif
 #if defined(FEAT_SIGNS) || defined(FEAT_FOLDING) || defined(FEAT_DIFF)
     int		*w_p_cc_cols;	    // array of columns to highlight or NULL
     char_u	w_p_culopt_flags;   // flags for cursorline highlighting
@@ -5229,7 +5236,7 @@ typedef struct
 #define KEYVALUE_ENTRY(k, v) \
     {(k), {((char_u *)v), STRLEN_LITERAL(v)}}
 
-#if defined(UNIX) || defined(MSWIN) || defined(VMS)
+#if defined(UNIX) || defined(MSWIN) || defined(VMS) || defined(AMIGA)
 // Defined as signed, to return -1 on error
 struct cellsize {
     int cs_xpixel;

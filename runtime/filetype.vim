@@ -1,7 +1,7 @@
 " Vim support file to detect file types
 "
 " Maintainer:		The Vim Project <https://github.com/vim/vim>
-" Last Change:		2025 Sep 14
+" Last Change:		2025 Oct 05
 " Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 " Listen very carefully, I will say this only once
@@ -1362,6 +1362,9 @@ endif
 " KDL
 au BufNewFile,BufRead *.kdl			setf kdl
 
+" KerML
+au BufNewFile,BufRead *.kerml		setf kerml
+
 " Kixtart
 au BufNewFile,BufRead *.kix			setf kix
 
@@ -1974,7 +1977,7 @@ au BufNewFile,BufRead Pipfile.lock		setf json
 au BufNewFile,BufRead pixi.lock			setf yaml
 
 " Pkl
-au BufNewFile,BufRead *.pkl			setf pkl
+au BufNewFile,BufRead *.pkl,*.pcf,pkl-lsp://*	setf pkl
 
 " PL/1, PL/I
 au BufNewFile,BufRead *.pli,*.pl1		setf pli
@@ -2632,6 +2635,9 @@ au BufNewFile,BufRead *.svg			setf svg
 
 " Surface
 au BufRead,BufNewFile *.sface			setf surface
+
+" SysML
+au BufNewFile,BufReadPost *.sysml	setf sysml
 
 " LLVM TableGen
 au BufNewFile,BufRead *.td			setf tablegen
