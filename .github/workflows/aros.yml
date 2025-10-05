@@ -7,20 +7,17 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  build-aros-tiny:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Clone MUI-Vim
-      run: git clone https://github.com/sodero/MUI-Vim.git
-
     - name: Compile
       run: |
         docker run --rm \
-          -v ${{ github.workspace }}/MUI-Vim:/opt/code \
+          -v ${{ github.workspace }}/src:/opt/code \
           -w /opt/code \
-          rolfkopman/arosi386v0env \
-          /bin/sh -c 'rm -f __ok__ && make -C src -f Make_ami.mak clean && make -C src -f Make_ami.mak && echo 1 > __ok__ || rm __ok__ 2> /dev/null'
+          -e BUILD=tiny \
+          rolfkopman/arosi386v0env make -f Make_ami.mak
