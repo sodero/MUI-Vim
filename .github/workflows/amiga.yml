@@ -1,4 +1,4 @@
-name: AROS build
+name: AmigaOS4/AROS/MorphOS build
 
 on:
   push:
@@ -7,9 +7,23 @@ on:
     branches: [ master ]
 
 jobs:
-  build-aros-tiny:
-    name: Tiny - AROS i386 ABI V0
+  build:
+    name: ${{ matrix.build-type }} - ${{ matrix.platform }}
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        platform:
+          - name: AmigaOS4
+            image: rolfkopman/os4env
+            mount: /opt/code
+          - name: AROS i386 ABI V0
+            image: rolfkopman/arosi386v0env
+            mount: /opt/code
+          - name: MorphOS
+            image: rolfkopman/mosenv
+            mount: /gg/code
+        build-type: [tiny, small, normal, huge, mui]
 
     steps:
     - name: Checkout code
@@ -18,231 +32,7 @@ jobs:
     - name: Compile
       run: |
         docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=tiny \
-          rolfkopman/arosi386v0env make -f Make_ami.mak
-
-  build-aros-small:
-    name: Small - AROS i386 ABI V0
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=small \
-          rolfkopman/arosi386v0env make -f Make_ami.mak
-
-  build-aros-normal:
-    name: Normal - AROS i386 ABI V0
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=normal \
-          rolfkopman/arosi386v0env make -f Make_ami.mak
-
-  build-aros-huge:
-    name: Huge - AROS i386 ABI V0
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=huge \
-          rolfkopman/arosi386v0env make -f Make_ami.mak
-
-  build-aros-mui:
-    name: MUI - AROS i386 ABI V0
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=mui \
-          rolfkopman/arosi386v0env make -f Make_ami.mak
-
-  build-morphos-tiny:
-    name: Tiny - MorphOS
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/gg/code \
-          -w /gg/code \
-          -e BUILD=tiny \
-          rolfkopman/mosenv make -f Make_ami.mak
-
-  build-morphos-small:
-    name: Small - MorphOS
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/gg/code \
-          -w /gg/code \
-          -e BUILD=small \
-          rolfkopman/mosenv make -f Make_ami.mak
-
-  build-morphos-normal:
-    name: Normal - MorphOS
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/gg/code \
-          -w /gg/code \
-          -e BUILD=normal \
-          rolfkopman/mosenv make -f Make_ami.mak
-
-  build-morphos-huge:
-    name: Huge - MorphOS
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/gg/code \
-          -w /gg/code \
-          -e BUILD=huge \
-          rolfkopman/mosenv make -f Make_ami.mak
-
-  build-morphos-mui:
-    name: MUI - MorphOS
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/gg/code \
-          -w /gg/code \
-          -e BUILD=mui \
-          rolfkopman/mosenv make -f Make_ami.mak
-
-  build-amigaos4-tiny:
-    name: Tiny - AmigaOS4
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=tiny \
-          rolfkopman/os4env make -f Make_ami.mak
-
-  build-amigaos4-small:
-    name: Small - AmigaOS4
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=small \
-          rolfkopman/os4env make -f Make_ami.mak
-
-  build-amigaos4-normal:
-    name: Normal - AmigaOS4
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=normal \
-          rolfkopman/os4env make -f Make_ami.mak
-
-  build-amigaos4-huge:
-    name: Huge - AmigaOS4
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=huge \
-          rolfkopman/os4env make -f Make_ami.mak
-
-  build-amigaos4-mui:
-    name: MUI - AmigaOS4
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Compile
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/src:/opt/code \
-          -w /opt/code \
-          -e BUILD=mui \
-          rolfkopman/os4env make -f Make_ami.mak
+          -v ${{ github.workspace }}/src:${{ matrix.platform.mount }} \
+          -w ${{ matrix.platform.mount }} \
+          -e BUILD=${{ matrix.build-type }} \
+          ${{ matrix.platform.image }} make -f Make_ami.mak
