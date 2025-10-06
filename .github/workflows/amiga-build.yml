@@ -21,6 +21,9 @@ jobs:
           - name: AROS i386 ABI V0
             image: rolfkopman/arosi386v0env
             mount: /opt/code
+          - name: AROS x86_64 ABI V1
+            image: rolfkopman/arosx64v1env
+            mount: /opt/code
           - name: MorphOS
             image: rolfkopman/mosenv
             mount: /gg/code

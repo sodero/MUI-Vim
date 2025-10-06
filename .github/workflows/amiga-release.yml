@@ -14,15 +14,18 @@ jobs:
     strategy:
       matrix:
         platform:
+          - name: AmigaOS4
+            image: rolfkopman/os4env
+            mount: /opt/code
           - name: AROS i386 ABI V0
             image: rolfkopman/arosi386v0env
+            mount: /opt/code
+          - name: AROS x86_64 ABI V1
+            image: rolfkopman/arosx64v1env
             mount: /opt/code
           - name: MorphOS
             image: rolfkopman/mosenv
             mount: /gg/code
-          - name: AmigaOS4
-            image: rolfkopman/os4env
-            mount: /opt/code
 
     steps:
     - name: Checkout code
