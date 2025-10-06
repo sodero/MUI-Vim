@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 9.1.42 (24.01.21) english
+@$VER: MUI-Vim.guide 9.1.1831 (25.10.05) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,6 +67,11 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2025-10-05@{UB}
+- Update to VIM 9.1.1831.
+- AmigaOS4: Built with Newlib instead of Clib2 for performance reasons.
+- Improved srand() / rand().
+
 @{B}2024-01-21@{UB}
 - Update to VIM 9.1.42.
 

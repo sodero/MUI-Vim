@@ -456,27 +456,30 @@ handle_import(
 	scriptitem_T	*si = SCRIPT_ITEM(current_sctx.sc_sid);
 	char_u		*tail = gettail(si->sn_name);
 	char_u		*from_name;
+	int		sourced_from_nofile_buf = FALSE;
 
-	// Relative to current script: "./name.vim", "../../name.vim".
-	len = STRLEN(si->sn_name) - STRLEN(tail) + STRLEN(tv.vval.v_string) + 2;
-	from_name = alloc((int)len);
-	if (from_name == NULL)
-	    goto erret;
-	vim_strncpy(from_name, si->sn_name, tail - si->sn_name);
-	add_pathsep(from_name);
-	STRCAT(from_name, tv.vval.v_string);
+	if (STRNCMP(si->sn_name, ":source buffer=", 15) == 0)
+	    sourced_from_nofile_buf = TRUE;
+
+	if (!sourced_from_nofile_buf)
+	{
+	    // Relative to current script: "./name.vim", "../../name.vim".
+	    len = STRLEN(si->sn_name) - STRLEN(tail) + STRLEN(tv.vval.v_string) + 2;
+	    from_name = alloc((int)len);
+	    if (from_name == NULL)
+		goto erret;
+	    vim_strncpy(from_name, si->sn_name, tail - si->sn_name);
+	    add_pathsep(from_name);
+	    STRCAT(from_name, tv.vval.v_string);
+	}
+	else
+	    from_name = vim_strsave(tv.vval.v_string);
 	simplify_filename(from_name);
 
 	res = handle_import_fname(from_name, is_autoload, &sid);
 	vim_free(from_name);
     }
-    else if (mch_isFullName(tv.vval.v_string)
-#ifdef BACKSLASH_IN_FILENAME
-	    // On MS-Windows omitting the drive is still handled like an
-	    // absolute path, not using 'runtimepath'.
-	    || *tv.vval.v_string == '/' || *tv.vval.v_string == '\\'
-#endif
-	    )
+    else if (mch_isFullName(tv.vval.v_string))
     {
 	// Absolute path: "/tmp/name.vim"
 	res = handle_import_fname(tv.vval.v_string, is_autoload, &sid);
@@ -837,8 +840,10 @@ vim9_declare_scriptvar(exarg_T *eap, char_u *arg)
 
     // parse type, check for reserved name
     p = skipwhite(p + 1);
-    type = parse_type(&p, &si->sn_type_list, TRUE);
-    if (type == NULL || check_reserved_name(name, FALSE) == FAIL)
+    type = parse_type(&p, &si->sn_type_list, NULL, NULL, TRUE);
+    if (type == NULL
+	    || check_reserved_name(name, FALSE) == FAIL
+	    || !valid_declaration_type(type))
     {
 	vim_free(name);
 	return p;
@@ -1110,35 +1115,52 @@ check_script_var_type(
 }
 
 // words that cannot be used as a variable
+// Keep this array sorted, as bsearch() is used to search this array.
 static char *reserved[] = {
-    "true",
     "false",
     "null",
     "null_blob",
+    "null_channel",
+    "null_class",
     "null_dict",
     "null_function",
+    "null_job",
     "null_list",
+    "null_object",
     "null_partial",
     "null_string",
-    "null_channel",
-    "null_job",
+    "null_tuple",
     "super",
     "this",
-    NULL
+    "true",
 };
 
+/*
+ * String compare function used for bsearch()
+ */
+    static int
+comp_names(const void *s1, const void *s2)
+{
+    return STRCMP(*(char **)s1, *(char **)s2);
+}
+
+/*
+ * Returns OK if "name" is not a reserved keyword.  Otherwise returns FAIL.
+ */
     int
 check_reserved_name(char_u *name, int is_objm_access)
 {
-    int idx;
+    // "this" can be used in an object method
+    if (is_objm_access && STRCMP("this", name) == 0)
+	return OK;
 
-    for (idx = 0; reserved[idx] != NULL; ++idx)
-	if (STRCMP(reserved[idx], name) == 0
-		&& !(STRCMP("this", name) == 0 && is_objm_access))
-	{
-	    semsg(_(e_cannot_use_reserved_name_str), name);
-	    return FAIL;
-	}
+    if (bsearch(&name, reserved, ARRAY_LENGTH(reserved),
+				sizeof(reserved[0]), comp_names) != NULL)
+    {
+	semsg(_(e_cannot_use_reserved_name_str), name);
+	return FAIL;
+    }
+
     return OK;
 }
 

@@ -238,7 +238,7 @@ typedef struct Gui
     int		in_focus;	    // Vim has input focus
     int		in_use;		    // Is the GUI being used?
     int		starting;	    // GUI will start in a little while
-    int		shell_created;	    // Has the shell been created yet?
+    bool	shell_created;	    // Has the shell been created yet?
     int		dying;		    // Is vim dying? Then output to terminal
     int		dofork;		    // Use fork() when GUI is starting
 #ifdef GUI_MAY_SPAWN
@@ -263,6 +263,7 @@ typedef struct Gui
     int		scrollbar_height;   // Height of horizontal scrollbar
     int		left_sbar_x;	    // Calculated x coord for left scrollbar
     int		right_sbar_x;	    // Calculated x coord for right scrollbar
+    int         force_redraw;       // Force a redraw even e.g. not resized
 
 #ifdef FEAT_MENU
 # ifndef FEAT_GUI_GTK
@@ -392,10 +393,12 @@ typedef struct Gui
     char_u	*browse_fname;	    // file name from filedlg
 
     guint32	event_time;
+#endif	// FEAT_GUI_GTK
 
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
     char_u ligatures_map[256];	    // ascii map for characters 0-255, value is
 				    // 1 if in 'guiligatures'
-#endif	// FEAT_GUI_GTK
+#endif
 
 #if defined(FEAT_GUI_TABLINE) \
 	&& (defined(FEAT_GUI_MSWIN) || defined(FEAT_GUI_MOTIF) \

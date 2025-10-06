@@ -3,7 +3,7 @@ Author:       Bram Moolenaar et al.
 Uploader:     rolfkopman@gmail.com (Ola Söder)
 Type:         text/edit
 Architecture: __ARC__
-URL:          https://mui-vim.sourceforge.io
+URL:          https://github.com/sodero/MUI-Vim
 Requires:     dev/mui/MCC_TheBar-26.22.lha
 Version:      __VER__
 Distribution: Aminet

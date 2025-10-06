@@ -1377,7 +1377,7 @@ gui_motif_update_mousemodel(vimmenu_T *menu)
 
     // When GUI hasn't started the menus have not been created.
     if (!gui.in_use)
-      return;
+	return;
 
     while (menu)
     {
@@ -2732,7 +2732,10 @@ gui_mch_dialog(
     // Motif.
     label = XmStringCreateLtoR((char *)message, STRING_TAG);
     if (label == NULL)
+    {
+	vim_free(buttons);
 	return -1;
+    }
     w = XtVaCreateManagedWidget("dialogMessage",
 				xmLabelGadgetClass, form,
 				XmNlabelString, label,

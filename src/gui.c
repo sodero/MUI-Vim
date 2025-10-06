@@ -146,6 +146,15 @@ gui_start(char_u *arg UNUSED)
 	    emsg(msg);
 #endif
     }
+    else
+	// Reset clipmethod to CLIPMETHOD_GUI
+	choose_clipmethod();
+
+#ifdef FEAT_SOCKETSERVER
+    // Install socket server listening socket if we are running it
+    if (socket_server_valid())
+	gui_gtk_init_socket_server();
+#endif
 
     vim_free(old_term);
 
@@ -357,7 +366,7 @@ gui_read_child_pipe(int fd)
     if (bytes_read < 0)
 	return GUI_CHILD_IO_ERROR;
     buffer[bytes_read] = NUL;
-    if (strcmp(buffer, "ok") == 0)
+    if (STRCMP(buffer, "ok") == 0)
 	return GUI_CHILD_OK;
     return GUI_CHILD_FAILED;
 }
@@ -393,7 +402,7 @@ gui_init_check(void)
 	return result;
     }
 
-    gui.shell_created = FALSE;
+    gui.shell_created = false;
     gui.dying = FALSE;
     gui.in_focus = TRUE;		// so the guicursor setting works
     gui.dragged_sb = SBAR_NONE;
@@ -455,8 +464,12 @@ gui_init_check(void)
     gui.scrollbar_width = gui.scrollbar_height = SB_DEFAULT_WIDTH;
     gui.prev_wrap = -1;
 
-#ifdef FEAT_GUI_GTK
-    CLEAR_FIELD(gui.ligatures_map);
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
+    // Note: gui_set_ligatures() might already have been called e.g. from .vimrc,
+    // and in that case we don't want to overwrite ligatures map that has already
+    // been correctly populated (as that would lead to a cleared ligatures maps).
+    if (*p_guiligatures == NUL)
+	CLEAR_FIELD(gui.ligatures_map);
 #endif
 
 #if defined(ALWAYS_USE_GUI) || defined(VIMDLL)
@@ -484,6 +497,7 @@ gui_init_check(void)
 gui_init(void)
 {
     win_T	*wp;
+    tabpage_T	*tp;
     static int	recursive = 0;
 
     /*
@@ -701,7 +715,7 @@ gui_init(void)
     gui_reset_scroll_region();
 
     // Create initial scrollbars
-    FOR_ALL_WINDOWS(wp)
+    FOR_ALL_TAB_WINDOWS(tp, wp)
     {
 	gui_create_scrollbar(&wp->w_scrollbars[SBAR_LEFT], SBAR_LEFT, wp);
 	gui_create_scrollbar(&wp->w_scrollbars[SBAR_RIGHT], SBAR_RIGHT, wp);
@@ -719,7 +733,7 @@ gui_init(void)
     gui_init_which_components(NULL);
 
     // All components of the GUI have been created now
-    gui.shell_created = TRUE;
+    gui.shell_created = true;
 
 #ifdef FEAT_GUI_MSWIN
     // Set the shell size, adjusted for the screen size.  For GTK this only
@@ -1074,7 +1088,7 @@ gui_get_wide_font(void)
     return OK;
 }
 
-#if defined(FEAT_GUI_GTK) || defined(PROTO)
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN) || defined(PROTO)
 /*
  * Set list of ascii characters that combined can create ligature.
  * Store them in char map for quick access from gui_gtk2_draw_string.
@@ -1599,8 +1613,11 @@ again:
     // Only comparing Rows and Columns may be sufficient, but let's stay on
     // the safe side.
     if (gui.num_rows != screen_Rows || gui.num_cols != screen_Columns
-	    || gui.num_rows != Rows || gui.num_cols != Columns)
+	    || gui.num_rows != Rows || gui.num_cols != Columns || gui.force_redraw)
+    {
 	shell_resized();
+	gui.force_redraw = 0;
+    }
 
 #ifdef FEAT_GUI_HAIKU
     vim_unlock_screen();
@@ -2332,6 +2349,8 @@ gui_outstr_nowrap(
 # endif
        )
     {
+	size_t	slen = 2;		    // 2 spaces by default
+
 # ifdef FEAT_NETBEANS_INTG
 	if (*s == MULTISIGN_BYTE)
 	    multi_sign = TRUE;
@@ -2340,14 +2359,16 @@ gui_outstr_nowrap(
 	if (*curwin->w_p_scl == 'n' && *(curwin->w_p_scl + 1) == 'u' &&
 		(curwin->w_p_nu || curwin->w_p_rnu))
 	{
-	    sprintf((char *)extra, "%*c ", number_width(curwin), ' ');
-	    s = extra;
+	    int	n = number_width(curwin);
+
+	    slen = MIN(n, (int)sizeof(extra) - 1);
 	}
-	else
-	    s = (char_u *)"  ";
+	vim_memset(extra, ' ', slen);
+	extra[slen] = NUL;
+	s = extra;
 	if (len == 1 && col > 0)
 	    --col;
-	len = (int)STRLEN(s);
+	len = (int)slen;
 	if (len > 2)
 	    // right align sign icon in the number column
 	    signcol = col + len - 3;
@@ -2698,7 +2719,7 @@ gui_undraw_cursor(void)
     int startcol = gui.cursor_col > 0 ? gui.cursor_col - 1 : gui.cursor_col;
     int endcol = gui.cursor_col;
 
-#ifdef FEAT_GUI_GTK
+#if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
     gui_adjust_undraw_cursor_for_ligatures(&startcol, &endcol);
 #endif
     gui_redraw_block(gui.cursor_row, startcol,
@@ -3758,10 +3779,6 @@ get_tabline_label(
     tabpage_T	*tp,
     int		tooltip)	// TRUE: get tooltip
 {
-    int		modified = FALSE;
-    char_u	buf[40];
-    int		wincount;
-    win_T	*wp;
     char_u	**opt;
 
     // Use 'guitablabel' or 'guitabtooltip' if it's set.
@@ -3807,26 +3824,42 @@ get_tabline_label(
     // use a default label.
     if (**opt == NUL || *NameBuff == NUL)
     {
+	win_T	*wp;
+	int	wincount = 0;
+	int	modified = FALSE;
+
 	// Get the buffer name into NameBuff[] and shorten it.
 	get_trans_bufname(tp == curtab ? curbuf : tp->tp_curwin->w_buffer);
 	if (!tooltip)
 	    shorten_dir(NameBuff);
 
-	wp = (tp == curtab) ? firstwin : tp->tp_firstwin;
-	for (wincount = 0; wp != NULL; wp = wp->w_next, ++wincount)
+	FOR_ALL_WINDOWS_IN_TAB(tp, wp)
+	{
+	    ++wincount;
 	    if (bufIsChanged(wp->w_buffer))
 		modified = TRUE;
+	}
+
 	if (modified || wincount > 1)
 	{
+	    char_u  buf[40] = "+ ";		// Tentatively assume modified only
+	    size_t  buflen = 2;
+	    size_t  NameBufflen = STRLEN(NameBuff);
+
 	    if (wincount > 1)
-		vim_snprintf((char *)buf, sizeof(buf), "%d", wincount);
-	    else
-		buf[0] = NUL;
-	    if (modified)
-		STRCAT(buf, "+");
-	    STRCAT(buf, " ");
-	    STRMOVE(NameBuff + STRLEN(buf), NameBuff);
-	    mch_memmove(NameBuff, buf, STRLEN(buf));
+		buflen = vim_snprintf_safelen(
+		    (char *)buf,
+		    sizeof(buf),
+		    "%d%s ",
+		    wincount,
+		    modified ? "+" : "");
+
+	    // Make sure resulting NameBuff will not exceed its bounds.
+	    if (NameBufflen + buflen < MAXPATHL)
+	    {
+		mch_memmove(NameBuff + buflen, NameBuff, NameBufflen + 1);	// +1 for NUL
+		mch_memmove(NameBuff, buf, buflen);
+	    }
 	}
     }
 }
@@ -3990,7 +4023,7 @@ gui_drag_scrollbar(scrollbar_T *sb, long value, int still_dragging)
     if (hold_gui_events)
 	return;
 
-    if (cmdwin_type != 0 && sb->wp != curwin)
+    if (cmdwin_type != 0 && sb->wp != cmdwin_win)
 	return;
 
     if (still_dragging)
@@ -4481,13 +4514,15 @@ gui_do_scroll(void)
     /*
      * Don't call updateWindow() when nothing has changed (it will overwrite
      * the status line!).
+     *
+     * Check for ScreenLines, because in ex-mode, we don't have a valid display.
      */
-    if (old_topline != wp->w_topline
+    if (ScreenLines != NULL && (old_topline != wp->w_topline
 	    || wp->w_redr_type != 0
 #ifdef FEAT_DIFF
 	    || old_topfill != wp->w_topfill
 #endif
-	    )
+	    ))
     {
 	int type = UPD_VALID;
 
@@ -4890,6 +4925,7 @@ xy2win(int x, int y, mouse_find_T popup)
 
     row = Y_2_ROW(y);
     col = X_2_COL(x);
+
     if (row < 0 || col < 0)		// before first window
 	return NULL;
     wp = mouse_find_win(&row, &col, popup);
@@ -5158,10 +5194,11 @@ get_find_dialog_text(
 	text = arg;
     if (text != NULL)
     {
-	text = vim_strsave(text);
+	int len = (int)STRLEN(text);
+
+	text = vim_strnsave(text, len);
 	if (text != NULL)
 	{
-	    int len = (int)STRLEN(text);
 	    int i;
 
 	    // Remove "\V"
@@ -5289,7 +5326,7 @@ gui_do_findrepl(
 
 		    del_bytes((long)(regmatch.endp[0] - regmatch.startp[0]),
 								FALSE, FALSE);
-		    ins_str(repl_text);
+		    ins_str(repl_text, STRLEN(repl_text));
 		}
 	    }
 	    else
@@ -5315,7 +5352,7 @@ gui_do_findrepl(
 	i = msg_scroll;
 	if (down)
 	{
-	    (void)do_search(NULL, '/', '/', ga.ga_data, 1L, searchflags, NULL);
+	    (void)do_search(NULL, '/', '/', ga.ga_data, STRLEN(ga.ga_data), 1L, searchflags, NULL);
 	}
 	else
 	{
@@ -5323,7 +5360,7 @@ gui_do_findrepl(
 	    // direction
 	    p = vim_strsave_escaped(ga.ga_data, (char_u *)"?");
 	    if (p != NULL)
-		(void)do_search(NULL, '?', '?', p, 1L, searchflags, NULL);
+		(void)do_search(NULL, '?', '?', p, STRLEN(p), 1L, searchflags, NULL);
 	    vim_free(p);
 	}
 

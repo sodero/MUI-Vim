@@ -2,7 +2,7 @@
 #
 # Do ":help uganda"  in Vim to read copying and usage conditions.
 # Do ":help credits" in Vim to see a list of people who contributed.
-# Copyright (C) 2023
+# Copyright (C) 2025
 # This file is distributed under the same license as the Vim package.
 # FIRST AUTHOR Ivan Pešić <ivan.pesic@gmail.com>, 2017.
 #
@@ -10,8 +10,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Vim(Serbian)\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-01-19 11:15+0400\n"
-"PO-Revision-Date: 2024-01-19 11:31+0400\n"
+"POT-Creation-Date: 2025-09-23 10:00+0400\n"
+"PO-Revision-Date: 2025-09-23 13:02+0400\n"
 "Last-Translator: Ivan Pešić <ivan.pesic@gmail.com>\n"
 "Language-Team: Serbian\n"
 "Language: sr\n"
@@ -165,6 +165,10 @@ msgid "%d%%"
 msgstr "%d%%"
 
 #, c-format
+msgid "%2s"
+msgstr "%2s"
+
+#, c-format
 msgid " (%d of %d)"
 msgstr " (%d од %d)"
 
@@ -179,6 +183,9 @@ msgstr " (фајл %d од %d)"
 #, c-format
 msgid " (file (%d) of %d)"
 msgstr " (фајл (%d) од %d)"
+
+msgid "[Command Line]"
+msgstr "[Командна линија]"
 
 msgid "[Prompt]"
 msgstr "[Одзив]"
@@ -255,14 +262,24 @@ msgstr ": Слање није успело. Покушава се локално
 msgid "%d of %d edited"
 msgstr "%d од %d уређено"
 
+msgid "Socket server not online:Send expression failed"
+msgstr "Сокет сервер није на мрежи: Није успело слање израза"
+
 msgid "No display: Send expression failed.\n"
-msgstr "Нема приказа: Израз слања није успео.\n"
+msgstr "Нема приказа: Није успело слање израза.\n"
 
 msgid ": Send expression failed.\n"
-msgstr ": Израз слања није успео.\n"
+msgstr ": Слање израза није успело.\n"
 
 msgid "Used CUT_BUFFER0 instead of empty selection"
 msgstr "Уместо празне селекције коришћен је CUT_BUFFER0"
+
+msgid "Could not find a way to access the clipboard."
+msgstr "Није могао да се пронађе начин за приступ клипборду."
+
+#, c-format
+msgid "Switched to clipboard method '%s'."
+msgstr "Прешло се на клипборд методу ’%s’."
 
 msgid "tagname"
 msgstr "ознака"
@@ -444,9 +461,9 @@ msgstr "катакана"
 msgid "Bopomofo"
 msgstr "бопомофо"
 
-msgid "Not enough memory to set references, garbage collection aborted!"
-msgstr ""
-"Нема довољно меморије за постављање референци, прекинуто је скупљање отпада"
+#, c-format
+msgid "%ld,"
+msgstr "%ld,"
 
 msgid ""
 "\n"
@@ -705,9 +722,6 @@ msgstr "Грешка"
 msgid "Interrupt"
 msgstr "Прекид"
 
-msgid "[Command Line]"
-msgstr "[Командна линија]"
-
 msgid "is a directory"
 msgstr "је директоријум"
 
@@ -789,11 +803,15 @@ msgid "[unix format]"
 msgstr "[unix формат]"
 
 #, c-format
-msgid "%ld line, "
-msgid_plural "%ld lines, "
-msgstr[0] "%ld линија, "
-msgstr[1] "%ld линије, "
-msgstr[2] "%ld линија, "
+msgid "%s%ldL, %lldB"
+msgstr "%s%ldЛ, %lldB"
+
+#, c-format
+msgid "%s%ld line, "
+msgid_plural "%s%ld lines, "
+msgstr[0] "%s%ld линија, "
+msgstr[1] "%s%ld линије, "
+msgstr[2] "%s%ld линија, "
 
 #, c-format
 msgid "%lld byte"
@@ -878,6 +896,10 @@ msgid_plural "+-%s%3ld lines: "
 msgstr[0] "+-%s%3ld линија: "
 msgstr[1] "+-%s%3ld линије: "
 msgstr[2] "+-%s%3ld линија: "
+
+msgid "Not enough memory to set references, garbage collection aborted!"
+msgstr ""
+"Нема довољно меморије за постављање референци, прекинуто је скупљање отпада"
 
 msgid "No match at cursor, finding next"
 msgstr "Нема подударања на месту курсора, тражи се даље"
@@ -1339,8 +1361,8 @@ msgstr[2] "%ld линија увучено "
 msgid " Keyword completion (^N^P)"
 msgstr " Довршавање кључне речи (^N^P)"
 
-msgid " ^X mode (^]^D^E^F^I^K^L^N^O^Ps^U^V^Y)"
-msgstr " ^X режим (^]^D^E^F^I^K^L^N^O^Ps^U^V^Y)"
+msgid " ^X mode (^]^D^E^F^I^K^L^N^O^P^Rs^U^V^Y)"
+msgstr " ^X режим (^]^D^E^F^I^K^L^N^O^P^Rs^U^V^Y)"
 
 msgid " Whole line completion (^L^N^P)"
 msgstr " Довршавање целе линије (^L^N^P)"
@@ -1372,11 +1394,14 @@ msgstr " Кориснички дефинисано довршавање (^U^N^P)
 msgid " Omni completion (^O^N^P)"
 msgstr " Omni довршавање (^O^N^P)"
 
-msgid " Spelling suggestion (s^N^P)"
-msgstr " Правописни предлог (s^N^P)"
+msgid " Spelling suggestion (^S^N^P)"
+msgstr " Правописни предлог (^S^N^P)"
 
 msgid " Keyword Local completion (^N^P)"
 msgstr " Довршавање локалне кључне речи (^N^P)"
+
+msgid " Register completion (^N^P)"
+msgstr " Довршавање регистра (^N^P)"
 
 msgid "'dictionary' option is empty"
 msgstr "Опција 'dictionary' је празна"
@@ -1563,11 +1588,20 @@ msgstr ""
 
 msgid ""
 "\n"
-"Where case is ignored prepend / to make flag upper case"
+"Where command is down-cased, prepend / (like: -/R) to treat flag as upper-"
+"case."
 msgstr ""
 "\n"
-"Где се мала/велика слова игноришу ставите испред / како би претворили "
-"индикатор у велика слова"
+"Где је комада исписана малим словима, ставите испред / (као: -/R) како би се "
+"заставица третирала као велико слово."
+
+msgid ""
+"\n"
+"Or, where supported, SET PROC/PARSE=EXT, or else quote upper-case material."
+msgstr ""
+"\n"
+"Или, где се то подржава, SET PROC/PARSE=EXT, или ставите материјал исписан "
+"великим словима у знаке навода."
 
 msgid ""
 "\n"
@@ -1657,7 +1691,7 @@ msgid "-L\t\t\tSame as -r"
 msgstr "-L\t\t\tИсто као -r"
 
 msgid "-f\t\t\tDon't use newcli to open window"
-msgstr "-f\t\t\tНемој да користиш нов cli да отвориш прозор"
+msgstr "-f\t\t\tНемој да користиш newcli да отвориш прозор"
 
 msgid "-dev <device>\t\tUse <device> for I/O"
 msgstr "-dev <уређај>\t\tКористи <уређај> за У/И"
@@ -1731,6 +1765,12 @@ msgstr "-display <дисплеј>\tПовежи Vim на овај X-сервер
 
 msgid "-X\t\t\tDo not connect to X server"
 msgstr "-X\t\t\tНе повезуј се на X сервер"
+
+msgid "-Y\t\t\tDo not connect to Wayland compositor"
+msgstr "-X\t\t\tНе повезуј се на Wayland композитор"
+
+msgid "--clientserver <socket|x11> Backend for clientserver communication"
+msgstr "--clientserver <socket|x11> Позадински механизам за clientserver комуникацију"
 
 msgid "--remote <files>\tEdit <files> in a Vim server if possible"
 msgstr "--remote <фајлови>\tУређуј <фајлови> у Vim серверу ако је могуће"
@@ -2299,6 +2339,18 @@ msgstr "-- Још --"
 msgid " SPACE/d/j: screen/page/line down, b/u/k: up, q: quit "
 msgstr " РАЗМАКНИЦА/d/j: екран/страна/линија наниже, b/u/k: навише, q: излаз "
 
+msgid "W24: Clipboard register not available. See :h W24"
+msgstr "W24: Клипборд регистар није доступан. Погледајте :h W24"
+
+msgid "W23: Clipboard register not available, using register 0"
+msgstr "W23: Клипборд регистар није доступан, користи се регистар 0"
+
+msgid "W23: Clipboard register + not available, using register 0"
+msgstr "W23: Клипборд регистар + није доступан, користи се регистар 0"
+
+msgid "W23: Clipboard register * not available, using register 0"
+msgstr "W23: Клипборд регистар * није доступан, користи се регистар 0"
+
 msgid "Question"
 msgstr "Питање"
 
@@ -2526,8 +2578,8 @@ msgstr ""
 "Vim: Дошло је до X грешке\n"
 
 #, c-format
-msgid "restoring display %s"
-msgstr "враћање екрана %s"
+msgid "restoring X11 display %s"
+msgstr "враћање X11 екрана %s"
 
 msgid "Testing the X display failed"
 msgstr "Тестирање X приказа није успело"
@@ -2625,6 +2677,10 @@ msgstr "XSMP ICE надгледање везе није успело"
 #, c-format
 msgid "XSMP SmcOpenConnection failed: %s"
 msgstr "XSMP SmcOpenConnection није успело: %s"
+
+#, c-format
+msgid "Failed creating socket directory: %s"
+msgstr "Не може да се креира сокет директоријум: %s"
 
 msgid "At line"
 msgstr "Код линије"
@@ -3471,6 +3527,13 @@ msgstr "%s (%s, компајлирано %s)"
 
 msgid ""
 "\n"
+"MS-Windows ARM64 GUI/console version"
+msgstr ""
+"\n"
+"MS-Windows ARM64 ГКИ/конзолна верзија"
+
+msgid ""
+"\n"
 "MS-Windows 64-bit GUI/console version"
 msgstr ""
 "\n"
@@ -3482,6 +3545,13 @@ msgid ""
 msgstr ""
 "\n"
 "MS-Windows 32-битна ГКИ/конзолна верзија"
+
+msgid ""
+"\n"
+"MS-Windows ARM64 GUI version"
+msgstr ""
+"\n"
+"MS-Windows ARM64 ГКИ верзија"
 
 msgid ""
 "\n"
@@ -3499,6 +3569,13 @@ msgstr ""
 
 msgid " with OLE support"
 msgstr " са OLE подршком"
+
+msgid ""
+"\n"
+"MS-Windows ARM64 console version"
+msgstr ""
+"\n"
+"MS-Windows ARM64 конзолна верзија"
 
 msgid ""
 "\n"
@@ -3530,10 +3607,10 @@ msgstr ""
 
 msgid ""
 "\n"
-"OpenVMS version"
+"OpenVMS (build) arch, version"
 msgstr ""
 "\n"
-"OpenVMS верзија"
+"OpenVMS (изградња) арх, верзија"
 
 msgid ""
 "\n"
@@ -3608,7 +3685,7 @@ msgid "with GUI."
 msgstr "са ГКИ."
 
 msgid "  Features included (+) or not (-):\n"
-msgstr "  Могућности укључене (+) или не (-):\n"
+msgstr " Могућности укључене (+) или не (-):\n"
 
 msgid "   system vimrc file: \""
 msgstr "      системски vimrc фајл: \""
@@ -3621,6 +3698,9 @@ msgstr " 2ги кориснички vimrc фајл: \""
 
 msgid " 3rd user vimrc file: \""
 msgstr " 3ћи кориснички vimrc фајл: \""
+
+msgid " 4th user vimrc file: \""
+msgstr " 4ти кориснички vimrc фајл: \""
 
 msgid "      user exrc file: \""
 msgstr "      кориснички exrc фајл: \""
@@ -3662,7 +3742,7 @@ msgid "Linking: "
 msgstr "Повезивање: "
 
 msgid "  DEBUG BUILD"
-msgstr "  ДИБАГ ИЗДАЊЕ"
+msgstr "  ДИБАГ ИЗГРАДЊА"
 
 msgid "VIM - Vi IMproved"
 msgstr "VIM - Vi IMproved"
@@ -3879,6 +3959,16 @@ msgstr " НЕУСПЕЛО"
 #, c-format
 msgid "Writing viminfo file \"%s\""
 msgstr "Уписивање viminfo фајла „%s”"
+
+msgid "wayland protocol error -> "
+msgstr "грешка wayland протокола -> "
+
+#, c-format
+msgid "restoring Wayland display %s"
+msgstr "враћање Wayland екрана %s"
+
+msgid "failed restoring, lost connection to Wayland display"
+msgstr "враћање није успело, изгубљена веза са Wayland екраном"
 
 msgid "Already only one window"
 msgstr "Већ постоји само један прозор"
@@ -4220,6 +4310,10 @@ msgid "E105: Using :loadkeymap not in a sourced file"
 msgstr "E105: Коришћење :loadkeymap ван фајла који се учитава као скрипта"
 
 #, c-format
+msgid "E106: Unsupported diff output format: %s"
+msgstr "E106: Није подржан diff излазни формат: %s"
+
+#, c-format
 msgid "E107: Missing parentheses: %s"
 msgstr "E107: Недостају заграде: %s"
 
@@ -4513,7 +4607,7 @@ msgid "E186: No previous directory"
 msgstr "E186: Нема претходног директоријума"
 
 msgid "E187: Directory unknown"
-msgstr "E187: Непознати Речник"
+msgstr "E187: Непознати директоријум"
 
 msgid "E188: Obtaining window position not implemented for this platform"
 msgstr "E188: Добављање позиције прозора није имплементирано за ову платформу"
@@ -4549,8 +4643,8 @@ msgstr "E196: У овој верзији нема диграфа"
 msgid "E197: Cannot set language to \"%s\""
 msgstr "E197: Језик не може да се постави на „%s”"
 
-msgid "E199: Active window or buffer deleted"
-msgstr "E199: Active window or buffer deleted"
+msgid "E199: Active window or buffer changed or deleted"
+msgstr "E199: Активни прозор или бафер је измењен или обрисан"
 
 msgid "E200: *ReadPre autocommands made the file unreadable"
 msgstr "E200: *ReadPre аутокоманде су учиниле фајл нечитљивим"
@@ -5042,7 +5136,7 @@ msgstr "E357: 'langmap': Недостаје одговарајући карак�
 
 #, c-format
 msgid "E358: 'langmap': Extra characters after semicolon: %s"
-msgstr "E358: 'langmap': Има још карактера након тачка зареза: %s"
+msgstr "E358: 'langmap': Има још карактера након тачка запете: %s"
 
 msgid "E359: Screen mode setting not supported"
 msgstr "E359: Подешавање режима екрана није подржано"
@@ -5220,7 +5314,7 @@ msgstr "E409: Непознато име групе: %s"
 
 #, c-format
 msgid "E410: Invalid :syntax subcommand: %s"
-msgstr "E410: Неважећа :syntax подкоманда: %s"
+msgstr "E410: Неважећа :syntax поткоманда: %s"
 
 #, c-format
 msgid "E411: Highlight group not found: %s"
@@ -5657,7 +5751,7 @@ msgid "E526: Missing number after <%s>"
 msgstr "E526: Недостаје број након <%s>"
 
 msgid "E527: Missing comma"
-msgstr "E527: Недостаје зарез"
+msgstr "E527: Недостаје запета"
 
 msgid "E528: Must specify a ' value"
 msgstr "E528: Мора да се наведе ' вредност"
@@ -5685,7 +5779,7 @@ msgid "E535: Illegal character after <%c>"
 msgstr "E535: Недозвољен карактер након <%c>"
 
 msgid "E536: Comma required"
-msgstr "E536: Потребан зарез"
+msgstr "E536: Потребна је запета"
 
 #, c-format
 msgid "E537: 'commentstring' must be empty or contain %s"
@@ -5815,10 +5909,10 @@ msgid "Illegal register name"
 msgstr "Неважеће име регистра"
 
 msgid "E579: :if nesting too deep"
-msgstr "E579: :if угњеждавање је сувише дубоко"
+msgstr "E579: :if угнеждавање је сувише дубоко"
 
 msgid "E579: Block nesting too deep"
-msgstr "E579: Угњеждавање блокова је сувише дубоко"
+msgstr "E579: Угнеждавање блокова је сувише дубоко"
 
 msgid "E580: :endif without :if"
 msgstr "E580: :endif без :if"
@@ -5891,7 +5985,7 @@ msgid "E600: Missing :endtry"
 msgstr "E600: Недостаје :endtry"
 
 msgid "E601: :try nesting too deep"
-msgstr "E601: :try угњеждавање је сувише дубоко"
+msgstr "E601: :try угнеждавање је сувише дубоко"
 
 msgid "E602: :endtry without :try"
 msgstr "E602: :endtry без :try"
@@ -5931,9 +6025,6 @@ msgstr "E612: Дефинисано је превише знакова"
 #, c-format
 msgid "E613: Unknown printer font: %s"
 msgstr "E613: Непознат фонт штампача: %s"
-
-msgid "E614: Class required"
-msgstr "E614: Потребна је класа"
 
 #, c-format
 msgid "E616: Object required for argument %d"
@@ -6192,7 +6283,7 @@ msgstr "E695: Funcref не може да се индексира"
 
 #, c-format
 msgid "E696: Missing comma in List: %s"
-msgstr "E696: У Листи недостаје зарез: %s"
+msgstr "E696: У Листи недостаје запета: %s"
 
 #, c-format
 msgid "E697: Missing end of List ']': %s"
@@ -6281,7 +6372,7 @@ msgstr "E721: Дупликат кључа у Речнику: „%s”"
 
 #, c-format
 msgid "E722: Missing comma in Dictionary: %s"
-msgstr "E722: Недостаје зарез у Речнику: %s"
+msgstr "E722: Недостаје запета у Речнику: %s"
 
 #, c-format
 msgid "E723: Missing end of Dictionary '}': %s"
@@ -6762,7 +6853,7 @@ msgid "E859: Failed to convert returned python object to a Vim value"
 msgstr "E859: Конверзија враћеног python објекта у vim вредност није успела"
 
 msgid "E860: Need 'id' and 'type' or 'types' with 'both'"
-msgstr "E860: ’id’ и ’type’ или 'types' су потребни уз 'both'"
+msgstr "E860: ’id’ и ’type’ или ’types’ су потребни уз ’both’"
 
 msgid "E861: Cannot open a second popup with a terminal"
 msgstr "E861: Са терминалом није могуће да се отвори други искачући прозор"
@@ -6829,6 +6920,10 @@ msgid "E876: (NFA regexp) Not enough space to store the whole NFA"
 msgstr ""
 "E876: (НКА регуларни израз) Нема довољно простора да се ускладишти комплетан "
 "НКА"
+
+#, c-format
+msgid "E877: (NFA regexp) Invalid character class: %d"
+msgstr "E877: (НКА регуларни израз) Неисправна класа карактера: %d"
 
 msgid "E878: (NFA regexp) Could not allocate memory for branch traversal!"
 msgstr ""
@@ -7039,7 +7134,7 @@ msgstr "E934: Не може да се скочи на бафер који нем
 
 #, c-format
 msgid "E935: Invalid submatch number: %d"
-msgstr "E935: Неисправан број подподударања: %d"
+msgstr "E935: Неисправан број потподударања: %d"
 
 msgid "E936: Cannot delete the current group"
 msgstr "E936: Текућа група не може да се обрише"
@@ -7590,7 +7685,7 @@ msgid "E1091: Function is not compiled: %s"
 msgstr "E1091: Функција није компајлирана: %s"
 
 msgid "E1092: Cannot nest :redir"
-msgstr "E1092: :redir не може да се угњеждава"
+msgstr "E1092: :redir не може да се угнеждава"
 
 #, c-format
 msgid "E1093: Expected %d items but got %d"
@@ -7677,8 +7772,9 @@ msgstr "E1115: „assert_fails()” четврти аргумент мора б�
 msgid "E1116: \"assert_fails()\" fifth argument must be a string"
 msgstr "E1116: „assert_fails()” пети аргумент мора бити стринг"
 
-msgid "E1117: Cannot use ! with nested :def"
-msgstr "E1117: ! не може да се користи са угњежденим :def"
+#, c-format
+msgid "E1117: Cannot use ! with nested %s"
+msgstr "E1117: ! не може да се користи са угњежденим %s"
 
 msgid "E1118: Cannot change locked list"
 msgstr "E1118: Закључана листа не може да се измени"
@@ -7698,7 +7794,7 @@ msgstr "E1122: Променљива је закључана: %s"
 
 #, c-format
 msgid "E1123: Missing comma before argument: %s"
-msgstr "E1123: Недостаје зарез испред аргумента: %s"
+msgstr "E1123: Недостаје запета испред аргумента: %s"
 
 #, c-format
 msgid "E1124: \"%s\" cannot be used in legacy Vim script"
@@ -7747,8 +7843,8 @@ msgstr "E1138: Логичка се користи као Број"
 msgid "E1139: Missing matching bracket after dict key"
 msgstr "E1139: Недостаје одговарајућа заграда након кључа речн"
 
-msgid "E1140: :for argument must be a sequence of lists"
-msgstr "E1140: :for аргумент мора бити низ листи"
+msgid "E1140: :for argument must be a sequence of lists or tuples"
+msgstr "E1140: :for аргумент мора бити низ листи или Н-торки"
 
 msgid "E1141: Indexable type required"
 msgstr "E1141: Потребан је тип који може да се индексира"
@@ -8069,8 +8165,8 @@ msgid "E1224: String, Number or List required for argument %d"
 msgstr "E1224: За аргумент %d се захтева Стринг, Број или Листа"
 
 #, c-format
-msgid "E1225: String, List or Dictionary required for argument %d"
-msgstr "E1225: За аргумент %d се захтева Стринг, Листа или Речник"
+msgid "E1225: String, List, Tuple or Dictionary required for argument %d"
+msgstr "E1225: За аргумент %d се захтева Стринг, Листа, Н-торка или Речник"
 
 #, c-format
 msgid "E1226: List or Blob required for argument %d"
@@ -8105,6 +8201,10 @@ msgstr "E1233: exists_compiled() може да се користи само у :
 
 msgid "E1234: legacy must be followed by a command"
 msgstr "E1234: иза legacy мора да следи команда"
+
+#, c-format
+msgid "E1235: Bool or Number required for argument %d"
+msgstr "E1235: За аргумент %d се захтева тип Логички или Број"
 
 #, c-format
 msgid "E1236: Cannot use %s itself, it is imported"
@@ -8161,12 +8261,17 @@ msgid "E1250: Argument of %s must be a List, String, Dictionary or Blob"
 msgstr "E1250: Аргумент за %s мора да буде Листа, Стринг, Речник или Блоб"
 
 #, c-format
-msgid "E1251: List, Dictionary, Blob or String required for argument %d"
-msgstr "E1251: За аргумент %d се захтева Листа, Речник, Блоб или Стринг"
+msgid "E1251: List, Tuple, Dictionary, Blob or String required for argument %d"
+msgstr ""
+"E1251: За аргумент %d се захтева Листа, Н-торка, Речник, Блоб или Стринг"
 
 #, c-format
 msgid "E1252: String, List or Blob required for argument %d"
 msgstr "E1252: За аргумент %d се захтева Стринг, Листа или Блоб"
+
+#, c-format
+msgid "E1253: String, List, Tuple or Blob required for argument %d"
+msgstr "E1253: За аргумент %d се захтева Стринг, Листа, Н-торка или Блоб"
 
 msgid "E1254: Cannot use script variable in for loop"
 msgstr "E1254: У for петљи не може да се користи скрипт променљива"
@@ -8346,8 +8451,8 @@ msgid "E1300: Cannot use a partial with dictionary for :defer"
 msgstr "E1300: За :defer не може да се користи парцијал са речником"
 
 #, c-format
-msgid "E1301: String, Number, List or Blob required for argument %d"
-msgstr "E1301: За аргумент %d се захтева Стринг, Број, Листа или Блоб"
+msgid "E1301: String, Number, List, Tuple or Blob required for argument %d"
+msgstr "E1301: За аргумент %d се захтева Стринг, Број, Листа, Н-торка или Блоб"
 
 msgid "E1302: Script variable was deleted"
 msgstr "E1302: Скрипт променљива је обрисана"
@@ -8410,20 +8515,11 @@ msgstr "E1317: Неисправна декларација променљиве 
 msgid "E1318: Not a valid command in a class: %s"
 msgstr "E1318: Команда не важи у класи: %s"
 
-msgid "E1319: Using a Class as a Number"
-msgstr "E1319: Класа се користи као Број"
-
 msgid "E1320: Using an Object as a Number"
 msgstr "E1320: Објекат се користи као Број"
 
-msgid "E1321: Using a Class as a Float"
-msgstr "E1321: Класа се користи као Покретни"
-
 msgid "E1322: Using an Object as a Float"
 msgstr "E1322: Објекат се користи као Покретни"
-
-msgid "E1323: Using a Class as a String"
-msgstr "E1323: Класа се користи као Стринг"
 
 msgid "E1324: Using an Object as a String"
 msgstr "E1324: Објекат се користи као Стринг"
@@ -8453,14 +8549,14 @@ msgid "E1330: Invalid type for object variable: %s"
 msgstr "E1330: Неисправан тип променљиве објекта: %s"
 
 msgid ""
-"E1331: Public must be followed by \"var\" or \"static\" or \"final\" or "
+"E1331: public must be followed by \"var\" or \"static\" or \"final\" or "
 "\"const\""
 msgstr ""
-"E1331: Након Public мора да следи „var” или „static” или „final” или „const”"
+"E1331: Након public мора да следи „var” или „static” или „final” или „const”"
 
 #, c-format
-msgid "E1332: Public variable name cannot start with underscore: %s"
-msgstr "E1332: Име Public променљиве не може почети доњом цртом: %s"
+msgid "E1332: public variable name cannot start with underscore: %s"
+msgstr "E1332: Име public променљиве не може почети доњом цртом: %s"
 
 #, c-format
 msgid "E1333: Cannot access protected variable \"%s\" in class \"%s\""
@@ -8658,10 +8754,10 @@ msgstr ""
 "E1386: Методи објекта „%s” може да се приступи само користећи објекат класе "
 "„%s”"
 
-msgid "E1387: Public variable not supported in an interface"
-msgstr "E1387: У интерфејсу се не подржава јавна променљива"
+msgid "E1387: public variable not supported in an interface"
+msgstr "E1387: У интерфејсу се не подржава public променљива"
 
-msgid "E1388: Public keyword not supported for a method"
+msgid "E1388: public keyword not supported for a method"
 msgstr "E1388: Метода не подржава кључну реч public"
 
 msgid "E1389: Missing name after implements"
@@ -8691,9 +8787,8 @@ msgstr "E1393: Тип може да се дефинише само у Vim9 ск�
 msgid "E1394: Type name must start with an uppercase letter: %s"
 msgstr "E1394: Име типа мора да почне великим словом: %s"
 
-#, c-format
-msgid "E1395: Type alias \"%s\" cannot be modified"
-msgstr "E1395: Алијас типа „%s” не може да се измени"
+msgid "E1395: Using a null class"
+msgstr "E1395: Користи се null класа"
 
 #, c-format
 msgid "E1396: Type alias \"%s\" already exists"
@@ -8709,18 +8804,6 @@ msgid "E1399: Type can only be used in a script"
 msgstr "E1399: Тип може да се употреби само у скрипти"
 
 #, c-format
-msgid "E1400: Using type alias \"%s\" as a Number"
-msgstr "E1400: Алијас типа „%s” се користи као Број"
-
-#, c-format
-msgid "E1401: Using type alias \"%s\" as a Float"
-msgstr "E1401: Алијас типа „%s” се користи као Покретни"
-
-#, c-format
-msgid "E1402: Using type alias \"%s\" as a String"
-msgstr "E1402: Алијас типа „%s” се користи као Стринг"
-
-#, c-format
 msgid "E1403: Type alias \"%s\" cannot be used as a value"
 msgstr "E1403: Алијас типа „%s” не може да се користи као вредност"
 
@@ -8730,9 +8813,6 @@ msgstr "E1404: Abstract не може да се користи у интерфе
 #, c-format
 msgid "E1405: Class \"%s\" cannot be used as a value"
 msgstr "E1405: Класа „%s” не може да се користи као вредност"
-
-msgid "E1406: Cannot use a Class as a variable or value"
-msgstr "E1406: Класа не може да се користи као променљива или вредност"
 
 msgid "E1407: Cannot use a Typealias as a variable or value"
 msgstr "E1407: Алијас типа не може да се користи као променљива или вредност"
@@ -8751,6 +8831,110 @@ msgstr "E1410: У интерфејсу се не подржава const пром
 #, c-format
 msgid "E1411: Missing dot after object \"%s\""
 msgstr "E1411: Недостаје тачка након објекта „%s”"
+
+#, c-format
+msgid "E1412: Builtin object method \"%s\" not supported"
+msgstr "E1412: Није подржана уграђена метода објекта „%s”"
+
+msgid "E1413: Builtin class method not supported"
+msgstr "E1413: Није подржана уграђена метода класе"
+
+msgid "E1414: Enum can only be defined in Vim9 script"
+msgstr "E1414: Набрајање може да се дефинише само у Vim9 скрипти"
+
+#, c-format
+msgid "E1415: Enum name must start with an uppercase letter: %s"
+msgstr "E1415: Име набрајања мора да почне великим словом: %s"
+
+msgid "E1416: Enum cannot extend a class or enum"
+msgstr "E1416: Набрајање не може да прошири класу или набрајање"
+
+msgid "E1417: Abstract cannot be used in an Enum"
+msgstr "E1417: Abstract не може да се користи у набрајању"
+
+#, c-format
+msgid "E1418: Invalid enum value declaration: %s"
+msgstr "E1418: Неисправна декларација вредности набрајања: %s"
+
+#, c-format
+msgid "E1419: Not a valid command in an Enum: %s"
+msgstr "E1419: Команда не важи у набрајању: %s"
+
+msgid "E1420: Missing :endenum"
+msgstr "E1420: Недостаје :endenum"
+
+#, c-format
+msgid "E1421: Enum \"%s\" cannot be used as a value"
+msgstr "E1421: Набрајање „%s” не може да се користи као вредност"
+
+#, c-format
+msgid "E1422: Enum value \"%s\" not found in enum \"%s\""
+msgstr "E1422: Вредност набрајања „%s” није пронађена у набрајању „%s”"
+
+#, c-format
+msgid "E1423: Enum value \"%s.%s\" cannot be modified"
+msgstr "E1423: Вредност набрајања „%s.%s” не може да се измени"
+
+#, c-format
+msgid "E1424: Using an Enum \"%s\" as a Number"
+msgstr "E1424: Набрајање „%s” се користи као Број"
+
+#, c-format
+msgid "E1425: Using an Enum \"%s\" as a String"
+msgstr "E1425: Набрајање „%s” се користи као Стринг"
+
+#, c-format
+msgid "E1426: Enum \"%s\" ordinal value cannot be modified"
+msgstr "E1426: Редна вредност набрајања „%s” не може да се измени"
+
+#, c-format
+msgid "E1427: Enum \"%s\" name cannot be modified"
+msgstr "E1427: Набрајање „%s” не може да се измени"
+
+#, c-format
+msgid "E1428: Duplicate enum value: %s"
+msgstr "E1428: Дуплирана вредност набрајања: %s"
+
+msgid "E1429: Class can only be used in a script"
+msgstr "E1429: Class може да се употреби само у скрипти"
+
+#, c-format
+msgid "E1430: Uninitialized object variable '%s' referenced"
+msgstr "E1430: Указује се на неиницијализовану објекат променљиву ’%s’"
+
+#, c-format
+msgid ""
+"E1431: Abstract method \"%s\" in class \"%s\" cannot be accessed directly"
+msgstr ""
+"E1431: Апстрактној методи „%s” у класи „%s” не може директно да се приступи"
+
+#, c-format
+msgid ""
+"E1432: Overriding generic method \"%s\" in class \"%s\" with a concrete "
+"method"
+msgstr ""
+"E1432: Генеричка метода „%s” у класи „%s” се преиначује конкретном методом"
+
+#, c-format
+msgid ""
+"E1433: Overriding concrete method \"%s\" in class \"%s\" with a generic "
+"method"
+msgstr ""
+"E1433: Конкретна метода „%s” у класи „%s” се преиначује са генеричком методом"
+
+#, c-format
+msgid ""
+"E1434: Mismatched number of type variables for generic method  \"%s\" in "
+"class \"%s\""
+msgstr ""
+"E1434: Неодговарајући број променљивих типа за генеричку методу „%s” у класи "
+"„%s”"
+
+msgid "E1435: Enum can only be used in a script"
+msgstr "E1435: Набрајање може да се употреби само у скрипти"
+
+msgid "E1436: Interface can only be used in a script"
+msgstr "E1436: Интерфејс може да се користи само у скрипти"
 
 #, c-format
 msgid "E1500: Cannot mix positional and non-positional arguments: %s"
@@ -8805,6 +8989,206 @@ msgstr "E1511: Погрешан број карактера за поље „%s�
 #, c-format
 msgid "E1512: Wrong character width for field \"%s\""
 msgstr "E1512: Погрешна ширина карактера за поље „%s”"
+
+msgid "E1513: Cannot switch buffer. 'winfixbuf' is enabled"
+msgstr "E1513: Не може да пређе на други бафер. Укључена је опција 'winfixbuf'"
+
+msgid "E1514: 'findfunc' did not return a List type"
+msgstr "E1514: 'findfunc' није вратила тип Листа"
+
+#, c-format
+msgid "E1515: Unable to convert from '%s' encoding"
+msgstr "E1515: Не може да се конвертује из кодирања ’%s’"
+
+#, c-format
+msgid "E1516: Unable to convert to '%s' encoding"
+msgstr "E1516: Не може да се конвертује у кодирање ’%s’"
+
+msgid "E1517: Can only compare Tuple with Tuple"
+msgstr "E1517: Н-торка може да се пореди само са Н-торком"
+
+msgid "E1518: Invalid operation for Tuple"
+msgstr "E1518: Неважећа операција за Н-торку"
+
+#, c-format
+msgid "E1519: Tuple index out of range: %ld"
+msgstr "E1519: Индекс Н-торке је ван опсега: %ld"
+
+msgid "E1520: Using a Tuple as a Number"
+msgstr "E1520: Н-торка се користи као Број"
+
+msgid "E1521: Using a Tuple as a Float"
+msgstr "E1521: Н-торка се користи као Покретни"
+
+msgid "E1522: Using a Tuple as a String"
+msgstr "E1522: Н-торка се користи као Стринг"
+
+msgid "E1523: String, List, Tuple or Blob required"
+msgstr "E1523: Захтева се Стринг Листа, Н-торка или Блоб"
+
+#, c-format
+msgid "E1524: Cannot use a tuple with function %s"
+msgstr "E1524: Н-торка не не може да се користи са функцијом %s"
+
+#, c-format
+msgid "E1525: Argument of %s must be a List, Tuple, String, Dictionary or Blob"
+msgstr ""
+"E1525: Аргумент за %s мора да буде Листа, Н-торка, Стринг, Речник или Блоб"
+
+#, c-format
+msgid "E1526: Missing end of Tuple ')': %s"
+msgstr "E1526: Недостаје крај Н-торке ’)’: %s"
+
+#, c-format
+msgid "E1527: Missing comma in Tuple: %s"
+msgstr "E1527: У Н-торци недостаје запета: %s"
+
+#, c-format
+msgid "E1528: List or Tuple or Blob required for argument %d"
+msgstr "E1528: За аргумент %d се захтева Листа или Н-торка или Блоб"
+
+#, c-format
+msgid "E1529: List or Tuple required for argument %d"
+msgstr "E1529: За аргумент %d се захтева Листа или Н-торка"
+
+#, c-format
+msgid "E1530: List or Tuple or Dictionary required for argument %d"
+msgstr "E1530: За аргумент %d се захтева Листа или Н-торка или Речник"
+
+#, c-format
+msgid "E1531: Argument of %s must be a List, Tuple, Dictionary or Blob"
+msgstr ""
+"E1531: Аргумент за %s мора да буде Листа, Н-торка, Стринг, Речник или Блоб"
+
+msgid "E1532: Cannot modify a tuple"
+msgstr "E1532: Н-торка не може да се измени"
+
+msgid "E1533: Cannot slice a tuple"
+msgstr "E1533: Н-торка не може да се сече"
+
+#, c-format
+msgid "E1534: Tuple required for argument %d"
+msgstr "E1534: За аргумент %d је неопходна Н-торка"
+
+msgid "E1535: List or Tuple required"
+msgstr "E1535: Захтева се Листа или Н-торка"
+
+msgid "E1536: Tuple required"
+msgstr "E1536: Захтева се Н-торка"
+
+msgid "E1537: Less targets than Tuple items"
+msgstr "E1537: Мање одредишта него ставки Н-торке"
+
+msgid "E1538: More targets than Tuple items"
+msgstr "E1538: Више одредишта него ставки Н-торке"
+
+#, c-format
+msgid "E1539: Variadic tuple must end with a list type: %s"
+msgstr "E1539: Варијадична н-торка мора да се заврши типом листе: %s"
+
+msgid "E1540: Cannot use a variadic tuple in concatenation"
+msgstr "E1540: У спајању не може да се користи варијадична н-торка"
+
+msgid "E1541: Value too large, max Unicode codepoint is U+10FFFF"
+msgstr "E1541: Вредност је превелика, макс Уникод кодна тачка је U+10FFFF"
+
+msgid "E1542: Cannot have a negative or zero number of quickfix/location lists"
+msgstr ""
+"E1542: Не може да се има негативни или нулти број quickfix/листи локација"
+
+msgid "E1543: Cannot have more than a hundred quickfix/location lists"
+msgstr "E1543: Не може да се има више од стотину quickfix/листи локација"
+
+msgid "E1544: Failed resizing the quickfix/location list stack"
+msgstr "E1544: Није успела промена величине стека quickfix/листи локација"
+
+msgid "E1545: Quickfix list stack unavailable"
+msgstr "E1545: Стек Quickfix листе није доступан"
+
+msgid "E1546: Cannot switch to a closing buffer"
+msgstr "E1546: Не може да се пређе на бафер који се затвара"
+
+msgid "E1547: This version of Vim does support :redrawtabpanel"
+msgstr "E1547: Ова верзија Vim едитора не подржава :redrawtabpanel"
+
+msgid "E1548: Wayland connection is unavailable"
+msgstr "E1548: Није доступна Wayland веза"
+
+#, c-format
+msgid "E1549: Cannot have more than %d diff anchors"
+msgstr "E1549: Не може да се ма више од %d diff сидра"
+
+msgid "E1550: Failed to find all diff anchors"
+msgstr "E1550: Нису успели да се пронађу сва diff сидра"
+
+msgid "E1551: Cannot open a popup window to a closing buffer"
+msgstr "E1551: Не може да се отвори искачући прозор на бафер који се затвара"
+
+#, c-format
+msgid "E1552: Type variable name must start with an uppercase letter: %s"
+msgstr "E1552: Име променљиве типа мора да почне великим словом: %s"
+
+#, c-format
+msgid "E1553: Missing comma after type in generic function: %s"
+msgstr "E1553: Недостаје запета након генеричке функције: %s"
+
+#, c-format
+msgid "E1554: Missing '>' in generic function: %s"
+msgstr "E1554: Недостаје ’>’ у генеричкој функцији: %s"
+
+#, c-format
+msgid "E1555: Empty type list specified for generic function '%s'"
+msgstr "E1555: За генеричку функцију ’%s’ је наведена празна листа типова"
+
+#, c-format
+msgid "E1556: Too many types specified for generic function '%s'"
+msgstr "E1556: Наведено је превише типова за генеричку функцију ’%s’"
+
+#, c-format
+msgid "E1557: Not enough types specified for generic function '%s'"
+msgstr "E1557: Није наведено довољно типова за генеричку функцију ’%s’"
+
+#, c-format
+msgid "E1558: Unknown generic function: %s"
+msgstr "E1558: Непозната генеричка функција: %s"
+
+#, c-format
+msgid "E1559: Type arguments missing for generic function '%s'"
+msgstr "E1559: Недостају аргументи типа за генеричку функцију ’%s’"
+
+#, c-format
+msgid "E1560: Not a generic function: %s"
+msgstr "E1560: Није генеричка функција: %s"
+
+#, c-format
+msgid "E1561: Duplicate type variable name: %s"
+msgstr "E1561: Дуплирано име променљиве типа: %s"
+
+msgid "E1562: Diff anchors cannot be used with hidden diff windows"
+msgstr "E1562: Diff не могу да се користе са скривеним diff прозорима"
+
+msgid "E1563: Socket path is too big"
+msgstr "E1563: Путања до сокета је сувише дугачка"
+
+msgid "E1564: Socket name cannot have slashes in it without being a path"
+msgstr "E1564: Име сокета не сме да са садржи косе црте осим ако није путања"
+
+msgid "E1565: Socket server is not online, call remote_startserver() first"
+msgstr "E1565: Сокет сервер није на мрежи, најпре позовите remote_startserver()"
+
+#, c-format
+msgid "E1566: Failed connecting to socket %s: %s"
+msgstr "E1566: Није успело повезивање на сокет: %s: %s"
+
+msgid "E1567: Cannot start socket server, socket path is unavailable"
+msgstr "E1567: Не може да се покрене сокет сервер, није доступна путања сокета"
+
+#, c-format
+msgid "E1568: OSC command response timed out: %.*s"
+msgstr "E1568: Истекло је време чекања на одговор OSC команде: %.*s"
+
+msgid "E1569: Cannot use listener_add in a listener callback"
+msgstr "E1569: У listener повратном позиву не може да се користи listener_add"
 
 msgid "--No lines in buffer--"
 msgstr "--У баферу нема линија--"
@@ -8986,6 +9370,18 @@ msgstr "vim.List атрибути не могу да се обришу"
 
 msgid "cannot modify fixed list"
 msgstr "фиксна листа не може да се измени"
+
+msgid "tuple constructor does not accept keyword arguments"
+msgstr "конструктор н-торке не прихвата кључне речи за аргументе"
+
+msgid "tuple index out of range"
+msgstr "индекс н-торке је ван опсега"
+
+msgid "cannot delete vim.Tuple attributes"
+msgstr "vim.Tuple атрибути не могу да се обришу"
+
+msgid "cannot modify fixed tuple"
+msgstr "фиксна н-торка не може да се измени"
 
 #, c-format
 msgid "unnamed function %s does not exist"
@@ -9289,6 +9685,9 @@ msgstr "не прави разлику у величини слова када �
 msgid "override 'ignorecase' when pattern has upper case characters"
 msgstr "премошћава 'ignorecase' када шаблон садржи велика слова"
 
+msgid "maximum number for the search count feature"
+msgstr "максимални број за функционалност броја пронађених"
+
 msgid "what method to use for changing case of letters"
 msgstr "који метод се користи за промену величине слова"
 
@@ -9405,10 +9804,12 @@ msgstr ""
 "укључује „uhex” за приказ карактера који се не штампају као хекс\n"
 "броја"
 
-msgid "characters to use for the status line, folds and filler lines"
+msgid ""
+"characters to use for the status line, folds, diffs, buffer text, filler "
+"lines and truncation in the completion menu"
 msgstr ""
-"карактери који се користе за статусну линију, свијутке и линије\n"
-"испуне"
+"карактери који се користе за статусну линију, свијутке, дифове, текст "
+"бафера, линије испуне и одсецање у менију довршавања "
 
 msgid "number of lines used for the command-line"
 msgstr "број линија резервисаних за командну-линију"
@@ -9449,6 +9850,12 @@ msgstr "приказује релативни број линије за сва�
 
 msgid "number of columns to use for the line number"
 msgstr "број колона које се користе за број линије"
+
+msgid "maximum number of quickfix lists that can be stored in history"
+msgstr "максималан број quickfix листи које могу да се сачувају у историји"
+
+msgid "maximum number of location lists that can be stored in history"
+msgstr "максималан број листи локација које могу да се сачувају у историји"
 
 msgid "controls whether concealable text is hidden"
 msgstr "контролише да ли се скрива текст који може да се сакрије"
@@ -9539,6 +9946,9 @@ msgstr "минимални број линија који се користи з
 msgid "minimal number of lines used for any window"
 msgstr "минимални број линија који се користи за било који прозор"
 
+msgid "keep window focused on a single buffer"
+msgstr "одржава фокус прозора на одређени бафер"
+
 msgid "keep the height of the window"
 msgstr "задржава се висина прозора"
 
@@ -9618,6 +10028,9 @@ msgstr "вишеструке картице"
 msgid "0, 1 or 2; when to use a tab pages line"
 msgstr "0, 1 или 2; када се користи линија са картицама"
 
+msgid "behaviour when closing tab pages: left, uselast or empty"
+msgstr "понашање приликом затварања картице: left, uselast или празно"
+
 msgid "maximum number of tab pages to open for -p and \"tab all\""
 msgstr "максимални број картица које се отварају за -p и „tab all”"
 
@@ -9688,6 +10101,9 @@ msgstr "када није празна, текст за икону овог пр
 
 msgid "restore the screen contents when exiting Vim"
 msgstr "враћа садржај екрана када се напушта Vim"
+
+msgid "timeout used for terminal OSC responses"
+msgstr "тајмаут који се користи за OSC одговоре терминала"
 
 msgid "using the mouse"
 msgstr "употреба миша"
@@ -9834,6 +10250,9 @@ msgstr ""
 msgid "list of flags to make messages shorter"
 msgstr "листа заставица за скраћивање порука"
 
+msgid "options for outputting messages"
+msgstr "опције за исписивање порука"
+
 msgid "show (partial) command keys in location given by 'showcmdloc'"
 msgstr ""
 "приказује (делимичне) тастере команде на месту наведеном у 'showcmdloc'"
@@ -9898,6 +10317,22 @@ msgstr ""
 "„unnamed” да се користи * регистар као неименовани регистар\n"
 "„autoselect” да се изабрани текст увек ставља у системску оставу"
 
+msgid "Ordered list of possible methods for accessing the clipboard"
+msgstr "Уређена листа могућих метода за приступ клипборду"
+
+msgid "Timeout to use when polling for data to read or write in wayland"
+msgstr ""
+"Тајмаут који се користи када се у wayland полира за податке који се читају "
+"или уписују"
+
+msgid "Wayland seat to use"
+msgstr "Wayland седиште које се користи"
+
+msgid ""
+"Enable wayland focus stealing functionality in order to access the clipboard"
+msgstr ""
+"Укључује wayland функционалност крађе фокуса да би се приступило клипборду"
+
 msgid "\"startsel\" and/or \"stopsel\"; what special keys can do"
 msgstr "„startsel” и/или „stopsel”; шта могу да ураде специјални тастери"
 
@@ -9951,8 +10386,26 @@ msgstr "израз који „gq” користи да форматира ли
 msgid "specifies how Insert mode completion works for CTRL-N and CTRL-P"
 msgstr "наводи како ради довршавање у режиму Уметање за CTRL-N и CTRL-P"
 
+msgid "automatic completion in insert mode"
+msgstr "аутоматско довршавање у режиму Уметање"
+
+msgid "initial decay timeout for 'autocomplete' algorithm"
+msgstr "почетни тајмаут опадања за 'autocomplete' алгоритам"
+
+msgid "initial decay timeout for CTRL-N and CTRL-P completion"
+msgstr "почетни тајмаут опадања за CTRL-N у CTRL-P довршавање"
+
+msgid "delay in msec before menu appears after typing"
+msgstr "кашњење у милисекундама пре појављивања менија након куцања"
+
 msgid "whether to use a popup menu for Insert mode completion"
 msgstr "да ли се за довршавање у режиму Уметање користи искачући мени"
+
+msgid "popup menu item align order"
+msgstr "редослед поравнања ставки искачућег менија"
+
+msgid "use fuzzy collection for specific completion modes"
+msgstr "за одређене режиме довршавања се користи фази колекција"
 
 msgid "options for the Insert mode completion info popup"
 msgstr "опције за искачући мени за довршавање у режиму Уметање"
@@ -9962,6 +10415,9 @@ msgstr "максимална висина искачућег менија"
 
 msgid "minimum width of the popup menu"
 msgstr "минимална ширина искачућег менија"
+
+msgid "maximum width of the popup menu"
+msgstr "максимална ширина искачућег менија"
 
 msgid "user defined function for Insert mode completion"
 msgstr "кориснички дефинисана функција за довршавање у режиму Уметање"
@@ -10142,6 +10598,9 @@ msgstr "опције за коришћење diff режима"
 
 msgid "expression used to obtain a diff file"
 msgstr "израз који се користи за добијање diff фајла"
+
+msgid "list of addresses for anchoring a diff"
+msgstr "листа адреса за сидрење diff-а"
 
 msgid "expression used to patch a file"
 msgstr "израз који се користи за крпљење фајла"
@@ -10420,6 +10879,9 @@ msgstr "наводи карактере у имену фајла"
 msgid "specifies the characters in an identifier"
 msgstr "наводи карактере у идентификатору"
 
+msgid "defines trigger strings for complete_match()"
+msgstr "дефинише стрингове који окидају complete_match()"
+
 msgid "specifies the characters in a keyword"
 msgstr "наводи карактере у кључној речи"
 
@@ -10551,6 +11013,9 @@ msgstr ""
 msgid "list of autocommand events which are to be ignored"
 msgstr "листа догађаја аутокоманди који треба да се игноришу"
 
+msgid "list of autocommand events which are to be ignored in a window"
+msgstr "листа догађаја аутокоманди који треба да се игноришу у прозору"
+
 msgid "load plugin scripts when starting up"
 msgstr "скрипте додатака се учитавају током покретања"
 
@@ -10564,7 +11029,7 @@ msgid "use the 'g' flag for \":substitute\""
 msgstr "користи се заставица ’g’ за „:substitute”"
 
 msgid "'g' and 'c' flags of \":substitute\" toggle"
-msgstr "’g’ и ’c’ заставице команде \":substitute\" мењају стање"
+msgstr "’g’ и ’c’ заставице команде „:substitute” мењају стање"
 
 msgid "allow reading/writing devices"
 msgstr "дозвољава се читање/упис на уређаје"
@@ -10637,6 +11102,15 @@ msgstr "име MzScheme динамичке библиотеке"
 
 msgid "name of the MzScheme GC dynamic library"
 msgstr "име MzScheme GC динамичке библиотеке"
+
+msgid "0, 1 or 2; when to use the tabpanel"
+msgstr "0, 1 или 2; када се користи панел картица"
+
+msgid "custom tab pages in tabpanel"
+msgstr "произвољне картице у панелу картица"
+
+msgid "options for using tabpanel"
+msgstr "опције за коришћење панела картица"
 
 msgid "You discovered the command-line window! You can close it with \":q\"."
 msgstr "Открили сте прозор командне линије! Можете да га затворите са „:q”."

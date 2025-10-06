@@ -8,7 +8,7 @@
  */
 
 /*
- * profiler.c: vim script profiler
+ * profiler.c: Vim script profiler
  */
 
 #include "vim.h"
@@ -172,7 +172,7 @@ profile_zero(proftime_T *tm)
 
 # endif  // FEAT_PROFILE || FEAT_RELTIME
 
-#if defined(FEAT_SYN_HL) && defined(FEAT_RELTIME) && defined(FEAT_PROFILE)
+#if defined(FEAT_SYN_HL) && defined(FEAT_RELTIME) && defined(FEAT_PROFILE) || defined(PROTO)
 # if defined(HAVE_MATH_H)
 #  include <math.h>
 # endif
@@ -287,11 +287,13 @@ profile_equal(proftime_T *tm1, proftime_T *tm2)
 profile_cmp(const proftime_T *tm1, const proftime_T *tm2)
 {
 # ifdef MSWIN
-    return (int)(tm2->QuadPart - tm1->QuadPart);
+    return tm2->QuadPart == tm1->QuadPart ? 0 :
+	tm2->QuadPart > tm1->QuadPart ? 1 : -1;
 # else
     if (tm1->tv_sec == tm2->tv_sec)
-	return tm2->tv_fsec - tm1->tv_fsec;
-    return tm2->tv_sec - tm1->tv_sec;
+	return tm2->tv_fsec == tm1->tv_fsec ? 0 :
+	    tm2->tv_fsec > tm1->tv_fsec ? 1 : -1;
+    return tm2->tv_sec > tm1->tv_sec ? 1 : -1;
 # endif
 }
 

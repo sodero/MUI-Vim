@@ -46,4 +46,5 @@ char_u *mch_getenv(char_u *var);
 int mch_setenv(char *var, char *value, int x);
 void mch_setmouse(int on);
 int mch_is_console(char_u *name);
+int mch_get_random(char_u *buf, int len);
 /* vim: set ft=c : */

@@ -1,4 +1,4 @@
-*sign.txt*      For Vim version 9.1.  Last change: 2023 Feb 21
+*sign.txt*      For Vim version 9.1.  Last change: 2025 Oct 05
 
 
 		  VIM REFERENCE MANUAL    by Gordon Prieur
@@ -80,8 +80,9 @@ used by popup windows where 'cursorline' is set.
 							*sign-priority*
 Each placed sign is assigned a priority value. When multiple signs are placed
 on the same line, the attributes of the sign with the highest priority is used
-independently of the sign group. The default priority for a sign is 10. The
-priority is assigned at the time of placing a sign.
+independently of the sign group. The default priority for a sign is 10, this
+value can be changed for different signs by specifying a different value at
+definition time.  The priority is assigned at the time of placing a sign.
 
 When two signs with the same priority are present, and one has an icon or text
 in the signcolumn while the other has line highlighting, then both are
@@ -114,7 +115,7 @@ DEFINING A SIGN.			*:sign-define* *E255* *E160* *E612*
 
 See |sign_define()| for the equivalent Vim script function.
 
-:sign define {name} {argument}...
+:sig[n] define {name} {argument}...
 		Define a new sign or set attributes for an existing sign.
 		The {name} can either be a number (all digits) or a name
 		starting with a non-digit.  Leading zeros are ignored, thus
@@ -135,6 +136,8 @@ See |sign_define()| for the equivalent Vim script function.
 			Motif		pixmap (.xpm)
 			Win32		.bmp, .ico, .cur
 					pixmap (.xpm) |+xpm_w32|
+	priority={prio}
+		Default priority for the sign, see |sign-priority|.
 
 	linehl={group}
 		Highlighting group used for the whole line the sign is placed
@@ -165,7 +168,7 @@ DELETING A SIGN						*:sign-undefine* *E155*
 
 See |sign_undefine()| for the equivalent Vim script function.
 
-:sign undefine {name}
+:sig[n] undefine {name}
 		Deletes a previously defined sign.  If signs with this {name}
 		are still placed this will cause trouble.
 
@@ -177,9 +180,9 @@ LISTING SIGNS						*:sign-list* *E156*
 
 See |sign_getdefined()| for the equivalent Vim script function.
 
-:sign list	Lists all defined signs and their attributes.
+:sig[n] list	Lists all defined signs and their attributes.
 
-:sign list {name}
+:sig[n] list {name}
 		Lists one defined sign and its attributes.
 
 
@@ -187,7 +190,7 @@ PLACING SIGNS						*:sign-place* *E158*
 
 See |sign_place()| for the equivalent Vim script function.
 
-:sign place {id} line={lnum} name={name} file={fname}
+:sig[n] place {id} line={lnum} name={name} file={fname}
 		Place sign defined as {name} at line {lnum} in file {fname}.
 							*:sign-fname*
 		The file {fname} must already be loaded in a buffer.  The
@@ -209,11 +212,11 @@ See |sign_place()| for the equivalent Vim script function.
 
 		By default, the sign is placed in the global sign group.
 
-		By default, the sign is assigned a default priority of 10. To
-		assign a different priority value, use "priority={prio}" to
-		specify a value.  The priority is used to determine the sign
-		that is displayed when multiple signs are placed on the same
-		line.
+		By default, the sign is assigned a default priority of 10,
+		unless specified otherwise by the sign definition.  To assign a
+		different priority value, use "priority={prio}" to specify a
+		value.  The priority is used to determine the sign that is
+		displayed when multiple signs are placed on the same line.
 
 		Examples: >
 			:sign place 5 line=3 name=sign1 file=a.py
@@ -221,7 +224,7 @@ See |sign_place()| for the equivalent Vim script function.
 			:sign place 9 group=g2 priority=50 line=5
 							\ name=sign1 file=a.py
 <
-:sign place {id} line={lnum} name={name} [buffer={nr}]
+:sig[n] place {id} line={lnum} name={name} [buffer={nr}]
 		Same, but use buffer {nr}.  If the buffer argument is not
 		given, place the sign in the current buffer.
 
@@ -230,7 +233,7 @@ See |sign_place()| for the equivalent Vim script function.
 			:sign place 10 line=99 name=sign3 buffer=3
 <
 							*E885*
-:sign place {id} name={name} file={fname}
+:sig[n] place {id} name={name} file={fname}
 		Change the placed sign {id} in file {fname} to use the defined
 		sign {name}.  See remark above about {fname} |:sign-fname|.
 		This can be used to change the displayed sign without moving
@@ -244,7 +247,7 @@ See |sign_place()| for the equivalent Vim script function.
 		Example: >
 			:sign place 23 name=sign1 file=/path/to/edit.py
 <
-:sign place {id} name={name} [buffer={nr}]
+:sig[n] place {id} name={name} [buffer={nr}]
 		Same, but use buffer {nr}.  If the buffer argument is not
 		given, use the current buffer.
 
@@ -257,75 +260,75 @@ REMOVING SIGNS						*:sign-unplace* *E159*
 
 See |sign_unplace()| for the equivalent Vim script function.
 
-:sign unplace {id} file={fname}
+:sig[n] unplace {id} file={fname}
 		Remove the previously placed sign {id} from file {fname}.
 		See remark above about {fname} |:sign-fname|.
 
-:sign unplace {id} group={group} file={fname}
+:sig[n] unplace {id} group={group} file={fname}
 		Same but remove the sign {id} in sign group {group}.
 
-:sign unplace {id} group=* file={fname}
+:sig[n] unplace {id} group=* file={fname}
 		Same but remove the sign {id} from all the sign groups.
 
-:sign unplace * file={fname}
+:sig[n] unplace * file={fname}
 		Remove all placed signs in file {fname}.
 
-:sign unplace * group={group} file={fname}
+:sig[n] unplace * group={group} file={fname}
 		Remove all placed signs in group {group} from file {fname}.
 
-:sign unplace * group=* file={fname}
+:sig[n] unplace * group=* file={fname}
 		Remove all placed signs in all the groups from file {fname}.
 
-:sign unplace {id} buffer={nr}
+:sig[n] unplace {id} buffer={nr}
 		Remove the previously placed sign {id} from buffer {nr}.
 
-:sign unplace {id} group={group} buffer={nr}
+:sig[n] unplace {id} group={group} buffer={nr}
 		Remove the previously placed sign {id} in group {group} from
 		buffer {nr}.
 
-:sign unplace {id} group=* buffer={nr}
+:sig[n] unplace {id} group=* buffer={nr}
 		Remove the previously placed sign {id} in all the groups from
 		buffer {nr}.
 
-:sign unplace * buffer={nr}
+:sig[n] unplace * buffer={nr}
 		Remove all placed signs in buffer {nr}.
 
-:sign unplace * group={group} buffer={nr}
+:sig[n] unplace * group={group} buffer={nr}
 		Remove all placed signs in group {group} from buffer {nr}.
 
-:sign unplace * group=* buffer={nr}
+:sig[n] unplace * group=* buffer={nr}
 		Remove all placed signs in all the groups from buffer {nr}.
 
-:sign unplace {id}
+:sig[n] unplace {id}
 		Remove the previously placed sign {id} from all files it
 		appears in.
 
-:sign unplace {id} group={group}
+:sig[n] unplace {id} group={group}
 		Remove the previously placed sign {id} in group {group} from
 		all files it appears in.
 
-:sign unplace {id} group=*
+:sig[n] unplace {id} group=*
 		Remove the previously placed sign {id} in all the groups from
 		all the files it appears in.
 
-:sign unplace *
+:sig[n] unplace *
 		Remove all placed signs in the global group from all the files.
 
-:sign unplace * group={group}
+:sig[n] unplace * group={group}
 		Remove all placed signs in group {group} from all the files.
 
-:sign unplace * group=*
+:sig[n] unplace * group=*
 		Remove all placed signs in all the groups from all the files.
 
-:sign unplace
+:sig[n] unplace
 		Remove a placed sign at the cursor position. If multiple signs
 		are placed in the line, then only one is removed.
 
-:sign unplace group={group}
+:sig[n] unplace group={group}
 		Remove a placed sign in group {group} at the cursor
 		position.
 
-:sign unplace group=*
+:sig[n] unplace group=*
 		Remove a placed sign in any group at the cursor position.
 
 
@@ -333,31 +336,31 @@ LISTING PLACED SIGNS					*:sign-place-list*
 
 See |sign_getplaced()| for the equivalent Vim script function.
 
-:sign place file={fname}
+:sig[n] place file={fname}
 		List signs placed in file {fname}.
 		See remark above about {fname} |:sign-fname|.
 
-:sign place group={group} file={fname}
+:sig[n] place group={group} file={fname}
 		List signs in group {group} placed in file {fname}.
 
-:sign place group=* file={fname}
+:sig[n] place group=* file={fname}
 		List signs in all the groups placed in file {fname}.
 
-:sign place buffer={nr}
+:sig[n] place buffer={nr}
 		List signs placed in buffer {nr}.
 
-:sign place group={group} buffer={nr}
+:sig[n] place group={group} buffer={nr}
 		List signs in group {group} placed in buffer {nr}.
 
-:sign place group=* buffer={nr}
+:sig[n] place group=* buffer={nr}
 		List signs in all the groups placed in buffer {nr}.
 
-:sign place	List placed signs in the global group in all files.
+:sig[n] place	List placed signs in the global group in all files.
 
-:sign place group={group}
+:sig[n] place group={group}
 		List placed signs with sign group {group} in all files.
 
-:sign place group=*
+:sig[n] place group=*
 		List placed signs in all sign groups in all files.
 
 
@@ -365,22 +368,22 @@ JUMPING TO A SIGN					*:sign-jump* *E157*
 
 See |sign_jump()| for the equivalent Vim script function.
 
-:sign jump {id} file={fname}
+:sig[n] jump {id} file={fname}
 		Open the file {fname} or jump to the window that contains
 		{fname} and position the cursor at sign {id}.
 		See remark above about {fname} |:sign-fname|.
 		If the file isn't displayed in window and the current file can
 		not be |abandon|ed this fails.
 
-:sign jump {id} group={group} file={fname}
+:sig[n] jump {id} group={group} file={fname}
 		Same but jump to the sign in group {group}
 
-:sign jump {id} [buffer={nr}]					*E934*
+:sig[n] jump {id} [buffer={nr}]				*E934*
 		Same, but use buffer {nr}.  This fails if buffer {nr} does not
 		have a name. If the buffer argument is not given, use the
 		current buffer.
 
-:sign jump {id} group={group} [buffer={nr}]
+:sig[n] jump {id} group={group} [buffer={nr}]
 		Same but jump to the sign in group {group}
 
 
@@ -401,6 +404,7 @@ sign_define({list})
 		   icon		full path to the bitmap file for the sign.
 		   linehl	highlight group used for the whole line the
 				sign is placed in.
+		   priority	default priority value of the sign
 		   numhl	highlight group used for the line number where
 				the sign is placed.
 		   text		text that is displayed when there is no icon
@@ -435,6 +439,9 @@ sign_define({list})
 <
 		Can also be used as a |method|: >
 			GetSignList()->sign_define()
+<
+		Return type: |Number|
+
 
 sign_getdefined([{name}])				*sign_getdefined()*
 		Get a list of defined signs and their attributes.
@@ -450,6 +457,7 @@ sign_getdefined([{name}])				*sign_getdefined()*
 		   linehl	highlight group used for the whole line the
 				sign is placed in; not present if not set
 		   name		name of the sign
+		   priority	default priority value of the sign
 		   numhl	highlight group used for the line number where
 				the sign is placed; not present if not set
 		   text		text that is displayed when there is no icon
@@ -473,6 +481,9 @@ sign_getdefined([{name}])				*sign_getdefined()*
 <
 		Can also be used as a |method|: >
 			GetSignList()->sign_getdefined()
+<
+		Return type: list<dict<string>> or list<any>
+
 
 sign_getplaced([{buf} [, {dict}]])			*sign_getplaced()*
 		Return a list of signs placed in a buffer or all the buffers.
@@ -537,8 +548,10 @@ sign_getplaced([{buf} [, {dict}]])			*sign_getplaced()*
 		Can also be used as a |method|: >
 			GetBufname()->sign_getplaced()
 <
-							*sign_jump()*
-sign_jump({id}, {group}, {buf})
+		Return type: list<dict<any>>
+
+
+sign_jump({id}, {group}, {buf})				*sign_jump()*
 		Open the buffer {buf} or jump to the window that contains
 		{buf} and position the cursor at sign {id} in group {group}.
 		This is similar to the |:sign-jump| command.
@@ -556,6 +569,9 @@ sign_jump({id}, {group}, {buf})
 		Can also be used as a |method|: >
 			GetSignid()->sign_jump()
 <
+		Return type: |Number|
+
+
 							*sign_place()*
 sign_place({id}, {group}, {name}, {buf} [, {dict}])
 		Place the sign defined as {name} at line {lnum} in file or
@@ -608,8 +624,10 @@ sign_place({id}, {group}, {name}, {buf} [, {dict}])
 		Can also be used as a |method|: >
 			GetSignid()->sign_place(group, name, expr)
 <
-							*sign_placelist()*
-sign_placelist({list})
+		Return type: |Number|
+
+
+sign_placelist({list})				*sign_placelist()*
 		Place one or more signs.  This is similar to the
 		|sign_place()| function.  The {list} argument specifies the
 		List of signs to place. Each list item is a dict with the
@@ -633,7 +651,8 @@ sign_placelist({list})
 		    priority	Priority of the sign. When multiple signs are
 				placed on a line, the sign with the highest
 				priority is used. If not specified, the
-				default value of 10 is used. See
+				default value of 10 is used, unless specified
+				otherwise by the sign definition. See
 				|sign-priority| for more information.
 
 		If {id} refers to an existing sign, then the existing sign is
@@ -669,6 +688,9 @@ sign_placelist({list})
 <
 		Can also be used as a |method|: >
 			GetSignlist()->sign_placelist()
+<
+		Return type: |Number|
+
 
 sign_undefine([{name}])					*sign_undefine()*
 sign_undefine({list})
@@ -695,6 +717,9 @@ sign_undefine({list})
 <
 		Can also be used as a |method|: >
 			GetSignlist()->sign_undefine()
+<
+		Return type: |Number|
+
 
 sign_unplace({group} [, {dict}])			*sign_unplace()*
 		Remove a previously placed sign in one or more buffers.  This
@@ -741,6 +766,9 @@ sign_unplace({group} [, {dict}])			*sign_unplace()*
 <		Can also be used as a |method|: >
 			GetSigngroup()->sign_unplace()
 <
+		Return type: |Number|
+
+
 sign_unplacelist({list})				*sign_unplacelist()*
 		Remove previously placed signs from one or more buffers.  This
 		is similar to the |sign_unplace()| function.
@@ -772,5 +800,6 @@ sign_unplacelist({list})				*sign_unplacelist()*
 		Can also be used as a |method|: >
 			GetSignlist()->sign_unplacelist()
 <
+		Return type: list<number> or list<any>
 
  vim:tw=78:ts=8:noet:ft=help:norl:

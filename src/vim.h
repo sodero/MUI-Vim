@@ -24,7 +24,11 @@
 // ============ the header file puzzle: order matters =========
 
 #ifdef HAVE_CONFIG_H	// GNU autoconf (or something else) was here
-# include "auto/config.h"
+# ifdef VMS
+#  include "config.h"   /* Rely on /INCLUDE to find it. */
+# else
+#  include "auto/config.h"
+# endif /* def VMS [else] */
 # define HAVE_PATHDEF
 
 /*
@@ -36,7 +40,23 @@
 #  error configure did not run properly.  Check auto/config.log.
 # endif
 
-# if (defined(__linux__) && !defined(__ANDROID__)) || defined(__CYGWIN__)
+/*
+ * NeXTSTEP / OPENSTEP support deprecation
+ *
+ * NeXT hardware was discontinued in 1993, and the last OPENSTEP release
+ * (4.2) shipped in 1996–1997. No known users remain today.
+ *
+ * To simplify maintenance, NeXT support is formally deprecated. If you hit
+ * this error, please report it to the Vim maintainers.
+ *
+ * This guard will be removed once the remaining NeXT-specific code paths
+ * are deleted in a future release.
+ */
+#if defined(NeXT) || defined(__NeXT__)
+# error "NeXTSTEP / OPENSTEP support has been deprecated."
+#endif
+
+# if (defined(__linux__) && !defined(__ANDROID__)) || defined(__CYGWIN__) || defined(__GNU__)
 // Needed for strptime().  Needs to be done early, since header files can
 // include other header files and end up including time.h, where these symbols
 // matter for Vim.
@@ -84,6 +104,13 @@
   // Fall back to assuming unsigned int is 32 bit.  If this is wrong then the
   // test in blowfish.c will fail.
 #  define UINT32_TYPEDEF unsigned int
+# endif
+#endif
+
+// C89 does not define SIZE_MAX
+#if defined(__hpux) || defined(VMS)
+# ifndef SIZE_MAX
+#  define SIZE_MAX ((size_t)(-1))
 # endif
 #endif
 
@@ -187,6 +214,10 @@
 # define FEAT_X11
 #endif
 
+#if defined(HAVE_WAYLAND) && defined(WANT_WAYLAND)
+# define FEAT_WAYLAND
+#endif
+
 #ifdef NO_X11_INCLUDES
     // In os_mac_conv.c and os_macosx.m NO_X11_INCLUDES is defined to avoid
     // X11 headers.  Disable all X11 related things to avoid conflicts.
@@ -249,7 +280,7 @@
 #if (defined(UNIX) || defined(VMS)) \
 	&& (!defined(MACOS_X) || defined(HAVE_CONFIG_H))
 # include "os_unix.h"	    // bring lots of system header files
-#else
+#elif !defined(PROTO)
   // For all non-Unix systems: use old-fashioned signal().
 # define mch_signal(signum, sighandler) signal(signum, sighandler)
 #endif
@@ -515,6 +546,7 @@ typedef long long vimlong_T;
 
 // for offsetof()
 #include <stddef.h>
+#include <stdbool.h>
 
 #if defined(HAVE_SYS_SELECT_H) && \
 	(!defined(HAVE_SYS_TIME_H) || defined(SYS_SELECT_WITH_SYS_TIME))
@@ -602,7 +634,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 # ifdef bindtextdomain
 #  undef bindtextdomain
 # endif
-# define bindtextdomain(x, y) // empty
+# define bindtextdomain(x, y) ""
 # ifdef bind_textdomain_codeset
 #  undef bind_textdomain_codeset
 # endif
@@ -631,6 +663,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 // flags for screen_line()
 #define SLF_RIGHTLEFT	1
 #define SLF_POPUP	2
+#define SLF_INC_VCOL	4
 
 #define MB_FILLER_CHAR '<'  // character used when a double-width character
 			    // doesn't fit.
@@ -659,8 +692,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define VALID_VIRTCOL	0x04	// w_virtcol (file col) is valid
 #define VALID_CHEIGHT	0x08	// w_cline_height and w_cline_folded valid
 #define VALID_CROW	0x10	// w_cline_row is valid
-#define VALID_BOTLINE	0x20	// w_botine and w_empty_rows are valid
-#define VALID_BOTLINE_AP 0x40	// w_botine is approximated
+#define VALID_BOTLINE	0x20	// w_botline and w_empty_rows are valid
+#define VALID_BOTLINE_AP 0x40	// w_botline is approximated
 #define VALID_TOPLINE	0x80	// w_topline is valid (for cursor position)
 
 // Values for w_popup_flags.
@@ -846,6 +879,14 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define EXPAND_ARGOPT		56
 #define EXPAND_TERMINALOPT	57
 #define EXPAND_KEYMAP		58
+#define EXPAND_DIRS_IN_CDPATH	59
+#define EXPAND_SHELLCMDLINE	60
+#define EXPAND_FINDFUNC		61
+#define EXPAND_HIGHLIGHT_GROUP  62
+#define EXPAND_FILETYPECMD	63
+#define EXPAND_PATTERN_IN_BUF	64
+#define EXPAND_RETAB		65
+
 
 // Values for exmode_active (0 is no exmode)
 #define EXMODE_NORMAL		1
@@ -879,6 +920,9 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define WILD_NOERROR		    0x800  // sets EW_NOERROR
 #define WILD_BUFLASTUSED	    0x1000
 #define BUF_DIFF_FILTER		    0x2000
+#define WILD_NOSELECT		    0x4000
+#define WILD_MAY_EXPAND_PATTERN	    0x8000
+#define WILD_FUNC_TRIGGER	    0x10000 // called from wildtrigger()
 
 // Flags for expand_wildcards()
 #define EW_DIR		0x01	// include directory names
@@ -901,11 +945,20 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define EW_DODOT	0x4000	// also files starting with a dot
 #define EW_EMPTYOK	0x8000	// no matches is not an error
 #define EW_NOTENV	0x10000	// do not expand environment variables
+#define EW_CDPATH	0x20000	// search in 'cdpath' too
 
 // Flags for find_file_*() functions.
 #define FINDFILE_FILE	0	// only files
 #define FINDFILE_DIR	1	// only directories
 #define FINDFILE_BOTH	2	// files and directories
+
+#if defined(FEAT_TABPANEL)
+# define COLUMNS_WITHOUT_TPL()		(Columns - tabpanel_width())
+# define TPL_LCOL()			tabpanel_leftcol()
+#else
+# define COLUMNS_WITHOUT_TPL()		Columns
+# define TPL_LCOL()			0
+#endif
 
 #define W_ENDCOL(wp)	((wp)->w_wincol + (wp)->w_width)
 #ifdef FEAT_MENU
@@ -951,6 +1004,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 # define HL_TRANS_CONT	0x10000 // transparent item without contains arg
 # define HL_CONCEAL	0x20000 // can be concealed
 # define HL_CONCEALENDS	0x40000 // can be concealed
+# define HL_INCLUDED_TOPLEVEL 0x80000 // toplevel item in included syntax, allowed by contains=TOP
 #endif
 
 // Values for 'options' argument in do_search() and searchit()
@@ -1012,9 +1066,10 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define KEY_COMPLETE	0x103	// end of completion
 
 // Used for the first argument of do_map()
-#define MAPTYPE_MAP	0
-#define MAPTYPE_UNMAP	1
-#define MAPTYPE_NOREMAP	2
+#define MAPTYPE_MAP		0
+#define MAPTYPE_UNMAP		1
+#define MAPTYPE_NOREMAP		2
+#define MAPTYPE_UNMAP_LHS	3
 
 // Values for "noremap" argument of ins_typebuf().  Also used for
 // map->m_noremap and menu->noremap[].
@@ -1077,6 +1132,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 // Values for flags argument of do_buffer()
 #define DOBUF_FORCEIT	1	// :cmd!
 #define DOBUF_NOPOPUP	2	// skip popup window buffers
+#define DOBUF_SKIPHELP	4	// skip or keep help buffers depending on b_help of the
+				// starting buffer
 
 // Values for sub_cmd and which_pat argument for search_regcomp()
 // Also used for which_pat argument for searchit()
@@ -1168,12 +1225,13 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define INSCHAR_COM_LIST 16	// format comments with list/2nd line indent
 
 // flags for open_line()
-#define OPENLINE_DELSPACES  0x01    // delete spaces after cursor
-#define OPENLINE_DO_COM	    0x02    // format comments
-#define OPENLINE_KEEPTRAIL  0x04    // keep trailing spaces
-#define OPENLINE_MARKFIX    0x08    // fix mark positions
-#define OPENLINE_COM_LIST   0x10    // format comments with list/2nd line indent
-#define OPENLINE_FORMAT	    0x20    // formatting long comment
+#define OPENLINE_DELSPACES	0x01    // delete spaces after cursor
+#define OPENLINE_DO_COM		0x02    // format comments
+#define OPENLINE_KEEPTRAIL	0x04    // keep trailing spaces
+#define OPENLINE_MARKFIX	0x08    // fix mark positions
+#define OPENLINE_COM_LIST	0x10    // format comments with list/2nd line indent
+#define OPENLINE_FORMAT		0x20    // formatting long comment
+#define OPENLINE_FORCE_INDENT	0x40    // use second_line_indent without indent logic
 
 // There are five history tables:
 #define HIST_CMD	0	// colon commands
@@ -1259,6 +1317,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define WSP_BELOW	0x40	// put new window below/right
 #define WSP_ABOVE	0x80	// put new window above/left
 #define WSP_NEWLOC	0x100	// don't copy location list
+#define WSP_FORCE_ROOM	0x200	// ignore "not enough room" errors
 
 /*
  * arguments for gui_set_shellsize()
@@ -1326,11 +1385,12 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define SID_WINLAYOUT	(-7)	// changing window size
 
 /*
- * Events for autocommands.
+ * Events for autocommands. Must be kept in sync with "event_tab".
  */
 enum auto_event
 {
     EVENT_BUFADD = 0,		// after adding a buffer to the buffer list
+    EVENT_BUFCREATE,		// UNUSED: BufCreate == BufAdd
     EVENT_BUFDELETE,		// deleting a buffer from the buffer list
     EVENT_BUFENTER,		// after entering a buffer
     EVENT_BUFFILEPOST,		// after renaming a buffer
@@ -1339,6 +1399,7 @@ enum auto_event
     EVENT_BUFLEAVE,		// before leaving a buffer
     EVENT_BUFNEW,		// after creating any buffer
     EVENT_BUFNEWFILE,		// when creating a buffer for a new file
+    EVENT_BUFREAD,		// UNUSED: BufRead == BufReadPost
     EVENT_BUFREADCMD,		// read buffer using command
     EVENT_BUFREADPOST,		// after reading a buffer
     EVENT_BUFREADPRE,		// before reading a buffer
@@ -1346,11 +1407,13 @@ enum auto_event
     EVENT_BUFWINENTER,		// after showing a buffer in a window
     EVENT_BUFWINLEAVE,		// just after buffer removed from window
     EVENT_BUFWIPEOUT,		// just before really deleting a buffer
+    EVENT_BUFWRITE,		// UNUSED: BufWrite == BufWritePost
     EVENT_BUFWRITECMD,		// write buffer using command
     EVENT_BUFWRITEPOST,		// after writing a buffer
     EVENT_BUFWRITEPRE,		// before writing a buffer
     EVENT_CMDLINECHANGED,	// command line was modified
     EVENT_CMDLINEENTER,		// after entering the command line
+    EVENT_CMDLINELEAVEPRE,	// just before leaving the command line
     EVENT_CMDLINELEAVE,		// before leaving the command line
     EVENT_CMDUNDEFINED,		// command undefined
     EVENT_CMDWINENTER,		// after entering the cmdline window
@@ -1363,6 +1426,7 @@ enum auto_event
     EVENT_CURSORHOLD,		// cursor in same position for a while
     EVENT_CURSORHOLDI,		// idem, in Insert mode
     EVENT_CURSORMOVED,		// cursor was moved
+    EVENT_CURSORMOVEDC,		// cursor was moved in Command line mode
     EVENT_CURSORMOVEDI,		// cursor was moved in Insert mode
     EVENT_DIFFUPDATED,		// after diffs were updated
     EVENT_DIRCHANGED,		// after user changed directory
@@ -1375,6 +1439,7 @@ enum auto_event
     EVENT_FILECHANGEDRO,	// before first change to read-only file
     EVENT_FILECHANGEDSHELL,	// after shell command that changed file
     EVENT_FILECHANGEDSHELLPOST,	// after (not) reloading changed file
+    EVENT_FILEENCODING,		// UNUSED: FileEncoding == EncodingChanged
     EVENT_FILEREADCMD,		// read from a file using command
     EVENT_FILEREADPOST,		// after reading a file
     EVENT_FILEREADPRE,		// before reading a file
@@ -1394,8 +1459,9 @@ enum auto_event
     EVENT_INSERTCHANGE,		// when changing Insert/Replace mode
     EVENT_INSERTCHARPRE,	// before inserting a char
     EVENT_INSERTENTER,		// when entering Insert mode
-    EVENT_INSERTLEAVEPRE,	// just before leaving Insert mode
     EVENT_INSERTLEAVE,		// just after leaving Insert mode
+    EVENT_INSERTLEAVEPRE,	// just before leaving Insert mode
+    EVENT_KEYINPUTPRE,		// before key input
     EVENT_MENUPOPUP,		// just before popup menu is displayed
     EVENT_MODECHANGED,		// after changing the mode
     EVENT_OPTIONSET,		// option was set
@@ -1406,18 +1472,20 @@ enum auto_event
     EVENT_SAFESTATE,		// going to wait for a character
     EVENT_SAFESTATEAGAIN,	// still waiting for a character
     EVENT_SESSIONLOADPOST,	// after loading a session file
+    EVENT_SESSIONWRITEPOST,	// after writing a session file
     EVENT_SHELLCMDPOST,		// after ":!cmd"
     EVENT_SHELLFILTERPOST,	// after ":1,2!cmd", ":w !cmd", ":r !cmd".
     EVENT_SIGUSR1,		// after the SIGUSR1 signal
     EVENT_SOURCECMD,		// sourcing a Vim script using command
-    EVENT_SOURCEPRE,		// before sourcing a Vim script
     EVENT_SOURCEPOST,		// after sourcing a Vim script
+    EVENT_SOURCEPRE,		// before sourcing a Vim script
     EVENT_SPELLFILEMISSING,	// spell file missing
     EVENT_STDINREADPOST,	// after reading from stdin
     EVENT_STDINREADPRE,		// before reading from stdin
     EVENT_SWAPEXISTS,		// found existing swap file
     EVENT_SYNTAX,		// syntax selected
     EVENT_TABCLOSED,		// after closing a tab page
+    EVENT_TABCLOSEDPRE,		// before closing a tab page
     EVENT_TABENTER,		// after entering a tab page
     EVENT_TABLEAVE,		// before leaving a tab page
     EVENT_TABNEW,		// when entering a new tab page
@@ -1437,16 +1505,17 @@ enum auto_event
     EVENT_VIMLEAVE,		// before exiting Vim
     EVENT_VIMLEAVEPRE,		// before exiting Vim and writing .viminfo
     EVENT_VIMRESIZED,		// after Vim window was resized
+    EVENT_VIMRESUME,		// after Vim is resumed
+    EVENT_VIMSUSPEND,		// before Vim is suspended
+    EVENT_WINCLOSED,		// after closing a window
     EVENT_WINENTER,		// after entering a window
     EVENT_WINLEAVE,		// before leaving a window
-    EVENT_WINNEW,		// when entering a new window
-    EVENT_WINCLOSED,		// after closing a window
-    EVENT_VIMSUSPEND,		// before Vim is suspended
-    EVENT_VIMRESUME,		// after Vim is resumed
+    EVENT_WINNEW,		// after creating a new window
+    EVENT_WINNEWPRE,		// before creating a new window
     EVENT_WINRESIZED,		// after a window was resized
     EVENT_WINSCROLLED,		// after a window was scrolled or resized
 
-    NUM_EVENTS			// MUST be the last one
+    NUM_EVENTS,			// MUST be the last one
 };
 
 typedef enum auto_event event_T;
@@ -1491,7 +1560,8 @@ typedef enum
     , HLF_ADD	    // Added diff line
     , HLF_CHD	    // Changed diff line
     , HLF_DED	    // Deleted diff line
-    , HLF_TXD	    // Text Changed in diff line
+    , HLF_TXD	    // Text Changed in changed diff line
+    , HLF_TXA	    // Text Added in changed diff line
     , HLF_CONCEAL   // Concealed text
     , HLF_SC	    // Sign column
     , HLF_SPB	    // SpellBad
@@ -1500,6 +1570,8 @@ typedef enum
     , HLF_SPL	    // SpellLocal
     , HLF_PNI	    // popup menu normal item
     , HLF_PSI	    // popup menu selected item
+    , HLF_PMNI	    // popup menu matched text in normal item
+    , HLF_PMSI	    // popup menu matched text in selected item
     , HLF_PNK	    // popup menu normal item "kind"
     , HLF_PSK	    // popup menu selected item "kind"
     , HLF_PNX	    // popup menu normal item "menu" (extra text)
@@ -1515,6 +1587,11 @@ typedef enum
     , HLF_QFL	    // quickfix window line currently selected
     , HLF_ST	    // status lines of terminal windows
     , HLF_STNC	    // status lines of not-current terminal windows
+    , HLF_MSG	    // message area
+    , HLF_TPL	    // tabpanel
+    , HLF_TPLS	    // tabpanel selected
+    , HLF_TPLF	    // tabpanel filler
+    , HLF_PRI	    // "preinsert" in 'completeopt'
     , HLF_COUNT	    // MUST be the last one
 } hlf_T;
 
@@ -1522,12 +1599,22 @@ typedef enum
 // When changing this also adjust the default for 'highlight'.
 #define HL_FLAGS {'8', '~', '@', 'd', 'e', 'h', 'i', 'l', 'y', 'm', 'M', \
 		  'n', 'a', 'b', 'N', 'G', 'O', 'r', 's', 'S', 'c', 't', 'v', 'V', \
-		  'w', 'W', 'f', 'F', 'A', 'C', 'D', 'T', '-', '>', \
+		  'w', 'W', 'f', 'F', 'A', 'C', 'D', 'T', 'E', '-', '>', \
 		  'B', 'P', 'R', 'L', \
-		  '+', '=', '[', ']', '{', '}', 'x', 'X', \
+		  '+', '=', 'k', '<','[', ']', '{', '}', 'x', 'X', \
 		  '*', '#', '_', '!', '.', 'o', 'q', \
-		  'z', 'Z'}
+		  'z', 'Z', 'g', \
+		  '%', '^', '&', 'I'}
 
+/*
+ * Values for behaviour in spell_move_to
+ */
+typedef enum
+{
+    SMT_ALL = 0		    // Move to "all" words
+    , SMT_BAD		    // Move to "bad" words only
+    , SMT_RARE		    // Move to "rare" words only
+} smt_T;
 /*
  * Boolean constants
  */
@@ -1603,6 +1690,7 @@ typedef UINT32_TYPEDEF UINT32_T;
  */
 #define MIN_COLUMNS	12	// minimal columns for screen
 #define MIN_LINES	2	// minimal lines for screen
+#define MIN_CMDHEIGHT	1	// minimal height for command line
 #define STATUS_HEIGHT	1	// height of a status line under a window
 #ifdef FEAT_MENU		// height of a status line under a window
 # define WINBAR_HEIGHT(wp)	(wp)->w_winbar_height
@@ -1750,6 +1838,7 @@ void *vim_memset(void *, int, size_t);
 
 # define MB_STRICMP(d, s)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)MAXCOL)
 # define MB_STRNICMP(d, s, n)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)(n))
+# define MB_STRNICMP2(d, s, n1, n2)	mb_strnicmp2((char_u *)(d), (char_u *)(s), (n1), (n2))
 
 #define STRCAT(d, s)	    strcat((char *)(d), (char *)(s))
 #define STRNCAT(d, s, n)    strncat((char *)(d), (char *)(s), (size_t)(n))
@@ -1849,7 +1938,7 @@ typedef void	    *vim_acl_T;		// dummy to pass an ACL to a function
 # define USE_INPUT_BUF
 #endif
 
-#ifndef EINTR
+#if !defined(EINTR) && !defined(PROTO)
 # define read_eintr(fd, buf, count) vim_read((fd), (buf), (count))
 # define write_eintr(fd, buf, count) vim_write((fd), (buf), (count))
 #endif
@@ -1968,6 +2057,7 @@ typedef int sock_T;
 // Note that gui.h is included by structs.h
 
 #include "structs.h"	// defines many structures
+#include "xdiff/xdiff.h"	// TODO: maybe remove this, but this brings in mmfile_t so it can compile
 
 #include "alloc.h"
 
@@ -2164,7 +2254,15 @@ typedef int sock_T;
 #define VV_MAXCOL	105
 #define VV_PYTHON3_VERSION 106
 #define VV_TYPE_TYPEALIAS 107
-#define VV_LEN		108	// number of v: vars
+#define VV_TYPE_ENUM	  108
+#define VV_TYPE_ENUMVALUE 109
+#define VV_STACKTRACE	110
+#define VV_TYPE_TUPLE	111
+#define VV_WAYLAND_DISPLAY 112
+#define VV_CLIPMETHOD 113
+#define VV_TERMDA1 114
+#define VV_TERMOSC 115
+#define VV_LEN		116	// number of v: vars
 
 // used for v_number in VAR_BOOL and VAR_SPECIAL
 #define VVAL_FALSE	0L	// VAR_BOOL
@@ -2188,6 +2286,9 @@ typedef int sock_T;
 #define VAR_TYPE_CLASS	    12
 #define VAR_TYPE_OBJECT	    13
 #define VAR_TYPE_TYPEALIAS  14
+#define VAR_TYPE_ENUM	    15
+#define VAR_TYPE_ENUMVALUE  16
+#define VAR_TYPE_TUPLE	    17
 
 #define DICT_MAXNEST 100	// maximum nesting of lists and dicts
 
@@ -2215,6 +2316,15 @@ typedef int sock_T;
 #   define WM_OLE (WM_APP+0)
 #  endif
 # endif
+
+typedef enum {
+    CLIPMETHOD_FAIL,
+    CLIPMETHOD_NONE,
+    CLIPMETHOD_WAYLAND,
+    CLIPMETHOD_X11,
+    CLIPMETHOD_GUI,
+    CLIPMETHOD_OTHER,
+} clipmethod_T;
 
 // Info about selected text
 typedef struct
@@ -2258,6 +2368,8 @@ typedef struct
 # ifdef FEAT_GUI_HAIKU
     // No clipboard at the moment. TODO?
 # endif
+    // If we've already warned about missing/unavailable clipboard
+    bool did_warn;
 } Clipboard_T;
 #else
 typedef int Clipboard_T;	// This is required for the prototypes.
@@ -2269,6 +2381,8 @@ typedef struct _stat64 stat_T;
 #else
 typedef struct stat stat_T;
 #endif
+
+typedef struct soundcb_S soundcb_T;
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__MINGW32__)
 # define ATTRIBUTE_FORMAT_PRINTF(fmt_idx, arg_idx) \
@@ -2349,6 +2463,17 @@ typedef enum {
 } funcerror_T;
 
 /*
+ * Array indexes used for cp_text[].
+ */
+typedef enum {
+    CPT_ABBR,		// "abbr"
+    CPT_KIND,		// "kind"
+    CPT_MENU,		// "menu"
+    CPT_INFO,		// "info"
+    CPT_COUNT,		// Number of entries
+} cpitem_T;
+
+/*
  * Type for the callback function that is invoked after an option value is
  * changed to validate and apply the new value.
  *
@@ -2382,6 +2507,7 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 #define ASSIGN_FOR_LOOP 0x40 // assigning to loop variable
 #define ASSIGN_INIT	0x80 // not assigning a value, just a declaration
 #define ASSIGN_UPDATE_BLOCK_ID 0x100  // update sav_block_id
+#define ASSIGN_COMPOUND_OP 0x200  // compound operator e.g. "+="
 
 #include "ex_cmds.h"	    // Ex command defines
 #include "spell.h"	    // spell checking stuff
@@ -2422,7 +2548,7 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 
 // This must come after including proto.h.
 // For VMS this is defined in macros.h.
-#if !defined(MSWIN) && !defined(VMS)
+#if !defined(MSWIN) && !defined(VMS) && !defined(PROTO)
 # define mch_open(n, m, p)	open((n), (m), (p))
 # define mch_fopen(n, p)	fopen((n), (p))
 #endif
@@ -2679,7 +2805,7 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 // values for vim_handle_signal() that are not a signal
 #define SIGNAL_BLOCK	(-1)
 #define SIGNAL_UNBLOCK  (-2)
-#if !defined(UNIX) && !defined(VMS)
+#if !defined(UNIX) && !defined(VMS) && !defined(PROTO)
 # define vim_handle_signal(x) 0
 #endif
 
@@ -2812,7 +2938,6 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 // flags for find_name_end()
 #define FNE_INCL_BR	1	// include [] in name
 #define FNE_CHECK_START	2	// check name starts with valid character
-#define FNE_ALLOW_CURLY	4	// always allow curly braces name
 
 // BSD is supposed to cover FreeBSD and similar systems.
 #if (defined(SUN_SYSTEM) || defined(BSD) || defined(__FreeBSD_kernel__)) \
@@ -2940,8 +3065,9 @@ long elapsed(DWORD start_tick);
 #define EVAL_VAR_IMPORT		4   // may return special variable for import
 #define EVAL_VAR_NO_FUNC	8   // do not look for a function
 
-// Maximum number of characters that can be fuzzy matched
-#define MAX_FUZZY_MATCHES	256
+// Fuzzy matching
+#define FUZZY_MATCH_MAX_LEN	1024    // max characters that can be matched
+#define FUZZY_SCORE_NONE	INT_MIN // invalid fuzzy score
 
 // flags for equal_type()
 #define ETYPE_ARG_UNKNOWN 1

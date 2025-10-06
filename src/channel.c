@@ -1493,7 +1493,7 @@ channel_set_req_callback(
 write_buf_line(buf_T *buf, linenr_T lnum, channel_T *channel)
 {
     char_u  *line = ml_get_buf(buf, lnum, FALSE);
-    int	    len = (int)STRLEN(line);
+    int	    len = ml_get_buf_len(buf, lnum);
     char_u  *p;
     int	    i;
 
@@ -2277,7 +2277,7 @@ channel_parse_json(channel_T *channel, ch_part_T part)
 	{
 	    int timeout;
 #ifdef MSWIN
-	    timeout = GetTickCount() > chanpart->ch_deadline;
+	    timeout = (int)(GetTickCount() - chanpart->ch_deadline) > 0;
 #else
 	    {
 		struct timeval now_tv;
@@ -2714,7 +2714,11 @@ invoke_one_time_callback(
 }
 
     static void
-append_to_buffer(buf_T *buffer, char_u *msg, channel_T *channel, ch_part_T part)
+append_to_buffer(
+    buf_T	*buffer,
+    char_u	*msg,
+    channel_T	*channel,
+    ch_part_T	part)
 {
     aco_save_T	aco;
     linenr_T    lnum = buffer->b_ml.ml_line_count;
@@ -5004,7 +5008,7 @@ set_ref_in_channel(int copyID)
 	{
 	    tv.v_type = VAR_CHANNEL;
 	    tv.vval.v_channel = channel;
-	    abort = abort || set_ref_in_item(&tv, copyID, NULL, NULL);
+	    abort = abort || set_ref_in_item(&tv, copyID, NULL, NULL, NULL);
 	}
     return abort;
 }

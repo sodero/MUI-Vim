@@ -383,7 +383,7 @@ static void (*dll_scheme_set_config_path)(Scheme_Object *p);
 # define scheme_null dll_scheme_null
 # define scheme_true dll_scheme_true
 
-// pointers are GetProceAddress'ed as pointers to pointer
+// pointers are GetProcAddress'ed as pointers to pointer
 #if !defined(USE_THREAD_LOCAL) && !defined(LINK_EXTENSIONS_BY_TABLE)
 #  define scheme_current_thread (*dll_scheme_current_thread_ptr)
 # endif
@@ -841,7 +841,11 @@ static void remove_timer(void);
 // timers are presented in GUI only
 # if defined(FEAT_GUI_MSWIN)
     static void CALLBACK
-timer_proc(HWND hwnd UNUSED, UINT uMsg UNUSED, UINT_PTR idEvent UNUSED, DWORD dwTime UNUSED)
+timer_proc(
+    HWND	hwnd UNUSED,
+    UINT	uMsg UNUSED,
+    UINT_PTR	idEvent UNUSED,
+    DWORD	dwTime UNUSED)
 # elif defined(FEAT_GUI_GTK)
     static gboolean
 timer_proc(gpointer data UNUSED)
@@ -924,7 +928,7 @@ mzscheme_end(void)
 #endif
 }
 
-#if HAVE_TLS_SPACE
+#if HAVE_TLS_SPACE && !defined(VIMDLL)
 # if defined(_MSC_VER)
 static __declspec(thread) void *tls_space;
 extern intptr_t _tls_index;
@@ -960,7 +964,24 @@ mzscheme_main(void)
     }
 #endif
 #ifdef HAVE_TLS_SPACE
+# ifdef VIMDLL
+    void **ptls_space;
+    intptr_t tls_index;
+    void (*pget_tls_info)(void ***ptls_space, intptr_t *ptls_index);
+
+    // Get the address of get_tls_info() from (g)vim.exe.
+    pget_tls_info = (void *)GetProcAddress(
+				GetModuleHandle(NULL), "get_tls_info");
+    if (pget_tls_info == NULL)
+    {
+	disabled = TRUE;
+	return vim_main2();
+    }
+    pget_tls_info(&ptls_space, &tls_index);
+    scheme_register_tls_space(ptls_space, tls_index);
+# else
     scheme_register_tls_space(&tls_space, _tls_index);
+# endif
 #endif
 #ifdef TRAMPOLINED_MZVIM_STARTUP
     return scheme_main_setup(TRUE, mzscheme_env_main, argc, &argv);
@@ -1289,7 +1310,10 @@ mzscheme_init(void)
  * Evaluate command with exception handling
  */
     static int
-eval_with_exn_handling(void *data, Scheme_Closed_Prim *what, Scheme_Object **ret)
+eval_with_exn_handling(
+    void		*data,
+    Scheme_Closed_Prim	*what,
+    Scheme_Object	**ret)
 {
     Scheme_Object   *value = NULL;
     Scheme_Object   *exn = NULL;
@@ -1681,7 +1705,10 @@ vim_eval(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
  * (range-start)
  */
     static Scheme_Object *
-get_range_start(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
+get_range_start(
+    void		*data UNUSED,
+    int			argc UNUSED,
+    Scheme_Object	**argv UNUSED)
 {
     return scheme_make_integer(range_start);
 }
@@ -1866,7 +1893,10 @@ get_curr_win(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
  * (win-count)
  */
     static Scheme_Object *
-get_window_count(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
+get_window_count(
+    void		*data UNUSED,
+    int			argc UNUSED,
+    Scheme_Object	**argv UNUSED)
 {
     int	    n = 0;
     win_T   *w;
@@ -2258,7 +2288,10 @@ get_buffer_num(void *data, int argc, Scheme_Object **argv)
  * (buff-count)
  */
     static Scheme_Object *
-get_buffer_count(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
+get_buffer_count(
+    void		*data UNUSED,
+    int			argc UNUSED,
+    Scheme_Object	**argv UNUSED)
 {
     buf_T   *b;
     int	    n = 0;
@@ -2283,7 +2316,10 @@ get_buffer_name(void *data, int argc, Scheme_Object **argv)
  * (curr-buff)
  */
     static Scheme_Object *
-get_curr_buffer(void *data UNUSED, int argc UNUSED, Scheme_Object **argv UNUSED)
+get_curr_buffer(
+    void		*data UNUSED,
+    int			argc UNUSED,
+    Scheme_Object	**argv UNUSED)
 {
     return (Scheme_Object *)get_vim_curr_buffer();
 }
@@ -2980,7 +3016,10 @@ vim_to_mzscheme(typval_T *vim_value)
 }
 
     static Scheme_Object *
-vim_to_mzscheme_impl(typval_T *vim_value, int depth, Scheme_Hash_Table *visited)
+vim_to_mzscheme_impl(
+    typval_T		*vim_value,
+    int			depth,
+    Scheme_Hash_Table	*visited)
 {
     Scheme_Object   *result = NULL;
     int		    new_value = TRUE;
