@@ -17,21 +17,35 @@ jobs:
           - name: AmigaOS4
             image: rolfkopman/os4env
             mount: /opt/code
+            os: AmigaOS
           - name: AROS i386 ABI V0
             image: rolfkopman/arosi386v0env
             mount: /opt/code
+            os: AROS
           - name: AROS x86_64 ABI V1
             image: rolfkopman/arosx64v1env
             mount: /opt/code
+            os: AROS
           - name: MorphOS
             image: rolfkopman/mosenv
             mount: /gg/code
+            os: MorphOS
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
-    - name: Compile
+    - name: Compile Installer
+      run: |
+        git clone --depth=1 https://github.com/sodero/InstallerLG.git
+        docker run --rm \
+          -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
+          -w ${{ matrix.platform.mount }} \
+          ${{ matrix.platform.image }} make -C InstallerLG/build
+          cp InstallerLG/build/Installer dist/extras/${{ matrix.platform.os }}
+          find dist
+
+    - name: Compile MUI-Vim
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
