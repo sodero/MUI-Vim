@@ -1,33 +1,37 @@
-name: SourceForge mirror
+name: Codeberg mirror
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
 
 jobs:
   mirror:
-    environment: sfenv
+    environment: cbenv
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Setup SSH
         env:
-          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          CB_SSH_KEY: ${{ secrets.CB_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SF_SSH_KEY" > ~/.ssh/id_rsa
+          echo "$CB_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan git.code.sf.net >> ~/.ssh/known_hosts
           cat > ~/.ssh/config << 'EOF'
-          Host git.code.sf.net
+          Host codeberg.org
+            HostName codeberg.org
             IdentityFile ~/.ssh/id_rsa
             IdentitiesOnly yes
             PubkeyAuthentication yes
             PasswordAuthentication no
             PreferredAuthentications publickey
+            StrictHostKeyChecking no
           EOF
           chmod 600 ~/.ssh/config
 
@@ -36,8 +40,8 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Push to SourceForge
+      - name: Mirror to Codeberg
         run: |
-          git remote add sf ssh://${{ secrets.SF_USERNAME }}@git.code.sf.net/p/${{ secrets.SF_PROJECT }}/code || true
-          git push sf master
-          git push sf --tags
+          git remote add codeberg git@codeberg.org:${{ secrets.CB_USERNAME }}/${{ secrets.CB_REPO }}.git || true
+          git push codeberg master
+          git push codeberg --tags
