@@ -13,24 +13,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup SSH with debugging
+      - name: Setup SSH
         env:
           SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$SF_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Verify key was written correctly
-          echo "Key file size:"
-          wc -c ~/.ssh/id_rsa
-          echo "Key starts with:"
-          head -n 1 ~/.ssh/id_rsa
-          
-          # Add known hosts
           ssh-keyscan git.code.sf.net >> ~/.ssh/known_hosts
-          
-          # Create SSH config
           cat > ~/.ssh/config << 'EOF'
           Host git.code.sf.net
             IdentityFile ~/.ssh/id_rsa
@@ -40,13 +30,7 @@ jobs:
             PreferredAuthentications publickey
           EOF
           chmod 600 ~/.ssh/config
-          
-          echo "SSH config created:"
           cat ~/.ssh/config
-
-      - name: Test SSH connection
-        run: |
-          ssh -v ${{ secrets.SF_USERNAME }}@git.code.sf.net 2>&1 | head -50 || true
 
       - name: Mirror to SourceForge
         run: |
