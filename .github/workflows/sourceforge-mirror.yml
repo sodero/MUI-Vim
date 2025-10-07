@@ -21,10 +21,15 @@ jobs:
           echo "$SF_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan git.code.sf.net >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config << EOF
+          Host git.code.sf.net
+            IdentityFile ~/.ssh/id_rsa
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Mirror repository
-        env:
-          GIT_SSH_COMMAND: "ssh -i ~/.ssh/id_rsa -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
         run: |
           git remote add sf ssh://${{ secrets.SF_USERNAME }}@git.code.sf.net/p/${{ secrets.SF_PROJECT }}/code
           git push sf master
