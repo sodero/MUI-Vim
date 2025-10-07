@@ -1,0 +1,29 @@
+name: SourceForge mirror
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  mirror:
+    environment: sfenv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SF_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan git.code.sf.net >> ~/.ssh/known_hosts
+
+      - name: Mirror repository
+        run: |
+          git remote add sf ssh://${{ secrets.SF_USERNAME }}@git.code.sf.net/p/${{ secrets.SF_PROJECT }}/code
+          git push sf master
+          git push sf --tags
