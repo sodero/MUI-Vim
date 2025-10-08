@@ -644,22 +644,35 @@ mch_input_isatty(void)
 }
 
 /*
- * mch_deduplicate_root(): Remove root slash from amiga root since this
- *                         is redundant at best. It will cause problems
- *                         when used in combination with non root assigns.
+ * In-place conversion of Unix style path to Amiga path
  */
-void mch_deduplicate_root(char_u *fname)
+static void mch_normalize_path(char_u *path)
 {
-    int i = 1, j = STRLEN(fname) - 1;
+    if (!path)
+        return;
 
-    for(i = 1; i < j - 1; ++i)
+    for (size_t i = 0; path[i];)
     {
-        if (fname[i] == ':' && fname[i + 1] == '/')
+        /* vim:/{1,}file -> vim:file */
+        if(path[i] == ':' && path[i + 1] == '/')
         {
-            while(++i < j) fname[i] = fname[i + 1];
-            fname[i] = 0;
-            break;
+            for(size_t j = i + 1; path[j]; ++j)
+            {
+                path[j] = path[j + 1];
+            }
+            continue;
         }
+        /* ./file -> file */
+        /* vim:dir/../file -> vim:dir//file */
+        if(path[i] == '.' && (path[i + 1] == '/' ||
+           path[i + 1] == '.' && path[i + 2] == '/'))
+        {
+            for(size_t j = i; path[j + 1]; ++j)
+            {
+                path[j] = path[j + 2];
+            }
+        }
+        ++i;
     }
 }
 
@@ -680,7 +693,7 @@ get_fib(char_u *fname)
 	return NULL;
     }
 
-    mch_deduplicate_root(fname);
+    mch_normalize_path(fname);
 
     BPTR lock = Lock(fname, ACCESS_READ);
 
@@ -1697,6 +1710,8 @@ mch_expandpath(
 	{TAG_DONE, 0L}
     };
 #endif
+
+    mch_normalize_path(pat);
 
     start_len = gap->ga_len;
 

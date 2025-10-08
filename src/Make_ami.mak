@@ -68,7 +68,7 @@ endif
 
 # OS specific compiler flags
 ifeq ($(UNM),AmigaOS)
-LDFLAGS = -lauto
+LDFLAGS = -lauto -lunix
 CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__
 else
 ifeq ($(UNM),AROS)
