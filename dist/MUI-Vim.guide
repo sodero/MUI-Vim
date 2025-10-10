@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 9.1.1840 (25.10.08) english
+@$VER: MUI-Vim.guide 9.1.1846 (25.10.10) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,6 +67,10 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2025-10-10@{UB}
+- Update to VIM 9.1.1846.
+- Fix runtime path
+
 @{B}2025-10-08@{UB}
 - Update to VIM 9.1.1840.
 - Fix broken path translation

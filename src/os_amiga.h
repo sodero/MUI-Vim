@@ -134,20 +134,20 @@ typedef long off_t;
 #endif
 
 #ifndef USR_EXRC_FILE
-# define USR_EXRC_FILE	"VIM:.exrc"
+# define USR_EXRC_FILE	"HOME:.exrc"
 #endif
 #ifndef USR_EXRC_FILE2
-# define USR_EXRC_FILE2	"HOME:.exrc"
+# define USR_EXRC_FILE2	"VIM:.exrc"
 #endif
 
 #ifndef USR_VIMRC_FILE
-# define USR_VIMRC_FILE	"VIM:.vimrc"
+# define USR_VIMRC_FILE	"HOME:.vimrc"
 #endif
 #ifndef USR_VIMRC_FILE2
-# define USR_VIMRC_FILE2 "HOME:.vimrc"
+# define USR_VIMRC_FILE2 "VIM:.vimrc"
 #endif
 #ifndef USR_VIMRC_FILE3
-# define USR_VIMRC_FILE3 "HOME:vimfiles:vimrc"
+# define USR_VIMRC_FILE3 "HOME:vimfiles/vimrc"
 #endif
 #ifndef USR_VIMRC_FILE4
 # define USR_VIMRC_FILE4 "S:.vimrc"
@@ -160,13 +160,13 @@ typedef long off_t;
 #endif
 
 #ifndef USR_GVIMRC_FILE
-# define USR_GVIMRC_FILE "VIM:.gvimrc"
+# define USR_GVIMRC_FILE "HOME:.gvimrc"
 #endif
 #ifndef USR_GVIMRC_FILE2
-# define USR_GVIMRC_FILE2 "HOME:.gvimrc"
+# define USR_GVIMRC_FILE2 "VIM:.gvimrc"
 #endif
 #ifndef USR_GVIMRC_FILE3
-# define USR_GVIMRC_FILE3 "HOME:vimfiles:gvimrc"
+# define USR_GVIMRC_FILE3 "HOME:vimfiles/gvimrc"
 #endif
 #ifndef USR_GVIMRC_FILE4
 # define USR_GVIMRC_FILE4 "S:.gvimrc"
