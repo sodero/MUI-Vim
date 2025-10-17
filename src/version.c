@@ -156,6 +156,11 @@ static char *(features[]) =
 #else
 	"-clipboard",
 #endif
+#ifdef FEAT_CLIPBOARD_PROVIDER
+	"+clipboard_provider",
+#else
+	"-clipboard_provider",
+#endif
 	"+cmdline_compl",
 	"+cmdline_hist",
 	"+cmdline_info",
@@ -729,6 +734,42 @@ static char *(features[]) =
 
 static int included_patches[] =
 {   /* Add new patch number below this line */
+/**/
+    1864,
+/**/
+    1863,
+/**/
+    1862,
+/**/
+    1861,
+/**/
+    1860,
+/**/
+    1859,
+/**/
+    1858,
+/**/
+    1857,
+/**/
+    1856,
+/**/
+    1855,
+/**/
+    1854,
+/**/
+    1853,
+/**/
+    1852,
+/**/
+    1851,
+/**/
+    1850,
+/**/
+    1849,
+/**/
+    1848,
+/**/
+    1847,
 /**/
     1846,
 /**/

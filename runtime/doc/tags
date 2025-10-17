@@ -1411,6 +1411,9 @@ $quote	eval.txt	/*$quote*
 +cindent	various.txt	/*+cindent*
 +clientserver	various.txt	/*+clientserver*
 +clipboard	various.txt	/*+clipboard*
++clipboard_plus_avail	various.txt	/*+clipboard_plus_avail*
++clipboard_provider	various.txt	/*+clipboard_provider*
++clipboard_star_avail	various.txt	/*+clipboard_star_avail*
 +clipboard_working	various.txt	/*+clipboard_working*
 +cmd	editing.txt	/*+cmd*
 +cmdline_compl	various.txt	/*+cmdline_compl*
@@ -2425,6 +2428,7 @@ $quote	eval.txt	/*$quote*
 :cex	quickfix.txt	/*:cex*
 :cexpr	quickfix.txt	/*:cexpr*
 :cf	quickfix.txt	/*:cf*
+:cfd	quickfix.txt	/*:cfd*
 :cfdo	quickfix.txt	/*:cfdo*
 :cfi	quickfix.txt	/*:cfi*
 :cfile	quickfix.txt	/*:cfile*
@@ -2847,6 +2851,7 @@ $quote	eval.txt	/*$quote*
 :lclose	quickfix.txt	/*:lclose*
 :lcs	if_cscop.txt	/*:lcs*
 :lcscope	if_cscop.txt	/*:lcscope*
+:ld	quickfix.txt	/*:ld*
 :ldo	quickfix.txt	/*:ldo*
 :le	change.txt	/*:le*
 :left	change.txt	/*:left*
@@ -2874,6 +2879,7 @@ $quote	eval.txt	/*$quote*
 :lex	quickfix.txt	/*:lex*
 :lexpr	quickfix.txt	/*:lexpr*
 :lf	quickfix.txt	/*:lf*
+:lfd	quickfix.txt	/*:lfd*
 :lfdo	quickfix.txt	/*:lfdo*
 :lfi	quickfix.txt	/*:lfi*
 :lfile	quickfix.txt	/*:lfile*
@@ -3227,6 +3233,7 @@ $quote	eval.txt	/*$quote*
 :rubydo	if_ruby.txt	/*:rubydo*
 :rubyf	if_ruby.txt	/*:rubyf*
 :rubyfile	if_ruby.txt	/*:rubyfile*
+:rund	undo.txt	/*:rund*
 :rundo	undo.txt	/*:rundo*
 :runtime	repeat.txt	/*:runtime*
 :rv	starting.txt	/*:rv*
@@ -3720,6 +3727,7 @@ $quote	eval.txt	/*$quote*
 :write_a	editing.txt	/*:write_a*
 :write_c	editing.txt	/*:write_c*
 :write_f	editing.txt	/*:write_f*
+:wu	undo.txt	/*:wu*
 :wundo	undo.txt	/*:wundo*
 :wv	starting.txt	/*:wv*
 :wviminfo	starting.txt	/*:wviminfo*
@@ -6686,6 +6694,12 @@ clipboard-autoselectml	options.txt	/*clipboard-autoselectml*
 clipboard-autoselectplus	options.txt	/*clipboard-autoselectplus*
 clipboard-exclude	options.txt	/*clipboard-exclude*
 clipboard-html	options.txt	/*clipboard-html*
+clipboard-provider-available	eval.txt	/*clipboard-provider-available*
+clipboard-provider-copy	eval.txt	/*clipboard-provider-copy*
+clipboard-provider-example	eval.txt	/*clipboard-provider-example*
+clipboard-provider-paste	eval.txt	/*clipboard-provider-paste*
+clipboard-provider-textlock	eval.txt	/*clipboard-provider-textlock*
+clipboard-providers	eval.txt	/*clipboard-providers*
 clipboard-unnamed	options.txt	/*clipboard-unnamed*
 clipboard-unnamedplus	options.txt	/*clipboard-unnamedplus*
 clojure-indent	indent.txt	/*clojure-indent*
@@ -7664,6 +7678,7 @@ ft-vb-syntax	syntax.txt	/*ft-vb-syntax*
 ft-verilog-indent	indent.txt	/*ft-verilog-indent*
 ft-vhdl-indent	indent.txt	/*ft-vhdl-indent*
 ft-vim-indent	indent.txt	/*ft-vim-indent*
+ft-vim-omni	insert.txt	/*ft-vim-omni*
 ft-vim-plugin	filetype.txt	/*ft-vim-plugin*
 ft-vim-syntax	syntax.txt	/*ft-vim-syntax*
 ft-xf86conf-syntax	syntax.txt	/*ft-xf86conf-syntax*
@@ -11249,6 +11264,7 @@ v:char	eval.txt	/*v:char*
 v:charconvert_from	eval.txt	/*v:charconvert_from*
 v:charconvert_to	eval.txt	/*v:charconvert_to*
 v:clipmethod	eval.txt	/*v:clipmethod*
+v:clipproviders	eval.txt	/*v:clipproviders*
 v:cmdarg	eval.txt	/*v:cmdarg*
 v:cmdbang	eval.txt	/*v:cmdbang*
 v:collate	eval.txt	/*v:collate*
