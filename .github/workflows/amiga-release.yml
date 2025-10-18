@@ -75,7 +75,6 @@ jobs:
         set ssl:verify-certificate no;
         open -u $FTP_USER,$FTP_PASS $FTP_HOST;
         cd /new;
-        mput ./dist/tmp/*.lha;
-        mput ./dist/tmp/*.readme;
+        mput ./dist/tmp/*;
         bye
         "
