@@ -2489,7 +2489,7 @@ ins_compl_has_autocomplete(void)
 }
 
 /*
- * Cacluate fuzzy score and sort completion matches unless sorting is disabled.
+ * Calculate fuzzy score and sort completion matches unless sorting is disabled.
  */
     static void
 ins_compl_fuzzy_sort(void)
@@ -7115,7 +7115,10 @@ ins_compl_start(void)
     can_si = FALSE;
     can_si_back = FALSE;
     if (stop_arrow() == FAIL)
+    {
+	did_ai = save_did_ai;
 	return FAIL;
+    }
 
     line = ml_get(curwin->w_cursor.lnum);
     curs_col = curwin->w_cursor.col;
@@ -7205,6 +7208,7 @@ ins_compl_start(void)
     {
 	VIM_CLEAR_STRING(compl_pattern);
 	VIM_CLEAR_STRING(compl_orig_text);
+	did_ai = save_did_ai;
 	return FAIL;
     }
 
@@ -7220,6 +7224,7 @@ ins_compl_start(void)
 	out_flush();
     }
 
+    did_ai = save_did_ai;
     return OK;
 }
 

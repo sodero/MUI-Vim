@@ -172,8 +172,10 @@ typedef long off_t;
 # define USR_GVIMRC_FILE4 "S:.gvimrc"
 #endif
 
-#ifndef VIMINFO_FILE
-# define VIMINFO_FILE	"VIM:.viminfo"
+#ifdef FEAT_VIMINFO
+# ifndef VIMINFO_FILE
+#  define VIMINFO_FILE	"VIM:.viminfo"
+# endif
 #endif
 
 #ifndef EXRC_FILE
