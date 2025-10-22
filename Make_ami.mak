@@ -20,7 +20,7 @@ SRC:=src
 DST:=dist
 VER=$(shell cat $(SRC)/.ver)
 PAT=$(shell cat $(SRC)/.pat)
-BLD=$(shell date +%d.%m.%Y || echo Unknown)
+BLD:=$(shell date +%Y-%m-%d || echo 1985-07-23)
 
 #------------------------------------------------------------------------------------------
 # Build Vim - Both MUI and Huge.
