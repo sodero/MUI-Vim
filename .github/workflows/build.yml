@@ -51,10 +51,10 @@ jobs:
       if: matrix.build-type == 'mui'
       run: |
         docker run --rm \
-          -v ${{ github.workspace }}/src:${{ matrix.platform.mount }} \
+          -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
           -w ${{ matrix.platform.mount }} \
           -e BUILD=${{ matrix.build-type }} \
-          ${{ matrix.platform.image }} make -C .. dist
+          ${{ matrix.platform.image }} make dist
 
     - name: Save artifact
       if: matrix.build-type == 'mui'
