@@ -1,0 +1,85 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.platform.name }} - ${{ matrix.build-type }}
+    runs-on: ubuntu-latest
+    environment: ftp
+
+    strategy:
+      matrix:
+        platform:
+          - name: AmigaOS4
+            short: ppc-amigaos
+            image: rolfkopman/os4env
+            mount: /opt/code
+          - name: AROS i386 ABI V0
+            short: i386-aros
+            image: rolfkopman/arosi386v0env
+            mount: /opt/code
+          - name: AROS x86_64 ABI V1
+            short: x86_64-aros
+            image: rolfkopman/arosx64v1env
+            mount: /opt/code
+          - name: MorphOS
+            short: ppc-morphos
+            image: rolfkopman/mosenv
+            mount: /gg/code
+        build-type: [tiny, small, normal, huge, mui]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Compile
+      if: matrix.build-type != 'mui'
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:${{ matrix.platform.mount }} \
+          -w ${{ matrix.platform.mount }} \
+          -e BUILD=${{ matrix.build-type }} \
+          ${{ matrix.platform.image }} make -f Make_ami.mak
+
+    - name: Compile and create archive
+      if: matrix.build-type == 'mui'
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}/src:${{ matrix.platform.mount }} \
+          -w ${{ matrix.platform.mount }} \
+          -e BUILD=${{ matrix.build-type }} \
+          ${{ matrix.platform.image }} make -C .. dist
+
+    - name: Save artifact
+      if: matrix.build-type == 'mui'
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-build-${{ github.sha }}-${{ matrix.platform.short }}
+        path: |
+          dist/tmp/Vim_*.lha
+        retention-days: 30
+        overwrite: true
+
+    - name: Install LFTP
+      if: matrix.build-type == 'mui'
+      run: sudo apt-get install -y lftp
+
+    - name: Upload to FTP
+      if: matrix.build-type == 'mui'
+      env:
+        FTP_HOST: ${{ secrets.FTP_SERVER }}
+        FTP_USER: ${{ secrets.FTP_USERNAME }}
+        FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+      run: |
+        lftp -c "
+        set ssl:verify-certificate no;
+        open -u $FTP_USER,$FTP_PASS $FTP_HOST;
+        mput ./dist/tmp/Vim_*.*;
+        bye
+        "
