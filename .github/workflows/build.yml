@@ -63,6 +63,8 @@ jobs:
         name: test-build-${{ github.sha }}-${{ matrix.platform.short }}
         path: |
           dist/tmp/Vim_*.lha
+        path: |
+          dist/tmp/Vim_*.lha
         retention-days: 30
         overwrite: true
 
