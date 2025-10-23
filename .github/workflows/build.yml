@@ -38,7 +38,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v5
 
-    - name: Compile
+    - name: Compile non-MUI build
       if: matrix.build-type != 'mui'
       run: |
         docker run --rm \
@@ -47,7 +47,18 @@ jobs:
           -e BUILD=${{ matrix.build-type }} \
           ${{ matrix.platform.image }} make -f Make_ami.mak
 
-    - name: Compile and create archive
+    - name: Compile InstallerLG
+      if: matrix.build-type == 'mui'
+      run: |
+        git clone --depth=1 https://github.com/sodero/InstallerLG.git
+        docker run --rm \
+          -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
+          -w ${{ matrix.platform.mount }} \
+          ${{ matrix.platform.image }} make -C InstallerLG/build
+          cp InstallerLG/build/Installer dist/extras/${{ matrix.platform.os }}
+          find dist
+
+    - name: Compile MUI build and create archive
       if: matrix.build-type == 'mui'
       run: |
         docker run --rm \
@@ -62,26 +73,6 @@ jobs:
       with:
         name: test-build-${{ github.sha }}-${{ matrix.platform.short }}
         path: |
-          dist/tmp/Vim_*.lha
-        path: |
-          dist/tmp/Vim_*.lha
+          dist/tmp/*
         retention-days: 30
         overwrite: true
-
-    - name: Install LFTP
-      if: matrix.build-type == 'mui'
-      run: sudo apt-get install -y lftp
-
-    - name: Upload to FTP
-      if: matrix.build-type == 'mui'
-      env:
-        FTP_HOST: ${{ secrets.FTP_SERVER }}
-        FTP_USER: ${{ secrets.FTP_USERNAME }}
-        FTP_PASS: ${{ secrets.FTP_PASSWORD }}
-      run: |
-        lftp -c "
-        set ssl:verify-certificate no;
-        open -u $FTP_USER,$FTP_PASS $FTP_HOST;
-        mput ./dist/tmp/Vim_*.*;
-        bye
-        "
