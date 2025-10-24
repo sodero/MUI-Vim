@@ -1360,7 +1360,6 @@ static tcap_entry_T builtin_debug[] = {
     {(int)KS_NAME,	NULL}  // end marker
 };
 
-# if defined(AMIGA) || defined(ALL_BUILTIN_TCAPS)
 /*
  * MorphOS
  */
@@ -1457,7 +1456,6 @@ static tcap_entry_T builtin_morphos[] = {
 
     {(int)KS_NAME,	NULL}  // end marker
 };
-# endif
 
 /*
  * List of builtin terminals.
