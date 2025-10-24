@@ -67,6 +67,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2025-10-24@{UB}
+- Update to VIM 9.1.1869.
+
 @{B}2025-10-10@{UB}
 - Update to VIM 9.1.1846.
 - Fix runtime path
