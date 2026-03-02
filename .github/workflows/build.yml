@@ -69,7 +69,7 @@ jobs:
 
     - name: Save artifact
       if: matrix.build-type == 'mui'
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: Vim-${{ github.sha }}-${{ matrix.platform.short }}
         path: |
