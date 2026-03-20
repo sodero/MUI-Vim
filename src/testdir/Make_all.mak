@@ -50,6 +50,7 @@ TEST_VIM9 = \
 	test_vim9_func \
 	test_vim9_generics \
 	test_vim9_import \
+	test_vim9_interface \
 	test_vim9_python3 \
 	test_vim9_script \
 	test_vim9_typealias
@@ -66,6 +67,7 @@ TEST_VIM9_RES = \
 	test_vim9_func.res \
 	test_vim9_generics.res \
 	test_vim9_import.res \
+	test_vim9_interface.res \
 	test_vim9_python3.res \
 	test_vim9_script.res \
 	test_vim9_typealias.res
@@ -105,13 +107,11 @@ NEW_TESTS = \
 	test_cjk_linebreak \
 	test_clientserver \
 	test_clipmethod \
-	test_clipboard_provider \
 	test_close_count \
 	test_cmd_lists \
 	test_cmdline \
 	test_cmdmods \
 	test_cmdwin \
-	test_codestyle \
 	test_command_count \
 	test_comments \
 	test_comparators \
@@ -245,9 +245,12 @@ NEW_TESTS = \
 	test_perl \
 	test_plugin_comment \
 	test_plugin_glvs \
+	test_plugin_helpcurwin \
 	test_plugin_helptoc \
 	test_plugin_man \
 	test_plugin_matchparen \
+	test_plugin_netrw \
+	test_plugin_osc52 \
 	test_plugin_tar \
 	test_plugin_termdebug \
 	test_plugin_tohtml \
@@ -308,6 +311,7 @@ NEW_TESTS = \
 	test_startup_utf8 \
 	test_stat \
 	test_statusline \
+	test_statuslineopt \
 	test_substitute \
 	test_suspend \
 	test_swap \
@@ -396,13 +400,11 @@ NEW_TESTS_RES = \
 	test_cjk_linebreak.res \
 	test_clientserver.res \
 	test_clipmethod.res \
-	test_clipboard_provider.res \
 	test_close_count.res \
 	test_cmd_lists.res \
 	test_cmdline.res \
 	test_cmdmods.res \
 	test_cmdwin.res \
-	test_codestyle.res \
 	test_command_count.res \
 	test_comments.res \
 	test_comparators.res \
@@ -519,9 +521,12 @@ NEW_TESTS_RES = \
 	test_perl.res \
 	test_plugin_comment.res \
 	test_plugin_glvs.res \
+	test_plugin_helpcurwin.res \
 	test_plugin_helptoc.res \
 	test_plugin_man.res \
 	test_plugin_matchparen.res \
+	test_plugin_netrw.res \
+	test_plugin_osc52.res \
 	test_plugin_tar.res \
 	test_plugin_termdebug.res \
 	test_plugin_tohtml.res \
@@ -572,6 +577,7 @@ NEW_TESTS_RES = \
 	test_startup.res \
 	test_stat.res \
 	test_statusline.res \
+	test_statuslineopt.res \
 	test_substitute.res \
 	test_suspend.res \
 	test_swap.res \

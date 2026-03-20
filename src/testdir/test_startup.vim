@@ -71,6 +71,36 @@ func Test_after_comes_later()
   call delete('Xsequence')
 endfunc
 
+func Test_vim_did_init()
+  let before =<< trim [CODE]
+    set nocp viminfo+=nviminfo
+    set guioptions+=M
+    set loadplugins
+    set rtp=Xhere
+    set nomore
+  [CODE]
+
+  let after =<< trim [CODE]
+    redir! > Xtestout
+    echo g:var_vimrc
+    echo g:var_plugin
+    redir END
+    quit
+  [CODE]
+
+  call writefile(['let g:var_vimrc=v:vim_did_init'], 'Xvimrc', 'D')
+  call mkdir('Xhere/plugin', 'pR')
+  call writefile(['let g:var_plugin=v:vim_did_init'], 'Xhere/plugin/here.vim')
+
+  if RunVim(before, after, '-u Xvimrc')
+    let lines = readfile('Xtestout')
+    call assert_equal('0', lines[1])
+    call assert_equal('1', lines[2])
+  endif
+
+  call delete('Xtestout')
+endfunc
+
 func Test_pack_in_rtp_when_plugins_run()
   CheckFeature packages
   let before =<< trim [CODE]
@@ -122,6 +152,26 @@ func Test_help_arg()
       endif
     endfor
     call assert_equal(['Readonly mode', '--version'], found)
+  endif
+  call delete('Xtestout')
+endfunc
+
+func Test_version_arg()
+  " This does not work with a GUI-only binary, such as on MS-Windows.
+  CheckAnyOf Unix NotGui
+
+  if RunVim([], [], '--version >Xtestout')
+    let lines = readfile('Xtestout')
+    call assert_true(len(lines) > 10)
+    call assert_match('Vi IMproved', lines[0])
+
+    let idx = indexof(lines, 'v:val =~# "Features included.*:"')
+    call assert_true(idx >= 0)
+    call assert_true(idx + 1 < len(lines))
+    " Make sure the feature name is doubled on a line.
+    " For example, "+acl       +jumplist"
+    let feat_name = '[+-]+\?\w\+\%(()\)\?'
+    call assert_match($'^{feat_name}\s\+{feat_name}', lines[idx+1])
   endif
   call delete('Xtestout')
 endfunc
@@ -782,6 +832,9 @@ func Test_stdin_no_newline()
   CheckScreendump
   CheckUnix
   CheckExecutable bash
+  " For some reason bash doesn't exit at the end of the test on FreeBSD &
+  " OpenBSD.
+  CheckNotBSD
 
   let $PS1 = 'TEST_PROMPT> '
   let buf = RunVimInTerminal('', #{rows: 20, cmd: 'bash --noprofile --norc'})
@@ -829,7 +882,7 @@ func Test_stdin_no_newline()
   endif
 
   " Clean up temp file and exit shell
-  call term_sendkeys(buf, "rm -f temp.txt\<CR>")
+  call term_sendkeys(buf, "\<C-U>rm -f temp.txt\<CR>")
   call term_sendkeys(buf, "exit\<CR>")
   call TermWait(buf, 200)
 

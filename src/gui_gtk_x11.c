@@ -27,7 +27,7 @@
 
 #include "vim.h"
 #ifdef USE_GRESOURCE
-#include "auto/gui_gtk_gresources.h"
+# include "auto/gui_gtk_gresources.h"
 #endif
 
 #ifdef FEAT_GUI_GNOME
@@ -59,6 +59,9 @@ extern void bonobo_dock_item_set_behavior(BonoboDockItem *dock_item, BonoboDockI
 #if defined(FEAT_GUI_GTK)
 # if GTK_CHECK_VERSION(3,0,0)
 #  include <gdk/gdkkeysyms-compat.h>
+#  ifdef GDK_WINDOWING_WAYLAND
+#   include <gdk/gdkwayland.h>
+#  endif
 #  include <gtk/gtkx.h>
 # else
 #  include <gdk/gdkkeysyms.h>
@@ -145,7 +148,7 @@ static const GtkTargetEntry dnd_targets[] =
  * "Monospace" is a standard font alias that should be present
  * on all proper Pango/fontconfig installations.
  */
-# define DEFAULT_FONT	"Monospace 12"
+#define DEFAULT_FONT	"Monospace 12"
 
 #if defined(FEAT_GUI_GNOME) && defined(FEAT_SESSION)
 # define USE_GNOME_SESSION
@@ -706,12 +709,12 @@ gui_mch_prepare(int *argc, char **argv)
 gui_mch_free_all(void)
 {
     vim_free(gui_argv);
-#if defined(USE_GNOME_SESSION)
+# if defined(USE_GNOME_SESSION)
     vim_free(abs_restart_command);
-#endif
-#ifdef TRACK_RESIZE_HISTORY
+# endif
+# ifdef TRACK_RESIZE_HISTORY
     free_all_resize_hist();
-#endif
+# endif
 }
 #endif
 
@@ -2036,14 +2039,9 @@ scroll_event(GtkWidget *widget,
     int_u   vim_modifiers;
 #if GTK_CHECK_VERSION(3,4,0)
     static double  acc_x, acc_y;
-#if !GTK_CHECK_VERSION(3,22,0)
+# if !GTK_CHECK_VERSION(3,22,0)
     static guint32 last_smooth_event_time;
-#endif
-#define DT_X11     1
-#define DT_WAYLAND 2
-    static int display_type;
-    if (!display_type)
-	display_type = gui_mch_get_display() ? DT_X11 : DT_WAYLAND;
+# endif
 #endif
 
     if (gtk_socket_id != 0 && !gtk_widget_has_focus(widget))
@@ -2071,37 +2069,36 @@ scroll_event(GtkWidget *widget,
 		// this event tells us to stop, without an actual moving
 		return FALSE;
 	    }
-#if GTK_CHECK_VERSION(3,22,0)
+# if GTK_CHECK_VERSION(3,22,0)
 	    if (gdk_device_get_axes(event->device) & GDK_AXIS_FLAG_WHEEL)
 		// this is from a wheel (as oppose to a touchpad / trackpoint)
-#else
+# else
 	    if (event->time - last_smooth_event_time > 50)
 		// reset our accumulations after 50ms of silence
-#endif
+# endif
 		acc_x = acc_y = 0;
 	    acc_x += event->delta_x;
 	    acc_y += event->delta_y;
-#if !GTK_CHECK_VERSION(3,22,0)
+# if !GTK_CHECK_VERSION(3,22,0)
 	    last_smooth_event_time = event->time;
-#endif
+# endif
 	    break;
 #endif
 	default: // This shouldn't happen
 	    return FALSE;
     }
 
-# ifdef FEAT_XIM
+#ifdef FEAT_XIM
     // cancel any preediting
     if (im_is_preediting())
 	xim_reset();
-# endif
+#endif
 
     vim_modifiers = modifiers_gdk2mouse(event->state);
 
 #if GTK_CHECK_VERSION(3,4,0)
-    // on x11, despite not requested, when we copy into primary clipboard,
-    // we'll get smooth events. Unsmooth ones will also come along.
-    if (event->direction == GDK_SCROLL_SMOOTH && display_type == DT_WAYLAND)
+# ifdef GDK_WINDOWING_WAYLAND
+    if (event->direction == GDK_SCROLL_SMOOTH && gui.is_wayland)
     {
 	while (acc_x >= 1.0)
 	{ // right
@@ -2128,12 +2125,14 @@ scroll_event(GtkWidget *widget,
 		    FALSE, vim_modifiers);
 	}
     }
-    else if (event->direction == GDK_SCROLL_SMOOTH && display_type == DT_X11)
+    else
+# endif
+    // on x11, despite not requested, when we copy into primary clipboard,
+    // we'll get smooth events. Unsmooth ones will also come along.
+    if (event->direction == GDK_SCROLL_SMOOTH && X_DISPLAY)
 	// for X11 we deal with unsmooth events, and so ignore the smooth ones
 	;
     else
-#undef DT_X11
-#undef DT_WAYLAND
 #endif
 	gui_send_mouse_event(button, (int)event->x, (int)event->y,
 		FALSE, vim_modifiers);
@@ -2721,15 +2720,27 @@ gui_gtk_uninit_socket_server(void)
 
 #endif
 
+    static GdkPixbuf *
+pixbuf_new_from_png_data(const unsigned char *data, unsigned int len)
+{
+    GInputStream *stream;
+    GdkPixbuf    *pixbuf;
+
+    stream = g_memory_input_stream_new_from_data(data, len, NULL);
+    pixbuf = gdk_pixbuf_new_from_stream(stream, NULL, NULL);
+    g_object_unref(stream);
+    return pixbuf;
+}
+
 /*
  * Setup the window icon & xcmdsrv comm after the main window has been realized.
  */
     static void
 mainwin_realize(GtkWidget *widget UNUSED, gpointer data UNUSED)
 {
-#include "../runtime/vim16x16.xpm"
-#include "../runtime/vim32x32.xpm"
-#include "../runtime/vim48x48.xpm"
+#include "../runtime/vim16x16_png.h"
+#include "../runtime/vim32x32_png.h"
+#include "../runtime/vim48x48_png.h"
 
     GdkWindow * const mainwin_win = gtk_widget_get_window(gui.mainwin);
 
@@ -2750,9 +2761,7 @@ mainwin_realize(GtkWidget *widget UNUSED, gpointer data UNUSED)
 	icon_theme = gtk_icon_theme_get_default();
 
 	if (icon_theme && gtk_icon_theme_has_icon(icon_theme, "gvim"))
-	{
 	    gtk_window_set_icon_name(GTK_WINDOW(gui.mainwin), "gvim");
-	}
 	else
 	{
 	    /*
@@ -2760,9 +2769,9 @@ mainwin_realize(GtkWidget *widget UNUSED, gpointer data UNUSED)
 	     */
 	    GList *icons = NULL;
 
-	    icons = g_list_prepend(icons, gdk_pixbuf_new_from_xpm_data((const char **)vim16x16));
-	    icons = g_list_prepend(icons, gdk_pixbuf_new_from_xpm_data((const char **)vim32x32));
-	    icons = g_list_prepend(icons, gdk_pixbuf_new_from_xpm_data((const char **)vim48x48));
+	    icons = g_list_prepend(icons, pixbuf_new_from_png_data(vim16x16_png, vim16x16_png_len));
+	    icons = g_list_prepend(icons, pixbuf_new_from_png_data(vim32x32_png, vim32x32_png_len));
+	    icons = g_list_prepend(icons, pixbuf_new_from_png_data(vim48x48_png, vim48x48_png_len));
 
 	    gtk_window_set_icon_list(GTK_WINDOW(gui.mainwin), icons);
 
@@ -2770,7 +2779,6 @@ mainwin_realize(GtkWidget *widget UNUSED, gpointer data UNUSED)
 	    g_list_foreach(icons, (GFunc)(void *)&g_object_unref, NULL);
 	    g_list_free(icons);
 	}
-	g_object_unref(icon_theme);
     }
 
 #if !defined(USE_GNOME_SESSION)
@@ -3182,9 +3190,9 @@ update_window_manager_hints(int force_width, int force_height)
     // otherwise the hints don't work.
     width  = gui_get_base_width();
     height = gui_get_base_height();
-# ifdef FEAT_MENU
+#ifdef FEAT_MENU
     height += tabline_height() * gui.char_height;
-# endif
+#endif
     width  += get_menu_tool_width();
     height += get_menu_tool_height();
 
@@ -4005,6 +4013,12 @@ gui_mch_init(void)
     gui.drawarea = gtk_drawing_area_new();
 #if GTK_CHECK_VERSION(3,0,0)
     gui.surface = NULL;
+#endif
+
+#ifdef GDK_WINDOWING_WAYLAND
+    GdkDisplay *d = gdk_display_get_default();
+    if (GDK_IS_WAYLAND_DISPLAY(d))
+	gui.is_wayland = true;
 #endif
 
     // Determine which events we will filter.
@@ -4849,16 +4863,16 @@ gui_mch_set_shellsize(int width, int height,
     else
 	update_window_manager_hints(width, height);
 
-# if !GTK_CHECK_VERSION(3,0,0)
-#  if 0
+#if !GTK_CHECK_VERSION(3,0,0)
+# if 0
     if (!resize_idle_installed)
     {
 	g_idle_add_full(GDK_PRIORITY_EVENTS + 10,
 			&force_shell_resize_idle, NULL, NULL);
 	resize_idle_installed = TRUE;
     }
-#  endif
-# endif // !GTK_CHECK_VERSION(3,0,0)
+# endif
+#endif // !GTK_CHECK_VERSION(3,0,0)
     /*
      * Wait until all events are processed to prevent a crash because the
      * real size of the drawing area doesn't reflect Vim's internal ideas.
@@ -5185,7 +5199,7 @@ static PangoEngineShape *default_shape_engine = NULL;
 
 /*
  * Create a map from ASCII characters in the range [32,126] to glyphs
- * of the current font.  This is used by gui_gtk2_draw_string() to skip
+ * of the current font.  This is used by gui_gtk_draw_string() to skip
  * the itemize and shaping process for the most common case.
  */
     static void
@@ -5900,7 +5914,7 @@ draw_under(int flags, int row, int col, int cells)
 }
 
     int
-gui_gtk2_draw_string(int row, int col, char_u *s, int len, int flags)
+gui_gtk_draw_string(int row, int col, char_u *s, int len, int flags)
 {
     char_u	*conv_buf = NULL;   // result of UTF-8 conversion
     char_u	*new_conv_buf;
@@ -6062,8 +6076,8 @@ gui_gtk2_draw_string(int row, int col, char_u *s, int len, int flags)
 	    backup_ch = *(cs + slen);
 	    *(cs + slen) = NUL;
 	}
-	len_sum += gui_gtk2_draw_string_ext(row, col + len_sum,
-						 cs, slen, flags, needs_pango);
+	len_sum += gui_gtk_draw_string_ext(row, col + len_sum, cs, slen, flags,
+					    needs_pango);
 	if (slen < len)
 	    *(cs + slen) = backup_ch;
 	cs += slen;
@@ -6075,7 +6089,7 @@ gui_gtk2_draw_string(int row, int col, char_u *s, int len, int flags)
 }
 
     int
-gui_gtk2_draw_string_ext(
+gui_gtk_draw_string_ext(
 	int	row,
 	int	col,
 	char_u	*s,
@@ -6912,13 +6926,69 @@ gui_gtk_surface_copy_rect(int dest_x, int dest_y,
 {
     cairo_t * const cr = cairo_create(gui.surface);
 
-    cairo_rectangle(cr, dest_x, dest_y, width, height);
-    cairo_clip(cr);
-    cairo_push_group(cr);
-    cairo_set_source_surface(cr, gui.surface, dest_x - src_x, dest_y - src_y);
-    cairo_paint(cr);
-    cairo_pop_group_to_source(cr);
-    cairo_paint(cr);
+# ifdef GDK_WINDOWING_WAYLAND
+    /*
+       Following optimizations are temporary until all callers are refactored
+       to wayland deferred redraw; .. then it could be removed.
+    */
+    static cairo_surface_t *scroll_scratch = NULL;
+    static int scratch_w = 0;
+    static int scratch_h = 0;
+    int last_row = Rows - 1;
+    int last_row_y = last_row * gui.char_height;
+    bool last_row_overlap = (dest_y + height) > last_row_y;
+    if (gui.is_wayland && ( !(State & MODE_CMDLINE) || !last_row_overlap) )
+    {
+	/*
+	   scrolling up
+	   */
+	if (dest_y < src_y)
+	{
+	    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+	    cairo_set_source_surface(cr, gui.surface,
+		    src_x - dest_x,
+		    dest_y - src_y);
+	    cairo_rectangle(cr, dest_x, dest_y, width, height);
+	    cairo_clip(cr);
+	    cairo_paint(cr);
+	}
+	else
+	{
+	    //  reusing surface when scrolling, only realloc if larger
+	    if (scroll_scratch == NULL || width > scratch_w || height > scratch_h)
+	    {
+		cairo_surface_destroy(scroll_scratch); // safe even if NULL
+		scroll_scratch = cairo_surface_create_similar(gui.surface,
+			cairo_surface_get_content(gui.surface), width, height);
+		scratch_w = width;
+		scratch_h = height;
+	    }
+
+	    // capture scroll source region
+	    cairo_t *tcr = cairo_create(scroll_scratch);
+	    cairo_set_source_surface(tcr, gui.surface, -src_x, -src_y);
+	    cairo_paint(tcr);
+	    cairo_destroy(tcr);
+
+	    // reuse scroll source region
+	    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+	    cairo_rectangle(cr, dest_x, dest_y, width, height);
+	    cairo_clip(cr);
+	    cairo_set_source_surface(cr, scroll_scratch, dest_x, dest_y);
+	    cairo_paint(cr);
+	}
+    }
+    else
+# endif
+    {
+	cairo_rectangle(cr, dest_x, dest_y, width, height);
+	cairo_clip(cr);
+	cairo_push_group(cr);
+	cairo_set_source_surface(cr, gui.surface, dest_x - src_x, dest_y - src_y);
+	cairo_paint(cr);
+	cairo_pop_group_to_source(cr);
+	cairo_paint(cr);
+    }
 
     cairo_destroy(cr);
 }

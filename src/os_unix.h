@@ -6,18 +6,6 @@
  * Do ":help credits" in Vim to see a list of people who contributed.
  */
 
-/*
- * NextStep has a problem with configure, undefine a few things:
- */
-#ifdef NeXT
-# ifdef HAVE_UTIME
-#  undef HAVE_UTIME
-# endif
-# ifdef HAVE_SYS_UTSNAME_H
-#  undef HAVE_SYS_UTSNAME_H
-# endif
-#endif
-
 #include <stdio.h>
 #include <ctype.h>
 
@@ -50,10 +38,6 @@
 
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
-#endif
-
-#ifdef HAVE_LIBC_H
-# include <libc.h>		    // for NeXT
 #endif
 
 #ifdef HAVE_SYS_PARAM_H
@@ -230,7 +214,7 @@ typedef struct dsc$descriptor   DESC;
 
 #ifndef USR_VIMRC_FILE
 # ifdef VMS
-# define USR_VIMRC_FILE  "sys$login:.vimrc"
+#  define USR_VIMRC_FILE  "sys$login:.vimrc"
 # else
 #  define USR_VIMRC_FILE "$HOME/.vimrc"
 # endif
@@ -241,7 +225,7 @@ typedef struct dsc$descriptor   DESC;
 # ifdef VMS
 #  define USR_VIMRC_FILE2	"sys$login:vimfiles/vimrc"
 # else
-#   define USR_VIMRC_FILE2	"~/.vim/vimrc"
+#  define USR_VIMRC_FILE2	"~/.vim/vimrc"
 # endif
 #endif
 
@@ -359,8 +343,8 @@ typedef struct dsc$descriptor   DESC;
 #  ifdef RUNTIME_GLOBAL
 #   ifdef RUNTIME_GLOBAL_AFTER
 #    define DFLT_RUNTIMEPATH	"~/.vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER ",~/.vim/after"
-#    define XDG_RUNTIMEPATH	"$XDG_CONFIG_HOME/vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER "/after,$XDG_CONFIG_HOME/vim/after"
-#    define XDG_RUNTIMEPATH_FB	"~/.config/vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER "/after,~/.config/vim/after"
+#    define XDG_RUNTIMEPATH	"$XDG_CONFIG_HOME/vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER ",$XDG_CONFIG_HOME/vim/after"
+#    define XDG_RUNTIMEPATH_FB	"~/.config/vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER ",~/.config/vim/after"
 #    define CLEAN_RUNTIMEPATH	RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL_AFTER
 #   else
 #    define DFLT_RUNTIMEPATH	"~/.vim," RUNTIME_GLOBAL ",$VIMRUNTIME," RUNTIME_GLOBAL "/after,~/.vim/after"
@@ -433,7 +417,7 @@ typedef struct dsc$descriptor   DESC;
 #  define mch_memmove(to, from, len) bcopy((char *)(from), (char *)(to), len)
 # else
     // ifdef USEMEMCPY
-#   define mch_memmove(to, from, len) memcpy((char *)(to), (char *)(from), len)
+#  define mch_memmove(to, from, len) memcpy((char *)(to), (char *)(from), len)
 # endif
 #endif
 

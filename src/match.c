@@ -323,6 +323,9 @@ init_search_hl(win_T *wp, match_T *search_hl)
 	cur->mit_hl.first_lnum = 0;
 	cur = cur->mit_next;
     }
+    // Must update this every time since highlight group override can change it.
+    search_hl->attr = HL_ATTR(HLF_L);
+
     search_hl->buf = wp->w_buffer;
     search_hl->lnum = 0;
     search_hl->first_lnum = 0;
@@ -866,11 +869,11 @@ get_prevcol_hl_flag(win_T *wp, match_T *search_hl, long curcol)
     int		prevcol_hl_flag = FALSE;
     matchitem_T *cur;			// points to the match list
 
-#if defined(FEAT_PROP_POPUP)
+# if defined(FEAT_PROP_POPUP)
     // don't do this in a popup window
     if (popup_is_popup(wp))
 	return FALSE;
-#endif
+# endif
 
     // we're not really at that column when skipping some text
     if ((long)(wp->w_p_wrap ? wp->w_skipcol : wp->w_leftcol) > prevcol)
@@ -965,7 +968,7 @@ matchadd_dict_arg(typval_T *tv, char_u **conceal_char, win_T **win)
 
     return OK;
 }
-#endif
+# endif
 
 /*
  * "clearmatches()" function
@@ -973,7 +976,7 @@ matchadd_dict_arg(typval_T *tv, char_u **conceal_char, win_T **win)
     void
 f_clearmatches(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 {
-#ifdef FEAT_SEARCH_EXTRA
+# ifdef FEAT_SEARCH_EXTRA
     win_T   *win;
 
     if (in_vim9script() && check_for_opt_number_arg(argvars, 0) == FAIL)
@@ -982,7 +985,7 @@ f_clearmatches(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     win = get_optional_window(argvars, 0);
     if (win != NULL)
 	clear_matches(win);
-#endif
+# endif
 }
 
 /*
@@ -1063,7 +1066,7 @@ f_getmatches(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     void
 f_setmatches(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 {
-#ifdef FEAT_SEARCH_EXTRA
+# ifdef FEAT_SEARCH_EXTRA
     list_T	*l;
     listitem_T	*li;
     dict_T	*d;
@@ -1172,7 +1175,7 @@ f_setmatches(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 	}
 	rettv->vval.v_number = 0;
     }
-#endif
+# endif
 }
 
 /*

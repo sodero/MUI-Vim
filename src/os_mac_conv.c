@@ -354,7 +354,9 @@ mac_utf16_to_enc(
 	}
 	else
 	{
-	    result = string_convert(&conv, utf8_str, (int *)&utf8_len);
+	    int len = utf8_len;
+	    result = string_convert(&conv, utf8_str, &len);
+	    utf8_len = len;
 	    vim_free(utf8_str);
 	}
 
@@ -576,13 +578,13 @@ mac_lang_init(void)
 	if (strcasestr(buf, "utf-8") == NULL)
 	    strcat(buf, ".UTF-8");
 	vim_setenv((char_u *)"LANG", (char_u *)buf);
-#   ifdef HAVE_LOCALE_H
+#ifdef HAVE_LOCALE_H
 	setlocale(LC_ALL, "");
-#   endif
-#   if defined(LC_NUMERIC)
+#endif
+#if defined(LC_NUMERIC)
 	// Make sure strtod() uses a decimal point, not a comma.
 	setlocale(LC_NUMERIC, "C");
-#   endif
+#endif
     }
 }
 #endif // MACOS_CONVERT

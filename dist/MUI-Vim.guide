@@ -1,7 +1,7 @@
 @DATABASE "Default"
 @NODE Main "MUI-Vim Guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 9.1.1846 (25.10.10) english
+@$VER: MUI-Vim.guide 9.2.211 (26.03.20) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,184 +67,187 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2026-03-20@{UB}
+- Update to VIM 9.2.211
+
 @{B}2025-10-24@{UB}
-- Update to VIM 9.1.1869.
+- Update to VIM 9.1.1869
 
 @{B}2025-10-10@{UB}
-- Update to VIM 9.1.1846.
+- Update to VIM 9.1.1846
 - Fix runtime path
 
 @{B}2025-10-08@{UB}
-- Update to VIM 9.1.1840.
+- Update to VIM 9.1.1840
 - Fix broken path translation
 
 @{B}2025-10-07@{UB}
-- Update to VIM 9.1.1834.
+- Update to VIM 9.1.1834
 - Fix broken VIM: path
 
 @{B}2025-10-05@{UB}
-- Update to VIM 9.1.1831.
-- AmigaOS4: Built with Newlib instead of Clib2 for performance reasons.
-- Improved srand() / rand().
+- Update to VIM 9.1.1831
+- AmigaOS4: Built with Newlib instead of Clib2 for performance reasons
+- Improved srand() / rand()
 
 @{B}2024-01-21@{UB}
-- Update to VIM 9.1.42.
+- Update to VIM 9.1.42
 
 @{B}2023-05-18@{UB}
-- Update to VIM 9.0.1546.
-- Hollywood syntax highlighting updated (10.0).
+- Update to VIM 9.0.1546
+- Hollywood syntax highlighting updated (10.0)
 
 @{B}2023-03-05@{UB}
-- Update to VIM 9.0.1378.
+- Update to VIM 9.0.1378
 
 @{B}2023-01-08@{UB}
-- Update to VIM 9.0.1158.
-- Hollywood syntax highlightning updated (9.1).
+- Update to VIM 9.0.1158
+- Hollywood syntax highlightning updated (9.1)
 
 @{B}2022-09-25@{UB}
-- Update to VIM 9.0.583.
+- Update to VIM 9.0.583
 
 @{B}2022-05-07@{UB}
-- Update to VIM 8.2.4867.
+- Update to VIM 8.2.4867
 
 @{B}2022-02-10@{UB}
-- Update to VIM 8.2.4424.
-- AROS graphical glitch fixed.
-- MorphOS DOS script filetype detection fixed.
+- Update to VIM 8.2.4424
+- AROS graphical glitch fixed
+- MorphOS DOS script filetype detection fixed
 
 @{B}2022-02-14@{UB}
-- Update to VIM 8.2.4370.
-- Crash upon exit on AROS fixed.
+- Update to VIM 8.2.4370
+- Crash upon exit on AROS fixed
 
 @{B}2022-02-05@{UB}
-- Update to VIM 8.2.4291.
+- Update to VIM 8.2.4291
 
 @{B}2021-07-17@{UB}
-- Update to VIM 8.2.2993.
-- Performance improvements.
+- Update to VIM 8.2.2993
+- Performance improvements
 
 @{B}2020-12-24@{UB}
-- Update to VIM 8.2.2187.
-- Startup error handling fix.
+- Update to VIM 8.2.2187
+- Startup error handling fix
 
 @{B}2020-12-16@{UB}
-- Update to VIM 8.2.2148.
-- Fixed WB startup bug.
+- Update to VIM 8.2.2148
+- Fixed WB startup bug
 
 @{B}2020-12-15@{UB}
-- Update to VIM 8.2.2146.
-- Fixed broken scrollbars in tabs.
+- Update to VIM 8.2.2146
+- Fixed broken scrollbars in tabs
 
 @{B}2020-12-09@{UB}
-- Update to VIM 8.2.2121.
-- OS4 and MorphOS scrollbar support.
-- MorphOS TCAP.
+- Update to VIM 8.2.2121
+- OS4 and MorphOS scrollbar support
+- MorphOS TCAP
 
 @{B}2020-11-17@{UB}
-- Update to VIM 8.2.2000.
-- AmigaOS4: 8 colors enabled in CLI mode.
+- Update to VIM 8.2.2000
+- AmigaOS4: 8 colors enabled in CLI mode
 
 @{B}2020-09-26@{UB}
-- Update to VIM 8.2.1749.
-- AmigaOS4: Fixed crash when removing iconified Vim with Exchange.
-- AmigaOS4: Use Mason icon when iconified.
+- Update to VIM 8.2.1749
+- AmigaOS4: Fixed crash when removing iconified Vim with Exchange
+- AmigaOS4: Use Mason icon when iconified
 
 @{B}2020-09-13@{UB}
-- Update to VIM 8.2.1583.
-- CLI only and easy builds are now included in the archive.
+- Update to VIM 8.2.1583
+- CLI only and easy builds are now included in the archive
 - Vim correctly detects initial console size when executed in text mode. On
   AmigaOS4 resizing is also working, while on MorphOS and AROS a manual
-  refresh using CTRL+L is required.
+  refresh using CTRL+L is required
 
 @{B}2019-12-21@{UB}
-- Update to VIM 8.2.25.
-- AmigaGuide syntax highlighting.
+- Update to VIM 8.2.25
+- AmigaGuide syntax highlighting
 
 @{B}2019-10-20@{UB}
-- Update to VIM 8.1.2146.
-- Hollywood syntax highlighting (Tom Crecelius).
-- Amiga Installer script filetype detection fix.
+- Update to VIM 8.1.2146
+- Hollywood syntax highlighting (Tom Crecelius)
+- Amiga Installer script filetype detection fix
 
 @{B}2019-03-31@{UB}
-- Update to VIM 8.1.1099.
+- Update to VIM 8.1.1099
 
 @{B}2019-02-16@{UB}
-- Amiga Installer script V44 syntax highlighting.
-- Update to VIM 8.1.932.
+- Amiga Installer script V44 syntax highlighting
+- Update to VIM 8.1.932
 
 @{B}2018-10-23@{UB}
-- Minor fix in Amiga Installer script syntax highlighting.
-- Vim no longer assumes that HOME: exists.
-- Update to VIM 8.1.490.
+- Minor fix in Amiga Installer script syntax highlighting
+- Vim no longer assumes that HOME: exists
+- Update to VIM 8.1.490
 
 @{B}2018-09-04@{UB}
-- The matchparen plugin has been replaced by matchparen++.
-- Syntax highlighting and filetype detection for Amiga Installer scripts.
-- The installer sets the correct default tool of 'gvim'.
-- Performance improvements.
-- Update to VIM 8.1.347.
+- The matchparen plugin has been replaced by matchparen++
+- Syntax highlighting and filetype detection for Amiga Installer scripts
+- The installer sets the correct default tool of 'gvim'
+- Performance improvements
+- Update to VIM 8.1.347
 
 @{B}2018-09-01@{UB}
-- Disabled crash prone plugin. Refer to default VIMRC.
-- Potential memory leak fixed.
-- Performance improvements.
-- Update to VIM 8.1.338.
+- Disabled crash prone plugin. Refer to default VIMRC
+- Potential memory leak fixed
+- Performance improvements
+- Update to VIM 8.1.338
 
 @{B}2017-12-23@{UB}
-- Problems with dragging and toolbar handling fixed.
-- Minor performance improvements.
-- Update to VIM 8.0.1422.
+- Problems with dragging and toolbar handling fixed
+- Minor performance improvements
+- Update to VIM 8.0.1422
 
 @{B}2017-04-08@{UB}
-- Version string survives compiler optimizations.
-- Update to VIM 8.0.553.
+- Version string survives compiler optimizations
+- Update to VIM 8.0.553
 
 @{B}2017-03-12@{UB}
-- Installer fixed - enabling icon updates.
-- Update to VIM 8.0.454.
+- Installer fixed - enabling icon updates
+- Update to VIM 8.0.454
 
 @{B}2017-03-04@{UB}
-- New toolbar icons.
-- Update to VIM 8.0.410.
+- New toolbar icons
+- Update to VIM 8.0.410
 
 @{B}2017-02-28@{UB}
-- New icon.
-- New default color scheme.
-- Update to VIM 8.0.387.
+- New icon
+- New default color scheme
+- Update to VIM 8.0.387
 
 @{B}2017-02-27@{UB}
-- Version string fixed.
-- Updated default vimrc with mapping that makes <DEL> work.
-- Update to VIM 8.0.382.
+- Version string fixed
+- Updated default vimrc with mapping that makes <DEL> work
+- Update to VIM 8.0.382
 
 @{B}2017-02-25@{UB}
-- Unnecessary vertical space removed.
-- Default color scheme changed to make info pane visible.
-- Update to VIM 8.0.369.
+- Unnecessary vertical space removed
+- Default color scheme changed to make info pane visible
+- Update to VIM 8.0.369
 
 @{B}2017-02-24@{UB}
-- Update to VIM 8.0.363.
+- Update to VIM 8.0.363
 
 @{B}2017-02-18@{UB}
-- Text mode resizing cheat now possible.
-- Update to VIM 8.0.336.
+- Text mode resizing cheat now possible
+- Update to VIM 8.0.336
 
 @{B}2017-02-15@{UB}
-- Plugin autoloading now works.
-- Reconfigured to make the MatchParen plugin work.
+- Plugin autoloading now works
+- Reconfigured to make the MatchParen plugin work
 
 @{B}2017-02-13@{UB}
-- Installer no longer silently sets EDITOR.
-- MUI settings and about dialogs are now reachable from the menu.
+- Installer no longer silently sets EDITOR
+- MUI settings and about dialogs are now reachable from the menu
 
 @{B}2017-02-12@{UB}
-- Graphical glitches when using non bitmap fonts fixed.
-- Bold text support.
-- Update to VIM 8.0.329.
+- Graphical glitches when using non bitmap fonts fixed
+- Bold text support
+- Update to VIM 8.0.329
 
 @{B}2017-02-11@{UB}
-- Inform user when MCC_TheBar is missing.
-- Installer no longer assumes the existance of Work:.
+- Inform user when MCC_TheBar is missing
+- Installer no longer assumes the existance of Work:
 
 @ENDNODE
 

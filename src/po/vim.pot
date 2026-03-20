@@ -1,5 +1,5 @@
 # SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR 2025, The Vim Project
+# Copyright (C) YEAR 2026, The Vim Project
 # This file is distributed under the same license as the Vim package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Vim\n"
 "Report-Msgid-Bugs-To: vim-dev@vim.org\n"
-"POT-Creation-Date: 2025-10-07 20:28+0000\n"
+"POT-Creation-Date: 2026-03-18 21:08+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -154,7 +154,7 @@ msgid "%d%%"
 msgstr ""
 
 #, c-format
-msgid "%2s"
+msgid "%3s"
 msgstr ""
 
 #, c-format
@@ -1960,6 +1960,9 @@ msgstr ""
 msgid "???LINES MISSING"
 msgstr ""
 
+msgid "???ILLEGAL BLOCK NUMBER"
+msgstr ""
+
 msgid "???BLOCK MISSING"
 msgstr ""
 
@@ -2220,16 +2223,10 @@ msgstr ""
 msgid " SPACE/d/j: screen/page/line down, b/u/k: up, q: quit "
 msgstr ""
 
-msgid "W24: Clipboard register not available. See :h W24"
-msgstr ""
-
 msgid "W23: Clipboard register not available, using register 0"
 msgstr ""
 
-msgid "W23: Clipboard register + not available, using register 0"
-msgstr ""
-
-msgid "W23: Clipboard register * not available, using register 0"
+msgid "W24: Clipboard register not available. See :h W24"
 msgstr ""
 
 msgid "Question"
@@ -3546,7 +3543,7 @@ msgstr ""
 msgid "Help poor children in Uganda!"
 msgstr ""
 
-msgid "type  :help iccf<Enter>       for information "
+msgid "type  :help Kuwasha<Enter>    for information "
 msgstr ""
 
 msgid "type  :q<Enter>               to exit         "
@@ -3588,16 +3585,10 @@ msgstr ""
 msgid "Sponsor Vim development!"
 msgstr ""
 
-msgid "Become a registered Vim user!"
-msgstr ""
-
 msgid "type  :help sponsor<Enter>    for information "
 msgstr ""
 
-msgid "type  :help register<Enter>   for information "
-msgstr ""
-
-msgid "menu  Help->Sponsor/Register  for information    "
+msgid "menu  Help->Sponsor  for information    "
 msgstr ""
 
 msgid "global"
@@ -7912,7 +7903,7 @@ msgid "E1238: Blob required for argument %d"
 msgstr ""
 
 #, c-format
-msgid "E1239: Invalid value for blob: %d"
+msgid "E1239: Invalid value for blob: 0x%lX"
 msgstr ""
 
 msgid "E1240: Resulting text too long"
@@ -8108,7 +8099,7 @@ msgstr ""
 msgid "E1292: Command-line window is already open"
 msgstr ""
 
-msgid "E1293: Cannot use a negative id after adding a textprop with text"
+msgid "E1293: Cannot use a negative id for a text property"
 msgstr ""
 
 msgid "E1294: Can only use text_align when column is zero"
@@ -8250,11 +8241,6 @@ msgstr ""
 
 #, c-format
 msgid "E1337: Class variable \"%s\" not found in class \"%s\""
-msgstr ""
-
-msgid ""
-"E1339: Cannot add a textprop with text after using a textprop with a "
-"negative id"
 msgstr ""
 
 #, c-format
@@ -8599,6 +8585,9 @@ msgstr ""
 msgid "E1436: Interface can only be used in a script"
 msgstr ""
 
+msgid "E1437: Can only compare Object with Object"
+msgstr ""
+
 #, c-format
 msgid "E1500: Cannot mix positional and non-positional arguments: %s"
 msgstr ""
@@ -8843,6 +8832,21 @@ msgid "E1568: OSC command response timed out: %.*s"
 msgstr ""
 
 msgid "E1569: Cannot use listener_add in a listener callback"
+msgstr ""
+
+msgid "E1570: Cannot use redraw_listener_add in a redraw listener callback"
+msgstr ""
+
+msgid "E1571: Must specify at least one callback for redraw_listener_add"
+msgstr ""
+
+msgid "E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified"
+msgstr ""
+
+msgid "E1573: Cannot listen on port"
+msgstr ""
+
+msgid "E1574: gethostbyname(): cannot resolve hostname in channel_listen()"
 msgstr ""
 
 #. type of cmdline window or 0
@@ -9442,6 +9446,12 @@ msgstr ""
 msgid "don't redraw while executing macros"
 msgstr ""
 
+msgid "configure method of receiving terminal size changes"
+msgstr ""
+
+msgid "enable terminal sync mode"
+msgstr ""
+
 msgid "timeout for 'hlsearch' and :match highlighting in msec"
 msgstr ""
 
@@ -9501,6 +9511,9 @@ msgstr ""
 msgid "highlight group to use for the window"
 msgstr ""
 
+msgid "highlight group mappings for the window"
+msgstr ""
+
 msgid "use GUI colors for the terminal"
 msgstr ""
 
@@ -9544,6 +9557,9 @@ msgid "0, 1 or 2; when to use a status line for the last window"
 msgstr ""
 
 msgid "alternate format to be used for a status line"
+msgstr ""
+
+msgid "optional settings for the status line"
 msgstr ""
 
 msgid "make all windows the same size when adding/removing windows"
@@ -9957,6 +9973,9 @@ msgstr ""
 msgid "definition of what comment lines look like"
 msgstr ""
 
+msgid "template for comments; used to put the marker in"
+msgstr ""
+
 msgid "list of flags that tell how automatic formatting works"
 msgstr ""
 
@@ -9993,11 +10012,6 @@ msgstr ""
 msgid ""
 " \n"
 "popup menu item align order"
-msgstr ""
-
-msgid ""
-" \n"
-"use fuzzy collection for specific completion modes"
 msgstr ""
 
 msgid "options for the Insert mode completion info popup"
@@ -10153,9 +10167,6 @@ msgid "specifies for which commands a fold will be opened"
 msgstr ""
 
 msgid "minimum number of screen lines for a fold to be closed"
-msgstr ""
-
-msgid "template for comments; used to put the marker in"
 msgstr ""
 
 msgid ""
@@ -10453,9 +10464,6 @@ msgstr ""
 msgid "specifies the characters in an identifier"
 msgstr ""
 
-msgid "defines trigger strings for complete_match()"
-msgstr ""
-
 msgid "specifies the characters in a keyword"
 msgstr ""
 
@@ -10670,6 +10678,45 @@ msgid "custom tab pages in tabpanel"
 msgstr ""
 
 msgid "options for using tabpanel"
+msgstr ""
+
+msgid "Notice"
+msgstr ""
+
+msgid "Quickfix list not found, stopping the job"
+msgstr ""
+
+msgid "Success!"
+msgstr ""
+
+msgid "Job terminated"
+msgstr ""
+
+msgid "There are errors."
+msgstr ""
+
+msgid "Could not create quickfix list"
+msgstr ""
+
+msgid "File not readable:"
+msgstr ""
+
+msgid "Failed to start job"
+msgstr ""
+
+msgid "Typesetting..."
+msgstr ""
+
+msgid "Jobs still running:"
+msgstr ""
+
+msgid "Done."
+msgstr ""
+
+msgid "Typeset"
+msgstr ""
+
+msgid "Please save the buffer first."
 msgstr ""
 
 msgid "You discovered the command-line window! You can close it with \":q\"."

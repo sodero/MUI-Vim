@@ -315,6 +315,10 @@ gui_mch_set_rendering_options(char_u *s)
 # define SPI_SETWHEELSCROLLCHARS	0x006D
 #endif
 
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+# define DWMWA_USE_IMMERSIVE_DARK_MODE	20
+#endif
+
 #ifndef DWMWA_CAPTION_COLOR
 # define DWMWA_CAPTION_COLOR		35
 #endif
@@ -416,6 +420,16 @@ static DPI_AWARENESS (WINAPI *pGetAwarenessFromDpiAwarenessContext)(DPI_AWARENES
 static HINSTANCE hLibDwm = NULL;
 static HRESULT (WINAPI *pDwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
 static void dyn_dwm_load(void);
+
+static int fullscreen_on = FALSE;
+
+#ifdef FEAT_GUI_DARKTHEME
+
+static HINSTANCE hUxThemeLib = NULL;
+static DWORD (WINAPI *pSetPreferredAppMode)(DWORD) = NULL;
+static void (WINAPI *pFlushMenuThemes)(void) = NULL;
+static void dyn_uxtheme_load(void);
+#endif
 
     static int WINAPI
 stubGetSystemMetricsForDpi(int nIndex, UINT dpi UNUSED)
@@ -1558,7 +1572,7 @@ dyn_dwm_load(void)
     }
 }
 
-extern BOOL win11_or_later; // this is in os_win32.c
+extern DWORD win_version; // this is in os_mswin.c
 
 /*
  * Set TitleBar's color. Handle hl-TitleBar and hl-TitleBarNC.
@@ -1570,11 +1584,12 @@ extern BOOL win11_or_later; // this is in os_win32.c
     void
 gui_mch_set_titlebar_colors(void)
 {
-    if (pDwmSetWindowAttribute == NULL || !win11_or_later)
+#define DWMWA_COLOR_DEFAULT 0xFFFFFFFF
+    if (pDwmSetWindowAttribute == NULL || win_version < MAKE_VER(10, 0, 22000))
 	return;
 
-    guicolor_T captionColor = 0xFFFFFFFF;
-    guicolor_T textColor = 0xFFFFFFFF;
+    guicolor_T captionColor = DWMWA_COLOR_DEFAULT;
+    guicolor_T textColor = DWMWA_COLOR_DEFAULT;
 
     if (vim_strchr(p_go, GO_TITLEBAR) != NULL)
     {
@@ -1590,9 +1605,9 @@ gui_mch_set_titlebar_colors(void)
 	}
 
 	if (captionColor == INVALCOLOR)
-	    captionColor = 0xFFFFFFFF;
+	    captionColor = DWMWA_COLOR_DEFAULT;
 	if (textColor == INVALCOLOR)
-	    textColor = 0xFFFFFFFF;
+	    textColor = DWMWA_COLOR_DEFAULT;
     }
 
     pDwmSetWindowAttribute(s_hwnd, DWMWA_CAPTION_COLOR,
@@ -3116,6 +3131,113 @@ gui_mch_set_curtab(int nr)
 
 #endif
 
+#ifdef FEAT_GUI_DARKTHEME
+    void
+gui_mch_set_dark_theme(int dark)
+{
+    if (pDwmSetWindowAttribute != NULL && win_version >= MAKE_VER(10, 0, 18985))
+	pDwmSetWindowAttribute(s_hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
+		sizeof(dark));
+
+    if (pSetPreferredAppMode != NULL && win_version >= MAKE_VER(10, 0, 18362))
+	pSetPreferredAppMode(dark);
+
+    if (pFlushMenuThemes != NULL && win_version >= MAKE_VER(10, 0, 18362))
+	pFlushMenuThemes();
+}
+
+    static void
+dyn_uxtheme_load(void)
+{
+    hUxThemeLib = vimLoadLib("uxtheme.dll");
+    if (hUxThemeLib == NULL)
+	return;
+
+    pSetPreferredAppMode = (DWORD (WINAPI *)(DWORD))
+	GetProcAddress(hUxThemeLib, MAKEINTRESOURCE(135));
+    pFlushMenuThemes = (void (WINAPI *)(void))
+	GetProcAddress(hUxThemeLib, MAKEINTRESOURCE(136));
+
+    if (pSetPreferredAppMode == NULL || pFlushMenuThemes == NULL)
+    {
+	FreeLibrary(hUxThemeLib);
+	hUxThemeLib = NULL;
+	return;
+    }
+}
+
+#endif // FEAT_GUI_DARKTHEME
+
+/*
+ * When flag is true, set fullscreen on.
+ * When flag is false, set fullscreen off.
+ */
+    void
+gui_mch_set_fullscreen(int flag)
+{
+    static RECT normal_rect;
+    static LONG_PTR normal_style, normal_exstyle;
+    HMONITOR	mon;
+    MONITORINFO	moninfo;
+    RECT	rc;
+
+    if (!full_screen) // Windows not set yet.
+	return;
+
+    if (flag)
+    {
+	if (fullscreen_on)
+	    return;
+
+	// Enter fullscreen mode
+	GetWindowRect(s_hwnd, &rc);
+
+	moninfo.cbSize = sizeof(MONITORINFO);
+	mon = MonitorFromRect(&rc, MONITOR_DEFAULTTONEAREST);
+	if (mon == NULL || !GetMonitorInfo(mon, &moninfo))
+	    return;
+
+	// Save current window state
+	GetWindowRect(s_hwnd, &normal_rect);
+	normal_style = GetWindowLongPtr(s_hwnd, GWL_STYLE);
+	normal_exstyle = GetWindowLongPtr(s_hwnd, GWL_EXSTYLE);
+
+	// Set fullscreen styles
+	SetWindowLongPtr(s_hwnd, GWL_STYLE,
+		normal_style & ~(WS_CAPTION | WS_THICKFRAME));
+	SetWindowLongPtr(s_hwnd, GWL_EXSTYLE,
+		normal_exstyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE |
+		    WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
+	SetWindowPos(s_hwnd, NULL,
+		moninfo.rcMonitor.left,
+		moninfo.rcMonitor.top,
+		moninfo.rcMonitor.right - moninfo.rcMonitor.left,
+		moninfo.rcMonitor.bottom - moninfo.rcMonitor.top,
+		SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+	fullscreen_on = TRUE;
+    }
+    else
+    {
+	if (!fullscreen_on)
+	    return;
+
+	// Exit fullscreen mode
+	SetWindowLongPtr(s_hwnd, GWL_STYLE, normal_style);
+	SetWindowLongPtr(s_hwnd, GWL_EXSTYLE, normal_exstyle);
+
+	// Restore original window position and size
+	SetWindowPos(s_hwnd, NULL,
+		normal_rect.left,
+		normal_rect.top,
+		normal_rect.right - normal_rect.left,
+		normal_rect.bottom - normal_rect.top,
+		SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+	fullscreen_on = FALSE;
+    }
+}
+
 /*
  * ":simalt" command.
  */
@@ -4616,7 +4738,6 @@ _OnMouseWheel(HWND hwnd UNUSED, WPARAM wParam, LPARAM lParam, int horizontal)
 	update_screen(0);
 	setcursor();
 	out_flush();
-	return;
     }
 #endif
 
@@ -5646,6 +5767,10 @@ gui_mch_init(void)
 
     load_dpi_func();
 
+#ifdef FEAT_GUI_DARKTHEME
+    dyn_uxtheme_load();
+#endif
+
     dyn_dwm_load();
 
     s_dpi = pGetDpiForSystem();
@@ -6541,6 +6666,16 @@ gui_mch_draw_string(
 	    pcliprect = &rc;
 	    foptions = ETO_CLIPPED;
 	}
+#ifdef FEAT_DIRECTX
+	// DirectWrite anti-aliasing can extend glyph pixels beyond cell
+	// boundaries, leaving artifacts when adjacent cells are not
+	// redrawn.  Clip to the cell rect to prevent this.
+	else if (IS_ENABLE_DIRECTX())
+	{
+	    pcliprect = &rc;
+	    foptions = ETO_CLIPPED;
+	}
+#endif
     }
     SetTextColor(s_hdc, gui.currFgColor);
     SelectFont(s_hdc, gui.currFont);
@@ -7066,14 +7201,12 @@ gui_mch_menu_grey(
      * is this a toolbar button?
      */
     if (menu->submenu_id == (HMENU)-1)
-    {
 	SendMessage(s_toolbarhwnd, TB_ENABLEBUTTON,
-	    (WPARAM)menu->id, (LPARAM) MAKELONG((grey ? FALSE : TRUE), 0));
-    }
+		(WPARAM)menu->id, (LPARAM) MAKELONG((grey ? FALSE : TRUE), 0));
     else
 # endif
-    (void)EnableMenuItem(menu->parent ? menu->parent->submenu_id : s_menuBar,
-		    menu->id, MF_BYCOMMAND | (grey ? MF_GRAYED : MF_ENABLED));
+	(void)EnableMenuItem(menu->parent ? menu->parent->submenu_id : s_menuBar,
+		menu->id, MF_BYCOMMAND | (grey ? MF_GRAYED : MF_ENABLED));
 
 # ifdef FEAT_TEAROFF
     if ((menu->parent != NULL) && (IsWindow(menu->parent->tearoff_handle)))
@@ -8058,7 +8191,7 @@ gui_mch_tearoff(
     if (submenuWidth != 0)
     {
 	submenuWidth = GetTextWidth(hdc, (char_u *)TEAROFF_SUBMENU_LABEL,
-					  (int)STRLEN(TEAROFF_SUBMENU_LABEL));
+				  (int)STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL));
 	textWidth += submenuWidth;
     }
     dlgwidth = GetTextWidthEnc(hdc, title, (int)STRLEN(title));
@@ -8181,7 +8314,7 @@ gui_mch_tearoff(
 	}
 	else
 	{
-	    len += (int)STRLEN(TEAROFF_SUBMENU_LABEL);
+	    len += (int)STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL);
 	    menuID = (WORD)((long_u)(menu->submenu_id) | (DWORD)0x8000);
 	}
 
@@ -8206,7 +8339,7 @@ gui_mch_tearoff(
 	if (menu->children != NULL)
 	{
 	    STRCPY(text, TEAROFF_SUBMENU_LABEL);
-	    text += STRLEN(TEAROFF_SUBMENU_LABEL);
+	    text += STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL);
 	}
 	else
 	{

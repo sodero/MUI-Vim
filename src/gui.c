@@ -78,6 +78,9 @@ gui_start(char_u *arg UNUSED)
 	cursor_on();			// needed for ":gui" in .vimrc
     full_screen = FALSE;
 
+    // If GUI fails to start, then we will recover afterwards
+    term_disable_dec();
+
 #ifdef GUI_MAY_FORK
     ++recursive;
     /*
@@ -141,19 +144,30 @@ gui_start(char_u *arg UNUSED)
 	termcapinit(old_term);
 	settmode(TMODE_RAW);		// restart RAW mode
 	set_title_defaults();		// set 'title' and 'icon' again
+#ifdef UNIX
+	term_set_win_resize(true);
+#endif
 #if defined(GUI_MAY_SPAWN) && defined(EXPERIMENTAL_GUI_CMD)
 	if (msg != NULL)
 	    emsg(msg);
 #endif
     }
+#ifdef HAVE_CLIPMETHOD
     else
-	// Reset clipmethod to CLIPMETHOD_GUI
+	// Reset clipmethod to CLIPMETHOD_NONE
 	choose_clipmethod();
+#endif
 
-#ifdef FEAT_SOCKETSERVER
+#if defined(FEAT_SOCKETSERVER) && defined(FEAT_GUI_GTK)
     // Install socket server listening socket if we are running it
     if (socket_server_valid())
 	gui_gtk_init_socket_server();
+#endif
+
+#ifdef FEAT_GUI_MSWIN
+    // Enable fullscreen mode
+    if (vim_strchr(p_go, GO_FULLSCREEN) != NULL)
+       gui_mch_set_fullscreen(TRUE);
 #endif
 
     vim_free(old_term);
@@ -203,7 +217,6 @@ gui_attempt_start(void)
 	if (gui_get_x11_windis(&x11_window, &x11_display) == OK)
 	    set_vim_var_nr(VV_WINDOWID, (long)x11_window);
 # endif
-
 	// Display error messages in a dialog now.
 	display_errors();
     }
@@ -214,7 +227,7 @@ gui_attempt_start(void)
 #ifdef GUI_MAY_FORK
 
 // for waitpid()
-# if defined(HAVE_SYS_WAIT_H) || defined(HAVE_UNION_WAIT)
+# if defined(HAVE_SYS_WAIT_H)
 #  include <sys/wait.h>
 # endif
 
@@ -270,11 +283,7 @@ gui_do_fork(void)
 		// The child failed to start the GUI, so the caller must
 		// continue. There may be more error information written
 		// to stderr by the child.
-# ifdef __NeXT__
-		wait4(pid, &exit_status, 0, (struct rusage *)0);
-# else
 		waitpid(pid, &exit_status, 0);
-# endif
 		emsg(_(e_the_child_process_failed_to_start_GUI));
 		return;
 	    }
@@ -476,6 +485,9 @@ gui_init_check(void)
     result = OK;
 #else
 # ifdef FEAT_GUI_GTK
+#  ifdef GDK_WINDOWING_WAYLAND
+    gui.is_wayland = false;
+#  endif
     /*
      * Note: Don't call gtk_init_check() before fork, it will be called after
      * the fork. When calling it before fork, it make vim hang for a while.
@@ -1091,7 +1103,7 @@ gui_get_wide_font(void)
 #if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
 /*
  * Set list of ascii characters that combined can create ligature.
- * Store them in char map for quick access from gui_gtk2_draw_string.
+ * Store them in char map for quick access from gui_gtk_draw_string.
  */
     void
 gui_set_ligatures(void)
@@ -2543,7 +2555,7 @@ gui_outstr_nowrap(
      */
 #ifdef FEAT_GUI_GTK
     // The value returned is the length in display cells
-    len = gui_gtk2_draw_string(gui.row, col, s, len, draw_flags);
+    len = gui_gtk_draw_string(gui.row, col, s, len, draw_flags);
 #else
     if (enc_utf8)
     {
@@ -3270,6 +3282,8 @@ button_set:
      */
     if ((State == MODE_NORMAL || State == MODE_NORMAL_BUSY
 						      || (State & MODE_INSERT))
+	    && X_2_COL(x) >= firstwin->w_wincol
+	    && X_2_COL(x) < firstwin->w_wincol + topframe->fr_width
 	    && Y_2_ROW(y) >= topframe->fr_height + firstwin->w_winrow
 	    && button != MOUSE_DRAG
 # ifdef FEAT_MOUSESHAPE
@@ -3488,7 +3502,7 @@ static int	prev_which_scrollbars[3];
 gui_init_which_components(char_u *oldval UNUSED)
 {
 #ifdef FEAT_GUI_DARKTHEME
-    static int	prev_dark_theme = -1;
+    static int	prev_dark_theme = FALSE;
     int		using_dark_theme = FALSE;
 #endif
 #ifdef FEAT_MENU
@@ -3502,8 +3516,11 @@ gui_init_which_components(char_u *oldval UNUSED)
     int		using_tabline;
 #endif
 #ifdef FEAT_GUI_MSWIN
-    static int	prev_titlebar = -1;
+    static int	prev_titlebar = FALSE;
     int		using_titlebar = FALSE;
+
+    static int	prev_fullscreen = FALSE;
+    int		using_fullscreen = FALSE;
 #endif
 #if defined(FEAT_MENU)
     static int	prev_tearoff = -1;
@@ -3578,6 +3595,9 @@ gui_init_which_components(char_u *oldval UNUSED)
 	    case GO_TITLEBAR:
 		using_titlebar = TRUE;
 		break;
+	    case GO_FULLSCREEN:
+		using_fullscreen = TRUE;
+		break;
 #endif
 #ifdef FEAT_TOOLBAR
 	    case GO_TOOLBAR:
@@ -3605,6 +3625,12 @@ gui_init_which_components(char_u *oldval UNUSED)
     {
 	gui_mch_set_titlebar_colors();
 	prev_titlebar = using_titlebar;
+    }
+
+    if (using_fullscreen != prev_fullscreen)
+    {
+	gui_mch_set_fullscreen(using_fullscreen);
+	prev_fullscreen = using_fullscreen;
     }
 #endif
 
@@ -4951,7 +4977,12 @@ xy2win(int x, int y, mouse_find_T popup)
 	return NULL;
     wp = mouse_find_win(&row, &col, popup);
     if (wp == NULL)
+    {
+#ifdef FEAT_MOUSESHAPE
+	update_mouseshape(-2);
+#endif
 	return NULL;
+    }
 #ifdef FEAT_MOUSESHAPE
     if (State == MODE_HITRETURN || State == MODE_ASKMORE)
     {
@@ -4960,13 +4991,15 @@ xy2win(int x, int y, mouse_find_T popup)
 	else
 	    update_mouseshape(SHAPE_IDX_MORE);
     }
-    else if (row > wp->w_height)	// below status line
+    else if (row >= wp->w_height + wp->w_status_height)	// below status line
 	update_mouseshape(SHAPE_IDX_CLINE);
     else if (!(State & MODE_CMDLINE) && wp->w_vsep_width > 0 && col == wp->w_width
-	    && (row != wp->w_height || !stl_connected(wp)) && msg_scrolled == 0)
+	    && (!(row >= wp->w_height && row < wp->w_height
+	    + wp->w_status_height) || !stl_connected(wp)) && msg_scrolled == 0)
 	update_mouseshape(SHAPE_IDX_VSEP);
     else if (!(State & MODE_CMDLINE) && wp->w_status_height > 0
-				  && row == wp->w_height && msg_scrolled == 0)
+	    && row >= wp->w_height && row < wp->w_height + wp->w_status_height
+	    && msg_scrolled == 0)
 	update_mouseshape(SHAPE_IDX_STATUS);
     else
 	update_mouseshape(-2);
@@ -5291,26 +5324,26 @@ gui_do_findrepl(
 
     ga_init2(&ga, 1, 100);
     if (type == FRD_REPLACEALL)
-	ga_concat(&ga, (char_u *)"%s/");
+	GA_CONCAT_LITERAL(&ga, "%s/");
 
-    ga_concat(&ga, (char_u *)"\\V");
+    GA_CONCAT_LITERAL(&ga, "\\V");
     if (flags & FRD_MATCH_CASE)
-	ga_concat(&ga, (char_u *)"\\C");
+	GA_CONCAT_LITERAL(&ga, "\\C");
     else
-	ga_concat(&ga, (char_u *)"\\c");
+	GA_CONCAT_LITERAL(&ga, "\\c");
     if (flags & FRD_WHOLE_WORD)
-	ga_concat(&ga, (char_u *)"\\<");
+	GA_CONCAT_LITERAL(&ga, "\\<");
     // escape slash and backslash
     p = vim_strsave_escaped(find_text, (char_u *)"/\\");
     if (p != NULL)
 	ga_concat(&ga, p);
     vim_free(p);
     if (flags & FRD_WHOLE_WORD)
-	ga_concat(&ga, (char_u *)"\\>");
+	GA_CONCAT_LITERAL(&ga, "\\>");
 
     if (type == FRD_REPLACEALL)
     {
-	ga_concat(&ga, (char_u *)"/");
+	GA_CONCAT_LITERAL(&ga, "/");
 	// Escape slash and backslash.
 	// Also escape tilde and ampersand if 'magic' is set.
 	p = vim_strsave_escaped(repl_text,
@@ -5318,7 +5351,7 @@ gui_do_findrepl(
 	if (p != NULL)
 	    ga_concat(&ga, p);
 	vim_free(p);
-	ga_concat(&ga, (char_u *)"/g");
+	GA_CONCAT_LITERAL(&ga, "/g");
     }
     ga_append(&ga, NUL);
 

@@ -318,7 +318,7 @@ func Test_set_completion()
 
   " Expand abbreviation of options.
   call feedkeys(":set ts\<C-A>\<C-B>\"\<CR>", 'tx')
-  call assert_equal('"set tabstop thesaurus thesaurusfunc ttyscroll', @:)
+  call assert_equal('"set tabstop termsync thesaurus thesaurusfunc ttyscroll', @:)
 
   " Expand current value
   call feedkeys(":set suffixes=\<C-A>\<C-B>\"\<CR>", 'tx')
@@ -522,15 +522,21 @@ func Test_set_completion_string_values()
   call assert_equal('unload', getcompletion('set bufhidden=', 'cmdline')[1])
   call assert_equal('nowrite', getcompletion('set buftype=', 'cmdline')[1])
   call assert_equal('internal', getcompletion('set casemap=', 'cmdline')[1])
-  if exists('+clipboard')
+  if has('clipboard')
     call assert_match('unnamed', getcompletion('set clipboard=', 'cmdline')[1])
   endif
-  if exists('+clipmethod')
-    if has('unix') || has('vms')
-      call assert_match('wayland', getcompletion('set clipmethod=', 'cmdline')[1])
-    else
-      call assert_match('gui', getcompletion('set clipmethod=', 'cmdline')[0])
-    endif
+  if has('wayland_clipboard')
+    call assert_match('wayland', getcompletion('set clipmethod=w', 'cmdline')[0])
+  endif
+  if has('xterm_clipboard')
+    call assert_match('x11', getcompletion('set clipmethod=x', 'cmdline')[0])
+  endif
+  if has('eval')
+    let v:clipproviders["first"] = {}
+    let v:clipproviders["second"] = {}
+
+    call assert_match('first', getcompletion('set clipmethod=f', 'cmdline')[0])
+    call assert_match('second', getcompletion('set clipmethod=s', 'cmdline')[0])
   endif
   call assert_equal('.', getcompletion('set complete=', 'cmdline')[1])
   call assert_equal('menu', getcompletion('set completeopt=', 'cmdline')[1])
@@ -617,9 +623,16 @@ func Test_set_completion_string_values()
   call assert_equal('top', getcompletion('set printoptions=', 'cmdline')[0])
   call assert_equal('SpecialKey', getcompletion('set wincolor=', 'cmdline')[0])
 
+  call assert_equal('SpecialKey', getcompletion('set winhighlight=', 'cmdline')[0])
+  call assert_equal('SpecialKey', getcompletion('set winhighlight=SpecialKey:', 'cmdline')[0])
+  call assert_equal('SpecialKey', getcompletion('set winhighlight=SpecialKey:SpecialKey,', 'cmdline')[0])
+  call assert_equal('!8', getcompletion('set winhighlight=SpecialKey:SpecialKey,!', 'cmdline')[0])
+
   call assert_equal('eol', getcompletion('set listchars+=', 'cmdline')[0])
   call assert_equal(['multispace', 'leadmultispace'], getcompletion('set listchars+=', 'cmdline')[-2:])
+  call assert_equal(['tab', 'leadtab'], getcompletion('set listchars+=', 'cmdline')[5:6])
   call assert_equal('eol', getcompletion('setl listchars+=', 'cmdline')[0])
+  call assert_equal(['tab', 'leadtab'], getcompletion('setl listchars+=', 'cmdline')[5:6])
   call assert_equal(['multispace', 'leadmultispace'], getcompletion('setl listchars+=', 'cmdline')[-2:])
   call assert_equal('stl', getcompletion('set fillchars+=', 'cmdline')[0])
   call assert_equal('stl', getcompletion('setl fillchars+=', 'cmdline')[0])
@@ -637,10 +650,10 @@ func Test_set_completion_string_values()
   set keyprotocol&
 
   " previewpopup / completepopup
-  call assert_equal('height:', getcompletion('set previewpopup=', 'cmdline')[0])
+  call assert_equal('border:', getcompletion('set previewpopup=', 'cmdline')[0])
   call assert_equal('EndOfBuffer', getcompletion('set previewpopup=highlight:End*Buffer', 'cmdline')[0])
   call feedkeys(":set previewpopup+=border:\<Tab>\<C-B>\"\<CR>", 'xt')
-  call assert_equal('"set previewpopup+=border:on', @:)
+  call assert_equal('"set previewpopup+=border:single', @:)
   call feedkeys(":set completepopup=height:10,align:\<Tab>\<C-B>\"\<CR>", 'xt')
   call assert_equal('"set completepopup=height:10,align:item', @:)
   call assert_equal([], getcompletion('set completepopup=bogusname:', 'cmdline'))
@@ -1675,25 +1688,34 @@ endfunc
 
 " Test for setting boolean global-local option value
 func Test_set_boolean_global_local_option()
-  setglobal autoread
-  setlocal noautoread
+  CheckUnix
+
+  setglobal autoread fsync
+  setlocal noautoread nofsync
   call assert_equal(1, &g:autoread)
   call assert_equal(0, &l:autoread)
   call assert_equal(0, &autoread)
+  call assert_equal(1, &g:fsync)
+  call assert_equal(0, &l:fsync)
+  call assert_equal(0, &fsync)
 
   " :set {option}< set the effective value of {option} to its global value.
-  set autoread<
+  set autoread< fsync<
   call assert_equal(1, &l:autoread)
   call assert_equal(1, &autoread)
+  call assert_equal(1, &l:fsync)
+  call assert_equal(1, &fsync)
 
   " :setlocal {option}< removes the local value, so that the global value will be used.
-  setglobal noautoread
-  setlocal autoread
-  setlocal autoread<
+  setglobal noautoread nofsync
+  setlocal autoread fsync
+  setlocal autoread< fsync<
   call assert_equal(-1, &l:autoread)
   call assert_equal(0, &autoread)
+  call assert_equal(-1, &l:fsync)
+  call assert_equal(0, &fsync)
 
-  set autoread&
+  set autoread& fsync&
 endfunc
 
 func Test_set_in_sandbox()
@@ -2714,6 +2736,9 @@ func Test_set_option_window_global_local_all()
       elseif opt == 'listchars'
         exe 'setl ' .. opt .. '=tab:>>'
         exe 'setg ' .. opt .. '=tab:++'
+      elseif opt == 'statuslineopt'
+        exe 'setl ' .. opt .. '=maxheight:4'
+        exe 'setg ' .. opt .. '=maxheight:5,fixedheight'
       elseif opt == 'virtualedit'
         exe 'setl ' .. opt .. '=all'
         exe 'setg ' .. opt .. '=block'
@@ -2733,6 +2758,8 @@ func Test_set_option_window_global_local_all()
         call assert_equal('vert:+,fold:+', eval('&g:' .. opt), 'option:' .. opt)
       elseif opt == 'listchars'
         call assert_equal('tab:++', eval('&g:' .. opt), 'option:' .. opt)
+      elseif opt == 'statuslineopt'
+        call assert_equal('maxheight:5,fixedheight', eval('&g:' .. opt), 'option:' .. opt)
       elseif opt == 'virtualedit'
         call assert_equal('block', eval('&g:' .. opt), 'option:' .. opt)
       else

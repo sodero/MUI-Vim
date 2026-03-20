@@ -386,19 +386,18 @@ removable(char_u *name)
 {
     char_u  *p;
     char_u  part[51];
+    int	    part_len;
     int	    retval = FALSE;
-    size_t  n;
 
     name = home_replace_save(NULL, name);
     if (name == NULL)
 	return FALSE;
     for (p = p_viminfo; *p; )
     {
-	copy_option_part(&p, part, 51, ", ");
+	part_len = copy_option_part(&p, part, sizeof(part), ", ");
 	if (part[0] == 'r')
 	{
-	    n = STRLEN(part + 1);
-	    if (MB_STRNICMP(part + 1, name, n) == 0)
+	    if (MB_STRNICMP(part + 1, name, part_len - 1) == 0)
 	    {
 		retval = TRUE;
 		break;
@@ -1891,7 +1890,7 @@ write_viminfo_registers(FILE *fp)
     int		max_kbyte;
     long	len;
     yankreg_T	*y_ptr;
-    yankreg_T	*y_regs_p = get_y_regs();;
+    yankreg_T	*y_regs_p = get_y_regs();
 
     fputs(_("\n# Registers:\n"), fp);
 
@@ -1907,9 +1906,9 @@ write_viminfo_registers(FILE *fp)
 
     for (i = 0; i < NUM_REGISTERS; i++)
     {
-#ifdef FEAT_CLIPBOARD
+#if defined(FEAT_CLIPBOARD) || defined(FEAT_CLIPBOARD_PROVIDER)
 	// Skip '*'/'+' register, we don't want them back next time
-	if (i == STAR_REGISTER || i == PLUS_REGISTER)
+	if (i == STAR_REGISTER || i == PLUS_REGISTER || i == REAL_PLUS_REGISTER)
 	    continue;
 #endif
 #ifdef FEAT_DND
@@ -3356,11 +3355,11 @@ write_viminfo(char_u *file, int forceit)
 		++viminfo_errcnt;
 		semsg(_(e_cant_rename_viminfo_file_to_str), fname);
 	    }
-# ifdef MSWIN
+#ifdef MSWIN
 	    // If the viminfo file was hidden then also hide the new file.
 	    else if (hidden)
 		mch_hide(fname);
-# endif
+#endif
 	}
 	if (viminfo_errcnt > 0)
 	    mch_remove(tempname);

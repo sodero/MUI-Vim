@@ -35,19 +35,19 @@ doctags: doctags.c
 	$(CC) doctags.c -o doctags
 
 vim.man: vim.1
-	nroff -man $? | sed -e s/.//g > $@
+	nroff -c -man $? | sed -e s/.//g > $@
 
 evim.man: evim.1
-	nroff -man $? | sed -e s/.//g > $@
+	nroff -c -man $? | sed -e s/.//g > $@
 
 vimdiff.man: vimdiff.1
-	nroff -man $? | sed -e s/.//g > $@
+	nroff -c -man $? | sed -e s/.//g > $@
 
 vimtutor.man: vimtutor.1
-	nroff -man $? | sed -e s/.//g > $@
+	nroff -c -man $? | sed -e s/.//g > $@
 
 xxd.man: xxd.1
-	nroff -man $? | sed -e s/.//g > $@
+	nroff -c -man $? | sed -e s/.//g > $@
 
 # Awk version of .txt to .html conversion.
 html: noerrors tags $(HTMLS)
@@ -237,3 +237,18 @@ vimdiff-tr.UTF-8.1: vimdiff-tr.1
 
 vimtutor-tr.UTF-8.1: vimtutor-tr.1
 	iconv -f latin5 -t UTF-8 $? >$@
+
+vim-sv.UTF-8.1: vim-sv.1
+	iconv -f latin1 -t UTF-8 $? >$@
+
+evim-sv.UTF-8.1: evim-sv.1
+	iconv -f latin1 -t UTF-8 $? >$@
+
+vimdiff-sv.UTF-8.1: vimdiff-sv.1
+	iconv -f latin1 -t UTF-8 $? >$@
+
+vimtutor-sv.UTF-8.1: vimtutor-sv.1
+	iconv -f latin1 -t UTF-8 $? >$@
+
+xxd-sv.UTF-8.1: xxd-sv.1
+	iconv -f latin1 -t UTF-8 $? >$@

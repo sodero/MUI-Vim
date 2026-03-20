@@ -46,9 +46,11 @@ func Test_terminal_shell_option()
     " the %PATH%, "term dir" succeeds unintentionally.  Use dir.com instead.
     try
       term dir.com /b runtest.vim
-      call WaitForAssert({-> assert_match('job failed', term_getline(bufnr(), 1))})
-    catch /CreateProcess/
-      " ignore
+      throw 'dir.com without a shell must fail, so you will never get here'
+    catch /CreateProcess failed/
+      " ignore:
+      " winpty simply fails with "CreateProcess failed".
+      " compty fails with "CreateProcess failed: {localized failure reason}".
     endtry
     bwipe!
 
@@ -1035,6 +1037,185 @@ func Test_terminal_visual_empty_listchars()
   call VerifyScreenDump(buf, 'Test_terminal_empty_listchars2', {})
 
   call StopVimInTerminal(buf)
+endfunc
+
+func Test_terminal_ansi_color_windows_cui()
+  if !has('win32') || has('gui_running')
+    throw 'Skipped: only for the Windows CUI'
+  endif
+  if exists('$APPVEYOR')
+    throw 'Skipped: this test cannot be performed because AppVeyor does not support ANSI escape sequences'
+  endif
+
+  call assert_equal('dark', &background)
+
+  " Outputs 16 ANSI colors as background colors
+  let ansi = ''
+  for i in range(16)
+    let ansi ..= printf("\e[%dm%X", i + (i < 8 ? 40 : 92), i)
+  endfor
+  let ansi ..= "\e[40m\n"
+  call writefile([ansi], 'XANSIcolor', 'D')
+
+  let expected_chars = '0123456789ABCDEF'
+  let expected_colors = [
+        \ '#000000', '#e00000', '#00e000', '#e0e000',
+        \ '#0000e0', '#e000e0', '#00e0e0', '#e0e0e0',
+        \ '#808080', '#ff4040', '#40ff40', '#ffff40',
+        \ '#4040ff', '#ff40ff', '#40ffff', '#ffffff',
+        \ ]
+
+  " Ideally, 16 colors should be checked. However, in the current CI
+  " environment, the 16th color is something other than white, and we don't
+  " know the cause nor solution. After discussion, we decided to check only 15
+  " colors for the time being.
+  " FIXME: Check all 16 colors in the future.
+  let len_to_check = 15
+  let expected_colors = expected_colors[:len_to_check-1]
+
+  " First, make sure vim can display correct ANSI color text in terminal.
+  let buf = term_start("cmd /C type XANSIcolor")
+  call WaitForAssert({-> assert_equal(expected_chars, term_scrape(buf, 1)[:15]->map({_, v -> v['chars']})->join(''))})
+  call assert_equal(expected_colors, term_scrape(buf, 1)[:len_to_check-1]->map({_, v -> v['bg']}))
+  bwipeout!
+
+  " Next, check if vim can do the same thing in the vim terminal in terminal.
+  let lines = [
+        \ 'call term_start("cmd /C type XANSIcolor")'
+        \ ]
+  call writefile(lines, 'XloadANSI', 'D')
+  let cmd = GetVimCommandCleanTerm()
+  let buf = term_start(cmd .. '-S XloadANSI')
+  call WaitForAssert({-> assert_equal(expected_chars, term_scrape(buf, 1)[:15]->map({_, v -> v['chars']})->join(''))})
+  call assert_equal(expected_colors, term_scrape(buf, 1)[:len_to_check-1]->map({_, v -> v['bg']}))
+endfunc
+
+func Test_terminal_backspace_on_windows()
+  if !has('win32')
+    throw 'Skipped: only for the Windows CUI'
+  endif
+  " Specify a simple prompt for easy comparison
+  let save_prompt = $PROMPT
+  let $PROMPT = '>'
+
+  " Return the prompt line before the cursor
+  func s:get_cmd_prompt(buf)
+    let cur = term_getcursor(a:buf)
+    return term_getline(a:buf, cur[0])[:cur[1]-2]
+  endfunc
+
+  let buf = term_start('cmd.exe')
+  call WaitForAssert({-> assert_equal('>', s:get_cmd_prompt(buf))}, 100)
+
+  " Verify sent characters are echoed back
+  call term_sendkeys(buf, 'foo bar')
+  call WaitForAssert({-> assert_equal('>foo bar', s:get_cmd_prompt(buf))}, 100)
+  " Backspace should delete a character in front of the cursor
+  call term_sendkeys(buf, "\<BS>")
+  call WaitForAssert({-> assert_equal('>foo ba', s:get_cmd_prompt(buf))}, 100)
+  " Ctrl+H behaves like Backspace
+  call term_sendkeys(buf, "\<C-H>")
+  call WaitForAssert({-> assert_equal('>foo b', s:get_cmd_prompt(buf))}, 100)
+  " Send a total of four BS and Ctrl+H to erase four characters.
+  call term_sendkeys(buf, "\<BS>\<BS>\<C-H>\<C-H>")
+  call WaitForAssert({-> assert_equal('>f', s:get_cmd_prompt(buf))}, 100)
+
+  delfunc s:get_cmd_prompt
+  let $PROMPT = save_prompt
+endfunc
+
+func Test_terminal_split_utf8()
+  CheckUnix
+
+  let buf = term_start('cat', {})
+  let chan = buf->term_getjob()->job_getchannel()
+  call ch_sendraw(chan, "1: \xc3")
+  call WaitForAssert({-> assert_equal('1: ', term_getline(buf, 1))})
+  call ch_sendraw(chan, "\xa5\xcc\xb2\n")
+  call WaitForAssert({-> assert_equal('1: å̲', term_getline(buf, 1))})
+  call WaitForAssert({-> assert_equal('1: å̲', term_getline(buf, 2))})
+  call ch_sendraw(chan, "2: \xc3\xa5")
+  call WaitForAssert({-> assert_equal('2: å', term_getline(buf, 3))})
+  call ch_sendraw(chan, "\xcc\xb2\n")
+  call WaitForAssert({-> assert_equal('2: å̲', term_getline(buf, 3))})
+  call WaitForAssert({-> assert_equal('2: å̲', term_getline(buf, 4))})
+  call ch_sendraw(chan, "3: \xc3\xa5\xcc")
+  call WaitForAssert({-> assert_equal('3: å', term_getline(buf, 5))})
+  call ch_sendraw(chan, "\xb2\n")
+  call WaitForAssert({-> assert_equal('3: å̲', term_getline(buf, 5))})
+  call WaitForAssert({-> assert_equal('3: å̲', term_getline(buf, 6))})
+
+  exe buf .. "bwipe!"
+endfunc
+
+func Test_terminal_max_combining_chars()
+  " somehow doesn't work on MS-Windows
+  CheckUnix
+  let cmd = "cat samples/terminal_max_combining_chars.txt\<CR>"
+  let buf = Run_shell_in_terminal({'term_rows': 15, 'term_cols': 35})
+  call TermWait(buf)
+  call term_sendkeys(buf, cmd)
+  " last char is a space with many combining chars
+  call WaitForAssert({-> assert_match("AAAAAAAAAAAAAAAAAAAAAAAAAAAA.", term_getline(buf, 14))})
+
+  call term_sendkeys(buf, "exit\r")
+  exe buf . "bwipe!"
+endfunc
+
+func Test_term_getpos()
+  CheckRunVimInTerminal
+  CheckUnix
+  CheckExecutable seq
+  defer delete('XTest_getpos_result')
+
+  let lines =<< trim EOL
+     term ++curwin sh
+  EOL
+  call writefile(lines, 'XTest_getpos', 'D')
+  let buf = RunVimInTerminal('-S XTest_getpos', {'rows': 15})
+  call term_sendkeys(buf, "for i in `seq 1 30`; do echo line$i; done\<cr>")
+
+  call WaitForAssert({-> assert_match("line18", term_getline(buf, 1))})
+  call WaitForAssert({-> assert_match("line30", term_getline(buf, 13))})
+
+  call term_sendkeys(buf, "\<c-w>:let g:job_w0 = line('w0')\<cr>")
+  call term_sendkeys(buf, "\<c-w>:let g:job_wdollar = line('w$')\<cr>")
+  call term_sendkeys(buf, "\<c-w>:call writefile([string(g:job_w0), string(g:job_wdollar)], 'XTest_getpos_result')\<cr>")
+  call WaitForAssert({-> assert_true(filereadable('XTest_getpos_result'))})
+  call WaitForAssert({-> assert_equal(2, len(readfile('XTest_getpos_result')))})
+  let job_result = readfile('XTest_getpos_result')
+  " 15 - 1: statusline - 1: prompt line
+  call assert_equal(13, str2nr(job_result[1]) - str2nr(job_result[0]))
+  call assert_true(str2nr(job_result[0]) > 1)
+  call delete('XTest_getpos_result')
+
+  " switch to Terminal-Normal mode and record w0/w$
+  call term_sendkeys(buf, "\<c-w>N")
+  call term_sendkeys(buf, ":let g:w0 = line('w0')\<cr>")
+  call term_sendkeys(buf, ":let g:wdollar = line('w$')\<cr>")
+  call term_sendkeys(buf, ":call writefile([string(g:w0), string(g:wdollar)], 'XTest_getpos_result')\<cr>")
+
+  call WaitForAssert({-> assert_true(filereadable('XTest_getpos_result'))})
+  call WaitForAssert({-> assert_equal(2, len(readfile('XTest_getpos_result')))})
+  let result = readfile('XTest_getpos_result')
+  " 15 - 1: statusline - 1: for prompt line
+  call assert_equal(13, str2nr(result[1]) - str2nr(result[0]))
+  call assert_true(str2nr(result[0]) > 1)
+
+  " Regression: line('w0') and line('w$') must not move cursor position
+  call term_sendkeys(buf, "gg")
+  call term_sendkeys(buf, ":call line('w0')\<cr>")
+  call term_sendkeys(buf, ":call line('w$')\<cr>")
+  call term_wait(buf)
+  call WaitForAssert({-> assert_match("for i in", term_getline(buf, 1))})
+  call WaitForAssert({-> assert_match("line12", term_getline(buf, 13))})
+
+  call StopVimInTerminal(buf)
+  " this crashed
+  new
+  setl buftype=terminal
+  call assert_equal(2, line('w0') + line('w$'))
+  bw
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

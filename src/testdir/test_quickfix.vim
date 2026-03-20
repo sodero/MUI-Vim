@@ -6958,4 +6958,52 @@ func Test_vimgrep_dummy_buffer_keep()
   %bw!
 endfunc
 
+func Test_quickfix_restore_current_win()
+  let curwin = win_getid()
+  vsplit Xb
+  wincmd p
+  botright copen
+  cclose
+
+  call assert_equal(curwin, win_getid())
+  bw! Xb
+endfunc
+
+func Test_quickfixtextfunc_wipes_buffer()
+  let g:crash=""
+  new
+  fu QFexpr(dummy)
+    bw
+  endfu
+  try
+    set quickfixtextfunc=QFexpr
+    lad "['0:4:e']"
+    lw
+  catch /^Vim\%((\S\+)\)\=:E565:/
+    let g:crash='caught'
+  endtry
+  " close location list window
+  bw
+  delfunc QFexpr
+  set quickfixtextfunc=
+  call assert_equal('caught', g:crash)
+  unlet g:crash
+  " close the newly opened window
+  bw
+endfunc
+
+func Test_quickfix_longline_noeol()
+  let qf = 'Xquickfix'
+  let args = $"-q {qf}"
+  let after =<< trim [CODE]
+    call writefile(['okay'], "XDONE")
+    qall!
+  [CODE]
+  defer delete("XDONE")
+  call writefile([repeat('A', 1024)], qf, 'bD')
+  call RunVim([], after, args)
+  call WaitForAssert({-> assert_true(filereadable("XDONE"))})
+  call assert_equal(['okay'], readfile("XDONE"))
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

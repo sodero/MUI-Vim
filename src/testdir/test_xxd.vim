@@ -67,17 +67,19 @@ func Test_xxd()
   exe '0r ' man_page '| set ff=unix | $d | w' man_copy '| bwipe!' man_copy
 
   " Test 5: Print 120 bytes as continuous hexdump with 20 octets per line
+  "         skip the first 30 bytes, it contains the date of the manpage
+  "         which can change
   let s:test += 1
   %d
-  exe '0r! ' . s:xxd_cmd . ' -l 120 -ps -c20 ' . man_copy
+  exe '0r! ' . s:xxd_cmd . ' -s 30 -l 120 -ps -c20 ' . man_copy
   $d
   let expected = [
-      \ '2e544820585844203120224d6179203230323422',
-      \ '20224d616e75616c207061676520666f72207878',
-      \ '64220a2e5c220a2e5c222032317374204d617920',
-      \ '313939360a2e5c22204d616e2070616765206175',
-      \ '74686f723a0a2e5c2220202020546f6e79204e75',
-      \ '67656e74203c746f6e79407363746e7567656e2e']
+      \ '61676520666f7220787864220a2e5c220a2e5c22',
+      \ '2032317374204d617920313939360a2e5c22204d',
+      \ '616e207061676520617574686f723a0a2e5c2220',
+      \ '202020546f6e79204e7567656e74203c746f6e79',
+      \ '407363746e7567656e2e7070702e67752e656475',
+      \ '2e61753e203c542e4e7567656e74407363742e67']
   call assert_equal(expected, getline(1,'$'), s:Mess(s:test))
 
   " Test 6: Print the date from xxd.1
@@ -278,6 +280,37 @@ func Test_xxd()
     unsigned char XXDfile[] = {
       0b01010100, 0b01000101, 0b01010011, 0b01010100, 0b01100001, 0b01100010,
       0b01100011, 0b01100100, 0b00110000, 0b00111001, 0b00001010
+    };
+    unsigned int XXDfile_len = 11;
+  [CODE]
+
+  call assert_equal(expected, getline(1,'$'), s:Mess(s:test))
+
+  " Test 20: Print C include with terminating null
+  let s:test += 1
+  call writefile(['TESTabcd09'], 'XXDfile')
+  %d
+  exe '0r! ' . s:xxd_cmd . ' -i -t XXDfile'
+  $d
+  let expected =<< trim [CODE]
+    unsigned char XXDfile[] = {
+      0x54, 0x45, 0x53, 0x54, 0x61, 0x62, 0x63, 0x64, 0x30, 0x39, 0x0a, 0x00
+    };
+    unsigned int XXDfile_len = 11;
+  [CODE]
+
+  call assert_equal(expected, getline(1,'$'), s:Mess(s:test))
+
+  " Test 21: Print C include in binary format
+  let s:test += 1
+  call writefile(['TESTabcd09'], 'XXDfile')
+  %d
+  exe '0r! ' . s:xxd_cmd . ' -i -b -t XXDfile'
+  $d
+  let expected =<< trim [CODE]
+    unsigned char XXDfile[] = {
+      0b01010100, 0b01000101, 0b01010011, 0b01010100, 0b01100001, 0b01100010,
+      0b01100011, 0b01100100, 0b00110000, 0b00111001, 0b00001010, 0b00000000
     };
     unsigned int XXDfile_len = 11;
   [CODE]

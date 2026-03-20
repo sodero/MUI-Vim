@@ -12,7 +12,7 @@ source util/shared.vim
 
 " Unlike X11, we need the socket server running if we want to send commands to
 " a server via sockets.
-CheckSocketServer
+RunSocketServer
 
 func Check_X11_Connection()
   if has('x11')
@@ -205,6 +205,7 @@ endfunc
 func Test_client_server_stopinsert()
   " test does not work on MS-Windows
   CheckNotMSWindows
+  CheckNotMac
   let g:test_is_flaky = 1
   let cmd = GetVimCommand()
   if cmd == ''
@@ -227,12 +228,13 @@ func Test_client_server_stopinsert()
   " When using valgrind it takes much longer.
   call WaitForAssert({-> assert_match(name, serverlist())})
 
-  call remote_expr(name, 'execute("stopinsert")')
+  call remote_send(name, "\<C-\>\<C-N>")
 
-  call assert_equal('n', name->remote_expr("mode(1)"))
-  call assert_equal('13', name->remote_expr("col('.')"))
+  " Wait for the mode to change to Normal ('n')
+  call WaitForAssert({-> assert_equal('n', name->remote_expr("mode(1)"))})
+  call WaitForAssert({-> assert_equal('13', name->remote_expr("col('.')"))})
 
-  eval name->remote_send(":qa!\<CR>")
+  call remote_send(name, "\<C-\>\<C-N>:qa!\<CR>")
   try
     call WaitForAssert({-> assert_equal("dead", job_status(job))})
   finally
@@ -283,7 +285,7 @@ func Test_client_server_x11_and_socket_server()
 endfunc
 
 " Test if socket server works in the GUI
-func Test_client_socket_server_server_gui()
+func Test_client_server_socket_server_gui()
   CheckNotMSWindows
   CheckFeature socketserver
   CheckFeature gui_gtk

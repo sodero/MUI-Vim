@@ -160,42 +160,11 @@ static int suppress_winsize = 1;	// don't fiddle with console
 
 static WCHAR *exe_pathw = NULL;
 
-static BOOL win8_or_later = FALSE;
-static BOOL win10_22H2_or_later = FALSE;
-BOOL win11_or_later = FALSE; // used in gui_mch_set_titlebar_colors(void)
-
 #if !defined(FEAT_GUI_MSWIN) || defined(VIMDLL)
 static BOOL use_alternate_screen_buffer = FALSE;
 #endif
 
-/*
- * Get version number including build number
- */
-typedef BOOL (WINAPI *PfnRtlGetVersion)(LPOSVERSIONINFOW);
-#define MAKE_VER(major, minor, build) \
-    (((major) << 24) | ((minor) << 16) | (build))
-
-    static DWORD
-get_build_number(void)
-{
-    OSVERSIONINFOW	osver;
-    HMODULE		hNtdll;
-    PfnRtlGetVersion	pRtlGetVersion;
-    DWORD		ver = MAKE_VER(0, 0, 0);
-
-    osver.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
-    hNtdll = GetModuleHandle("ntdll.dll");
-    if (hNtdll == NULL)
-	return ver;
-
-    pRtlGetVersion =
-	(PfnRtlGetVersion)GetProcAddress(hNtdll, "RtlGetVersion");
-    pRtlGetVersion(&osver);
-    ver = MAKE_VER(min(osver.dwMajorVersion, 255),
-	    min(osver.dwMinorVersion, 255),
-	    min(osver.dwBuildNumber, 32767));
-    return ver;
-}
+extern DWORD win_version; // this is in os_mswin.c
 
 #if !defined(FEAT_GUI_MSWIN) || defined(VIMDLL)
     static BOOL
@@ -257,7 +226,7 @@ read_console_input(
     if (nLength == -2)
 	return (s_dwMax > 0) ? TRUE : FALSE;
 
-    if (!win8_or_later)
+    if (win_version < MAKE_VER(6, 2, 0)) // Before Windows 8
     {
 	if (nLength == -1)
 	    return PeekConsoleInputW(hInput, lpBuffer, 1, lpEvents);
@@ -918,39 +887,17 @@ win32_enable_privilege(LPTSTR lpszPrivilege)
 }
 #endif
 
-#ifdef _MSC_VER
-// Suppress the deprecation warning for using GetVersionEx().
-// It is needed for implementing "windowsversion()".
-# pragma warning(push)
-# pragma warning(disable: 4996)
-#endif
 /*
- * Set "win8_or_later" and fill in "windowsVersion" if possible.
+ * Fill in "windowsVersion" if possible and enable security privilege for ACL.
  */
     void
 PlatformId(void)
 {
-    OSVERSIONINFO ovi;
-
-    ovi.dwOSVersionInfoSize = sizeof(ovi);
-    if (!GetVersionEx(&ovi))
-	return;
-
 #ifdef FEAT_EVAL
-    vim_snprintf(windowsVersion, sizeof(windowsVersion), "%d.%d",
-	    (int)ovi.dwMajorVersion, (int)ovi.dwMinorVersion);
+    DWORD major = (win_version >> 24) & 0xFF;
+    DWORD minor = (win_version >> 16) & 0xFF;
+    vim_snprintf(windowsVersion, sizeof(windowsVersion), "%d.%d", major, minor);
 #endif
-    if ((ovi.dwMajorVersion == 6 && ovi.dwMinorVersion >= 2)
-	    || ovi.dwMajorVersion > 6)
-	win8_or_later = TRUE;
-
-    if ((ovi.dwMajorVersion == 10 && ovi.dwBuildNumber >= 19045)
-	    || ovi.dwMajorVersion > 10)
-	win10_22H2_or_later = TRUE;
-
-    if ((ovi.dwMajorVersion == 10 && ovi.dwBuildNumber >= 22000)
-	    || ovi.dwMajorVersion > 10)
-	win11_or_later = TRUE;
 
 #ifdef HAVE_ACL
     // Enable privilege for getting or setting SACLs.
@@ -958,9 +905,6 @@ PlatformId(void)
 	return;
 #endif
 }
-#ifdef _MSC_VER
-# pragma warning(pop)
-#endif
 
 #if !defined(FEAT_GUI_MSWIN) || defined(VIMDLL)
 
@@ -1507,7 +1451,6 @@ decode_mouse_wheel(MOUSE_EVENT_RECORD *pmer)
 	update_screen(0);
 	setcursor();
 	out_flush();
-	return;
     }
 # endif
     mouse_col = g_xMouse;
@@ -2867,7 +2810,8 @@ executable_exists(
 		goto theend;
 	    }
 
-	    if (mch_getenv("NoDefaultCurrentDirectoryInExePath") == NULL)
+	    if (mch_getenv("NoDefaultCurrentDirectoryInExePath") == NULL &&
+		    strstr((char *)gettail(p_sh), "cmd.exe") != NULL)
 	    {
 		STRCPY(pathbuf.string, ".;");
 		pathbuf.length = 2;
@@ -2919,7 +2863,7 @@ executable_exists(
 		(char *)buf,
 		sizeof(buf),
 		"%.*s%s%s", (int)(e - p), p,
-		!after_pathsep(p, e - 1) ? PATHSEPSTR : "",
+		!after_pathsep(p, e) ? PATHSEPSTR : "",
 		name);
 	}
 
@@ -4436,7 +4380,7 @@ handler_routine(
     case CTRL_CLOSE_EVENT:
     case CTRL_LOGOFF_EVENT:
     case CTRL_SHUTDOWN_EVENT:
-	windgoto((int)Rows - 1, 0);
+	windgoto((int)Rows - 1, cmdline_col_off);
 	g_fForceExit = TRUE;
 
 	vim_snprintf((char *)IObuff, IOSIZE, _("Vim: Caught %s event\n"),
@@ -4847,7 +4791,6 @@ mch_system_classic(char *cmd, int options)
 
     // Wait for the command to terminate before continuing
     {
-# ifdef FEAT_GUI
 	int	    delay = 1;
 
 	// Keep updating the window while waiting for the shell to finish.
@@ -4871,9 +4814,6 @@ mch_system_classic(char *cmd, int options)
 	    if (delay < 50)
 		delay += 10;
 	}
-# else
-	WaitForSingleObject(pi.hProcess, INFINITE);
-# endif
 
 	// Get the command exit code
 	GetExitCodeProcess(pi.hProcess, &ret);
@@ -4885,6 +4825,10 @@ mch_system_classic(char *cmd, int options)
 
     // Try to get input focus back.  Doesn't always work though.
     PostMessage(hwnd, WM_SETFOCUS, 0, 0);
+    // To increase the chances that WM_SETFOCUS will work, run the message loop
+    // here.  In addition, it prevents problems caused by delayed WM_SETFOCUS
+    // processing.
+    gui_mch_update();
 
     return ret;
 }
@@ -5058,7 +5002,7 @@ dump_pipe(int	    options,
 	    msg_puts((char *)buffer);
 	}
 
-	windgoto(msg_row, msg_col);
+	windgoto(msg_row, cmdline_col_off + msg_col);
 	cursor_on();
 	out_flush();
     }
@@ -5257,7 +5201,7 @@ mch_system_piped(char *cmd, int options)
 			else
 			    msg_outtrans_len(ta_buf + i, 1);
 		    }
-		    windgoto(msg_row, msg_col);
+		    windgoto(msg_row, cmdline_col_off + msg_col);
 		    out_flush();
 
 		    ta_len += len;
@@ -5483,6 +5427,21 @@ mch_call_shell_terminal(
     return retval;
 }
 #endif
+/* Restore a previous environment variable value, or unset it if NULL.
+ * 'must_free' indicates whether 'old_value' was allocated.
+ */
+    static void
+restore_env_var(char_u *name, char_u *old_value, int must_free)
+{
+    if (old_value != NULL)
+    {
+	vim_setenv(name, old_value);
+	if (must_free)
+	    vim_free(old_value);
+	return;
+    }
+    vim_unsetenv(name);
+}
 
 /*
  * Either execute a command by calling the shell or start a new shell
@@ -5495,6 +5454,8 @@ mch_call_shell(
     int		x = 0;
     int		tmode = cur_tmode;
     WCHAR	szShellTitle[512];
+    int		must_free;
+    char_u	*oldval;
 
 #ifdef FEAT_EVAL
     ch_log(NULL, "executing shell command: %s", cmd);
@@ -5519,6 +5480,11 @@ mch_call_shell(
 	    }
 	}
     }
+    // do not execute anything from the current directory by setting the
+    // environment variable $NoDefaultCurrentDirectoryInExePath
+    oldval = vim_getenv((char_u *)"NoDefaultCurrentDirectoryInExePath",
+	    &must_free);
+    vim_setenv((char_u *)"NoDefaultCurrentDirectoryInExePath", (char_u *)"1");
 
     out_flush();
 
@@ -5552,6 +5518,8 @@ mch_call_shell(
 	    // Use a terminal window to run the command in.
 	    x = mch_call_shell_terminal(cmd, options);
 	    resettitle();
+	    restore_env_var((char_u *)"NoDefaultCurrentDirectoryInExePath",
+		    oldval, must_free);
 	    return x;
 	}
     }
@@ -5775,6 +5743,10 @@ mch_call_shell(
 	    }
 	}
     }
+
+    // Restore original value of NoDefaultCurrentDirectoryInExePath
+    restore_env_var((char_u *)"NoDefaultCurrentDirectoryInExePath",
+	    oldval, must_free);
 
     if (tmode == TMODE_RAW)
     {
@@ -7468,17 +7440,29 @@ notsgr:
 	}
 	else if (s[0] == ESC && len >= 3-1 && s[1] == '[')
 	{
-	    int l = 2;
-
-	    if (SAFE_isdigit(s[l]))
-		l++;
-	    if (s[l] == ' ' && s[l + 1] == 'q')
+	    // When USE_VTP is active, CSI sequences written through
+	    // write_chars() are interpreted by the console's VTP parser,
+	    // generating responses (e.g. DECRQM) that end up in the
+	    // input buffer as unwanted keystrokes.  Parse the sequence
+	    // and only pass through known safe ones (e.g. DECSCUSR for
+	    // cursor shape), discard the rest.
+	    if (USE_VTP)
 	    {
-		// DECSCUSR (cursor style) sequences
-		if (vtp_working)
-		    vtp_printf("%.*s", l + 2, s);   // Pass through
-		s += l + 2;
-		len -= l + 1;
+		int l = 2;
+
+		// skip parameter and intermediate bytes (0x20-0x3F)
+		while (s + l < end && s[l] >= 0x20 && s[l] <= 0x3F)
+		    l++;
+		// skip the final byte (0x40-0x7E)
+		if (s + l < end && s[l] >= 0x40 && s[l] <= 0x7E)
+		{
+		    // DECSCUSR (cursor style): pass through to terminal
+		    if (s[l] == 'q')
+			vtp_printf("%.*s", l + 1, s);
+		    l++;
+		}
+		len -= l - 1;
+		s += l;
 	    }
 	}
 	else
@@ -8509,7 +8493,7 @@ mch_setenv(char *var, char *value, int x UNUSED)
  * Support for 256 colors and 24-bit colors was added in Windows 10
  * version 1703 (Creators update).
  */
-#define VTP_FIRST_SUPPORT_BUILD MAKE_VER(10, 0, 15063)
+#define VTP_FIRST_SUPPORT_BUILD	    MAKE_VER(10, 0, 15063)
 
 /*
  * Support for pseudo-console (ConPTY) was added in windows 10
@@ -8541,11 +8525,11 @@ mch_setenv(char *var, char *value, int x UNUSED)
 #define CONPTY_INSIDER_BUILD	    MAKE_VER(10, 0, 18995)
 
 /*
- * Not stable now.
+ * Make conpty default on Windows 11
  */
-#define CONPTY_STABLE_BUILD	    MAKE_VER(10, 0, 32767)  // T.B.D.
+#define CONPTY_STABLE_BUILD	    MAKE_VER(10, 0, 22000)
 // Notes:
-// Win 10 22H2 Final is build 19045, it's conpty is widely used.
+// Win 10 22H2 Final is build 19045, its conpty is widely used.
 // Strangely, 19045 is newer but is a lower build number than the 2020 insider
 // preview which had a build 19587.  And, not sure how stable that was?
 // Win Server 2022 (May 10, 2022) is build 20348, its conpty is widely used.
@@ -8554,7 +8538,6 @@ mch_setenv(char *var, char *value, int x UNUSED)
     static void
 vtp_flag_init(void)
 {
-    DWORD   ver = get_build_number();
 #if !defined(FEAT_GUI_MSWIN) || defined(VIMDLL)
     DWORD   mode;
     HANDLE  out;
@@ -8565,7 +8548,7 @@ vtp_flag_init(void)
     {
 	out = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	vtp_working = (ver >= VTP_FIRST_SUPPORT_BUILD) ? 1 : 0;
+	vtp_working = (win_version >= VTP_FIRST_SUPPORT_BUILD) ? 1 : 0;
 	GetConsoleMode(out, &mode);
 	mode |= (ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 	if (SetConsoleMode(out, mode) == 0)
@@ -8573,26 +8556,26 @@ vtp_flag_init(void)
 
 	// VTP uses alternate screen buffer.
 	// But, not if running in a nested terminal
-	use_alternate_screen_buffer = win10_22H2_or_later && p_rs && vtp_working
-						&& !mch_getenv("VIM_TERMINAL");
+	use_alternate_screen_buffer = win_version >= MAKE_VER(10, 0, 19045)
+	    && p_rs && vtp_working && !mch_getenv("VIM_TERMINAL");
     }
 #endif
 
-    if (ver >= CONPTY_FIRST_SUPPORT_BUILD)
+    if (win_version >= CONPTY_FIRST_SUPPORT_BUILD)
 	conpty_working = 1;
-    if (ver >= CONPTY_STABLE_BUILD)
+    if (win_version >= CONPTY_STABLE_BUILD)
 	conpty_stable = 1;
 
-    if (ver <= CONPTY_INSIDER_BUILD)
+    if (win_version <= CONPTY_INSIDER_BUILD)
 	conpty_type = 3;
-    if (ver <= CONPTY_1909_BUILD)
+    if (win_version <= CONPTY_1909_BUILD)
 	conpty_type = 2;
-    if (ver <= CONPTY_1903_BUILD)
+    if (win_version <= CONPTY_1903_BUILD)
 	conpty_type = 2;
-    if (ver < CONPTY_FIRST_SUPPORT_BUILD)
+    if (win_version < CONPTY_FIRST_SUPPORT_BUILD)
 	conpty_type = 1;
 
-    if (ver >= CONPTY_NEXT_UPDATE_BUILD)
+    if (win_version >= CONPTY_NEXT_UPDATE_BUILD)
 	conpty_fix_type = 1;
 }
 
@@ -9045,22 +9028,38 @@ resize_console_buf(void)
     char *
 GetWin32Error(void)
 {
-    static char *oldmsg = NULL;
-    char *msg = NULL;
+    static char	*oldmsg = NULL;
+    char	*acp_msg = NULL;
+    DWORD	acp_len;
+    char	*enc_msg = NULL;
+    int		enc_len = 0;
 
-    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,
-	    NULL, GetLastError(), 0, (LPSTR)&msg, 0, NULL);
+    // get formatted message from OS
+    acp_len = FormatMessage(
+	    FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,
+	    NULL, GetLastError(), 0, (LPSTR)&acp_msg, 0, NULL);
+    if (acp_len == 0 || acp_msg == NULL)
+	return NULL;
+
+    // clean oldmsg if remained.
     if (oldmsg != NULL)
-	LocalFree(oldmsg);
-    if (msg == NULL)
+    {
+	vim_free(oldmsg);
+	oldmsg = NULL;
+    }
+
+    acp_to_enc((char_u *)acp_msg, (int)acp_len, (char_u **)&enc_msg, &enc_len);
+    LocalFree(acp_msg);
+    if (enc_msg == NULL)
 	return NULL;
 
     // remove trailing \r\n
-    char *pcrlf = strstr(msg, "\r\n");
+    char *pcrlf = strstr(enc_msg, "\r\n");
     if (pcrlf != NULL)
 	*pcrlf = NUL;
-    oldmsg = msg;
-    return msg;
+
+    oldmsg = enc_msg;
+    return enc_msg;
 }
 
 #if defined(FEAT_RELTIME)

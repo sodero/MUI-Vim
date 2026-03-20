@@ -905,6 +905,10 @@ pum_redraw(void)
     int		last_isabbr = FALSE;
     int		orig_attr = -1;
     int		scroll_range = pum_size - pum_height;
+    bool	override_success;
+
+    // Use current window for highlight overrides when using 'winhighlight'
+    override_success = push_highlight_overrides(curwin->w_hl, curwin->w_hl_len);
 
     hlf_T	hlfsNorm[3];
     hlf_T	hlfsSel[3];
@@ -1042,6 +1046,9 @@ pum_redraw(void)
 #ifdef FEAT_PROP_POPUP
     screen_zindex = 0;
 #endif
+
+    if (override_success)
+	pop_highlight_overrides();
 }
 
 #if defined(FEAT_PROP_POPUP) && defined(FEAT_QUICKFIX)
@@ -2234,16 +2241,19 @@ pum_draw_border(void)
 }
 
 /*
- * Get the underlying character and redraw with shadow highlight
+ * Get the underlying character and redraw with shadow highlight.
+ * Preserve bold, italic, underline, and reverse text underneath the shadow.
  */
     void
 put_shadow_char(int row, int col)
 {
     char_u  buf[MB_MAXBYTES + 1];
-    int	    attr = highlight_attr[HLF_PMS];
+    int	    shadow_attr = highlight_attr[HLF_PMS];
+    int	    char_attr, new_attr;
 
-    screen_getbytes(row, col, buf, NULL);
-    screen_putchar((*mb_ptr2char)(buf), row, col, attr);
+    screen_getbytes(row, col, buf, &char_attr);
+    new_attr = hl_combine_attr(char_attr, shadow_attr);
+    screen_putchar((*mb_ptr2char)(buf), row, col, new_attr);
 }
 
 /*

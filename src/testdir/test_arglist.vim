@@ -772,7 +772,6 @@ func Test_crash_arglist_uaf()
   "%argdelete
   new one
   au BufAdd XUAFlocal :bw
-  "call assert_fails(':arglocal XUAFlocal', 'E163:')
   arglocal XUAFlocal
   au! BufAdd
   bw! XUAFlocal
@@ -785,6 +784,37 @@ func Test_crash_arglist_uaf()
   bw! XUAFlocal2
   bw! two
 
+  au! BufAdd
+endfunc
+
+" This was using freed memory again
+func Test_crash_arglist_uaf2()
+  new
+  au BufAdd XUAFlocal :bw
+  arglocal XUAFlocal
+  redraw!
+  put ='abc'
+  2#
+  au! BufAdd
+endfunc
+
+func Test_arglist_w_locked_unlock()
+  au BufAdd * split
+
+  args a
+  call assert_equal(2, winnr('$'))
+  wincmd p
+  quit
+  call assert_equal(1, winnr('$'))
+
+  argedit b
+  call assert_equal(2, winnr('$'))
+  wincmd p
+  quit
+  call assert_equal(1, winnr('$'))
+
+  %argd
+  %bw!
   au! BufAdd
 endfunc
 

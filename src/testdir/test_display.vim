@@ -265,6 +265,65 @@ func Test_display_scroll_update_visual()
   call StopVimInTerminal(buf)
 endfunc
 
+func Test_display_scroll_setline()
+  CheckScreendump
+
+  let lines =<< trim END
+    setlocal scrolloff=5 signcolumn=yes
+    call setline(1, range(1, 100))
+    call sign_define('foo', #{text: '>'})
+    call sign_place(1, 'bar', 'foo', bufnr(), #{lnum: 71})
+    call sign_place(2, 'bar', 'foo', bufnr(), #{lnum: 72})
+    call sign_place(3, 'bar', 'foo', bufnr(), #{lnum: 73})
+    call sign_place(4, 'bar', 'foo', bufnr(), #{lnum: 74})
+    call sign_place(5, 'bar', 'foo', bufnr(), #{lnum: 75})
+    normal! G
+    autocmd CursorMoved * if line('.') == 79
+                      \ |   call sign_unplace('bar', #{id: 4})
+                      \ |   call setline(80, repeat('foo', 15))
+                      \ | elseif line('.') == 78
+                      \ |   call setline(72, repeat('bar', 10))
+                      \ | elseif line('.') == 77
+                      \ |   call sign_unplace('bar', #{id: 2})
+                      \ | endif
+  END
+  call writefile(lines, 'XscrollSetline.vim', 'D')
+
+  let buf = RunVimInTerminal('-S XscrollSetline.vim', #{rows: 15, cols: 20})
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_1', {})
+  call term_sendkeys(buf, '19k')
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_2', {})
+  call term_sendkeys(buf, 'k')
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_3', {})
+  call term_sendkeys(buf, 'k')
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_4', {})
+  call term_sendkeys(buf, 'k')
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_5', {})
+  call term_sendkeys(buf, 'k')
+  call VerifyScreenDump(buf, 'Test_display_scroll_setline_6', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_display_hit_enter_setline()
+  CheckScreendump
+
+  let lines =<< trim END
+    call setline(1, range(1, 100))
+  END
+  call writefile(lines, 'XhitEnterSetline.vim', 'D')
+
+  let buf = RunVimInTerminal('-S XhitEnterSetline.vim', #{rows: 8, cols: 40})
+  call VerifyScreenDump(buf, 'Test_display_hit_enter_setline_1', {})
+  call term_sendkeys(buf, ':echo "abc\ndef\nghi"')
+  call term_sendkeys(buf, "\<CR>")
+  call VerifyScreenDump(buf, 'Test_display_hit_enter_setline_2', {})
+  call term_sendkeys(buf, ":call setline(2, repeat('foo', 35))\<CR>")
+  call VerifyScreenDump(buf, 'Test_display_hit_enter_setline_3', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
 " Test for 'eob' (EndOfBuffer) item in 'fillchars'
 func Test_eob_fillchars()
   " default value
@@ -568,6 +627,67 @@ func Test_display_cursor_long_line()
   " Same for "ge".
    call term_sendkeys(buf, '$ge')
    call VerifyScreenDump(buf, 'Test_display_cursor_long_line_4', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_change_wrapped_line_cpo_dollar()
+  CheckScreendump
+
+  let lines =<< trim END
+    set cpoptions+=$ laststatus=0
+    call setline(1, ['foo', 'bar',
+          \ repeat('x', 25) .. '!!()!!' .. repeat('y', 25),
+          \ 'FOO', 'BAR'])
+    inoremap <F2> <Cmd>call setline(1, repeat('z', 30))<CR>
+    inoremap <F3> <Cmd>call setline(1, 'foo')<CR>
+    vsplit
+    call cursor(3, 1)
+  END
+  call writefile(lines, 'Xwrapped_cpo_dollar', 'D')
+  let buf = RunVimInTerminal('-S Xwrapped_cpo_dollar', #{rows: 10, cols: 45})
+
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_01', {})
+  call term_sendkeys(buf, 'ct!')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_02', {})
+  call term_sendkeys(buf, "\<F2>")
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_03', {})
+  call term_sendkeys(buf, "\<F3>")
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_02', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_04', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_05', {})
+  call term_sendkeys(buf, "\<Esc>")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_06', {})
+
+  call term_sendkeys(buf, ":silent undo | echo\<CR>")
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_01', {})
+  call term_sendkeys(buf, ":source samples/matchparen.vim\<CR>")
+  call term_sendkeys(buf, 'ct(')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_07', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_08', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_09', {})
+  call term_sendkeys(buf, "\<Esc>")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_10', {})
+
+  call term_sendkeys(buf, ":silent undo | echo\<CR>")
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_01', {})
+  call term_sendkeys(buf, "f(azz\<CR>zz\<Esc>k0")
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_11', {})
+  call term_sendkeys(buf, 'ct(')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_12', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_13', {})
+  call term_sendkeys(buf, 'y')
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_14', {})
+  call term_sendkeys(buf, "\<Esc>")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_change_wrapped_line_cpo_dollar_15', {})
 
   call StopVimInTerminal(buf)
 endfunc

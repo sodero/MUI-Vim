@@ -6,7 +6,12 @@ CheckScreendump
 " Run the command in terminal and wait for it to complete via notification
 func s:RunCommandAndWait(buf, cmd)
   call term_sendkeys(a:buf, a:cmd .. "; printf '" .. TermNotifyParentCmd(v:false) .. "'\<cr>")
-  call WaitForChildNotification()
+  if ValgrindOrAsan()
+    " test times out on ASAN CI builds
+    call WaitForChildNotification(10000)
+  else
+    call WaitForChildNotification()
+  endif
 endfunc
 
 func Test_crash1()
@@ -254,6 +259,24 @@ func TearDown()
   " but cleaning up in that test doesn't remove it. Let's try again at
   " the end of this test script
   call delete('Untitled')
+endfunc
+
+func Test_crash_bufwrite()
+  let lines =<< trim END
+    w! ++enc=ucs4 Xoutput
+    call writefile(['done'], 'Xbufwrite')
+  END
+  call writefile(lines, 'Xvimrc')
+  let opts = #{wait_for_ruler: 0, rows: 20}
+  let args = ' -u NONE -i NONE -b -S Xvimrc'
+  let buf = RunVimInTerminal(args .. ' samples/buffer-test.txt', opts)
+  call TermWait(buf, 1000)
+  call StopVimInTerminal(buf)
+  call WaitForAssert({-> assert_true(filereadable('Xbufwrite'))})
+  call assert_equal(['done'], readfile('Xbufwrite'))
+  call delete('Xbufwrite')
+  call delete('Xoutput')
+  call delete('Xvimrc')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

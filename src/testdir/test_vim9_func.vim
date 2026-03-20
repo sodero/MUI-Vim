@@ -1922,6 +1922,18 @@ def MyDefVarargs(one: string, two = 'foo', ...rest: list<string>): string
   return res
 enddef
 
+def Test_call_def_comments()
+  var lines =<< trim END
+      def Func(n: number)
+        echo n
+      enddef
+      Func( # comment
+        1
+        )
+  END
+  v9.CheckSourceDefSuccess(lines)
+enddef
+
 def Test_call_def_varargs()
   assert_fails('g:MyDefVarargs()', 'E119:', '', 1, 'Test_call_def_varargs')
   g:MyDefVarargs('one')->assert_equal('one,foo')
@@ -4767,6 +4779,20 @@ def Test_call_modified_import_func()
 
     assert_equal(4, setup)
     assert_equal(1, imp.done)
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
+
+" Test for assigning the return value of mkdir() to a new local variable.
+" This used to result in the "E1012: Type mismatch; expected list<any> but
+" got number" error message.
+def Test_assign_mkdir_ret_value()
+  var lines =<< trim END
+    vim9script
+    def Fn()
+      var ret: number = mkdir('./foo/bar/baz', 'p')
+    enddef
+    defcompile
   END
   v9.CheckScriptSuccess(lines)
 enddef

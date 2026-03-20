@@ -248,8 +248,8 @@ compile_lock_unlock(
 		if (*end != '.' && *end != '[')
 		{
 		    // Push the class of the bare class variable name
-		    name = cl->class_name;
-		    len = (int)STRLEN(name);
+		    name = cl->class_name.string;
+		    len = (int)cl->class_name.length;
 #ifdef LOG_LOCKVAR
 		    ch_log(NULL, "LKVAR:    ... cctx_class_member: name %s",
 			   name);
@@ -596,6 +596,11 @@ compile_elseif(char_u *arg, cctx_T *cctx)
 	emsg(_(e_elseif_without_if));
 	return NULL;
     }
+    if (scope->se_u.se_if.is_seen_else)
+    {
+	emsg(_(e_elseif_after_else));
+	return NULL;
+    }
     unwind_locals(cctx, scope->se_local_count, TRUE);
     if (!cctx->ctx_had_return && !cctx->ctx_had_throw)
 	// the previous if block didn't end in a "return" or a "throw"
@@ -743,6 +748,11 @@ compile_else(char_u *arg, cctx_T *cctx)
     if (scope == NULL || scope->se_type != IF_SCOPE)
     {
 	emsg(_(e_else_without_if));
+	return NULL;
+    }
+    if (scope->se_u.se_if.is_seen_else)
+    {
+	emsg(_(e_multiple_else));
 	return NULL;
     }
     unwind_locals(cctx, scope->se_local_count, TRUE);
@@ -1172,7 +1182,7 @@ compile_for(char_u *arg_start, cctx_T *cctx)
 		if (lhs_type == &t_any)
 		    lhs_type = item_type;
 		else if (item_type != &t_unknown
-			&& need_type_where(item_type, lhs_type, FALSE, -1,
+			&& need_type_where(item_type, lhs_type, 0, -1,
 					    where, cctx, FALSE, FALSE) == FAIL)
 		    goto failed;
 		var_lvar = reserve_local(cctx, arg, varlen, ASSIGN_FINAL,
@@ -2040,25 +2050,40 @@ compile_defer(char_u *arg_start, cctx_T *cctx)
     int		argcount = 0;
     int		defer_var_idx;
     type_T	*type = NULL;
-    int		func_idx;
+    int		func_idx = -1;
 
-    // Get a funcref for the function name.
-    // TODO: better way to find the "(".
-    paren = vim_strchr(arg, '(');
-    if (paren == NULL)
+    if (*arg == '(')
     {
-	semsg(_(e_missing_parenthesis_str), arg);
-	return NULL;
+	// a lambda function
+	if (compile_lambda(&arg, cctx) != OK)
+	    return NULL;
+	paren = vim_strchr(arg, '(');
+	if (paren == NULL)
+	{
+	    semsg(_(e_missing_parenthesis_str), arg);
+	    return NULL;
+	}
     }
-    *paren = NUL;
-    func_idx = find_internal_func(arg);
-    if (func_idx >= 0)
-	// TODO: better type
-	generate_PUSHFUNC(cctx, (char_u *)internal_func_name(func_idx),
-							   &t_func_any, FALSE);
-    else if (compile_expr0(&arg, cctx) == FAIL)
-	return NULL;
-    *paren = '(';
+    else
+    {
+	// Get a funcref for the function name.
+	// TODO: better way to find the "(".
+	paren = vim_strchr(arg, '(');
+	if (paren == NULL)
+	{
+	    semsg(_(e_missing_parenthesis_str), arg);
+	    return NULL;
+	}
+	*paren = NUL;
+	func_idx = find_internal_func(arg);
+	if (func_idx >= 0)
+	    // TODO: better type
+	    generate_PUSHFUNC(cctx, (char_u *)internal_func_name(func_idx),
+		    &t_func_any, FALSE);
+	else if (compile_expr0(&arg, cctx) == FAIL)
+	    return NULL;
+	*paren = '(';
+    }
 
     // check for function type
     if (cctx->ctx_skip != SKIP_YES)
@@ -2610,7 +2635,7 @@ compile_redir(char_u *line, exarg_T *eap, cctx_T *cctx)
 	if (compile_assign_lhs(arg, lhs, CMD_redir,
 					 FALSE, FALSE, FALSE, 1, cctx) == FAIL)
 	    return NULL;
-	if (need_type(&t_string, lhs->lhs_member_type, FALSE,
+	if (need_type(&t_string, lhs->lhs_member_type, 0,
 					    -1, 0, cctx, FALSE, FALSE) == FAIL)
 	    return NULL;
 	if (cctx->ctx_skip == SKIP_YES)
@@ -2692,7 +2717,7 @@ compile_return(char_u *arg, int check_return_type, int legacy, cctx_T *cctx)
 	    int save_flags = cmdmod.cmod_flags;
 
 	    generate_LEGACY_EVAL(cctx, p);
-	    if (need_type(&t_any, cctx->ctx_ufunc->uf_ret_type, FALSE, -1,
+	    if (need_type(&t_any, cctx->ctx_ufunc->uf_ret_type, 0, -1,
 						0, cctx, FALSE, FALSE) == FAIL)
 		return NULL;
 	    cmdmod.cmod_flags |= CMOD_LEGACY;
@@ -2723,7 +2748,7 @@ compile_return(char_u *arg, int check_return_type, int legacy, cctx_T *cctx)
 	    }
 	    else
 	    {
-		if (need_type(stack_type, cctx->ctx_ufunc->uf_ret_type, FALSE,
+		if (need_type(stack_type, cctx->ctx_ufunc->uf_ret_type, 0,
 					    -1, 0, cctx, FALSE, FALSE) == FAIL)
 		    return NULL;
 	    }

@@ -1253,7 +1253,7 @@ do_bang(
 	msg_putchar('!');
 	msg_outtrans(newcmd);
 	msg_clr_eos();
-	windgoto(msg_row, msg_col);
+	windgoto(msg_row, cmdline_col_off + msg_col);
 
 	do_shell(newcmd, 0);
     }
@@ -1404,7 +1404,7 @@ do_filter(
     if (cmd_buf == NULL)
 	goto filterend;
 
-    windgoto((int)Rows - 1, 0);
+    windgoto((int)Rows - 1, cmdline_col_off);
     cursor_on();
 
     /*
@@ -1659,7 +1659,7 @@ do_shell(
     // This windgoto is required for when the '\n' resulted in a "delete line
     // 1" command to the terminal.
     if (!swapping_screen())
-	windgoto(msg_row, msg_col);
+	windgoto(msg_row, cmdline_col_off + msg_col);
     cursor_on();
     (void)call_shell(cmd, SHELL_COOKED | flags);
     did_check_timestamps = FALSE;
@@ -1810,14 +1810,17 @@ make_filter_cmd(
 				|| fnamecmp(shell_name, "powershell.exe") == 0
 				|| fnamecmp(shell_name, "pwsh") == 0
 				|| fnamecmp(shell_name, "pwsh.exe") == 0);
-	len = (long_u)STRLEN(cmd) + 3;		// "()" + NUL
+	if (is_powershell)
+	    len = (long_u)STRLEN(cmd) + 7; // "& { " + " }" + NUL
+	else
+	    len = (long_u)STRLEN(cmd) + 3; // "()" + NUL
     }
 
     if (itmp != NULL)
     {
 	if (is_powershell)
-	    // "& { Get-Content " + " | & " + " }"
-	    len += (long_u)STRLEN(itmp) + 24;
+	    // "Get-Content " + " | & "
+	    len += (long_u)STRLEN(itmp) + 17;
 	else
 	    len += (long_u)STRLEN(itmp) + 9;	// " { < " + " } "
     }
@@ -1836,7 +1839,7 @@ make_filter_cmd(
 	    vim_snprintf((char *)buf, len, "& { Get-Content %s | & %s }",
 								itmp, cmd);
 	else
-	    vim_snprintf((char *)buf, len, "(%s)", cmd);
+	    vim_snprintf((char *)buf, len, "& { %s }", cmd);
     }
     else
     {
@@ -2498,6 +2501,7 @@ do_wqall(exarg_T *eap)
     buf_T	*buf;
     int		error = 0;
     int		save_forceit = eap->forceit;
+    int		save_exiting = exiting;
 
     if (eap->cmdidx == CMD_xall || eap->cmdidx == CMD_wqall)
     {
@@ -2509,9 +2513,9 @@ do_wqall(exarg_T *eap)
     FOR_ALL_BUFFERS(buf)
     {
 #ifdef FEAT_TERMINAL
-	if (exiting && term_job_running(buf->b_term))
+	if (exiting && !eap->forceit && term_job_running(buf->b_term))
 	{
-	    no_write_message_nobang(buf);
+	    no_write_message_buf(buf);
 	    ++error;
 	}
 	else
@@ -2564,7 +2568,7 @@ do_wqall(exarg_T *eap)
     {
 	if (!error)
 	    getout(0);		// exit Vim
-	not_exiting();
+	not_exiting(save_exiting);
     }
 }
 
@@ -2896,24 +2900,26 @@ do_ecmd(
     if ((command != NULL || newlnum > (linenr_T)0)
 	    && *get_vim_var_str(VV_SWAPCOMMAND) == NUL)
     {
-	int	len;
-	char_u	*p;
+	string_T    val;
+	size_t	    valsize;
 
 	// Set v:swapcommand for the SwapExists autocommands.
 	if (command != NULL)
-	    len = (int)STRLEN(command) + 3;
+	    valsize = (int)STRLEN(command) + 3;
 	else
-	    len = 30;
-	p = alloc(len);
-	if (p != NULL)
+	    valsize = 30;
+	val.string = alloc(valsize);
+	if (val.string != NULL)
 	{
 	    if (command != NULL)
-		vim_snprintf((char *)p, len, ":%s\r", command);
+		val.length = vim_snprintf_safelen((char *)val.string,
+		    valsize, ":%s\r", command);
 	    else
-		vim_snprintf((char *)p, len, "%ldG", (long)newlnum);
-	    set_vim_var_string(VV_SWAPCOMMAND, p, -1);
+		val.length = vim_snprintf_safelen((char *)val.string,
+		    valsize, "%ldG", (long)newlnum);
+	    set_vim_var_string(VV_SWAPCOMMAND, val.string, (int)val.length);
 	    did_set_swapcommand = TRUE;
-	    vim_free(p);
+	    vim_free(val.string);
 	}
     }
 #endif
@@ -4126,8 +4132,11 @@ ex_substitute(exarg_T *eap)
 		vim_free(old_sub);
 		old_sub = vim_strsave(sub);
 		if (old_sub == NULL)
+		{
 		    // out of memory
+		    vim_free(sub);
 		    return;
+		}
 	    }
 	}
     }
@@ -4694,7 +4703,7 @@ ex_substitute(exarg_T *eap)
 			    msg_no_more = FALSE;
 			    msg_scroll = i;
 			    showruler(TRUE);
-			    windgoto(msg_row, msg_col);
+			    windgoto(msg_row, cmdline_col_off + msg_col);
 			    RedrawingDisabled = save_RedrawingDisabled;
 
 #ifdef USE_ON_FLY_SCROLL
@@ -5489,12 +5498,18 @@ ex_global(exarg_T *eap)
 	}
 	else
 	{
+#ifdef FEAT_CLIPBOARD_PROVIDER
+	    inc_clip_provider();
+#endif
 #ifdef FEAT_CLIPBOARD
 	    start_global_changes();
 #endif
 	    global_exe(cmd);
 #ifdef FEAT_CLIPBOARD
 	    end_global_changes();
+#endif
+#ifdef FEAT_CLIPBOARD_PROVIDER
+	    dec_clip_provider();
 #endif
 	}
 

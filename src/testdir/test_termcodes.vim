@@ -1641,6 +1641,62 @@ func Test_mouse_termcodes()
   %bw!
 endfunc
 
+" Test buttons 8 and 9 for xterm-like terminal mouse support
+func Test_term_mouse_side_buttons()
+  new
+  let save_mouse = &mouse
+  let save_term = &term
+  let save_ttymouse = &ttymouse
+  call test_override('no_query_mouse', 1)
+  set mouse=a term=xterm
+  call WaitForResponses()
+
+  for ttymouse_val in g:Ttymouse_values
+    let msg = 'ttymouse=' .. ttymouse_val
+    exe 'set ttymouse=' .. ttymouse_val
+
+    let mouse_codes = [
+          \ ["<X1Mouse>", TerminalEscapeCode(128, 1, 1, 'M')],
+          \ ["<X1Drag>", TerminalEscapeCode(128+32, 1, 1, 'M')],
+          \ ["<X2Mouse>", TerminalEscapeCode(129, 1, 1, 'M')],
+          \ ["<X2Drag>", TerminalEscapeCode(129+32, 1, 1, 'M')],
+          \ ["<S-X1Mouse>", TerminalEscapeCode(128+4, 1, 1, 'M')],
+          \ ["<S-X2Mouse>", TerminalEscapeCode(129+4, 1, 1, 'M')],
+          \ ["<M-X1Mouse>", TerminalEscapeCode(128+8, 1, 1, 'M')],
+          \ ["<M-X2Mouse>", TerminalEscapeCode(129+8, 1, 1, 'M')],
+          \ ["<C-X1Mouse>", TerminalEscapeCode(128+16, 1, 1, 'M')],
+          \ ["<C-X2Mouse>", TerminalEscapeCode(129+16, 1, 1, 'M')],
+          \ ]
+
+    for [outstr, code] in mouse_codes
+      exe "normal ggC\<C-K>" . code
+      call assert_equal(outstr, getline(1), msg)
+    endfor
+  endfor
+
+  " ttymouse_val 'sgr'
+  let msg = 'ttymouse=sgr'
+  exe 'set ttymouse=sgr'
+
+  let mouse_codes = [
+        \ ["<X1Mouse>", TerminalEscapeCode(128, 1, 1, 'M')],
+        \ ["<X1Release>", TerminalEscapeCode(128, 1, 1, 'm')],
+        \ ["<X2Mouse>", TerminalEscapeCode(129, 1, 1, 'M')],
+        \ ["<X2Release>", TerminalEscapeCode(129, 1, 1, 'm')],
+        \ ]
+
+  for [outstr, code] in mouse_codes
+    exe "normal ggC\<C-K>" . code
+    call assert_equal(outstr, getline(1), msg)
+  endfor
+
+  let &mouse = save_mouse
+  let &term = save_term
+  let &ttymouse = save_ttymouse
+  call test_override('no_query_mouse', 0)
+  bwipe!
+endfunc
+
 " This only checks if the sequence is recognized.
 " This must be after other tests, because it has side effects to xterm
 " properties.
@@ -2720,6 +2776,45 @@ func Test_home_key_works()
   let &t_@7 = save_end
 endfunc
 
+func Test_home_is_not_khome()
+  " kHome and Home (or xHome) might be defined to the same termcode (for
+  " example, when xterm-codes reports the same for both termcaps).
+  " It is better to choose Home than kHome.
+  let save_K1 = exists('&t_K1') ? &t_K1 : ''
+  let save_kh = exists('&t_kh') ? &t_kh : ''
+
+  let &t_K1 = "\<Esc>OH"       " <kHome>
+  let &t_kh = "\<Esc>O*H"      " <Home>
+
+  new
+  call feedkeys("i\<C-K>\<Esc>OH\<Esc>", 'tx')
+  call assert_equal("<Home>", getline(1))
+
+  bwipe!
+  let &t_K1 = save_K1
+  let &t_kh = save_kh
+endfunc
+
+func Test_raw_codes_in_mappings()
+  let save_cpo = &cpo
+  let save_ku = exists('&t_ku') ? &t_ku : ''
+
+  set cpo-=k
+  let &t_ku = "\<Esc>O*A"
+  exe "map X ^\<Esc>OAjk"
+  let &t_ku = ""
+
+  new
+  exe "normal iabc\<CR>abc\<CR>abc\<CR>abc\<Esc>XX"
+  call assert_equal(['abc', 'abc', 'abc', 'abc'], getline(1, '$'))
+  call assert_equal([0, 2, 1, 0], getpos('.'))
+
+  bwipe!
+  let &cpo = save_cpo
+  let &t_ku = save_ku
+  unmap X
+endfunc
+
 func Test_terminal_builtin_without_gui()
   CheckNotMSWindows
 
@@ -2791,12 +2886,36 @@ func Test_term_response_osc()
   " Test if large OSC responses (that must be processed in chunks) are handled
   let data = repeat('a', 3000)
 
-  call feedkeys("\<Esc>]12;" .. data .. "\x07", 'Lx!')
-  call assert_equal("\<Esc>]12;" .. data .. "\x07", v:termosc)
+  call feedkeys("\<Esc>]12;" .. data .. "\<Esc>\\", 'Lx!')
+  call assert_equal("\<Esc>]12;" .. data .. "\<Esc>\\", v:termosc)
 
   " Test small OSC responses
-  call feedkeys("\<Esc>]15;hello world!\07", 'Lx!')
+  call feedkeys("\<Esc>]15;hello world!\x07", 'Lx!')
   call assert_equal("\<Esc>]15;hello world!\x07", v:termosc)
+endfunc
+
+" Test if xOSC key is emitted.
+func Test_term_response_xosc_key()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    func Test()
+      while getcharstr(-1) != "\<xOSC>"
+      endwhile
+      call writefile(["done"], 'XTestResult')
+    endfunc
+  END
+  call writefile(lines, 'XTest', 'D')
+  defer delete('XTestResult')
+
+  let buf = RunVimInTerminal("-S XTest", {'rows': 10})
+  call TermWait(buf)
+  call term_sendkeys(buf, "\<Esc>:call Test()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, "\<Esc>]52;hello;\<Esc>\\")
+  call TermWait(buf)
+  call WaitForAssert({-> assert_equal(["done"], readfile('XTestResult'))})
+  call StopVimInTerminal(buf)
 endfunc
 
 " This only checks if the sequence is recognized.
@@ -2865,6 +2984,85 @@ func Test_term_rgb_response()
   call assert_equal('light', &background)
 
   set t_RF= t_RB=
+endfunc
+
+" Test in-band window resize events (DEC mode 2048).
+" https://gist.github.com/rockorager/e695fb2924d36b2bcf1fff4a3704bd83
+func Test_term_win_resize()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+  vim9script
+
+  autocmd VimResized * writefile([$"{&lines} {&columns}"], "XTestWinResizeResult")
+  END
+  call writefile(lines, 'XTestWinResize', 'D')
+  defer delete("XTestWinResizeResult")
+
+  let buf = RunVimInTerminal('-S XTestWinResize', #{rows: 15, cols: 20})
+
+  " Send status report
+  call term_sendkeys(buf, "\<Esc>[?2048;1$y")
+  call TermWait(buf)
+
+  " Resize to 50 rows 100 cols
+  call term_sendkeys(buf, "\<Esc>[48;50;100;0;0t")
+  call TermWait(buf)
+
+  call WaitForAssert({-> assert_equal(["50 100"], readfile("XTestWinResizeResult"))})
+
+  " Test that screen is only resized if it actually changed in width or height.
+  call term_sendkeys(buf, "\<Esc>:intro\<CR>")
+  call TermWait(buf)
+
+  call term_sendkeys(buf, "\<Esc>[48;50;100;0;0t")
+  call TermWait(buf)
+
+  " call delete("tmp.dump")
+  " call term_dumpwrite(buf, "tmp.dump")
+
+  " SIGWINCH handler should be uninstalled
+  call job_stop(term_getjob(buf), 28)
+  call TermWait(buf)
+
+  call WaitForAssert({-> assert_equal(["50 100"], readfile("XTestWinResizeResult"))})
+
+  " SIGWINCH handler should be reinstalled again
+  call term_sendkeys(buf, "\<Esc>:set termresize=sigwinch\<CR>")
+  call TermWait(buf)
+
+  call WaitForAssert({-> assert_equal(["15 20"], readfile("XTestWinResizeResult"))})
+
+  call term_sendkeys(buf, "\<Esc>:set termresize=\<CR>")
+  call TermWait(buf)
+
+  call term_sendkeys(buf, "\<Esc>[48;50;30;0;0t")
+  call TermWait(buf)
+
+  call WaitForAssert({-> assert_equal(["50 30"], readfile("XTestWinResizeResult"))})
+
+  " Simulate no support for in-band window resize
+  call term_sendkeys(buf, "\<Esc>[?2048;0$y")
+  call TermWait(buf)
+
+  " Should reinstall SIGWINCH handler
+  call WaitForAssert({-> assert_equal(["15 20"], readfile("XTestWinResizeResult"))})
+
+  call term_setsize(buf, 5, 20)
+  call TermWait(buf)
+  call WaitForAssert({-> assert_equal(["5 20"], readfile("XTestWinResizeResult"))})
+
+  " Setting 'termresize' to "inband" should do nothing if support is not
+  " detected from terminal.
+  call term_sendkeys(buf, "\<Esc>:set termresize=inband\<CR>")
+  call TermWait(buf)
+
+  call term_sendkeys(buf, "\<Esc>[48;50;100;0;0t")
+  call TermWait(buf)
+
+  call WaitForAssert({-> assert_equal(["5 20"], readfile("XTestWinResizeResult"))})
+
+  call StopVimInTerminal(buf)
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -58,7 +58,7 @@ func Test_backward_slash_uncomment()
   let input_file = "Test_backward_slash_uncomment_input.mom"
   call writefile(lines, input_file, "D")
 
-  let buf = RunVimInTerminal('-c "packadd comment" ' .. input_file, {})
+  let buf = RunVimInTerminal('-c "packadd comment" -c "set ft=nroff" ' .. input_file, {})
   call term_sendkeys(buf, "gcc")
   let output_file = "backward_slash_uncomment_test.mom"
   call term_sendkeys(buf, $":w {output_file}\<CR>")
@@ -508,7 +508,7 @@ endfunc
 func Test_textobj_cursor_on_leading_space_comment()
   let lines =<< trim END
     int main() {
-        // multilple comments
+        // multiple comments
         // cursor is between them
     }
   END

@@ -1,7 +1,7 @@
-*if_pyth.txt*   For Vim version 9.1.  Last change: 2025 Oct 12
+*if_pyth.txt*	For Vim version 9.2.  Last change: 2026 Mar 18
 
 
-		  VIM REFERENCE MANUAL    by Paul Moore
+		  VIM REFERENCE MANUAL	  by Paul Moore
 
 
 The Python Interface to Vim				*python* *Python*
@@ -183,9 +183,11 @@ vim.eval(str)						*python-eval*
 	Evaluates the expression str using the vim internal expression
 	evaluator (see |expression|).  Returns the expression result as:
 	- a string if the Vim expression evaluates to a string or number
-	- a list if the Vim expression evaluates to a Vim list
-	- a tuple if the Vim expression evaluates to a Vim tuple
-	- a dictionary if the Vim expression evaluates to a Vim dictionary
+	- a list if the Vim expression evaluates to a Vim |list|
+	- a tuple if the Vim expression evaluates to a Vim |tuple|
+	- a dictionary if the Vim expression evaluates to a Vim |dict|
+	- a boolean if Vim expression evaluates to |v:true| or |v:false|
+	- `None` if Vim expression evaluates to |v:null| or |v:none|
 	Dictionaries, lists and tuples are recursively expanded.
 	Examples: >
 	    :" value of the 'textwidth' option

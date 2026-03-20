@@ -74,6 +74,14 @@ $(NEW_TESTS):
 		exit 1; \
 	fi
 
+codestyle:
+	rm -f test_codestyle.res $(CLEANUP_FILES)
+	@MAKEFLAGS=--no-print-directory $(MAKE) -f Makefile test_codestyle.res VIMPROG=$(VIMPROG) XXDPROG=$(XXDPROG) SCRIPTSOURCE=$(SCRIPTSOURCE)
+	@cat messages
+	@if test -f test.log; then \
+		exit 1; \
+	fi
+
 # Run only tests specific for Vim9 script
 test_vim9:
 	rm -f test_vim9_*.res $(CLEANUP_FILES)
@@ -94,6 +102,7 @@ RUN_VIMPROG = VIMRUNTIME=$(SCRIPTSOURCE) $(VALGRIND) $(VIMPROG) -f $(GUI_FLAG) -
 clean:
 	-rm -rf *.out *.failed *.res *.rej *.orig XfakeHOME Xdir1 Xfind failed
 	-rm -f opt_test.vim test_result.log $(CLEANUP_FILES)
+	-rm -f gen_opt_test.log
 	-rm -rf $(RM_ON_RUN) $(RM_ON_START)
 	-rm -f valgrind.*
 	-rm -f asan.* asan_test_*
@@ -188,8 +197,8 @@ opt_test.vim: $(GEN_OPT_DEPS)
 	else \
 		$(VIMPROG) -e -s -u NONE $(NO_INITS) --nofork --gui-dialog-file guidialog -S $(GEN_OPT_DEPS) ; \
 	fi
-	@if test -f test.log; then \
-		cat test.log; \
+	@if test -f gen_opt_test.log; then \
+		cat gen_opt_test.log; \
 		exit 1; \
 	fi
 

@@ -1,8 +1,9 @@
 " Author: Stephen Sugden <stephen@stephensugden.com>
 " Last Modified: 2023-09-11
 " Last Change:
-" 2025 Mar 31 by Vim project (rename s:RustfmtConfigOptions())
-" 2025 Jul 14 by Vim project (don't parse rustfmt version automatically #17745)
+" 2025 Oct 27 by Vim project: don't use rustfmt as 'formatprg' by default
+" 2026 Jan 25 by Vim project: don't hide rustfmt errors, restore default var
+"
 "
 " Adapted from https://github.com/fatih/vim-go
 " For bugs, patches and license go to https://github.com/rust-lang/rust.vim
@@ -68,7 +69,7 @@ function! s:RustfmtWriteMode()
     endif
 endfunction
 
-function! rustfmt#RustfmtConfigOptions()
+function! s:RustfmtConfigOptions()
     let default = '--edition 2018'
 
     if !get(g:, 'rustfmt_find_toml', 0)
@@ -97,7 +98,7 @@ function! s:RustfmtCommandRange(filename, line1, line2)
 
     let l:arg = {"file": shellescape(a:filename), "range": [a:line1, a:line2]}
     let l:write_mode = s:RustfmtWriteMode()
-    let l:rustfmt_config = rustfmt#RustfmtConfigOptions()
+    let l:rustfmt_config = s:RustfmtConfigOptions()
 
     " FIXME: When --file-lines gets to be stable, add version range checking
     " accordingly.
@@ -112,7 +113,7 @@ endfunction
 
 function! s:RustfmtCommand()
     let write_mode = g:rustfmt_emit_files ? '--emit=stdout' : '--write-mode=display'
-    let config = rustfmt#RustfmtConfigOptions()
+    let config = s:RustfmtConfigOptions()
     return join([g:rustfmt_command, write_mode, config, g:rustfmt_options])
 endfunction
 
@@ -205,7 +206,7 @@ function! s:RunRustfmt(command, tmpname, from_writepre)
             echo "rust.vim: was not able to parse rustfmt messages. Here is the raw output:"
             echo "\n"
             for l:line in l:stderr
-                echo l:line
+                echomsg l:line
             endfor
         endif
 
@@ -224,7 +225,10 @@ function! s:RunRustfmt(command, tmpname, from_writepre)
 
     " Open lwindow after we have changed back to the previous directory
     if l:open_lwindow == 1
+        try
         lwindow
+        catch /^Vim\%((\S\+)\)\=:E776:/
+        endtry
     endif
 
     call winrestview(l:view)

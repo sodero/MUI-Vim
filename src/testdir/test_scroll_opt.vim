@@ -236,7 +236,7 @@ func Test_smoothscroll_number()
   call term_sendkeys(buf, "\<C-Y>")
   call VerifyScreenDump(buf, 'Test_smooth_number_6', {})
 
-  call term_sendkeys(buf, ":botright split\<CR>gg")
+  call term_sendkeys(buf, ":botright split\<CR>\<C-L>gg")
   call VerifyScreenDump(buf, 'Test_smooth_number_7', {})
   call term_sendkeys(buf, "\<C-E>")
   call VerifyScreenDump(buf, 'Test_smooth_number_8', {})
@@ -277,6 +277,7 @@ endfunc
 
 func Test_smoothscroll_diff_mode()
   CheckScreendump
+  CheckFeature diff
 
   let lines =<< trim END
       vim9script
@@ -303,6 +304,7 @@ endfunc
 
 func Test_smoothscroll_diff_change_line_default()
   CheckScreendump
+  CheckFeature diff
 
   " Uses the new diffopt default with indent-heuristic and inline:char
   let lines =<< trim END
@@ -334,6 +336,7 @@ endfunc
 
 func Test_smoothscroll_diff_change_line()
   CheckScreendump
+  CheckFeature diff
 
   " Uses the old diffopt default
   let lines =<< trim END

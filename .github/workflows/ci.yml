@@ -47,7 +47,7 @@ jobs:
             extra: [nogui]
           - features: tiny
             compiler: gcc
-            extra: [nogui]
+            extra: [nogui, syn_test_execs]
           - features: tiny
             compiler: gcc
             extra: [nogui]
@@ -84,17 +84,14 @@ jobs:
             architecture: arm64
           - features: normal
             compiler: gcc
-            extra: [vimtags, proto]
+            extra: [vimtags, proto, preproc_indent, encoding, codestyle]
           - features: huge
             compiler: gcc
-            extra: [no_x11]
-          - features: huge
-            compiler: gcc
-            extra: [socketserver]
+            extra: [no_x11_wl]
 
     steps:
       - name: Checkout repository from github
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check Filelist (for packaging)
         run: |
@@ -108,6 +105,13 @@ jobs:
           # highlight.c, nor listed as 'intentionally left out' in hlgroups.ignore,
           # exit with an error code and list the missing entries.
           make -C ci -f hlgroups.make
+
+      - name: Report executable syntax tests
+        if: contains(matrix.extra, 'syn_test_execs')
+        run: |
+          # Search and list all found executable syntax tests, and exit with
+          # an error code.
+          make -C runtime/syntax executables
 
       - run: sudo dpkg --add-architecture i386
         if: matrix.architecture == 'i386'
@@ -245,11 +249,8 @@ jobs:
             ;;
           esac
 
-          if ${{ contains(matrix.extra, 'no_x11') }}; then
-            CONFOPT="${CONFOPT} --without-x --disable-gui"
-          fi
-          if ${{ contains(matrix.extra, 'socketserver') }}; then
-            CONFOPT="${CONFOPT} --enable-socketserver"
+          if ${{ contains(matrix.extra, 'no_x11_wl') }}; then
+            CONFOPT="${CONFOPT} --without-x --disable-gui --without-wayland --enable-socketserver"
           fi
           if ${{ matrix.coverage == true }}; then
             CFLAGS="${CFLAGS} --coverage -DUSE_GCOV_FLUSH"
@@ -334,7 +335,7 @@ jobs:
           fi
 
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 45
         run: |
           make ${SHADOWOPT} ${TEST}
 
@@ -366,6 +367,32 @@ jobs:
           # This will exit with an error code if the generated proto files differ from source
           (
             git diff --exit-code -- src/proto/
+            true
+          )
+
+      - name: Check Source Code style
+        if: contains(matrix.extra, 'codestyle')
+        run: |
+          make -C src/testdir codestyle
+
+      - name: Check preprocessor indent
+        if: contains(matrix.extra, 'preproc_indent')
+        run: |
+          # This will exit with an error code if the files differ from source
+          (
+            "${SRCDIR}"/vim -u NONE --not-a-term -esNX +"cd runtime/tools" -S preproc_indent.vim
+            git diff --exit-code -- src/*.[ch] src/xxd/xxd.c
+            true
+          )
+
+      - name: Check encoding of utf-8 runtime files
+        if: contains(matrix.extra, 'encoding')
+        run: |
+          # This will exit with an error code if utf-8 runtime files are not in utf-8 encoding
+          (
+            find . -type f -name "*utf-8*.vim" -exec sh -c \
+              'iconv -f utf-8 -t utf-8 "$1" >/dev/null 2>&1 || echo "non utf-8 encoding detected in $1"' \
+              find-sh {} \; |grep  "non utf-8 encoding" && exit 3
             true
           )
 
@@ -406,11 +433,11 @@ jobs:
       fail-fast: false
       matrix:
         features: [tiny, normal, huge]
-        runner: [macos-15-intel, macos-15]
+        runner: [macos-15-intel, macos-26]
 
     steps:
       - name: Checkout repository from github
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install packages
         if: matrix.features == 'huge'
@@ -528,6 +555,7 @@ jobs:
           - { features: HUGE,   toolchain: mingw, VIMDLL: yes, GUI: yes, arch: x86, python3: stable, coverage: yes }
           - { features: HUGE,   toolchain: msvc,  VIMDLL: no,  GUI: yes, arch: x86 }
           - { features: HUGE,   toolchain: mingw, VIMDLL: yes, GUI: no,  arch: x64, coverage: yes }
+          - { features: HUGE,   toolchain: msvc,  VIMDLL: no,  GUI: no,  arch: x64, ttytype: conpty }
           - { features: NORMAL, toolchain: msvc,  VIMDLL: yes, GUI: no,  arch: x86 }
           - { features: NORMAL, toolchain: mingw, VIMDLL: no,  GUI: yes, arch: x64 }
           - { features: TINY,   toolchain: msvc,  VIMDLL: yes, GUI: yes, arch: x64 }
@@ -540,8 +568,6 @@ jobs:
         run: |
           # Show Windows version
           cmd /c ver
-
-          git config --global core.autocrlf input
 
           if ${{ matrix.arch == 'x64' }}; then
             cygreg=registry
@@ -594,7 +620,7 @@ jobs:
           release: false
 
       - name: Checkout repository from github
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Create a list of download URLs
         shell: cmd
@@ -607,7 +633,7 @@ jobs:
           echo %GETTEXT64_URL%>> urls.txt
 
       - name: Cache downloaded files
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: downloads
           key: ${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('urls.txt') }}
@@ -622,11 +648,13 @@ jobs:
           call :downloadfile %LUA${{ env.BITS }}_URL% downloads\lua.zip
           7z x downloads\lua.zip -o%LUA_DIR% > nul || exit 1
 
-          echo %COL_GREEN%Download winpty%COL_RESET%
-          call :downloadfile %WINPTY_URL% downloads\winpty.zip
-          7z x -y downloads\winpty.zip -oD:\winpty > nul || exit 1
-          copy /Y D:\winpty\%WARCH%\bin\winpty.dll        src\winpty%BITS%.dll
-          copy /Y D:\winpty\%WARCH%\bin\winpty-agent.exe  src\
+          if not "${{ matrix.ttytype }}" == "conpty" (
+            echo %COL_GREEN%Download winpty%COL_RESET%
+            call :downloadfile %WINPTY_URL% downloads\winpty.zip
+            7z x -y downloads\winpty.zip -oD:\winpty > nul || exit 1
+            copy /Y D:\winpty\%WARCH%\bin\winpty.dll        src\winpty%BITS%.dll
+            copy /Y D:\winpty\%WARCH%\bin\winpty-agent.exe  src\
+          )
 
           echo %COL_GREEN%Download libsodium%COL_RESET%
           if "${{ matrix.toolchain }}"=="msvc" (
@@ -725,7 +753,7 @@ jobs:
       - name: Check version
         shell: cmd
         run: |
-          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PATH%;%PYTHON3_DIR%
+          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PYTHON3_DIR%;%PATH%
           if "${{ matrix.GUI }}"=="yes" (
             start /wait src\gvim -u NONE -i NONE -c "redir > version.txt | ver | q" || exit 1
             type version.txt
@@ -753,7 +781,7 @@ jobs:
       #    copy src\vim*.dll artifacts
       #
       #- name: Upload Artifact
-      #  uses: actions/upload-artifact@v1
+      #  uses: actions/upload-artifact@v7
       #  with:
       #    name: vim${{ matrix.bits }}-${{ matrix.toolchain }}
       #    path: ./artifacts
@@ -775,7 +803,7 @@ jobs:
         shell: cmd
         timeout-minutes: 15
         run: |
-          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PATH%;%PYTHON3_DIR%;%SODIUM_LIB%
+          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PYTHON3_DIR%;%PATH%;%SODIUM_LIB%
           call "%VCVARSALL%" %VCARCH%
 
           echo %COL_GREEN%Test gVim:%COL_RESET%
@@ -792,7 +820,7 @@ jobs:
         shell: cmd
         timeout-minutes: 15
         run: |
-          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PATH%;%PYTHON3_DIR%;%SODIUM_LIB%
+          PATH %LUA_DIR%;C:\msys64\%MSYSTEM%\bin;%PYTHON3_DIR%;%PATH%;%SODIUM_LIB%
           call "%VCVARSALL%" %VCARCH%
 
           echo %COL_GREEN%Test Vim:%COL_RESET%

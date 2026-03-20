@@ -2497,6 +2497,9 @@ bt_regcomp(char_u *expr, int re_flags)
     if (r == NULL)
 	return NULL;
     r->re_in_use = FALSE;
+#ifdef DEBUG
+    r->regsz = regsize;
+#endif
 
     // Second pass: emit code.
     regcomp_start(expr, re_flags);
@@ -5188,11 +5191,11 @@ regdump(char_u *pattern, bt_regprog_T *r)
     char_u  *end = NULL;
     FILE    *f;
 
-#ifdef BT_REGEXP_LOG
+# ifdef BT_REGEXP_LOG
     f = fopen("bt_regexp_log.log", "a");
-#else
+# else
     f = stdout;
-#endif
+# endif
     if (f == NULL)
 	return;
     fprintf(f, "-------------------------------------\n\r\nregcomp(%s):\r\n", pattern);
@@ -5200,11 +5203,11 @@ regdump(char_u *pattern, bt_regprog_T *r)
     s = r->program + 1;
     // Loop until we find the END that isn't before a referred next (an END
     // can also appear in a NOMATCH operand).
-    while (op != END || s <= end)
+    while ((op != END || s <= end) && s < r->program + r->regsz)
     {
 	op = OP(s);
 	fprintf(f, "%2d%s", (int)(s - r->program), regprop(s)); // Where, what.
-	next = regnext(s);
+	next = (s + 3 <= r->program + r->regsz) ? regnext(s) : NULL;
 	if (next == NULL)	// Next ptr.
 	    fprintf(f, "(0)");
 	else
@@ -5230,14 +5233,22 @@ regdump(char_u *pattern, bt_regprog_T *r)
 	    s += 5;
 	}
 	s += 3;
+	if (op == MULTIBYTECODE)
+	{
+	    fprintf(f, " mbc=%d", utf_ptr2char(s));
+	    s += utfc_ptr2len(s);
+	}
 	if (op == ANYOF || op == ANYOF + ADD_NL
 		|| op == ANYBUT || op == ANYBUT + ADD_NL
 		|| op == EXACTLY)
 	{
 	    // Literal string, where present.
 	    fprintf(f, "\nxxxxxxxxx\n");
-	    while (*s != NUL)
-		fprintf(f, "%c", *s++);
+	    while (*s != NUL && s < r->program + r->regsz)
+	    {
+		fprintf(f, "%c", *s);
+		s += utfc_ptr2len(s);  // advance by full char including combining
+	    }
 	    fprintf(f, "\nxxxxxxxxx\n");
 	    s++;
 	}
@@ -5255,9 +5266,9 @@ regdump(char_u *pattern, bt_regprog_T *r)
 	fprintf(f, "must have \"%s\"", r->regmust);
     fprintf(f, "\r\n");
 
-#ifdef BT_REGEXP_LOG
+# ifdef BT_REGEXP_LOG
     fclose(f);
-#endif
+# endif
 }
 #endif	    // BT_REGEXP_DUMP
 
@@ -5550,7 +5561,7 @@ regprop(char_u *op)
       case NCLOSE:
 	p = "NCLOSE";
 	break;
-#ifdef FEAT_SYN_HL
+# ifdef FEAT_SYN_HL
       case ZOPEN + 1:
       case ZOPEN + 2:
       case ZOPEN + 3:
@@ -5587,7 +5598,7 @@ regprop(char_u *op)
 	buflen += sprintf(buf + buflen, "ZREF%d", OP(op) - ZREF);
 	p = NULL;
 	break;
-#endif
+# endif
       case STAR:
 	p = "STAR";
 	break;

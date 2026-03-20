@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: vim-dev@vim.org\n"
-"POT-Creation-Date: 2025-10-07 08:49+0200\n"
-"PO-Revision-Date: 2025-10-07 13:30+0100\n"
+"POT-Creation-Date: 2026-02-22 09:23+0100\n"
+"PO-Revision-Date: 2026-02-22 09:40+0100\n"
 "Last-Translator: Antonio Colombo <azc100@gmail.com>\n"
 "Language-Team: Italian\n"
 "Language: it\n"
@@ -166,8 +166,8 @@ msgid "%d%%"
 msgstr "%d%%"
 
 #, c-format
-msgid "%2s"
-msgstr "%2s"
+msgid "%3s"
+msgstr "%3s"
 
 #, c-format
 msgid " (%d of %d)"
@@ -2367,17 +2367,11 @@ msgstr "-- Ancora --"
 msgid " SPACE/d/j: screen/page/line down, b/u/k: up, q: quit "
 msgstr " SPAZIO/d/j: schermo/pagina/riga giù, b/u/k: su, q: abbandona "
 
-msgid "W24: Clipboard register not available. See :h W24"
-msgstr "W24: Registro clipboard non disponibile. Vedere :h W24"
-
 msgid "W23: Clipboard register not available, using register 0"
 msgstr "W23: Registro clipboard non disponibile, uso registro 0"
 
-msgid "W23: Clipboard register + not available, using register 0"
-msgstr "W23: Registro clipboard + non disponibile, uso registro 0"
-
-msgid "W23: Clipboard register * not available, using register 0"
-msgstr "W23: Registro clipboard * non disponibile, uso registro 0"
+msgid "W24: Clipboard register not available. See :h W24"
+msgstr "W24: Registro clipboard non disponibile. Vedere :h W24"
 
 msgid "Question"
 msgstr "Domanda"
@@ -3797,8 +3791,8 @@ msgstr "Vim è 'open source' e può essere distribuito liberamente"
 msgid "Help poor children in Uganda!"
 msgstr "Aiuta i bambini poveri dell'Uganda!"
 
-msgid "type  :help iccf<Enter>       for information "
-msgstr "batti :help iccf<Invio>       per informazioni            "
+msgid "type  :help Kuwasha<Enter>    for information "
+msgstr "batti :help Kuwasha<Invio>    per informazioni "
 
 msgid "type  :q<Enter>               to exit         "
 msgstr "batti :q<Invio>               per uscire                  "
@@ -3839,17 +3833,11 @@ msgstr "                            modo Vim predefinito "
 msgid "Sponsor Vim development!"
 msgstr "Sponsorizza lo sviluppo di Vim!"
 
-msgid "Become a registered Vim user!"
-msgstr "Diventa un utente Vim registrato!"
-
 msgid "type  :help sponsor<Enter>    for information "
 msgstr "batti :help sponsor<Invio>    per informazioni "
 
-msgid "type  :help register<Enter>   for information "
-msgstr "batti :help register<Invio>   per informazioni "
-
-msgid "menu  Help->Sponsor/Register  for information    "
-msgstr "menu  Aiuto->Sponsor/Registrazione  per informazioni "
+msgid "menu  Help->Sponsor  for information    "
+msgstr "menu  Aiuto->Sponsor  per informazioni  "
 
 msgid "global"
 msgstr "global"
@@ -8299,8 +8287,8 @@ msgid "E1238: Blob required for argument %d"
 msgstr "E1238: Blob richiesto per argomento %d"
 
 #, c-format
-msgid "E1239: Invalid value for blob: %d"
-msgstr "E1239: Valore non valido per blob: %d"
+msgid "E1239: Invalid value for blob: 0x%lX"
+msgstr "E1239: Valore non valido per blob: 0x%lX"
 
 msgid "E1240: Resulting text too long"
 msgstr "E1240: Testo risultante troppo lungo"
@@ -8632,6 +8620,7 @@ msgstr "E1328: Il valore predefinito del costruttore dev'essere v:none: %s"
 msgid "E1329: Invalid class variable declaration: %s"
 msgstr "E1329: Dichiarazione di variabile Classe non valida: %s"
 
+#, c-format
 msgid "E1330: Invalid type used in variable declaration: %s"
 msgstr "E1330: Tipo non valido usato nella dichiarazione di variabile: %s"
 
@@ -9040,6 +9029,9 @@ msgstr "E1435: Enum può solo essere usato in uno script"
 msgid "E1436: Interface can only be used in a script"
 msgstr "E1436: Interface può solo essere usato in uno script"
 
+msgid "E1437: Can only compare Object with Object"
+msgstr "E1437: Si può solo confrontare compare Object con Object"
+
 #, c-format
 msgid "E1500: Cannot mix positional and non-positional arguments: %s"
 msgstr ""
@@ -9302,11 +9294,18 @@ msgstr ""
 "E1567: Non posso far partire il server di socket, percorso di socket non "
 "disponibile"
 
+#, c-format
 msgid "E1568: OSC command response timed out: %.*s"
 msgstr "E1568: tempo di risposta a comando OSC terminato: %.*s"
 
 msgid "E1569: Cannot use listener_add in a listener callback"
 msgstr "E1569: Non posso usare listener_add in una callback listener"
+
+msgid "E1570: Cannot use redraw_listener_add in a redraw listener callback"
+msgstr "E1570: Non posso usare redraw_listener_add in una callback listener"
+
+msgid "E1571: Must specify at least one callback for redraw_listener_add"
+msgstr "E1571: Va specificata almeno una callback per redraw_listener_add"
 
 #. type of cmdline window or 0
 #. result of cmdline window or 0
@@ -9966,8 +9965,8 @@ msgid ""
 "buffer text, filler lines and truncation in the completion menu"
 msgstr ""
 "caratteri da usare per riga di status, piegature, differenze,\n"
-"testo di un buffer, righe di riempitivo e troncamento nel menu "
-"di completamento"
+"testo di un buffer, righe di riempitivo e troncamento nel menu di "
+"completamento"
 
 msgid "number of lines used for the command-line"
 msgstr "numero di righe disponibili per la riga-di-comando"
@@ -10565,6 +10564,9 @@ msgstr ""
 msgid "definition of what comment lines look like"
 msgstr "definizioni per individuare le righe di commento"
 
+msgid "template for comments; used to put the marker in"
+msgstr "modello per i commenti; usata per marcature nelle piegature"
+
 msgid "list of flags that tell how automatic formatting works"
 msgstr ""
 "lista di flag con specifiche riguardo alla\n"
@@ -10589,16 +10591,15 @@ msgid ""
 "initial decay timeout for 'autocomplete' algorithm"
 msgstr ""
 " \n"
-"tempo-di-attesa iniziale prima di interrompere l'algoritmo di "
-"'autocomplete'"
+"tempo-di-attesa iniziale prima di interrompere l'algoritmo di 'autocomplete'"
 
 msgid ""
 " \n"
 "initial decay timeout for CTRL-N and CTRL-P completion"
 msgstr ""
 " \n"
-"tempo-di-attesa iniziale prima di interrompere il completamento "
-"con CTRL-N e CTRL-P"
+"tempo-di-attesa iniziale prima di interrompere il completamento con CTRL-N e "
+"CTRL-P"
 
 msgid ""
 " \n"
@@ -10618,13 +10619,6 @@ msgstr ""
 " \n"
 "ordine di allineamento elemento menù dinamico (popup)"
 
-msgid ""
-" \n"
-"use fuzzy collection for specific completion modes"
-msgstr ""
-" \n"
-"usare raccolta approssimata per modi di completamento specificati"
-
 msgid "options for the Insert mode completion info popup"
 msgstr ""
 "opzioni per il menù dinamico con le informazioni di completamento in\n"
@@ -10638,6 +10632,9 @@ msgstr "larghezza minima del menù dinamico"
 
 msgid "maximum width of the popup menu"
 msgstr "larghezza massima del menù dinamico"
+
+msgid "popup border style"
+msgstr "stile bordo menù dinamico"
 
 msgid "user defined function for Insert mode completion"
 msgstr "funzione definita dall'utente per il completamento in modo Insert"
@@ -10800,9 +10797,6 @@ msgid "minimum number of screen lines for a fold to be closed"
 msgstr ""
 "numero minimo di righe sullo schermo per visualizzare come chiusa\n"
 "una piegatura"
-
-msgid "template for comments; used to put the marker in"
-msgstr "modello per i commenti; usata per marcature nelle piegature"
 
 msgid ""
 "folding type: \"manual\", \"indent\", \"expr\", \"marker\",\n"
@@ -11151,9 +11145,6 @@ msgstr "lista dei caratteri contenuti in un nome di file"
 msgid "specifies the characters in an identifier"
 msgstr "lista dei caratteri contenuti in un identificativo"
 
-msgid "defines trigger strings for complete_match()"
-msgstr "lista stringhe che innescano complete_match()"
-
 msgid "specifies the characters in a keyword"
 msgstr "lista dei caratteri contenuti in una parola"
 
@@ -11402,10 +11393,45 @@ msgstr "personalizzazione pagine scheda nel pannello-schede"
 msgid "options for using tabpanel"
 msgstr "opzioni per usare il pannello-schede"
 
+msgid "Notice"
+msgstr "Avviso"
+
+msgid "Quickfix list not found, stopping the job"
+msgstr "Lista quickfix non trovata, arresto il Job"
+
+msgid "Success!"
+msgstr "Successo!"
+
+msgid "Job terminated"
+msgstr "Job terminato"
+
+msgid "There are errors."
+msgstr "Ci sono errori."
+
+msgid "Could not create quickfix list"
+msgstr "Non riesco a creare lista quickfix"
+
+msgid "File not readable:"
+msgstr "File non leggibile:"
+
+msgid "Failed to start job"
+msgstr "Fallita partenza Job"
+
+msgid "Typesetting..."
+msgstr "Componendo..."
+
+msgid "Jobs still running:"
+msgstr "Job ancora attivi:"
+
+msgid "Done."
+msgstr "Fatto."
+
+msgid "Typeset"
+msgstr "Composizione"
+
+msgid "Please save the buffer first."
+msgstr "Siete pregati di salvare prima il buffer."
+
 msgid "You discovered the command-line window! You can close it with \":q\"."
 msgstr ""
 "Questa è la finestra della riga-di-comando! Si può chiudere con \":q\"."
-
-#, c-format
-#~ msgid "E1330: Invalid type for object variable: %s"
-#~ msgstr "E1330: Tipo non valido per variabile Object: %s"

@@ -234,7 +234,7 @@ EXCMD(CMD_breakdel,	"breakdel",	ex_breakdel,
 	EX_EXTRA|EX_TRLBAR|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_NONE),
 EXCMD(CMD_breaklist,	"breaklist",	ex_breaklist,
-	EX_EXTRA|EX_TRLBAR|EX_CMDWIN|EX_LOCK_OK,
+	EX_TRLBAR|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_NONE),
 EXCMD(CMD_browse,	"browse",	ex_wrongmodifier,
 	EX_NEEDARG|EX_EXTRA|EX_NOTRLCOM|EX_CMDWIN|EX_LOCK_OK,
@@ -693,8 +693,8 @@ EXCMD(CMD_help,		"help",		ex_help,
 	EX_BANG|EX_EXTRA|EX_NOTRLCOM,
 	ADDR_NONE),
 EXCMD(CMD_helpclose,	"helpclose",	ex_helpclose,
-	EX_RANGE|EX_COUNT|EX_TRLBAR,
-	ADDR_OTHER),
+	EX_TRLBAR,
+	ADDR_NONE),
 EXCMD(CMD_helpfind,	"helpfind",	ex_helpfind,
 	EX_EXTRA|EX_NOTRLCOM,
 	ADDR_NONE),
@@ -1158,10 +1158,10 @@ EXCMD(CMD_pclose,	"pclose",	ex_pclose,
 	EX_BANG|EX_TRLBAR,
 	ADDR_NONE),
 EXCMD(CMD_perl,		"perl",		ex_perl,
-	EX_RANGE|EX_EXTRA|EX_DFLALL|EX_NEEDARG|EX_SBOXOK|EX_CMDWIN|EX_LOCK_OK,
+	EX_RANGE|EX_EXTRA|EX_DFLALL|EX_NEEDARG|EX_SBOXOK|EX_CMDWIN|EX_LOCK_OK|EX_RESTRICT,
 	ADDR_LINES),
 EXCMD(CMD_perldo,	"perldo",	ex_perldo,
-	EX_RANGE|EX_EXTRA|EX_DFLALL|EX_NEEDARG|EX_CMDWIN|EX_LOCK_OK,
+	EX_RANGE|EX_EXTRA|EX_DFLALL|EX_NEEDARG|EX_CMDWIN|EX_LOCK_OK|EX_RESTRICT,
 	ADDR_LINES),
 EXCMD(CMD_pedit,	"pedit",	ex_pedit,
 	EX_BANG|EX_FILE1|EX_CMDARG|EX_ARGOPT|EX_TRLBAR,
@@ -1560,8 +1560,8 @@ EXCMD(CMD_tags,		"tags",		do_tags,
 	EX_TRLBAR|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_NONE),
 EXCMD(CMD_tab,		"tab",		ex_wrongmodifier,
-	EX_NEEDARG|EX_EXTRA|EX_NOTRLCOM,
-	ADDR_NONE),
+	EX_RANGE|EX_ZEROR|EX_NEEDARG|EX_EXTRA|EX_NOTRLCOM,
+	ADDR_TABS),
 EXCMD(CMD_tabclose,	"tabclose",	ex_tabclose,
 	EX_BANG|EX_RANGE|EX_ZEROR|EX_EXTRA|EX_NOSPC|EX_TRLBAR|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_TABS),
@@ -1647,8 +1647,8 @@ EXCMD(CMD_tlnoremenu,	"tlnoremenu",	ex_menu,
 	EX_RANGE|EX_ZEROR|EX_EXTRA|EX_TRLBAR|EX_NOTRLCOM|EX_CTRLV|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_OTHER),
 EXCMD(CMD_tlunmenu,	"tlunmenu",	ex_menu,
-	EX_RANGE|EX_ZEROR|EX_EXTRA|EX_TRLBAR|EX_NOTRLCOM|EX_CTRLV|EX_CMDWIN|EX_LOCK_OK,
-	ADDR_OTHER),
+	EX_EXTRA|EX_TRLBAR|EX_NOTRLCOM|EX_CTRLV|EX_CMDWIN|EX_LOCK_OK,
+	ADDR_NONE),
 EXCMD(CMD_tmenu,	"tmenu",	ex_menu,
 	EX_RANGE|EX_ZEROR|EX_EXTRA|EX_TRLBAR|EX_NOTRLCOM|EX_CTRLV|EX_CMDWIN|EX_LOCK_OK,
 	ADDR_OTHER),
@@ -1944,9 +1944,9 @@ struct exarg
     char_u	*nextcmd;	// next command (NULL if none)
     char_u	*cmd;		// the name of the command (except for :make)
     char_u	**cmdlinep;	// pointer to pointer of allocated cmdline
-#ifdef FEAT_EVAL
+# ifdef FEAT_EVAL
     char_u	*cmdline_tofree; // free later
-#endif
+# endif
     cmdidx_T	cmdidx;		// the index for the command
     long	argt;		// flags for the command
     int		skip;		// don't execute the command, only parse it
@@ -1971,17 +1971,19 @@ struct exarg
     char	*errmsg;	// returned error message
     char_u	*(*ea_getline)(int, void *, int, getline_opt_T);
     void	*cookie;	// argument for getline()
-#ifdef FEAT_EVAL
+# ifdef FEAT_EVAL
     cstack_T	*cstack;	// condition stack for ":if" etc.
-#endif
+    class_T	*ea_class;		// Name of class being defined. Used by :class
+				// and :enum commands.
+# endif
 };
 
-#define FORCE_BIN 1		// ":edit ++bin file"
-#define FORCE_NOBIN 2		// ":edit ++nobin file"
+# define FORCE_BIN 1		// ":edit ++bin file"
+# define FORCE_NOBIN 2		// ":edit ++nobin file"
 
 // Values for "flags"
-#define EXFLAG_LIST	0x01	// 'l': list
-#define EXFLAG_NR	0x02	// '#': number
-#define EXFLAG_PRINT	0x04	// 'p': print
+# define EXFLAG_LIST	0x01	// 'l': list
+# define EXFLAG_NR	0x02	// '#': number
+# define EXFLAG_PRINT	0x04	// 'p': print
 
 #endif

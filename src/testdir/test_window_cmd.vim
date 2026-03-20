@@ -114,6 +114,7 @@ func Test_window_cmd_wincmd_gf()
   new | only!
 
   augroup! test_window_cmd_wincmd_gf
+  bw!
 endfunc
 
 func Test_window_quit()
@@ -596,14 +597,14 @@ func Test_window_jump_tag()
   CheckFeature quickfix
 
   help
-  /iccf
-  call assert_match('^|iccf|',  getline('.'))
+  /Kuwasha
+  call assert_match('^|Kuwasha|',  getline('.'))
   call assert_equal(2, winnr('$'))
   2wincmd }
   call assert_equal(3, winnr('$'))
-  call assert_match('^|iccf|',  getline('.'))
+  call assert_match('^|Kuwasha|',  getline('.'))
   wincmd k
-  call assert_match('\*iccf\*',  getline('.'))
+  call assert_match('\*Kuwasha\*',  getline('.'))
   call assert_equal(2, winheight(0))
 
   wincmd z
@@ -823,6 +824,7 @@ func Test_window_prevwin()
   q
   set hidden&vim autoread&vim
   delfunc Fun_RenewFile
+  bw!
 endfunc
 
 func Test_relative_cursor_position_in_one_line_window()
@@ -1911,7 +1913,7 @@ func Test_splitkeep_cmdwin_cursor_position()
   set splitkeep=screen
   call setline(1, range(&lines))
 
-  " No scroll when cursor is at near bottom of window and cusor position
+  " No scroll when cursor is at near bottom of window and cursor position
   " recompution (done by line('w0') in this test) happens while in cmdwin.
   normal! G
   let firstline = line('w0')
@@ -2117,6 +2119,7 @@ func Test_splitkeep_skipcol()
   let buf = RunVimInTerminal('-S XTestSplitkeepSkipcol', #{rows: 12, cols: 40})
 
   call VerifyScreenDump(buf, 'Test_splitkeep_skipcol_1', {})
+  call StopVimInTerminal(buf)
 endfunc
 
 func Test_splitkeep_line()
@@ -2135,6 +2138,7 @@ func Test_splitkeep_line()
 
   call term_sendkeys(buf, ":wincmd s\<CR>")
   call VerifyScreenDump(buf, 'Test_splitkeep_line_2', {})
+  call StopVimInTerminal(buf)
 endfunc
 
 func Test_new_help_window_on_error()
@@ -2367,6 +2371,128 @@ func Test_resize_from_another_tabpage()
   let buf = RunVimInTerminal('-S XTestResizeFromAnotherTabpage', #{rows: 8})
   call VerifyScreenDump(buf, 'Test_resize_from_another_tabpage_1', {})
 
+  call StopVimInTerminal(buf)
+endfunc
+
+" When shrinking a window and the only other window has 'winfixheight'
+" with 'winminheight'=0, freed rows must go to the wfh window.
+func Test_winfixheight_resize_wmh_zero()
+  CheckFeature quickfix
+
+  set winminheight=0 laststatus=0
+  let id1 = win_getid()
+  copen
+  let id2 = win_getid()
+  wincmd w
+  wincmd _
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  let exp = &lines - wi1.status_height - wi2.height - wi2.status_height - &ch
+  call assert_equal([exp, 1], [wi1.height, wi1.status_height])
+  call assert_equal([0, 0], [wi2.height, wi2.status_height])
+
+  wincmd w  " enter qf (height 0 -> 1)
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  let exp = &lines - wi1.status_height - wi2.height - wi2.status_height - &ch
+  call assert_equal(exp, wi1.height)
+  call assert_equal(1, wi2.height)
+
+  wincmd w
+  " Freed rows must go to qf (wfh, only other window).
+  " Before the fix, the rows were lost (fr_height sum < topframe fr_height),
+  " resulting in wrong window heights in subsequent operations.
+  1wincmd _
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  call assert_equal(1, wi1.height)
+  let exp = &lines - wi1.height - wi1.status_height - &ch
+  call assert_equal(exp, wi2.height)
+
+  wincmd w
+  99wincmd +
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  call assert_equal(0, wi1.height)
+  let exp = &lines - wi1.height - wi1.status_height - &ch
+  call assert_equal(exp, wi2.height)
+
+  99wincmd -
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  let exp = &lines - wi1.status_height - wi2.height - &ch
+  call assert_equal(exp, wi1.height)
+  call assert_equal(1, wi2.height)
+
+  " The original bug caused a crash here, but could not be reproduced in the
+  " test.  Kept as-is, though it has no particular significance.
+  wincmd w
+  call feedkeys("999i\<CR>\<Esc>", 'tx')
+  call feedkeys("ggMi" .. repeat("\<CR>", 99) .. "\<Esc>", 'tx')
+  let wi1 = getwininfo(id1)[0]
+  let wi2 = getwininfo(id2)[0]
+  let exp = &lines - wi1.status_height - wi2.height - &ch
+  call assert_equal(exp, wi1.height)
+  call assert_equal(1, wi2.height)
+
+  cclose
+  set winminheight& laststatus&
+endfunc
+
+" Test that setting 'laststatus' from 0 to 2 gives all windows in a vertical
+" split (FR_ROW) the same height and correct status line position.
+func Test_laststatus_vsplit_row_height()
+  CheckScreendump
+
+  let lines =<< trim END
+    set ls=0
+    vsplit
+    topleft new
+    wincmd _
+    set ls=2
+  END
+  call writefile(lines, 'XTestLaststatusVsplitRowHeight', 'D')
+  let buf = RunVimInTerminal('-S XTestLaststatusVsplitRowHeight', #{rows: 8})
+  call VerifyScreenDump(buf, 'Test_laststatus_vsplit_row_height_1', {})
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test that when FR_ROW windows have different status line heights (due to
+" window-local 'statuslineopt'), content heights compensate so that total
+" rows are equal across the row.
+func Test_laststatus_vsplit_row_height_mixed_stlo()
+  CheckScreendump
+
+  let lines =<< trim END
+    set ls=0
+    setlocal stlo=fixedheight,maxheight:2
+    rightbelow vnew
+    topleft new
+    wincmd _
+    set ls=2
+  END
+  call writefile(lines, 'XTestLaststatusVsplitRowHeight2', 'D')
+  let buf = RunVimInTerminal('-S XTestLaststatusVsplitRowHeight2', #{rows: 8})
+  call VerifyScreenDump(buf, 'Test_laststatus_vsplit_row_height2_1', {})
+  call StopVimInTerminal(buf)
+endfunc
+
+" Same as above but with the stlo window on the right (second leaf in FR_ROW).
+func Test_laststatus_vsplit_row_height_mixed_stlo_reversed()
+  CheckScreendump
+
+  let lines =<< trim END
+    set ls=0
+    leftabove vnew
+    wincmd p
+    setlocal stlo=fixedheight,maxheight:2
+    topleft new
+    wincmd _
+    set ls=2
+  END
+  call writefile(lines, 'XTestLaststatusVsplitRowHeight3', 'D')
+  let buf = RunVimInTerminal('-S XTestLaststatusVsplitRowHeight3', #{rows: 8})
+  call VerifyScreenDump(buf, 'Test_laststatus_vsplit_row_height3_1', {})
   call StopVimInTerminal(buf)
 endfunc
 

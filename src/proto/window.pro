@@ -1,6 +1,7 @@
 /* window.c */
 void window_layout_lock(void);
 void window_layout_unlock(void);
+int frames_locked(void);
 int window_layout_locked(enum CMD_index cmd);
 int check_can_set_curbuf_disabled(void);
 int check_can_set_curbuf_forceit(int forceit);
@@ -27,7 +28,7 @@ void close_windows(buf_T *buf, int keep_curwin);
 int last_window(void);
 int one_window(void);
 int win_close(win_T *win, int free_buf);
-void trigger_tabclosedpre(tabpage_T *tp, int directly);
+void trigger_tabclosedpre(tabpage_T *tp);
 void snapshot_windows_scroll_size(void);
 void may_make_initial_scroll_size_snapshot(void);
 void may_trigger_win_scrolled_resized(void);
@@ -89,6 +90,11 @@ void win_new_width(win_T *wp, int width);
 void win_comp_scroll(win_T *wp);
 void command_height(void);
 void last_status(int morewin);
+void update_stl_rendered_height(win_T *wp);
+int frame_change_statusline_height(void);
+void set_stlo_mh(int mh);
+int statuslineopt_changed(char_u *stlopt, win_T *wp);
+int statusline_height(win_T *wp);
 int tabline_height(void);
 int last_stl_height(int morewin);
 int min_rows(void);

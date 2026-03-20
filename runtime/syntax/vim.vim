@@ -2,7 +2,7 @@
 " Language:	   Vim script
 " Maintainer:	   Hirohito Higashi <h.east.727 ATMARK gmail.com>
 "	   Doug Kearns <dougkearns@gmail.com>
-" Last Change:	   2025 Oct 14
+" Last Change:	   2026 Mar 13
 " Former Maintainer: Charles E. Campbell
 
 " DO NOT CHANGE DIRECTLY.
@@ -34,14 +34,14 @@ syn cluster vimCommentGroup	contains=vimTodo,@Spell
 
 " regular vim commands {{{2
 " GEN_SYN_VIM: vimCommand normal, START_STR='syn keyword vimCommand contained', END_STR='nextgroup=vimBang'
-syn keyword vimCommand contained al[l] ar[gs] arga[dd] argd[elete] argdo argded[upe] arge[dit] argg[lobal] argl[ocal] argu[ment] as[cii] b[uffer] bN[ext] ba[ll] bad[d] balt bd[elete] bf[irst] bl[ast] bm[odified] bn[ext] bp[revious] br[ewind] brea[k] breaka[dd] breakd[el] breakl[ist] buffers bufd[o] bun[load] bw[ipeout] cN[ext] cNf[ile] cabo[ve] cad[dbuffer] cadde[xpr] caddf[ile] caf[ter] cb[uffer] cbe[fore] cbel[ow] cbo[ttom] cc ccl[ose] cd cdo ce[nter] cex[pr] cf[ile] cfd[o] cfir[st] cg[etfile] cgetb[uffer] cgete[xpr] changes che[ckpath] checkt[ime] chi[story] cl[ist] clip[reset] cla[st] clo[se] cle[arjumps] cn[ext] cnew[er] cnf[ile] col[der] colo[rscheme] comc[lear] comp[iler] con[tinue] cope[n] cp[revious] cpf[ile] cq[uit] cr[ewind] cs[cope] cst[ag] cw[indow] nextgroup=vimBang
-syn keyword vimCommand contained delm[arks] deb[ug] defc[ompile] di[splay] dif[fupdate] diffg[et] diffo[ff] diffp[atch] diffpu[t] diffs[plit] difft[his] dig[raphs] disa[ssemble] dj[ump] dli[st] dr[op] ds[earch] dsp[lit] e[dit] ea[rlier] em[enu] endfo[r] endt[ry] endw[hile] ene[w] ex exi[t] exu[sage] f[ile] files fin[d] fina[lly] fini[sh] fir[st] fix[del] fo[ld] foldc[lose] foldd[oopen] folddoc[losed] foldo[pen] g[lobal] go[to] gu[i] gv[im] h[elp] helpc[lose] helpf[ind] helpt[ags] ha[rdcopy] his[tory] ij[ump] il[ist] int[ro] ip[ut] is[earch] isp[lit] ju[mps] l[ist] lN[ext] lNf[ile] la[st] lab[ove] lan[guage] lad[dexpr] laddb[uffer] laddf[ile] laf[ter] lat[er] lb[uffer] lbe[fore] lbel[ow] lbo[ttom] lc[d] lch[dir] lcl[ose] lcs[cope] ld[o] le[ft] lex[pr] lf[ile] lfd[o] nextgroup=vimBang
-syn keyword vimCommand contained lfir[st] lg[etfile] lgetb[uffer] lgete[xpr] lhi[story] ll lla[st] lli[st] lmak[e] lne[xt] lnew[er] lnf[ile] lo[adview] lockv[ar] lol[der] lop[en] lp[revious] lpf[ile] lr[ewind] lt[ag] lw[indow] ls m[ove] marks mes[sages] mk[exrc] mks[ession] mksp[ell] mkv[imrc] mkvie[w] mod[e] n[ext] nb[key] nbc[lose] nbs[tart] noh[lsearch] nu[mber] o[pen] ol[dfiles] on[ly] opt[ions] ow[nsyntax] p[rint] pa[ckadd] packl[oadall] pb[uffer] pc[lose] ped[it] po[p] pp[op] pre[serve] prev[ious] pro[mptfind] promptr[epl] ps[earch] pt[ag] ptN[ext] ptf[irst] ptj[ump] ptl[ast] ptn[ext] ptp[revious] ptr[ewind] pts[elect] pu[t] pw[d] q[uit] quita[ll] qa[ll] r[ead] rec[over] red[o] redr[aw] redraws[tatus] redrawt[abline] redrawtabp[anel] reg[isters] res[ize] nextgroup=vimBang
-syn keyword vimCommand contained ret[ab] rew[ind] ri[ght] ru[ntime] rund[o] rv[iminfo] sN[ext] sa[rgument] sal[l] sav[eas] sb[uffer] sbN[ext] sba[ll] sbf[irst] sbl[ast] sbm[odified] sbn[ext] sbp[revious] sbr[ewind] scr[iptnames] scripte[ncoding] scriptv[ersion] scs[cope] setf[iletype] sf[ind] sfir[st] sh[ell] sim[alt] sig[n] sla[st] sn[ext] so[urce] spe[llgood] spelld[ump] spelli[nfo] spellr[epall] spellra[re] spellu[ndo] spellw[rong] spr[evious] sre[wind] st[op] sta[g] star[tinsert] startg[replace] startr[eplace] stopi[nsert] stj[ump] sts[elect] sun[hide] sus[pend] sv[iew] sync[bind] smi[le] t tN[ext] ta[g] tags tabc[lose] tabd[o] tabe[dit] tabf[ind] tabfir[st] tabm[ove] tabl[ast] tabn[ext] tabnew tabo[nly] tabp[revious] tabN[ext] tabr[ewind] tabs tc[d] tch[dir] nextgroup=vimBang
-syn keyword vimCommand contained te[aroff] tf[irst] tj[ump] tl[ast] tn[ext] tp[revious] tr[ewind] try ts[elect] u[ndo] undoj[oin] undol[ist] unh[ide] up[date] v[global] ve[rsion] vi[sual] vie[w] viu[sage] vne[w] vs[plit] w[rite] wN[ext] wa[ll] wi[nsize] wind[o] winp[os] wl[restore] wn[ext] wp[revious] wq wqa[ll] wu[ndo] wv[iminfo] x[it] xa[ll] xr[estore] y[ank] z dl dell delel deletl deletel dp dep delp delep deletp deletep a i nextgroup=vimBang
+syn keyword vimCommand contained al[l] ar[gs] arga[dd] argd[elete] argded[upe] arge[dit] argg[lobal] argl[ocal] argu[ment] as[cii] b[uffer] bN[ext] ba[ll] bad[d] balt bd[elete] bf[irst] bl[ast] bm[odified] bn[ext] bp[revious] br[ewind] brea[k] buffers bun[load] bw[ipeout] cN[ext] cNf[ile] cabo[ve] cad[dbuffer] cadde[xpr] caddf[ile] caf[ter] cb[uffer] cbe[fore] cbel[ow] cbo[ttom] cc ccl[ose] ce[nter] cex[pr] cf[ile] cfir[st] cg[etfile] cgetb[uffer] cgete[xpr] changes che[ckpath] checkt[ime] chi[story] cl[ist] clip[reset] cla[st] clo[se] cle[arjumps] cn[ext] cnew[er] cnf[ile] col[der] colo[rscheme] comc[lear] comp[iler] con[tinue] cope[n] cp[revious] cpf[ile] cq[uit] cr[ewind] cs[cope] cst[ag] cw[indow] delm[arks] defc[ompile] di[splay] dif[fupdate] diffg[et] diffo[ff] nextgroup=vimBang
+syn keyword vimCommand contained diffp[atch] diffpu[t] diffs[plit] difft[his] dig[raphs] disa[ssemble] dj[ump] dli[st] dr[op] ds[earch] dsp[lit] e[dit] ea[rlier] em[enu] endfo[r] endt[ry] endw[hile] ene[w] ex exi[t] exu[sage] f[ile] files fin[d] fina[lly] fini[sh] fir[st] fix[del] fo[ld] foldc[lose] foldo[pen] g[lobal] go[to] gu[i] gv[im] helpc[lose] helpf[ind] helpt[ags] ha[rdcopy] ij[ump] il[ist] int[ro] ip[ut] is[earch] isp[lit] ju[mps] l[ist] lN[ext] lNf[ile] la[st] lab[ove] lad[dexpr] laddb[uffer] laddf[ile] laf[ter] lat[er] lb[uffer] lbe[fore] lbel[ow] lbo[ttom] lcl[ose] lcs[cope] le[ft] lex[pr] lf[ile] lfir[st] lg[etfile] lgetb[uffer] lgete[xpr] lhi[story] ll lla[st] lli[st] lmak[e] lne[xt] lnew[er] lnf[ile] lo[adview] lockv[ar] lol[der] lop[en] lp[revious] nextgroup=vimBang
+syn keyword vimCommand contained lpf[ile] lr[ewind] lt[ag] lw[indow] ls m[ove] marks mes[sages] mk[exrc] mks[ession] mksp[ell] mkv[imrc] mkvie[w] mod[e] n[ext] nb[key] nbc[lose] nbs[tart] noh[lsearch] nu[mber] o[pen] ol[dfiles] on[ly] opt[ions] ow[nsyntax] p[rint] pa[ckadd] packl[oadall] pb[uffer] pc[lose] ped[it] po[p] pp[op] pre[serve] prev[ious] ps[earch] pt[ag] ptN[ext] ptf[irst] ptj[ump] ptl[ast] ptn[ext] ptp[revious] ptr[ewind] pts[elect] pu[t] pw[d] q[uit] quita[ll] qa[ll] r[ead] rec[over] red[o] redr[aw] redraws[tatus] redrawt[abline] redrawtabp[anel] reg[isters] res[ize] ret[ab] rew[ind] ri[ght] ru[ntime] rund[o] rv[iminfo] sN[ext] sa[rgument] sal[l] sav[eas] sb[uffer] sbN[ext] sba[ll] sbf[irst] sbl[ast] sbm[odified] sbn[ext] sbp[revious] sbr[ewind] scr[iptnames] nextgroup=vimBang
+syn keyword vimCommand contained scripte[ncoding] scriptv[ersion] scs[cope] setf[iletype] sf[ind] sfir[st] sh[ell] sim[alt] sig[n] sla[st] sn[ext] so[urce] spe[llgood] spelld[ump] spelli[nfo] spellr[epall] spellra[re] spellu[ndo] spellw[rong] spr[evious] sre[wind] st[op] sta[g] star[tinsert] startg[replace] startr[eplace] stopi[nsert] stj[ump] sts[elect] sun[hide] sus[pend] sv[iew] sync[bind] smi[le] t tN[ext] ta[g] tags tabc[lose] tabe[dit] tabf[ind] tabfir[st] tabm[ove] tabl[ast] tabn[ext] tabnew tabo[nly] tabp[revious] tabN[ext] tabr[ewind] tabs te[aroff] tf[irst] tj[ump] tl[ast] tn[ext] tp[revious] tr[ewind] try ts[elect] u[ndo] undoj[oin] undol[ist] unh[ide] up[date] v[global] ve[rsion] vi[sual] vie[w] viu[sage] vne[w] vs[plit] w[rite] wN[ext] wa[ll] wi[nsize] nextgroup=vimBang
+syn keyword vimCommand contained winp[os] wl[restore] wn[ext] wp[revious] wq wqa[ll] wu[ndo] wv[iminfo] x[it] xa[ll] xr[estore] y[ank] z dl dell delel deletl deletel dp dep delp delep deletp deletep a i nextgroup=vimBang
 
 " Lower priority :syn-match to allow for :command/function() distinction
-syn match vimCommand "\<chd\%[ir]\>"    nextgroup=vimBang
+" :chdir is handled specially elsewhere
 syn match vimCommand "\<co\%[py]\>"     nextgroup=vimBang
 syn match vimCommand "\<d\%[elete]\>"   nextgroup=vimBang
 syn match vimCommand "\<j\%[oin]\>"     nextgroup=vimBang
@@ -65,31 +65,31 @@ syn keyword vimStdPlugin contained	Arguments Asm Break Cfilter Clear Continue Di
 " vimOptions are caught only when contained in a vimSet {{{2
 " GEN_SYN_VIM: vimOption normal, START_STR='syn keyword vimOption contained', END_STR='skipwhite nextgroup=vimSetEqual,vimSetMod'
 syn keyword vimOption contained al aleph ari allowrevins ambw ambiwidth arab arabic arshape arabicshape acd autochdir ac autocomplete acl autocompletedelay act autocompletetimeout ai autoindent ar autoread asd autoshelldir aw autowrite awa autowriteall bg background bs backspace bk backup bkc backupcopy bdir backupdir bex backupext bsk backupskip bdlay balloondelay beval ballooneval bevalterm balloonevalterm bexpr balloonexpr bo belloff bin binary bomb brk breakat bri breakindent briopt breakindentopt bsdir browsedir bh bufhidden bl buflisted bt buftype cmp casemap cdh cdhome cd cdpath cedit ccv charconvert chi chistory cin cindent cink cinkeys cino cinoptions cinsd cinscopedecls cinw cinwords cb clipboard cpm clipmethod ch cmdheight cwh cmdwinheight cc colorcolumn skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained co columns com comments cms commentstring cp compatible cpt complete cfu completefunc cfc completefuzzycollect cia completeitemalign cot completeopt cpp completepopup csl completeslash cto completetimeout cocu concealcursor cole conceallevel cf confirm ci copyindent cpo cpoptions cm cryptmethod cspc cscopepathcomp csprg cscopeprg csqf cscopequickfix csre cscoperelative cst cscopetag csto cscopetagorder csverb cscopeverbose crb cursorbind cuc cursorcolumn cul cursorline culopt cursorlineopt debug def define deco delcombine dict dictionary diff dia diffanchors dex diffexpr dip diffopt dg digraph dir directory dy display ead eadirection ed edcompatible emo emoji enc encoding eof endoffile eol endofline ea equalalways ep equalprg eb errorbells skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained ef errorfile efm errorformat ek esckeys ei eventignore eiw eventignorewin et expandtab ex exrc fenc fileencoding fencs fileencodings ff fileformat ffs fileformats fic fileignorecase ft filetype fcs fillchars ffu findfunc fixeol fixendofline fcl foldclose fdc foldcolumn fen foldenable fde foldexpr fdi foldignore fdl foldlevel fdls foldlevelstart fmr foldmarker fdm foldmethod fml foldminlines fdn foldnestmax fdo foldopen fdt foldtext fex formatexpr flp formatlistpat fo formatoptions fp formatprg fs fsync gd gdefault gfm grepformat gp grepprg gcr guicursor gfn guifont gfs guifontset gfw guifontwide ghr guiheadroom gli guiligatures go guioptions guipty gtl guitablabel gtt guitabtooltip hf helpfile hh helpheight hlg helplang hid hidden skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained hl highlight hi history hk hkmap hkp hkmapp hls hlsearch icon iconstring ic ignorecase imaf imactivatefunc imak imactivatekey imc imcmdline imd imdisable imi iminsert ims imsearch imsf imstatusfunc imst imstyle inc include inex includeexpr is incsearch inde indentexpr indk indentkeys inf infercase im insertmode ise isexpand isf isfname isi isident isk iskeyword isp isprint js joinspaces jop jumpoptions key kmp keymap km keymodel kpc keyprotocol kp keywordprg lmap langmap lm langmenu lnr langnoremap lrm langremap ls laststatus lz lazyredraw lhi lhistory lbr linebreak lines lsp linespace lisp lop lispoptions lw lispwords list lcs listchars lpl loadplugins luadll magic mef makeef menc makeencoding mp makeprg mps matchpairs mat matchtime skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained mco maxcombine mfd maxfuncdepth mmd maxmapdepth mm maxmem mmp maxmempattern mmt maxmemtot msc maxsearchcount mis menuitems mopt messagesopt msm mkspellmem ml modeline mle modelineexpr mls modelines ma modifiable mod modified more mouse mousef mousefocus mh mousehide mousem mousemodel mousemev mousemoveevent mouses mouseshape mouset mousetime mzq mzquantum mzschemedll mzschemegcdll nf nrformats nu number nuw numberwidth ofu omnifunc odev opendevice opfunc operatorfunc ost osctimeoutlen pp packpath para paragraphs paste pt pastetoggle pex patchexpr pm patchmode pa path perldll pi preserveindent pvh previewheight pvp previewpopup pvw previewwindow pdev printdevice penc printencoding pexpr printexpr pfn printfont pheader printheader skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained pmbcs printmbcharset pmbfn printmbfont popt printoptions prompt pb pumborder ph pumheight pmw pummaxwidth pw pumwidth pythondll pythonhome pythonthreedll pythonthreehome pyx pyxversion qftf quickfixtextfunc qe quoteescape ro readonly rdt redrawtime re regexpengine rnu relativenumber remap rop renderoptions report rs restorescreen ri revins rl rightleft rlc rightleftcmd rubydll ru ruler ruf rulerformat rtp runtimepath scr scroll scb scrollbind scf scrollfocus sj scrolljump so scrolloff sbo scrollopt sect sections secure sel selection slm selectmode ssop sessionoptions sh shell shcf shellcmdflag sp shellpipe shq shellquote srr shellredir ssl shellslash stmp shelltemp st shelltype sxe shellxescape sxq shellxquote sr shiftround sw shiftwidth skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained shm shortmess sn shortname sbr showbreak sc showcmd sloc showcmdloc sft showfulltag sm showmatch smd showmode stal showtabline stpl showtabpanel ss sidescroll siso sidescrolloff scl signcolumn scs smartcase si smartindent sta smarttab sms smoothscroll sts softtabstop spell spc spellcapcheck spf spellfile spl spelllang spo spelloptions sps spellsuggest sb splitbelow spk splitkeep spr splitright sol startofline stl statusline su suffixes sua suffixesadd swf swapfile sws swapsync swb switchbuf smc synmaxcol syn syntax tcl tabclose tal tabline tpm tabpagemax tpl tabpanel tplo tabpanelopt ts tabstop tbs tagbsearch tc tagcase tfu tagfunc tl taglength tr tagrelative tag tags tgst tagstack tcldll term tbidi termbidi tenc termencoding tgc termguicolors skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained twk termwinkey twsl termwinscroll tws termwinsize twt termwintype terse ta textauto tx textmode tw textwidth tsr thesaurus tsrfu thesaurusfunc top tildeop to timeout tm timeoutlen title titlelen titleold titlestring tb toolbar tbis toolbariconsize ttimeout ttm ttimeoutlen tbi ttybuiltin tf ttyfast ttym ttymouse tsl ttyscroll tty ttytype udir undodir udf undofile ul undolevels ur undoreload uc updatecount ut updatetime vsts varsofttabstop vts vartabstop vbs verbose vfile verbosefile vdir viewdir vop viewoptions vi viminfo vif viminfofile ve virtualedit vb visualbell warn wiv weirdinvert ww whichwrap wc wildchar wcm wildcharm wig wildignore wic wildignorecase wmnu wildmenu wim wildmode wop wildoptions wak winaltkeys wcr wincolor wi window skipwhite nextgroup=vimSetEqual,vimSetMod
-syn keyword vimOption contained wfb winfixbuf wfh winfixheight wfw winfixwidth wh winheight wmh winminheight wmw winminwidth winptydll wiw winwidth wse wlseat wst wlsteal wtm wltimeoutlen wrap wm wrapmargin ws wrapscan write wa writeany wb writebackup wd writedelay xtermcodes skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained co columns com comments cms commentstring cp compatible cpt complete cfu completefunc cia completeitemalign cot completeopt cpp completepopup csl completeslash cto completetimeout cocu concealcursor cole conceallevel cf confirm ci copyindent cpo cpoptions cm cryptmethod cspc cscopepathcomp csprg cscopeprg csqf cscopequickfix csre cscoperelative cst cscopetag csto cscopetagorder csverb cscopeverbose crb cursorbind cuc cursorcolumn cul cursorline culopt cursorlineopt debug def define deco delcombine dict dictionary diff dia diffanchors dex diffexpr dip diffopt dg digraph dir directory dy display ead eadirection ed edcompatible emo emoji enc encoding eof endoffile eol endofline ea equalalways ep equalprg eb errorbells ef errorfile skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained efm errorformat ek esckeys ei eventignore eiw eventignorewin et expandtab ex exrc fenc fileencoding fencs fileencodings ff fileformat ffs fileformats fic fileignorecase ft filetype fcs fillchars ffu findfunc fixeol fixendofline fcl foldclose fdc foldcolumn fen foldenable fde foldexpr fdi foldignore fdl foldlevel fdls foldlevelstart fmr foldmarker fdm foldmethod fml foldminlines fdn foldnestmax fdo foldopen fdt foldtext fex formatexpr flp formatlistpat fo formatoptions fp formatprg fs fsync gd gdefault gfm grepformat gp grepprg gcr guicursor gfn guifont gfs guifontset gfw guifontwide ghr guiheadroom gli guiligatures go guioptions guipty gtl guitablabel gtt guitabtooltip hf helpfile hh helpheight hlg helplang hid hidden hl highlight skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained hi history hk hkmap hkp hkmapp hls hlsearch icon iconstring ic ignorecase imaf imactivatefunc imak imactivatekey imc imcmdline imd imdisable imi iminsert ims imsearch imsf imstatusfunc imst imstyle inc include inex includeexpr is incsearch inde indentexpr indk indentkeys inf infercase im insertmode isf isfname isi isident isk iskeyword isp isprint js joinspaces jop jumpoptions key kmp keymap km keymodel kpc keyprotocol kp keywordprg lmap langmap lm langmenu lnr langnoremap lrm langremap ls laststatus lz lazyredraw lhi lhistory lbr linebreak lines lsp linespace lisp lop lispoptions lw lispwords list lcs listchars lpl loadplugins luadll magic mef makeef menc makeencoding mp makeprg mps matchpairs mat matchtime mco maxcombine mfd maxfuncdepth skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained mmd maxmapdepth mm maxmem mmp maxmempattern mmt maxmemtot msc maxsearchcount mis menuitems mopt messagesopt msm mkspellmem ml modeline mle modelineexpr mls modelines ma modifiable mod modified more mouse mousef mousefocus mh mousehide mousem mousemodel mousemev mousemoveevent mouses mouseshape mouset mousetime mzq mzquantum mzschemedll mzschemegcdll nf nrformats nu number nuw numberwidth ofu omnifunc odev opendevice opfunc operatorfunc ost osctimeoutlen pp packpath para paragraphs paste pt pastetoggle pex patchexpr pm patchmode pa path perldll pi preserveindent pvh previewheight pvp previewpopup pvw previewwindow pdev printdevice penc printencoding pexpr printexpr pfn printfont pheader printheader pmbcs printmbcharset pmbfn printmbfont skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained popt printoptions prompt pb pumborder ph pumheight pmw pummaxwidth pw pumwidth pythondll pythonhome pythonthreedll pythonthreehome pyx pyxversion qftf quickfixtextfunc qe quoteescape ro readonly rdt redrawtime re regexpengine rnu relativenumber remap rop renderoptions report rs restorescreen ri revins rl rightleft rlc rightleftcmd rubydll ru ruler ruf rulerformat rtp runtimepath scr scroll scb scrollbind scf scrollfocus sj scrolljump so scrolloff sbo scrollopt sect sections secure sel selection slm selectmode ssop sessionoptions sh shell shcf shellcmdflag sp shellpipe shq shellquote srr shellredir ssl shellslash stmp shelltemp st shelltype sxe shellxescape sxq shellxquote sr shiftround sw shiftwidth shm shortmess sn shortname sbr showbreak skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained sc showcmd sloc showcmdloc sft showfulltag sm showmatch smd showmode stal showtabline stpl showtabpanel ss sidescroll siso sidescrolloff scl signcolumn scs smartcase si smartindent sta smarttab sms smoothscroll sts softtabstop spell spc spellcapcheck spf spellfile spl spelllang spo spelloptions sps spellsuggest sb splitbelow spk splitkeep spr splitright sol startofline stl statusline stlo statuslineopt su suffixes sua suffixesadd swf swapfile sws swapsync swb switchbuf smc synmaxcol syn syntax tcl tabclose tal tabline tpm tabpagemax tpl tabpanel tplo tabpanelopt ts tabstop tbs tagbsearch tc tagcase tfu tagfunc tl taglength tr tagrelative tag tags tgst tagstack tcldll term tbidi termbidi tenc termencoding tgc termguicolors trz termresize skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained tsy termsync twk termwinkey twsl termwinscroll tws termwinsize twt termwintype terse ta textauto tx textmode tw textwidth tsr thesaurus tsrfu thesaurusfunc top tildeop to timeout tm timeoutlen title titlelen titleold titlestring tb toolbar tbis toolbariconsize ttimeout ttm ttimeoutlen tbi ttybuiltin tf ttyfast ttym ttymouse tsl ttyscroll tty ttytype udir undodir udf undofile ul undolevels ur undoreload uc updatecount ut updatetime vsts varsofttabstop vts vartabstop vbs verbose vfile verbosefile vdir viewdir vop viewoptions vi viminfo vif viminfofile ve virtualedit vb visualbell warn wiv weirdinvert ww whichwrap wc wildchar wcm wildcharm wig wildignore wic wildignorecase wmnu wildmenu wim wildmode wop wildoptions wak winaltkeys wcr wincolor skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained wi window wfb winfixbuf wfh winfixheight wfw winfixwidth wh winheight whl winhighlight wmh winminheight wmw winminwidth winptydll wiw winwidth wse wlseat wst wlsteal wtm wltimeoutlen wrap wm wrapmargin ws wrapscan write wa writeany wb writebackup wd writedelay xtermcodes skipwhite nextgroup=vimSetEqual,vimSetMod
 
 " vimOptions: These are the turn-off setting variants {{{2
 " GEN_SYN_VIM: vimOption turn-off, START_STR='syn keyword vimOption contained', END_STR=''
 syn keyword vimOption contained noari noallowrevins noarab noarabic noarshape noarabicshape noacd noautochdir noac noautocomplete noai noautoindent noar noautoread noasd noautoshelldir noaw noautowrite noawa noautowriteall nobk nobackup nobeval noballooneval nobevalterm noballoonevalterm nobin nobinary nobomb nobri nobreakindent nobl nobuflisted nocdh nocdhome nocin nocindent nocp nocompatible nocf noconfirm noci nocopyindent nocsre nocscoperelative nocst nocscopetag nocsverb nocscopeverbose nocrb nocursorbind nocuc nocursorcolumn nocul nocursorline nodeco nodelcombine nodiff nodg nodigraph noed noedcompatible noemo noemoji noeof noendoffile noeol noendofline noea noequalalways noeb noerrorbells noek noesckeys noet noexpandtab noex noexrc nofic nofileignorecase
 syn keyword vimOption contained nofixeol nofixendofline nofen nofoldenable nofs nofsync nogd nogdefault noguipty nohid nohidden nohk nohkmap nohkp nohkmapp nohls nohlsearch noicon noic noignorecase noimc noimcmdline noimd noimdisable nois noincsearch noinf noinfercase noim noinsertmode nojs nojoinspaces nolnr nolangnoremap nolrm nolangremap nolz nolazyredraw nolbr nolinebreak nolisp nolist nolpl noloadplugins nomagic noml nomodeline nomle nomodelineexpr noma nomodifiable nomod nomodified nomore nomousef nomousefocus nomh nomousehide nomousemev nomousemoveevent nonu nonumber noodev noopendevice nopaste nopi nopreserveindent nopvw nopreviewwindow noprompt noro noreadonly nornu norelativenumber noremap nors norestorescreen nori norevins norl norightleft noru noruler
-syn keyword vimOption contained noscb noscrollbind noscf noscrollfocus nosecure nossl noshellslash nostmp noshelltemp nosr noshiftround nosn noshortname nosc noshowcmd nosft noshowfulltag nosm noshowmatch nosmd noshowmode noscs nosmartcase nosi nosmartindent nosta nosmarttab nosms nosmoothscroll nospell nosb nosplitbelow nospr nosplitright nosol nostartofline noswf noswapfile notbs notagbsearch notr notagrelative notgst notagstack notbidi notermbidi notgc notermguicolors noterse nota notextauto notx notextmode notop notildeop noto notimeout notitle nottimeout notbi nottybuiltin notf nottyfast noudf noundofile novb novisualbell nowarn nowiv noweirdinvert nowic nowildignorecase nowmnu nowildmenu nowfb nowinfixbuf nowfh nowinfixheight nowfw nowinfixwidth nowst nowlsteal
-syn keyword vimOption contained nowrap nows nowrapscan nowrite nowa nowriteany nowb nowritebackup noxtermcodes
+syn keyword vimOption contained noscb noscrollbind noscf noscrollfocus nosecure nossl noshellslash nostmp noshelltemp nosr noshiftround nosn noshortname nosc noshowcmd nosft noshowfulltag nosm noshowmatch nosmd noshowmode noscs nosmartcase nosi nosmartindent nosta nosmarttab nosms nosmoothscroll nospell nosb nosplitbelow nospr nosplitright nosol nostartofline noswf noswapfile notbs notagbsearch notr notagrelative notgst notagstack notbidi notermbidi notgc notermguicolors notsy notermsync noterse nota notextauto notx notextmode notop notildeop noto notimeout notitle nottimeout notbi nottybuiltin notf nottyfast noudf noundofile novb novisualbell nowarn nowiv noweirdinvert nowic nowildignorecase nowmnu nowildmenu nowfb nowinfixbuf nowfh nowinfixheight nowfw nowinfixwidth
+syn keyword vimOption contained nowst nowlsteal nowrap nows nowrapscan nowrite nowa nowriteany nowb nowritebackup noxtermcodes
 
 " vimOptions: These are the invertible variants {{{2
 " GEN_SYN_VIM: vimOption invertible, START_STR='syn keyword vimOption contained', END_STR=''
 syn keyword vimOption contained invari invallowrevins invarab invarabic invarshape invarabicshape invacd invautochdir invac invautocomplete invai invautoindent invar invautoread invasd invautoshelldir invaw invautowrite invawa invautowriteall invbk invbackup invbeval invballooneval invbevalterm invballoonevalterm invbin invbinary invbomb invbri invbreakindent invbl invbuflisted invcdh invcdhome invcin invcindent invcp invcompatible invcf invconfirm invci invcopyindent invcsre invcscoperelative invcst invcscopetag invcsverb invcscopeverbose invcrb invcursorbind invcuc invcursorcolumn invcul invcursorline invdeco invdelcombine invdiff invdg invdigraph inved invedcompatible invemo invemoji inveof invendoffile inveol invendofline invea invequalalways inveb inverrorbells
 syn keyword vimOption contained invek invesckeys invet invexpandtab invex invexrc invfic invfileignorecase invfixeol invfixendofline invfen invfoldenable invfs invfsync invgd invgdefault invguipty invhid invhidden invhk invhkmap invhkp invhkmapp invhls invhlsearch invicon invic invignorecase invimc invimcmdline invimd invimdisable invis invincsearch invinf invinfercase invim invinsertmode invjs invjoinspaces invlnr invlangnoremap invlrm invlangremap invlz invlazyredraw invlbr invlinebreak invlisp invlist invlpl invloadplugins invmagic invml invmodeline invmle invmodelineexpr invma invmodifiable invmod invmodified invmore invmousef invmousefocus invmh invmousehide invmousemev invmousemoveevent invnu invnumber invodev invopendevice invpaste invpi invpreserveindent
-syn keyword vimOption contained invpvw invpreviewwindow invprompt invro invreadonly invrnu invrelativenumber invremap invrs invrestorescreen invri invrevins invrl invrightleft invru invruler invscb invscrollbind invscf invscrollfocus invsecure invssl invshellslash invstmp invshelltemp invsr invshiftround invsn invshortname invsc invshowcmd invsft invshowfulltag invsm invshowmatch invsmd invshowmode invscs invsmartcase invsi invsmartindent invsta invsmarttab invsms invsmoothscroll invspell invsb invsplitbelow invspr invsplitright invsol invstartofline invswf invswapfile invtbs invtagbsearch invtr invtagrelative invtgst invtagstack invtbidi invtermbidi invtgc invtermguicolors invterse invta invtextauto invtx invtextmode invtop invtildeop invto invtimeout invtitle
-syn keyword vimOption contained invttimeout invtbi invttybuiltin invtf invttyfast invudf invundofile invvb invvisualbell invwarn invwiv invweirdinvert invwic invwildignorecase invwmnu invwildmenu invwfb invwinfixbuf invwfh invwinfixheight invwfw invwinfixwidth invwst invwlsteal invwrap invws invwrapscan invwrite invwa invwriteany invwb invwritebackup invxtermcodes
+syn keyword vimOption contained invpvw invpreviewwindow invprompt invro invreadonly invrnu invrelativenumber invremap invrs invrestorescreen invri invrevins invrl invrightleft invru invruler invscb invscrollbind invscf invscrollfocus invsecure invssl invshellslash invstmp invshelltemp invsr invshiftround invsn invshortname invsc invshowcmd invsft invshowfulltag invsm invshowmatch invsmd invshowmode invscs invsmartcase invsi invsmartindent invsta invsmarttab invsms invsmoothscroll invspell invsb invsplitbelow invspr invsplitright invsol invstartofline invswf invswapfile invtbs invtagbsearch invtr invtagrelative invtgst invtagstack invtbidi invtermbidi invtgc invtermguicolors invtsy invtermsync invterse invta invtextauto invtx invtextmode invtop invtildeop invto invtimeout
+syn keyword vimOption contained invtitle invttimeout invtbi invttybuiltin invtf invttyfast invudf invundofile invvb invvisualbell invwarn invwiv invweirdinvert invwic invwildignorecase invwmnu invwildmenu invwfb invwinfixbuf invwfh invwinfixheight invwfw invwinfixwidth invwst invwlsteal invwrap invws invwrapscan invwrite invwa invwriteany invwb invwritebackup invxtermcodes
 " termcap codes (which can also be set) {{{2
 " GEN_SYN_VIM: vimOption term output code, START_STR='syn keyword vimOption contained', END_STR='skipwhite nextgroup=vimSetEqual,vimSetMod'
-syn keyword vimOption contained t_AB t_AF t_AU t_AL t_al t_bc t_BE t_BD t_cd t_ce t_Ce t_CF t_cl t_cm t_Co t_CS t_Cs t_cs t_CV t_da t_db t_DL t_dl t_ds t_Ds t_EC t_EI t_fs t_fd t_fe t_GP t_IE t_IS t_ke t_ks t_le t_mb t_md t_me t_mr t_ms t_nd t_op t_RF t_RB t_RC t_RI t_Ri t_RK t_RS t_RT t_RV t_Sb t_SC t_se t_Sf t_SH t_SI t_Si t_so t_SR t_sr t_ST t_Te t_te t_TE t_ti t_TI t_Ts t_ts t_u7 t_ue t_us t_Us t_ut t_vb t_ve t_vi t_VS t_vs t_WP t_WS t_XM t_xn t_xs t_ZH t_ZR t_8f t_8b t_8u t_xo skipwhite nextgroup=vimSetEqual,vimSetMod
+syn keyword vimOption contained t_AB t_AF t_AU t_AL t_al t_bc t_BE t_BD t_cd t_ce t_Ce t_CF t_cl t_cm t_Co t_CS t_Cs t_cs t_CV t_da t_db t_DL t_dl t_ds t_Ds t_EC t_EI t_fs t_fd t_fe t_GP t_IE t_IS t_ke t_ks t_le t_mb t_md t_me t_mr t_ms t_nd t_op t_RF t_RB t_RC t_RI t_Ri t_RK t_RS t_RT t_RV t_Sb t_SC t_se t_Sf t_SH t_SI t_Si t_so t_SR t_sr t_ST t_Te t_te t_TE t_ti t_TI t_Ts t_ts t_u7 t_ue t_us t_Us t_ut t_vb t_ve t_vi t_VS t_vs t_WP t_WS t_XM t_xn t_xs t_ZH t_ZR t_8f t_8b t_8u t_xo t_BS t_ES skipwhite nextgroup=vimSetEqual,vimSetMod
 " term key codes
 syn keyword vimOption contained	t_F1 t_F2 t_F3 t_F4 t_F5 t_F6 t_F7 t_F8 t_F9 t_k1 t_K1 t_k2 t_k3 t_K3 t_k4 t_K4 t_k5 t_K5 t_k6 t_K6 t_k7 t_K7 t_k8 t_K8 t_k9 t_K9 t_KA t_kb t_kB t_KB t_KC t_kd t_kD t_KD t_KE t_KF t_KG t_kh t_KH t_kI t_KI t_KJ t_KK t_kl t_KL t_kN t_kP t_kr t_ku
 syn match   vimOption contained	"t_%1"
@@ -104,16 +104,16 @@ syn match   vimOption contained	"t_k;"
 " vimOptions: These are the variable names {{{2
 " GEN_SYN_VIM: vimOption normal variable,           START_STR='syn keyword vimOptionVarName contained', END_STR=''
 syn keyword vimOptionVarName contained al aleph ari allowrevins ambw ambiwidth arab arabic arshape arabicshape acd autochdir ac autocomplete acl autocompletedelay act autocompletetimeout ai autoindent ar autoread asd autoshelldir aw autowrite awa autowriteall bg background bs backspace bk backup bkc backupcopy bdir backupdir bex backupext bsk backupskip bdlay balloondelay beval ballooneval bevalterm balloonevalterm bexpr balloonexpr bo belloff bin binary bomb brk breakat bri breakindent briopt breakindentopt bsdir browsedir bh bufhidden bl buflisted bt buftype cmp casemap cdh cdhome cd cdpath cedit ccv charconvert chi chistory cin cindent cink cinkeys cino cinoptions cinsd cinscopedecls cinw cinwords cb clipboard cpm clipmethod ch cmdheight cwh cmdwinheight cc colorcolumn
-syn keyword vimOptionVarName contained co columns com comments cms commentstring cp compatible cpt complete cfu completefunc cfc completefuzzycollect cia completeitemalign cot completeopt cpp completepopup csl completeslash cto completetimeout cocu concealcursor cole conceallevel cf confirm ci copyindent cpo cpoptions cm cryptmethod cspc cscopepathcomp csprg cscopeprg csqf cscopequickfix csre cscoperelative cst cscopetag csto cscopetagorder csverb cscopeverbose crb cursorbind cuc cursorcolumn cul cursorline culopt cursorlineopt debug def define deco delcombine dict dictionary diff dia diffanchors dex diffexpr dip diffopt dg digraph dir directory dy display ead eadirection ed edcompatible emo emoji enc encoding eof endoffile eol endofline ea equalalways ep equalprg
-syn keyword vimOptionVarName contained eb errorbells ef errorfile efm errorformat ek esckeys ei eventignore eiw eventignorewin et expandtab ex exrc fenc fileencoding fencs fileencodings ff fileformat ffs fileformats fic fileignorecase ft filetype fcs fillchars ffu findfunc fixeol fixendofline fcl foldclose fdc foldcolumn fen foldenable fde foldexpr fdi foldignore fdl foldlevel fdls foldlevelstart fmr foldmarker fdm foldmethod fml foldminlines fdn foldnestmax fdo foldopen fdt foldtext fex formatexpr flp formatlistpat fo formatoptions fp formatprg fs fsync gd gdefault gfm grepformat gp grepprg gcr guicursor gfn guifont gfs guifontset gfw guifontwide ghr guiheadroom gli guiligatures go guioptions guipty gtl guitablabel gtt guitabtooltip hf helpfile hh helpheight
-syn keyword vimOptionVarName contained hlg helplang hid hidden hl highlight hi history hk hkmap hkp hkmapp hls hlsearch icon iconstring ic ignorecase imaf imactivatefunc imak imactivatekey imc imcmdline imd imdisable imi iminsert ims imsearch imsf imstatusfunc imst imstyle inc include inex includeexpr is incsearch inde indentexpr indk indentkeys inf infercase im insertmode ise isexpand isf isfname isi isident isk iskeyword isp isprint js joinspaces jop jumpoptions key kmp keymap km keymodel kpc keyprotocol kp keywordprg lmap langmap lm langmenu lnr langnoremap lrm langremap ls laststatus lz lazyredraw lhi lhistory lbr linebreak lines lsp linespace lisp lop lispoptions lw lispwords list lcs listchars lpl loadplugins luadll magic mef makeef menc makeencoding mp makeprg
-syn keyword vimOptionVarName contained mps matchpairs mat matchtime mco maxcombine mfd maxfuncdepth mmd maxmapdepth mm maxmem mmp maxmempattern mmt maxmemtot msc maxsearchcount mis menuitems mopt messagesopt msm mkspellmem ml modeline mle modelineexpr mls modelines ma modifiable mod modified more mouse mousef mousefocus mh mousehide mousem mousemodel mousemev mousemoveevent mouses mouseshape mouset mousetime mzq mzquantum mzschemedll mzschemegcdll nf nrformats nu number nuw numberwidth ofu omnifunc odev opendevice opfunc operatorfunc ost osctimeoutlen pp packpath para paragraphs paste pt pastetoggle pex patchexpr pm patchmode pa path perldll pi preserveindent pvh previewheight pvp previewpopup pvw previewwindow pdev printdevice penc printencoding pexpr printexpr
-syn keyword vimOptionVarName contained pfn printfont pheader printheader pmbcs printmbcharset pmbfn printmbfont popt printoptions prompt pb pumborder ph pumheight pmw pummaxwidth pw pumwidth pythondll pythonhome pythonthreedll pythonthreehome pyx pyxversion qftf quickfixtextfunc qe quoteescape ro readonly rdt redrawtime re regexpengine rnu relativenumber remap rop renderoptions report rs restorescreen ri revins rl rightleft rlc rightleftcmd rubydll ru ruler ruf rulerformat rtp runtimepath scr scroll scb scrollbind scf scrollfocus sj scrolljump so scrolloff sbo scrollopt sect sections secure sel selection slm selectmode ssop sessionoptions sh shell shcf shellcmdflag sp shellpipe shq shellquote srr shellredir ssl shellslash stmp shelltemp st shelltype sxe shellxescape
-syn keyword vimOptionVarName contained sxq shellxquote sr shiftround sw shiftwidth shm shortmess sn shortname sbr showbreak sc showcmd sloc showcmdloc sft showfulltag sm showmatch smd showmode stal showtabline stpl showtabpanel ss sidescroll siso sidescrolloff scl signcolumn scs smartcase si smartindent sta smarttab sms smoothscroll sts softtabstop spell spc spellcapcheck spf spellfile spl spelllang spo spelloptions sps spellsuggest sb splitbelow spk splitkeep spr splitright sol startofline stl statusline su suffixes sua suffixesadd swf swapfile sws swapsync swb switchbuf smc synmaxcol syn syntax tcl tabclose tal tabline tpm tabpagemax tpl tabpanel tplo tabpanelopt ts tabstop tbs tagbsearch tc tagcase tfu tagfunc tl taglength tr tagrelative tag tags tgst tagstack
-syn keyword vimOptionVarName contained tcldll term tbidi termbidi tenc termencoding tgc termguicolors twk termwinkey twsl termwinscroll tws termwinsize twt termwintype terse ta textauto tx textmode tw textwidth tsr thesaurus tsrfu thesaurusfunc top tildeop to timeout tm timeoutlen title titlelen titleold titlestring tb toolbar tbis toolbariconsize ttimeout ttm ttimeoutlen tbi ttybuiltin tf ttyfast ttym ttymouse tsl ttyscroll tty ttytype udir undodir udf undofile ul undolevels ur undoreload uc updatecount ut updatetime vsts varsofttabstop vts vartabstop vbs verbose vfile verbosefile vdir viewdir vop viewoptions vi viminfo vif viminfofile ve virtualedit vb visualbell warn wiv weirdinvert ww whichwrap wc wildchar wcm wildcharm wig wildignore wic wildignorecase wmnu wildmenu
-syn keyword vimOptionVarName contained wim wildmode wop wildoptions wak winaltkeys wcr wincolor wi window wfb winfixbuf wfh winfixheight wfw winfixwidth wh winheight wmh winminheight wmw winminwidth winptydll wiw winwidth wse wlseat wst wlsteal wtm wltimeoutlen wrap wm wrapmargin ws wrapscan write wa writeany wb writebackup wd writedelay xtermcodes
+syn keyword vimOptionVarName contained co columns com comments cms commentstring cp compatible cpt complete cfu completefunc cia completeitemalign cot completeopt cpp completepopup csl completeslash cto completetimeout cocu concealcursor cole conceallevel cf confirm ci copyindent cpo cpoptions cm cryptmethod cspc cscopepathcomp csprg cscopeprg csqf cscopequickfix csre cscoperelative cst cscopetag csto cscopetagorder csverb cscopeverbose crb cursorbind cuc cursorcolumn cul cursorline culopt cursorlineopt debug def define deco delcombine dict dictionary diff dia diffanchors dex diffexpr dip diffopt dg digraph dir directory dy display ead eadirection ed edcompatible emo emoji enc encoding eof endoffile eol endofline ea equalalways ep equalprg eb errorbells ef errorfile
+syn keyword vimOptionVarName contained efm errorformat ek esckeys ei eventignore eiw eventignorewin et expandtab ex exrc fenc fileencoding fencs fileencodings ff fileformat ffs fileformats fic fileignorecase ft filetype fcs fillchars ffu findfunc fixeol fixendofline fcl foldclose fdc foldcolumn fen foldenable fde foldexpr fdi foldignore fdl foldlevel fdls foldlevelstart fmr foldmarker fdm foldmethod fml foldminlines fdn foldnestmax fdo foldopen fdt foldtext fex formatexpr flp formatlistpat fo formatoptions fp formatprg fs fsync gd gdefault gfm grepformat gp grepprg gcr guicursor gfn guifont gfs guifontset gfw guifontwide ghr guiheadroom gli guiligatures go guioptions guipty gtl guitablabel gtt guitabtooltip hf helpfile hh helpheight hlg helplang hid hidden hl highlight
+syn keyword vimOptionVarName contained hi history hk hkmap hkp hkmapp hls hlsearch icon iconstring ic ignorecase imaf imactivatefunc imak imactivatekey imc imcmdline imd imdisable imi iminsert ims imsearch imsf imstatusfunc imst imstyle inc include inex includeexpr is incsearch inde indentexpr indk indentkeys inf infercase im insertmode isf isfname isi isident isk iskeyword isp isprint js joinspaces jop jumpoptions key kmp keymap km keymodel kpc keyprotocol kp keywordprg lmap langmap lm langmenu lnr langnoremap lrm langremap ls laststatus lz lazyredraw lhi lhistory lbr linebreak lines lsp linespace lisp lop lispoptions lw lispwords list lcs listchars lpl loadplugins luadll magic mef makeef menc makeencoding mp makeprg mps matchpairs mat matchtime mco maxcombine
+syn keyword vimOptionVarName contained mfd maxfuncdepth mmd maxmapdepth mm maxmem mmp maxmempattern mmt maxmemtot msc maxsearchcount mis menuitems mopt messagesopt msm mkspellmem ml modeline mle modelineexpr mls modelines ma modifiable mod modified more mouse mousef mousefocus mh mousehide mousem mousemodel mousemev mousemoveevent mouses mouseshape mouset mousetime mzq mzquantum mzschemedll mzschemegcdll nf nrformats nu number nuw numberwidth ofu omnifunc odev opendevice opfunc operatorfunc ost osctimeoutlen pp packpath para paragraphs paste pt pastetoggle pex patchexpr pm patchmode pa path perldll pi preserveindent pvh previewheight pvp previewpopup pvw previewwindow pdev printdevice penc printencoding pexpr printexpr pfn printfont pheader printheader pmbcs printmbcharset
+syn keyword vimOptionVarName contained pmbfn printmbfont popt printoptions prompt pb pumborder ph pumheight pmw pummaxwidth pw pumwidth pythondll pythonhome pythonthreedll pythonthreehome pyx pyxversion qftf quickfixtextfunc qe quoteescape ro readonly rdt redrawtime re regexpengine rnu relativenumber remap rop renderoptions report rs restorescreen ri revins rl rightleft rlc rightleftcmd rubydll ru ruler ruf rulerformat rtp runtimepath scr scroll scb scrollbind scf scrollfocus sj scrolljump so scrolloff sbo scrollopt sect sections secure sel selection slm selectmode ssop sessionoptions sh shell shcf shellcmdflag sp shellpipe shq shellquote srr shellredir ssl shellslash stmp shelltemp st shelltype sxe shellxescape sxq shellxquote sr shiftround sw shiftwidth shm shortmess
+syn keyword vimOptionVarName contained sn shortname sbr showbreak sc showcmd sloc showcmdloc sft showfulltag sm showmatch smd showmode stal showtabline stpl showtabpanel ss sidescroll siso sidescrolloff scl signcolumn scs smartcase si smartindent sta smarttab sms smoothscroll sts softtabstop spell spc spellcapcheck spf spellfile spl spelllang spo spelloptions sps spellsuggest sb splitbelow spk splitkeep spr splitright sol startofline stl statusline stlo statuslineopt su suffixes sua suffixesadd swf swapfile sws swapsync swb switchbuf smc synmaxcol syn syntax tcl tabclose tal tabline tpm tabpagemax tpl tabpanel tplo tabpanelopt ts tabstop tbs tagbsearch tc tagcase tfu tagfunc tl taglength tr tagrelative tag tags tgst tagstack tcldll term tbidi termbidi tenc termencoding
+syn keyword vimOptionVarName contained tgc termguicolors trz termresize tsy termsync twk termwinkey twsl termwinscroll tws termwinsize twt termwintype terse ta textauto tx textmode tw textwidth tsr thesaurus tsrfu thesaurusfunc top tildeop to timeout tm timeoutlen title titlelen titleold titlestring tb toolbar tbis toolbariconsize ttimeout ttm ttimeoutlen tbi ttybuiltin tf ttyfast ttym ttymouse tsl ttyscroll tty ttytype udir undodir udf undofile ul undolevels ur undoreload uc updatecount ut updatetime vsts varsofttabstop vts vartabstop vbs verbose vfile verbosefile vdir viewdir vop viewoptions vi viminfo vif viminfofile ve virtualedit vb visualbell warn wiv weirdinvert ww whichwrap wc wildchar wcm wildcharm wig wildignore wic wildignorecase wmnu wildmenu wim wildmode
+syn keyword vimOptionVarName contained wop wildoptions wak winaltkeys wcr wincolor wi window wfb winfixbuf wfh winfixheight wfw winfixwidth wh winheight whl winhighlight wmh winminheight wmw winminwidth winptydll wiw winwidth wse wlseat wst wlsteal wtm wltimeoutlen wrap wm wrapmargin ws wrapscan write wa writeany wb writebackup wd writedelay xtermcodes
 " GEN_SYN_VIM: vimOption term output code variable, START_STR='syn keyword vimOptionVarName contained', END_STR=''
-syn keyword vimOptionVarName contained t_AB t_AF t_AU t_AL t_al t_bc t_BE t_BD t_cd t_ce t_Ce t_CF t_cl t_cm t_Co t_CS t_Cs t_cs t_CV t_da t_db t_DL t_dl t_ds t_Ds t_EC t_EI t_fs t_fd t_fe t_GP t_IE t_IS t_ke t_ks t_le t_mb t_md t_me t_mr t_ms t_nd t_op t_RF t_RB t_RC t_RI t_Ri t_RK t_RS t_RT t_RV t_Sb t_SC t_se t_Sf t_SH t_SI t_Si t_so t_SR t_sr t_ST t_Te t_te t_TE t_ti t_TI t_Ts t_ts t_u7 t_ue t_us t_Us t_ut t_vb t_ve t_vi t_VS t_vs t_WP t_WS t_XM t_xn t_xs t_ZH t_ZR t_8f t_8b t_8u t_xo
+syn keyword vimOptionVarName contained t_AB t_AF t_AU t_AL t_al t_bc t_BE t_BD t_cd t_ce t_Ce t_CF t_cl t_cm t_Co t_CS t_Cs t_cs t_CV t_da t_db t_DL t_dl t_ds t_Ds t_EC t_EI t_fs t_fd t_fe t_GP t_IE t_IS t_ke t_ks t_le t_mb t_md t_me t_mr t_ms t_nd t_op t_RF t_RB t_RC t_RI t_Ri t_RK t_RS t_RT t_RV t_Sb t_SC t_se t_Sf t_SH t_SI t_Si t_so t_SR t_sr t_ST t_Te t_te t_TE t_ti t_TI t_Ts t_ts t_u7 t_ue t_us t_Us t_ut t_vb t_ve t_vi t_VS t_vs t_WP t_WS t_XM t_xn t_xs t_ZH t_ZR t_8f t_8b t_8u t_xo t_BS t_ES
 syn keyword vimOptionVarName contained	t_F1 t_F2 t_F3 t_F4 t_F5 t_F6 t_F7 t_F8 t_F9 t_k1 t_K1 t_k2 t_k3 t_K3 t_k4 t_K4 t_k5 t_K5 t_k6 t_K6 t_k7 t_K7 t_k8 t_K8 t_k9 t_K9 t_KA t_kb t_kB t_KB t_KC t_kd t_kD t_KD t_KE t_KF t_KG t_kh t_KH t_kI t_KI t_KJ t_KK t_kl t_KL t_kN t_kP t_kr t_ku
 syn match   vimOptionVarName contained	"t_%1"
 syn match   vimOptionVarName contained	"t_#2"
@@ -134,8 +134,8 @@ syn keyword vimErrSetting contained invakm invaltkeymap invanti invantialias inv
 syn case ignore
 " GEN_SYN_VIM: vimAutoEvent, START_STR='syn keyword vimAutoEvent contained', END_STR='skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern'
 syn keyword vimAutoEvent contained BufAdd BufCreate BufDelete BufEnter BufFilePost BufFilePre BufHidden BufLeave BufNew BufNewFile BufRead BufReadCmd BufReadPost BufReadPre BufUnload BufWinEnter BufWinLeave BufWipeout BufWrite BufWriteCmd BufWritePost BufWritePre CmdlineChanged CmdlineEnter CmdlineLeave CmdlineLeavePre CmdUndefined CmdwinEnter CmdwinLeave ColorScheme ColorSchemePre CompleteChanged CompleteDone CompleteDonePre CursorHold CursorHoldI CursorMoved CursorMovedC CursorMovedI DiffUpdated DirChanged DirChangedPre EncodingChanged ExitPre FileAppendCmd FileAppendPost FileAppendPre FileChangedRO FileChangedShell FileChangedShellPost FileEncoding FileReadCmd FileReadPost FileReadPre FileType FileWriteCmd FileWritePost FileWritePre FilterReadPost FilterReadPre skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern
-syn keyword vimAutoEvent contained FilterWritePost FilterWritePre FocusGained FocusLost FuncUndefined GUIEnter GUIFailed InsertChange InsertCharPre InsertEnter InsertLeave InsertLeavePre KeyInputPre MenuPopup ModeChanged OptionSet QuickFixCmdPost QuickFixCmdPre QuitPre RemoteReply SafeState SafeStateAgain SessionLoadPost SessionWritePost ShellCmdPost ShellFilterPost SigUSR1 SourceCmd SourcePost SourcePre SpellFileMissing StdinReadPost StdinReadPre SwapExists Syntax TabClosed TabClosedPre TabEnter TabLeave TabNew TermChanged TerminalOpen TerminalWinOpen TermResponse TermResponseAll TextChanged TextChangedI TextChangedP TextChangedT TextYankPost VimEnter VimLeave VimLeavePre VimResized VimResume VimSuspend WinClosed WinEnter WinLeave WinNew WinNewPre WinResized skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern
-syn keyword vimAutoEvent contained WinScrolled skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern
+syn keyword vimAutoEvent contained FilterWritePost FilterWritePre FocusGained FocusLost FuncUndefined GUIEnter GUIFailed InsertChange InsertCharPre InsertEnter InsertLeave InsertLeavePre KeyInputPre MenuPopup ModeChanged OptionSet QuickFixCmdPost QuickFixCmdPre QuitPre RemoteReply SafeState SafeStateAgain SessionLoadPost SessionLoadPre SessionWritePost ShellCmdPost ShellFilterPost SigUSR1 SourceCmd SourcePost SourcePre SpellFileMissing StdinReadPost StdinReadPre SwapExists Syntax TabClosed TabClosedPre TabEnter TabLeave TabNew TermChanged TerminalOpen TerminalWinOpen TermResponse TermResponseAll TextChanged TextChangedI TextChangedP TextChangedT TextYankPost VimEnter VimLeave VimLeavePre VimResized VimResume VimSuspend WinClosed WinEnter WinLeave WinNew WinNewPre skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern
+syn keyword vimAutoEvent contained WinResized WinScrolled skipwhite nextgroup=vimAutoEventSep,@vimAutocmdPattern
 
 syn keyword	vimAutoEvent	contained	User	skipwhite nextgroup=vimUserAutoEvent
 syn match	vimUserAutoEvent	contained	"\<\h\w*\>"	skipwhite nextgroup=vimUserAutoEventSep,vimAutocmdMod,vimAutocmdBlock
@@ -153,20 +153,20 @@ syn case match
 
 " Function Names {{{2
 " GEN_SYN_VIM: vimFuncName, START_STR='syn keyword vimFuncName contained', END_STR=''
-syn keyword vimFuncName contained abs acos add and append appendbufline argc argidx arglistid argv asin assert_beeps assert_equal assert_equalfile assert_exception assert_fails assert_false assert_inrange assert_match assert_nobeep assert_notequal assert_notmatch assert_report assert_true atan atan2 autocmd_add autocmd_delete autocmd_get balloon_gettext balloon_show balloon_split base64_decode base64_encode bindtextdomain blob2list blob2str browse browsedir bufadd bufexists buflisted bufload bufloaded bufname bufnr bufwinid bufwinnr byte2line byteidx byteidxcomp call ceil ch_canread ch_close ch_close_in ch_evalexpr ch_evalraw ch_getbufnr ch_getjob ch_info ch_log ch_logfile ch_open ch_read ch_readblob ch_readraw ch_sendexpr ch_sendraw ch_setoptions ch_status changenr
-syn keyword vimFuncName contained char2nr charclass charcol charidx chdir cindent clearmatches cmdcomplete_info col complete complete_add complete_check complete_info complete_match confirm copy cos cosh count cscope_connection cursor debugbreak deepcopy delete deletebufline did_filetype diff diff_filler diff_hlID digraph_get digraph_getlist digraph_set digraph_setlist echoraw empty environ err_teapot escape eval eventhandler executable execute exepath exists exists_compiled exp expand expandcmd extend extendnew feedkeys filecopy filereadable filewritable filter finddir findfile flatten flattennew float2nr floor fmod fnameescape fnamemodify foldclosed foldclosedend foldlevel foldtext foldtextresult foreach foreground fullcommand funcref function garbagecollect
-syn keyword vimFuncName contained get getbufinfo getbufline getbufoneline getbufvar getcellpixels getcellwidths getchangelist getchar getcharmod getcharpos getcharsearch getcharstr getcmdcomplpat getcmdcompltype getcmdline getcmdpos getcmdprompt getcmdscreenpos getcmdtype getcmdwintype getcompletion getcompletiontype getcurpos getcursorcharpos getcwd getenv getfontname getfperm getfsize getftime getftype getimstatus getjumplist getline getloclist getmarklist getmatches getmousepos getmouseshape getpid getpos getqflist getreg getreginfo getregion getregionpos getregtype getscriptinfo getstacktrace gettabinfo gettabvar gettabwinvar gettagstack gettext getwininfo getwinpos getwinposx getwinposy getwinvar glob glob2regpat globpath has has_key haslocaldir hasmapto
-syn keyword vimFuncName contained histadd histdel histget histnr hlID hlexists hlget hlset hostname iconv id indent index indexof input inputdialog inputlist inputrestore inputsave inputsecret insert instanceof interrupt invert isabsolutepath isdirectory isinf islocked isnan items job_getchannel job_info job_setoptions job_start job_status job_stop join js_decode js_encode json_decode json_encode keys keytrans len libcall libcallnr line line2byte lispindent list2blob list2str list2tuple listener_add listener_flush listener_remove localtime log log10 luaeval map maparg mapcheck maplist mapnew mapset match matchadd matchaddpos matcharg matchbufline matchdelete matchend matchfuzzy matchfuzzypos matchlist matchstr matchstrlist matchstrpos max menu_info min mkdir mode
-syn keyword vimFuncName contained mzeval nextnonblank ngettext nr2char or pathshorten perleval popup_atcursor popup_beval popup_clear popup_close popup_create popup_dialog popup_filter_menu popup_filter_yesno popup_findecho popup_findinfo popup_findpreview popup_getoptions popup_getpos popup_hide popup_list popup_locate popup_menu popup_move popup_notification popup_setbuf popup_setoptions popup_settext popup_show pow preinserted prevnonblank printf prompt_getprompt prompt_setcallback prompt_setinterrupt prompt_setprompt prop_add prop_add_list prop_clear prop_find prop_list prop_remove prop_type_add prop_type_change prop_type_delete prop_type_get prop_type_list pum_getpos pumvisible py3eval pyeval pyxeval rand range readblob readdir readdirex readfile reduce reg_executing
-syn keyword vimFuncName contained reg_recording reltime reltimefloat reltimestr remote_expr remote_foreground remote_peek remote_read remote_send remote_startserver remove rename repeat resolve reverse round rubyeval screenattr screenchar screenchars screencol screenpos screenrow screenstring search searchcount searchdecl searchpair searchpairpos searchpos server2client serverlist setbufline setbufvar setcellwidths setcharpos setcharsearch setcmdline setcmdpos setcursorcharpos setenv setfperm setline setloclist setmatches setpos setqflist setreg settabvar settabwinvar settagstack setwinvar sha256 shellescape shiftwidth sign_define sign_getdefined sign_getplaced sign_jump sign_place sign_placelist sign_undefine sign_unplace sign_unplacelist simplify sin sinh slice
-syn keyword vimFuncName contained sort sound_clear sound_playevent sound_playfile sound_stop soundfold spellbadword spellsuggest split sqrt srand state str2blob str2float str2list str2nr strcharlen strcharpart strchars strdisplaywidth strftime strgetchar stridx string strlen strpart strptime strridx strtrans strutf16len strwidth submatch substitute swapfilelist swapinfo swapname synID synIDattr synIDtrans synconcealed synstack system systemlist tabpagebuflist tabpagenr tabpagewinnr tagfiles taglist tan tanh tempname term_dumpdiff term_dumpload term_dumpwrite term_getaltscreen term_getansicolors term_getattr term_getcursor term_getjob term_getline term_getscrolled term_getsize term_getstatus term_gettitle term_gettty term_list term_scrape term_sendkeys term_setansicolors
-syn keyword vimFuncName contained term_setapi term_setkill term_setrestore term_setsize term_start term_wait terminalprops test_alloc_fail test_autochdir test_feedinput test_garbagecollect_now test_garbagecollect_soon test_getvalue test_gui_event test_ignore_error test_mswin_event test_null_blob test_null_channel test_null_dict test_null_function test_null_job test_null_list test_null_partial test_null_string test_null_tuple test_option_not_set test_override test_refcount test_setmouse test_settime test_srand_seed test_unknown test_void timer_info timer_pause timer_start timer_stop timer_stopall tolower toupper tr trim trunc tuple2list type typename undofile undotree uniq uri_decode uri_encode utf16idx values virtcol virtcol2col visualmode wildmenumode wildtrigger
-syn keyword vimFuncName contained win_execute win_findbuf win_getid win_gettype win_gotoid win_id2tabwin win_id2win win_move_separator win_move_statusline win_screenpos win_splitmove winbufnr wincol windowsversion winheight winlayout winline winnr winrestcmd winrestview winsaveview winwidth wordcount writefile xor
+syn keyword vimFuncName contained abs acos add and append appendbufline argc argidx arglistid argv asin assert_beeps assert_equal assert_equalfile assert_exception assert_fails assert_false assert_inrange assert_match assert_nobeep assert_notequal assert_notmatch assert_report assert_true atan atan2 autocmd_add autocmd_delete autocmd_get balloon_gettext balloon_show balloon_split base64_decode base64_encode bindtextdomain blob2list blob2str browse browsedir bufadd bufexists buflisted bufload bufloaded bufname bufnr bufwinid bufwinnr byte2line byteidx byteidxcomp call ceil ch_canread ch_close ch_close_in ch_evalexpr ch_evalraw ch_getbufnr ch_getjob ch_info ch_listen ch_log ch_logfile ch_open ch_read ch_readblob ch_readraw ch_sendexpr ch_sendraw ch_setoptions ch_status
+syn keyword vimFuncName contained changenr char2nr charclass charcol charidx chdir cindent clearmatches cmdcomplete_info col complete complete_add complete_check complete_info confirm copy cos cosh count cscope_connection cursor debugbreak deepcopy delete deletebufline did_filetype diff diff_filler diff_hlID digraph_get digraph_getlist digraph_set digraph_setlist echoraw empty environ err_teapot escape eval eventhandler executable execute exepath exists exists_compiled exp expand expandcmd extend extendnew feedkeys filecopy filereadable filewritable filter finddir findfile flatten flattennew float2nr floor fmod fnameescape fnamemodify foldclosed foldclosedend foldlevel foldtext foldtextresult foreach foreground fullcommand funcref function garbagecollect get getbufinfo
+syn keyword vimFuncName contained getbufline getbufoneline getbufvar getcellpixels getcellwidths getchangelist getchar getcharmod getcharpos getcharsearch getcharstr getcmdcomplpat getcmdcompltype getcmdline getcmdpos getcmdprompt getcmdscreenpos getcmdtype getcmdwintype getcompletion getcompletiontype getcurpos getcursorcharpos getcwd getenv getfontname getfperm getfsize getftime getftype getimstatus getjumplist getline getloclist getmarklist getmatches getmousepos getmouseshape getpid getpos getqflist getreg getreginfo getregion getregionpos getregtype getscriptinfo getstacktrace gettabinfo gettabvar gettabwinvar gettagstack gettext getwininfo getwinpos getwinposx getwinposy getwinvar glob glob2regpat globpath has has_key haslocaldir hasmapto histadd histdel
+syn keyword vimFuncName contained histget histnr hlID hlexists hlget hlset hostname iconv id indent index indexof input inputdialog inputlist inputrestore inputsave inputsecret insert instanceof interrupt invert isabsolutepath isdirectory isinf islocked isnan items job_getchannel job_info job_setoptions job_start job_status job_stop join js_decode js_encode json_decode json_encode keys keytrans len libcall libcallnr line line2byte lispindent list2blob list2str list2tuple listener_add listener_flush listener_remove localtime log log10 luaeval map maparg mapcheck maplist mapnew mapset match matchadd matchaddpos matcharg matchbufline matchdelete matchend matchfuzzy matchfuzzypos matchlist matchstr matchstrlist matchstrpos max menu_info min mkdir mode mzeval nextnonblank
+syn keyword vimFuncName contained ngettext nr2char or pathshorten perleval popup_atcursor popup_beval popup_clear popup_close popup_create popup_dialog popup_filter_menu popup_filter_yesno popup_findecho popup_findinfo popup_findpreview popup_getoptions popup_getpos popup_hide popup_list popup_locate popup_menu popup_move popup_notification popup_setbuf popup_setoptions popup_settext popup_show pow preinserted prevnonblank printf prompt_getprompt prompt_setcallback prompt_setinterrupt prompt_setprompt prop_add prop_add_list prop_clear prop_find prop_list prop_remove prop_type_add prop_type_change prop_type_delete prop_type_get prop_type_list pum_getpos pumvisible py3eval pyeval pyxeval rand range readblob readdir readdirex readfile redraw_listener_add redraw_listener_remove
+syn keyword vimFuncName contained reduce reg_executing reg_recording reltime reltimefloat reltimestr remote_expr remote_foreground remote_peek remote_read remote_send remote_startserver remove rename repeat resolve reverse round rubyeval screenattr screenchar screenchars screencol screenpos screenrow screenstring search searchcount searchdecl searchpair searchpairpos searchpos server2client serverlist setbufline setbufvar setcellwidths setcharpos setcharsearch setcmdline setcmdpos setcursorcharpos setenv setfperm setline setloclist setmatches setpos setqflist setreg settabvar settabwinvar settagstack setwinvar sha256 shellescape shiftwidth sign_define sign_getdefined sign_getplaced sign_jump sign_place sign_placelist sign_undefine sign_unplace sign_unplacelist
+syn keyword vimFuncName contained simplify sin sinh slice sort sound_clear sound_playevent sound_playfile sound_stop soundfold spellbadword spellsuggest split sqrt srand state str2blob str2float str2list str2nr strcharlen strcharpart strchars strdisplaywidth strftime strgetchar stridx string strlen strpart strptime strridx strtrans strutf16len strwidth submatch substitute swapfilelist swapinfo swapname synID synIDattr synIDtrans synconcealed synstack system systemlist tabpagebuflist tabpagenr tabpagewinnr tagfiles taglist tan tanh tempname term_dumpdiff term_dumpload term_dumpwrite term_getaltscreen term_getansicolors term_getattr term_getcursor term_getjob term_getline term_getscrolled term_getsize term_getstatus term_gettitle term_gettty term_list term_scrape
+syn keyword vimFuncName contained term_sendkeys term_setansicolors term_setapi term_setkill term_setrestore term_setsize term_start term_wait terminalprops test_alloc_fail test_autochdir test_feedinput test_garbagecollect_now test_garbagecollect_soon test_getvalue test_gui_event test_ignore_error test_mswin_event test_null_blob test_null_channel test_null_dict test_null_function test_null_job test_null_list test_null_partial test_null_string test_null_tuple test_option_not_set test_override test_refcount test_setmouse test_settime test_srand_seed test_unknown test_void timer_info timer_pause timer_start timer_stop timer_stopall tolower toupper tr trim trunc tuple2list type typename undofile undotree uniq uri_decode uri_encode utf16idx values virtcol virtcol2col
+syn keyword vimFuncName contained visualmode wildmenumode wildtrigger win_execute win_findbuf win_getid win_gettype win_gotoid win_id2tabwin win_id2win win_move_separator win_move_statusline win_screenpos win_splitmove winbufnr wincol windowsversion winheight winlayout winline winnr winrestcmd winrestview winsaveview winwidth wordcount writefile xor
 
 " Predefined variable names {{{2
 " GEN_SYN_VIM: vimVarName, START_STR='syn keyword vimVimVarName contained', END_STR=''
 syn keyword vimVimVarName contained count count1 prevcount errmsg warningmsg statusmsg shell_error this_session version lnum termresponse fname lang lc_time ctype charconvert_from charconvert_to fname_in fname_out fname_new fname_diff cmdarg foldstart foldend folddashes foldlevel progname servername dying exception throwpoint register cmdbang insertmode val key profiling fcs_reason fcs_choice beval_bufnr beval_winnr beval_winid beval_lnum beval_col beval_text scrollstart swapname swapchoice swapcommand char mouse_win mouse_winid mouse_lnum mouse_col operator searchforward hlsearch oldfiles windowid progpath completed_item option_new option_old option_oldlocal option_oldglobal option_command option_type errors false true none null numbermax numbermin numbersize
-syn keyword vimVimVarName contained vim_did_enter testing t_number t_string t_func t_list t_dict t_float t_bool t_none t_job t_channel t_blob t_class t_object termrfgresp termrbgresp termu7resp termstyleresp termblinkresp event versionlong echospace argv collate exiting colornames sizeofint sizeoflong sizeofpointer maxcol python3_version t_typealias t_enum t_enumvalue stacktrace t_tuple wayland_display clipmethod termda1 termosc clipproviders
+syn keyword vimVimVarName contained vim_did_enter testing t_number t_string t_func t_list t_dict t_float t_bool t_none t_job t_channel t_blob t_class t_object termrfgresp termrbgresp termu7resp termstyleresp termblinkresp event versionlong echospace argv collate exiting colornames sizeofint sizeoflong sizeofpointer maxcol python3_version t_typealias t_enum t_enumvalue stacktrace t_tuple wayland_display clipmethod termda1 termosc vim_did_init clipproviders
 
 "--- syntax here and above generated by runtime/syntax/generator/gen_syntax_vim.vim ---
 
@@ -300,7 +300,7 @@ syn match	vimNumber	'\<0z\%(\x\x\)\+\%(\.\%(\x\x\)\+\)*'	skipwhite nextgroup=@vi
 syn case match
 
 " All vimCommands are contained by vimIsCommand. {{{2
-syn cluster vimCmdList	contains=vimAbb,vimAddress,vimAutocmd,vimAugroup,vimBehave,vimCall,vimCatch,vimCommandModifier,vimConst,vimDoautocmd,vimDebuggreedy,vimDef,vimDefFold,vimDefer,vimDelcommand,vimDelFunction,@vimEcho,vimElse,vimEnddef,vimEndfunction,vimEndif,vimEval,vimExecute,vimIsCommand,vimExtCmd,vimExFilter,vimExMark,vimFiletype,vimFor,vimFunction,vimFunctionFold,vimGrep,vimGrepAdd,vimGlobal,vimHelpgrep,vimHighlight,vimImport,vimLet,vimLoadkeymap,vimLockvar,vimMake,vimMap,vimMark,vimMatch,vimNotFunc,vimNormal,vimProfdel,vimProfile,vimRedir,vimSet,vimSleep,vimSort,vimSyntax,vimSyntime,vimSynColor,vimSynLink,vimTerminal,vimThrow,vimUniq,vimUnlet,vimUnlockvar,vimUnmap,vimUserCmd,vimVimgrep,vimVimgrepadd,vimWincmd,vimMenu,vimMenutranslate,@vim9CmdList,@vimExUserCmdList,vimLua,vimMzScheme,vimPerl,vimPython,vimPython3,vimPythonX,vimRuby,vimTcl
+syn cluster vimCmdList	contains=vimAbb,vimAddress,vimAt,vimAutocmd,vimAugroup,vimBehave,vimBreakadd,vimBreakdel,vimBreaklist,vimCall,vimCatch,vimCd,vimCommandModifier,vimConst,vimDoautocmd,vimDebug,vimDebuggreedy,vimDef,vimDefFold,vimDefer,vimDelcommand,vimDelFunction,vimDoCommand,@vimEcho,vimElse,vimEnddef,vimEndfunction,vimEndif,vimEval,vimExecute,vimIsCommand,vimExtCmd,vimExFilter,vimExMark,vimFiletype,vimFor,vimFunction,vimFunctionFold,vimGrep,vimGrepAdd,vimGlobal,vimHelp,vimHelpgrep,vimHighlight,vimHistory,vimImport,vimLanguage,vimLet,vimLoadkeymap,vimLockvar,vimMake,vimMap,vimMark,vimMatch,vimNotFunc,vimNormal,vimProfdel,vimProfile,vimPrompt,vimRedir,vimSet,vimSleep,vimSort,vimSyntax,vimSyntime,vimSynColor,vimSynLink,vimTerminal,vimThrow,vimUniq,vimUnlet,vimUnlockvar,vimUnmap,vimUserCmd,vimVimgrep,vimVimgrepadd,vimWincmd,vimMenu,vimMenutranslate,@vim9CmdList,@vimExUserCmdList,vimLua,vimMzScheme,vimPerl,vimPython,vimPython3,vimPythonX,vimRuby,vimTcl
 syn cluster vim9CmdList	contains=vim9Abstract,vim9Class,vim9Const,vim9Enum,vim9Export,vim9Final,vim9For,vim9Interface,vim9Type,vim9Var
 syn match vimCmdSep	"\\\@1<!|"	skipwhite nextgroup=@vimCmdList,vimSubst1,@vimFunc
 syn match vimCmdSep	":\+"	skipwhite nextgroup=@vimCmdList,vimSubst1
@@ -361,9 +361,49 @@ syn match   vimBehave	"\<be\%[have]\>"	nextgroup=vimBehaveBang,vimBehaveModel,vi
 syn match   vimBehaveBang	contained	"\a\@1<=!" nextgroup=vimBehaveModel skipwhite
 syn keyword vimBehaveModel	contained	mswin	xterm
 
+" Break* commands {{{2
+" ===============
+syn keyword	vimBreakaddFunc	contained	func	skipwhite nextgroup=vimBreakpointFunctionLine,vimBreakpointFunction
+syn keyword	vimBreakaddFile	contained	file	skipwhite nextgroup=vimBreakpointFileLine,vimBreakpointFilename
+syn keyword	vimBreakaddHere	contained	here	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+syn keyword	vimBreakaddExpr	contained	expr	skipwhite nextgroup=@vimExprList
+
+syn match	vimBreakpointGlob		contained	"*"	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+syn match	vimBreakpointNumber	contained	"\<\d\+\>"	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+
+syn cluster vimBreakpointArg contains=vimBreakaddFunc,vimBreakaddFile,vimBreakaddHere,vimBreakaddExpr
+
+syn match	vimBreakpointFunction	contained	"\<\%(\*\|\w\)\+\>"	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+syn match	vimBreakpointFilename	contained	"\<\%(\*\|\f\)\+\>"	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+syn match	vimBreakpointFunctionLine	contained	"\<\d\+\>"		skipwhite nextgroup=vimBreakpointFunction
+syn match	vimBreakpointFileLine	contained	"\<\d\+\>"		skipwhite nextgroup=vimBreakpointFilename
+
+syn keyword	vimBreakadd	breaka[dd]	skipwhite nextgroup=@vimBreakpointArg
+syn keyword	vimBreakdel	breakd[el]	skipwhite nextgroup=@vimBreakpointArg,vimBreakpointNumber,vimBreakpointGlob
+syn keyword	vimBreaklist	breakl[ist]	skipwhite nextgroup=vimComment,vim9Comment,vimSep
+
 " Call {{{2
 " ====
 syn match vimCall	"\<call\=\>"	skipwhite nextgroup=vimVar,@vimFunc
+
+" Cd: {{{2
+" ==
+" GEN_SYN_VIM: vimCommand cd, START_STR='syn keyword vimCd', END_STR='skipwhite nextgroup=vimCdBang,vimCdArg,vimComment,vim9Comment,vimCmdSep'
+syn keyword vimCd cd lc[d] lch[dir] tc[d] tch[dir] skipwhite nextgroup=vimCdBang,vimCdArg,vimComment,vim9Comment,vimCmdSep
+syn match	vimCd	"\<chd\%[ir]\>"	skipwhite nextgroup=vimCdBang,vimCdArg,vimComment,vim9Comment,vimCmdSep
+syn region	vimCdArg	contained
+      \ start=+["#|]\@!\S+
+      \ end="\ze\s*$"
+      \ end=+\ze\s*\\\@1<!["#|]+
+      \ skipwhite nextgroup=vimComment,vim9Comment,vimCmdSep
+      \ contains=vimSpecfile,@vimWildCard
+      \ oneline
+
+syn match	vimCdBang	contained	"\a\@1<=!"	skipwhite nextgroup=vimCdArg,vimComment,vim9Comment,vimCmdSep
+
+" Debug {{{2
+" =====
+syn keyword	vimDebug	deb[ug]	skipwhite nextgroup=@vimCmdList
 
 " Debuggreedy {{{2
 " ===========
@@ -372,7 +412,17 @@ syn match	vimDebuggreedy	"\<0\=debugg\%[reedy]\>" contains=vimCount
 
 " Defer {{{2
 " =====
-syn match	vimDefer	"\<defer\=\>"	skipwhite nextgroup=@vimFunc
+syn match	vimDefer	"\<defer\=\>"	skipwhite nextgroup=@vimFunc,vim9LambdaParams
+
+" *Do commands {{{2
+" ============
+syn match	vimDoCommandBang	contained	"\a\@1<=!"	skipwhite nextgroup=@vimCmdList
+
+syn keyword	vimDoCommand	argdo bufd[o]		skipwhite nextgroup=vimDoCommandBang,@vimCmdList
+syn keyword	vimDoCommand	tabd[o] wind[o]		skipwhite nextgroup=@vimCmdList
+syn keyword	vimDoCommand	cdo cfd[o]		skipwhite nextgroup=vimDoCommandBang,@vimCmdList
+syn keyword	vimDoCommand	ld[o] lfd[o]		skipwhite nextgroup=vimDoCommandBang,@vimCmdList
+syn keyword	vimDoCommand	foldd[oopen] folddoc[losed]	skipwhite nextgroup=@vimCmdList
 
 " Exception Handling {{{2
 syn keyword	vimThrow	th[row]	skipwhite nextgroup=@vimExprList
@@ -393,6 +443,16 @@ if !exists("g:vimsyn_noerror") && !exists("g:vimsyn_vimFTError")
 endif
 syn keyword vimFTCmd    contained	filet[ype]
 syn keyword vimFTOption contained	detect indent off on plugin
+
+" History {{{2
+" =======
+" TODO: handle Vim9 "history" variable assignment (like :wincmd, but a common variable name)
+syn keyword	vimHistory	his[tory]	skipwhite nextgroup=vimHistoryName,vimHistoryRange,vimCmdSep,vimComment,vim9Comment
+syn keyword	vimHistoryName	contained	c[md] s[earch] e[xpr] i[nput] d[ebug] a[ll]	skipwhite nextgroup=vimHistoryRange,vimCmdSep,vimComment,vim9Comment
+syn match	vimHistoryName	contained	"[:/?=@>]"			skipwhite nextgroup=vimHistoryRange,vimCmdSep,vimComment,vim9Comment
+syn match	vimHistoryRange	contained	"-\=\<\d\+\>\%(\s*,\)\="		skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment
+syn match	vimHistoryRange	contained	",\s*-\=\d\+\>"			skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment
+syn match	vimHistoryRange	contained	"-\=\<\d\+\s*,\s*-\=\d\+\>"		skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment
 
 " Import {{{2
 " ======
@@ -435,19 +495,29 @@ endif
 syn match	vimImportName	contained	"\%(\<as\s\+\)\@<=\h\w*\>"	skipwhite nextgroup=@vimComment
 syn match	vimImport		"\<imp\%[ort]\>"		skipwhite nextgroup=vimImportAutoload,vimImportFilename
 
+" Language {{{2
+" ========
+syn keyword 	vimLanguage		lan[guage]	skipwhite nextgroup=@vimLanguageName,vimLanguageCategory,vimSep,vimComment,vim9Comment
+syn keyword	vimLanguageCategory	contained	col[late] cty[pe] mes[sages] tim[e]	skipwhite nextgroup=@vimLanguageName
+
+" [language[_territory][.codeset][@modifier]] and the reserved "C" and "POSIX"
+syn match	vimLanguageName		contained	"[[:alnum:]][[:alnum:]._@-]*[[:alnum:]]"	nextgroup=vimSep,vimComment,vim9Comment
+syn keyword	vimLanguageNameReserved	contained	C POSIX			nextgroup=vimSep,vimComment,vim9Comment
+syn cluster	vimLanguageName	contains=vimLanguageName,vimLanguageNameReserved
+
 " Augroup : vimAugroupError removed because long augroups caused sync'ing problems. {{{2
 " ======= : Trade-off: Increasing synclines with slower editing vs augroup END error checking.
 syn cluster vimAugroupList	contains=@vimCmdList,vimFilter,@vimFunc,vimLineComment,vimSpecFile,vimOper,vimNumber,vimOperParen,@vimComment,vimString,vimSubst,vimRegister,vimCmplxRepeat,vimNotation,vimCtrlChar,vimContinue
 
 " define
 VimFolda syn region vimAugroup
-      \ start="\<aug\%[roup]\>\ze\s\+\%([eE][nN][dD]\)\@!\S\+"
+      \ start="\<aug\%[roup]\>\ze\s\+\%([eE][nN][dD]\%($\|[[:space:]|"#]\)\)\@!\S"
       \ matchgroup=vimAugroupKey
-      \ end="\<aug\%[roup]\>\ze\s\+[eE][nN][dD]\>"
+      \ end="\<aug\%[roup]\ze\s\+[eE][nN][dD]\s*\%($\|[|"#]\)"
       \ skipwhite nextgroup=vimAugroupEnd
       \ contains=vimAutocmd,@vimAugroupList,vimAugroupkey
 if !exists("g:vimsyn_noerror") && !exists("g:vimsyn_noaugrouperror")
-  syn match	vimAugroupError	"\<aug\%[roup]\>\s\+[eE][nN][dD]\>"
+  syn match	vimAugroupError	"\<aug\%[roup]\s\+[eE][nN][dD]\ze\s*\%($\|[|"#]\)"
 endif
 
 " TODO: Vim9 comment
@@ -629,13 +699,21 @@ syn match	vimParamType	contained	":\s"	skipwhite skipnl nextgroup=@vimType conta
 syn match	vimTypeSep	contained	":\%(\s\|\n\)\@=" skipwhite nextgroup=@vimType
 syn keyword	vimType	contained	blob bool channel float job number string void
 syn keyword	vimTypeAny	contained	any
+syn match	vimTypeObject	contained	"\<object<\@="	nextgroup=vimTypeObjectArgs
+syn region	vimTypeObjectArgs	contained
+      \ matchgroup=vimTypeObjectBracket
+      \ start="<"
+      \ end=">"
+      \ contains=vimTypeAny,vimTypeObject,vimUserType
+      \ oneline
+      \ transparent
 syn match	vimType	contained	"\<\%(func\)\>"
 syn region	vimCompoundType	contained	matchgroup=vimType start="\<func("	          end=")" nextgroup=vimTypeSep contains=@vim9Continue,@vimType transparent
 syn region	vimCompoundType	contained	matchgroup=vimType start="\<tuple<"           end=">"                      contains=@vim9Continue,@vimType transparent
 syn region	vimCompoundType	contained	matchgroup=vimType start="\<\%(list\|dict\)<" end=">"		   contains=@vimType oneline       transparent
 syn match	vimUserType	contained	"\<\%(\h\w*\.\)*\u\w*\>"
 
-syn cluster vimType contains=vimType,vimTypeAny,vimCompoundType,vimUserType
+syn cluster vimType contains=vimType,vimTypeAny,vimTypeObject,vimCompoundType,vimUserType
 
 " Classes, Enums And Interfaces: {{{2
 " =============================
@@ -730,7 +808,7 @@ if s:vim9script
   " FIXME: don't match as dictionary keys, remove when operators are not
   "        shared between Vim9 and legacy script
   syn match	vim9This		contained	"\.\@1<!\<this\>:\@!"
-  " super must be folowed by '.'
+  " super must be followed by '.'
   syn match	vim9Super		contained	"\.\@1<!\<super\.\@="
 
   VimFoldc syn region	vim9ClassBody	start="\<class\>" matchgroup=vimCommand end="\<endclass\>" contains=@vim9ClassBodyList transparent
@@ -860,6 +938,10 @@ syn match	vimSpecFile	"\s%$"ms=s+1		nextgroup=vimSpecFileMod,vimSubst1
 syn match	vimSpecFile	"\s%<"ms=s+1,me=e-1	nextgroup=vimSpecFileMod,vimSubst1
 syn match	vimSpecFile	"#\d\+\|[#%]<\>"		nextgroup=vimSpecFileMod,vimSubst1
 syn match	vimSpecFileMod	"\(:[phtre]\)\+"	contained
+
+syn match	vimSpecFile	contained		"%[ \t:]"me=e-1	nextgroup=vimSpecFileMod
+syn match	vimSpecFile	contained	excludenl	"%$"	nextgroup=vimSpecFileMod
+syn match	vimSpecFile	contained		"%<"me=e-1	nextgroup=vimSpecFileMod
 
 " User-Specified Commands: {{{2
 " =======================
@@ -1085,7 +1167,13 @@ syn match	vimComFilter contained	"|!!\=[^"]\{-}\(|\|\ze\"\|$\)"      contains=vi
 " Complex Repeats: (:h complex-repeat) {{{2
 " ===============
 syn match	vimCmplxRepeat	'[^a-zA-Z_/\\()]q[0-9a-zA-Z"]\>'lc=1
-syn match	vimCmplxRepeat	'@[0-9a-z".=@:]\ze\($\|[^a-zA-Z]\>\)'
+
+" NOTE: :* as an alias for :@ is not supported, this is considered a :range,
+" see :help cpo-star
+syn match	vimAtArg	contained	+@\@1<=[0-9a-z".=*+:@]+
+syn match	vimAt	+@[0-9a-z".=*+:@]\ze\s*\%($\|[|"#]\)+	skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment contains=vimAtArg
+" Vim9: avoid LHS assignment mismatching of :@["#]
+syn match	vimAt	+@\ze\s*\%($\||\|\s["#]\)+		skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment
 
 " Set command and associated set-options (vimOptions) with comment {{{2
 syn match	vimSet		"\<\%(setl\%[ocal]\|setg\%[lobal]\|se\%[t]\)\>" skipwhite nextgroup=vimSetBang,vimCmdSep,vimComment,vimSetArgs
@@ -1136,11 +1224,11 @@ syn region	vimLetVarSubscript contained
       \ skipwhite nextgroup=vimLetVarSubscript,vimLetHeredoc
       \ contains=@vimExprList
 
-VimL syn keyword	vimUnlet		unl[et]	skipwhite nextgroup=vimUnletBang,vimUnletVars
+syn keyword	vimUnlet		unl[et]	skipwhite nextgroup=vimUnletBang,vimUnletVars
 syn match	vimUnletBang	contained	"\a\@1<=!"	skipwhite nextgroup=vimUnletVars
 syn region	vimUnletVars	contained
-      \ start="$\I\|\h" skip=+\n\s*\%(\\\|"\\ \)\|^\s*"\\ + end="$" end="\ze[|"]"
-      \ nextgroup=vimCmdSep,vimComment
+      \ start="$\I\|\h" skip=+\n\s*\%(\\\|["#]\\ \)\|^\s*["#]\\ + end="$" end=+\ze\s*[|"#]+
+      \ skipwhite nextgroup=vimCmdSep,vimComment,vim9Comment
       \ contains=@vimContinue,vimEnvvar,vimVar,vimVimVar
 
 " TODO: type error after register or environment variables (strings)
@@ -1180,6 +1268,14 @@ syn region	vim9VariableList	contained	start="\[" end="]" contains=@vimContinue,@
 syn match	vim9VariableTypeSep	contained	"\S\@1<=:\%(\s\|\n\)\@="		skipwhite nextgroup=@vim9VariableType
 syn keyword	vim9VariableType		contained	blob bool channel float job number string void	skipwhite nextgroup=vimLetHeredoc
 syn keyword	vim9VariableTypeAny	contained	any			skipwhite nextgroup=vimLetHeredoc
+syn match	vim9VariableTypeObject	contained	"\<object<\@="			          nextgroup=vim9VariableTypeObjectArgs
+syn region	vim9VariableTypeObjectArgs
+      \ matchgroup=vim9VariableTypeObjectBracket
+      \ start="<"
+      \ end=">"
+      \ contains=vimTypeAny,vimTypeObject,vimUserType
+      \ oneline
+      \ transparent
 syn match	vim9VariableType		contained	"\<\%(func\)\>"			skipwhite nextgroup=vimLetHeredoc
 syn region	vim9VariableCompoundType	contained
       \ matchgroup=vim9VariableType
@@ -1205,7 +1301,7 @@ syn region	vim9VariableCompoundType	contained
       \ transparent
 syn match	vim9VariableUserType	contained	"\<\%(\h\w*\.\)*\u\w*\>"	skipwhite nextgroup=vimLetHeredoc
 
-syn cluster vim9VariableType contains=vim9VariableType,vim9VariableTypeAny,vim9VariableCompoundType,vim9VariableUserType
+syn cluster vim9VariableType contains=vim9VariableType,vim9VariableTypeAny,vim9VariableTypeObject,vim9VariableCompoundType,vim9VariableUserType
 
 " Lockvar and Unlockvar: {{{2
 " =====================
@@ -1418,11 +1514,23 @@ syn region	vimMakeArgs	contained
 syn match	vimMakeBarEscape	contained	"\\|"
 syn match	vimMakeBang	contained	"\a\@1<=!"		skipwhite nextgroup=vimMakeArgs,vimCmdSep
 
+" Help*: {{{2
+" =====
+syn match	vimHelp	"\<h\%[elp]\>"	skipwhite nextgroup=vimHelpBang,vimHelpArg,vimHelpNextCommand
+" TODO: match wildcards, ignoring exceptions?
+syn region	vimHelpArg	contained
+      \ start="\S"
+      \ matchgroup=Special
+      \ end="\%(@\a\a\)\=\ze\s*\%($\|\%x0d\|\%x00\||[^|]\)"
+      \ oneline
+syn match	vimHelpNextCommand	contained	"\ze|[^|]"	skipwhite nextgroup=vimCmdSep
+syn match	vimHelpBang		contained	"\a\@1<=!"	skipwhite nextgroup=vimHelpArg,vimHelpNextCommand
+
 syn match	vimHelpgrep		"\<l\=helpg\%[rep]\>"	skipwhite nextgroup=vimHelpgrepBang,vimHelpgrepPattern
 syn region	vimHelpgrepPattern	contained
       \ start="\S"
       \ matchgroup=Special
-      \ end="@\w\w\>"
+      \ end="@\a\a\>"
       \ end="$"
       \ contains=@vimSubstList
       \ oneline
@@ -1621,6 +1729,15 @@ syn keyword	vimProfdelArg	contained	file	skipwhite nextgroup=vimProfilePattern
 syn keyword	vimProfdelArg	contained	here	skipwhite nextgroup=vimCmdSep,@vimComment
 syn match	vimProfdel	"\<profd\%[el]\>" skipwhite nextgroup=vimProfdelArg
 
+" Prompt{find,repl}: {{{2
+" =================
+syn region	vimPromptArg	contained
+      \ start="\S"
+      \ skip=+\n\s*\%(\\\|["#]\\ \)+
+      \ end="$"
+      \ contains=@vimContinue
+syn keyword	vimPrompt	promptf[ind] promptr[epl]	skipwhite nextgroup=vimPromptArg
+
 " Redir: {{{2
 " =====
 syn match	vimRedir		"\<redir\=\>"	skipwhite nextgroup=vimRedirBang,vimRedirFileOperator,vimRedirVariableOperator,vimRedirRegister,vimRedirEnd
@@ -1730,17 +1847,32 @@ Vim9 syn match	vimWincmd	"\s\=\<winc\%[md]\>\ze\s\+=\s*\%([#|]\|$\)"	skipwhite n
 
 " Syntax: {{{2
 "=======
-syn match	vimGroupList	contained	"[^[:space:],]\+\%(\s*,\s*[^[:space:],]\+\)*" contains=vimGroupSpecial
-syn region	vimGroupList	contained	start=/^\s*["#]\\ \|^\s*\\\|[^[:space:],]\+\s*,/ skip=/\s*\n\s*\%(\\\|["#]\\ \)\|^\s*\%(\\\|["#]\\ \)/ end=/[^[:space:],]\s*$\|[^[:space:],]\ze\s\+\w/ contains=@vimContinue,vimGroupSpecial
+syn region	vimGroupList	contained
+      \ start="\S"
+      \ skip=+\n\s*\%(\\\|["#]\\ \)+
+      "\ need to consume the whitespace
+      \ end="\s"he=e-1
+      \ end="$"
+      \ contains=@vimGroupListContinue,vimGroupSpecial,vimGroupListContinueComma
 syn keyword	vimGroupSpecial	contained	ALL	ALLBUT	CONTAINED	TOP
+syn match	vimGroupListComma		contained	","
+syn match	vimGroupListContinueComma	contained	"\s\+,\s*\|,\s\+"	contains=vimGroupListComma
+syn match	vimGroupListContinueComma	contained	"\s*,\s*\%(\n\s*\%(\\\s\+\|["#]\\ .*\)\)\+"	contains=@vimGroupListContinue,vimGroupListComma
+
+syn match	vimGroupListEquals	contained	"="		skipwhite skipnl nextgroup=vimGroupListContinueStart,vimGroupList
+" the first continuation line does not terminate the list at whitepace after \
+syn match	vimGroupListContinueStart	contained	"^\%(\s*["#]\\ .*\n\)*\s*\\\s\+"	skipwhite        nextgroup=vimGroupList contains=@vimGroupListContinue transparent
+
+syn match	vimGroupListContinue	contained	"^\s*\\"	skipwhite skipnl nextgroup=@vimGroupListContinue,vimGroupListContinueComma contains=vimWhitespace
+syn match	vimGroupListContinueComment	contained	'^\s*["#]\\ .*'	skipwhite skipnl nextgroup=@vimGroupListContinue		   contains=vimWhitespace
+syn cluster	vimGroupListContinue	contains=vimGroupListContinue,vimGroupListContinueComment
 
 if !exists("g:vimsyn_noerror") && !exists("g:vimsyn_novimsynerror")
- syn match	vimSynError	contained	"\i\+"
- syn match	vimSynError	contained	"\i\+="	nextgroup=vimGroupList
+ syn match	vimSynError		contained	"\i\+"
 endif
-syn match	vimSynContains	contained	"\<contain\%(s\|edin\)="	skipwhite skipnl nextgroup=vimGroupList
-syn match	vimSynKeyContainedin	contained	"\<containedin="	skipwhite skipnl nextgroup=vimGroupList
-syn match	vimSynNextgroup	contained	"\<nextgroup="		skipwhite skipnl nextgroup=vimGroupList
+syn match	vimSynContains		contained	"\<contains\>"	skipwhite nextgroup=vimGroupListEquals
+syn match	vimSynContainedin		contained	"\<containedin\>"	skipwhite nextgroup=vimGroupListEquals
+syn match	vimSynNextgroup		contained	"\<nextgroup\>"	skipwhite nextgroup=vimGroupListEquals
 if has("conceal")
  " no whitespace allowed after '='
  syn match	vimSynCchar	contained	"\<cchar="	nextgroup=vimSynCcharValue
@@ -1758,13 +1890,13 @@ endif
 syn keyword	vimSynCase	contained	ignore	match
 
 " Syntax: clear {{{2
-syn keyword	vimSynType	contained	clear	skipwhite nextgroup=vimGroupList
+syn keyword	vimSynType	contained	clear
 
 " Syntax: cluster {{{2
 syn keyword	vimSynType	contained	cluster	skipwhite nextgroup=vimClusterName
 syn region	vimClusterName	contained keepend	matchgroup=vimGroupName start="\h\w*\>" skip=+\\\\\|\\\|\n\s*\%(\\\|"\\ \)+ matchgroup=vimCmdSep end="$\||" contains=@vimContinue,vimGroupAdd,vimGroupRem,vimSynContains,vimSynError
-syn match	vimGroupAdd	contained keepend	"\<add="	skipwhite skipnl nextgroup=vimGroupList
-syn match	vimGroupRem	contained keepend	"\<remove="	skipwhite skipnl nextgroup=vimGroupList
+syn match	vimGroupAdd	contained	"\<add\>"	skipwhite nextgroup=vimGroupListEquals
+syn match	vimGroupRem	contained	"\<remove\>"	skipwhite nextgroup=vimGroupListEquals
 
 " Syntax: conceal {{{2
 syn match	vimSynType	contained	"\<conceal\>"	skipwhite nextgroup=vimSynConceal,vimSynConcealError
@@ -1787,16 +1919,17 @@ syn match	vimSynIskeyword		contained	"\S\+"	contains=vimSynIskeywordSep
 syn match	vimSynIskeywordSep	contained	","
 
 " Syntax: include {{{2
-syn keyword	vimSynType	contained	include	skipwhite nextgroup=vimGroupList
+syn keyword	vimSynType		contained	include	skipwhite nextgroup=vimSynIncludeCluster
+syn match	vimSynIncludeCluster	contained	"@[_a-zA-Z0-9]\+\>"
 
 " Syntax: keyword {{{2
-syn cluster	vimSynKeyGroup	contains=@vimContinue,vimSynCchar,vimSynNextgroup,vimSynKeyOpt,vimSynKeyContainedin
+syn cluster	vimSynKeyGroup	contains=@vimContinue,vimSynCchar,vimSynNextgroup,vimSynKeyOpt,vimSynContainedin
 syn keyword	vimSynType	contained	keyword	skipwhite nextgroup=vimSynKeyRegion
 syn region	vimSynKeyRegion	contained         keepend	matchgroup=vimGroupName start="\h\w*\>" skip=+\\\\\|\\|\|\n\s*\%(\\\|"\\ \)+ matchgroup=vimCmdSep end="|\|$" contains=@vimSynKeyGroup
 syn match	vimSynKeyOpt	contained	"\%#=1\<\%(conceal\|contained\|transparent\|skipempty\|skipwhite\|skipnl\)\>"
 
 " Syntax: match {{{2
-syn cluster	vimSynMtchGroup	contains=@vimContinue,vimSynCchar,vimSynContains,vimSynError,vimSynMtchOpt,vimSynNextgroup,vimSynRegPat,vimNotation,vimMtchComment
+syn cluster	vimSynMtchGroup	contains=@vimContinue,vimSynCchar,vimSynContains,vimSynContainedin,vimSynError,vimSynMtchOpt,vimSynNextgroup,vimSynRegPat,vimNotation,vimMtchComment
 syn keyword	vimSynType	contained	match	skipwhite nextgroup=vimSynMatchRegion
 syn region	vimSynMatchRegion	contained keepend	matchgroup=vimGroupName start="\h\w*\>" skip=+\\\\\|\\|\|\n\s*\%(\\\|"\\ \)+ matchgroup=vimCmdSep end="|\|$" contains=@vimSynMtchGroup
 syn match	vimSynMtchOpt	contained	"\%#=1\<\%(conceal\|transparent\|contained\|excludenl\|keepend\|skipempty\|skipwhite\|display\|extend\|skipnl\|fold\)\>"
@@ -1806,9 +1939,9 @@ syn keyword	vimSynType	contained	enable	list	manual	off	on	reset
 
 " Syntax: region {{{2
 syn cluster	vimSynRegPatGroup	contains=@vimContinue,vimPatSep,vimNotPatSep,vimSynPatRange,vimSynNotPatRange,vimSubstSubstr,vimPatRegion,vimPatSepErr,vimNotation
-syn cluster	vimSynRegGroup	contains=@vimContinue,vimSynCchar,vimSynContains,vimSynNextgroup,vimSynRegOpt,vimSynReg,vimSynMtchGrp
+syn cluster	vimSynRegGroup	contains=@vimContinue,vimSynCchar,vimSynContains,vimSynContainedin,vimSynNextgroup,vimSynRegOpt,vimSynReg,vimSynMtchGrp
 syn keyword	vimSynType	contained	region	skipwhite nextgroup=vimSynRegion
-syn region	vimSynRegion	contained keepend	matchgroup=vimGroupName start="\h\w*" skip=+\\\\\|\\\|\n\s*\%(\\\|"\\ \)+ matchgroup=vimCmdSep end="|\|$" contains=@vimSynRegGroup
+syn region	vimSynRegion	contained keepend	matchgroup=vimGroupName start="\h\w*" skip=+\\\\\|\\|\|\n\s*\%(\\\|"\\ \)+ matchgroup=vimCmdSep end="|\|$" contains=@vimSynRegGroup
 syn match	vimSynRegOpt	contained	"\%#=1\<\%(conceal\%(ends\)\=\|transparent\|contained\|excludenl\|skipempty\|skipwhite\|display\|keepend\|oneline\|extend\|skipnl\|fold\)\>"
 syn match	vimSynReg	contained	"\<\%(start\|skip\|end\)="	nextgroup=vimSynRegPat
 syn match	vimSynMtchGrp	contained	"matchgroup="	nextgroup=vimGroup,vimHLGroup
@@ -1979,10 +2112,10 @@ VimFoldl syn region vimLuaHeredoc	contained
 
 " [-- mzscheme --] {{{3
 if s:interfaces =~# 'm'
-  let s:iskKeep = &isk
+  let s:iskKeep = &l:isk
   syn include @vimMzSchemeScript syntax/scheme.vim
   unlet b:current_syntax
-  let &isk = s:iskKeep
+  let &l:isk = s:iskKeep
 endif
 
 syn keyword	vimMzScheme	mz[scheme]	skipwhite nextgroup=vimMzSchemeHeredoc,vimMzSchemeStatement
@@ -2286,7 +2419,7 @@ Vim9 syn region	vim9LineComment	start=+^[ \t:]*\zs#.*$+ skip=+\n\s*\%(\\\|#\\ \)
 VimL syn region	vimLineComment	start=+^[ \t:]*\zs".*$+ skip=+\n\s*\%(\\\|"\\ \)+ end="$" contains=@vimCommentGroup,vimCommentString,vimCommentTitle extend
 
 syn match	vimCommentTitle	'"\s*\%([sS]:\|\h\w*#\)\=\u\w*\(\s\+\u\w*\)*:'hs=s+1	contained contains=vimCommentTitleLeader,vimTodo,@vimCommentGroup
-syn match	vim9CommentTitle	'#\s*\%([sS]:\|\h\w*#\)\=\u\w*\(\s\+\u\w*\)*:'hs=s+1	contained contains=vim9CommentTitleLeader,vimTodo,@vimCommentGroup
+syn match	vim9CommentTitle	'#\s*\%([sS]:\|\h\w*#\)\=\%([A-DF-Z]\w*\|E\%(\d\{1,4}\>\)\@!\w*\)\(\s\+\u\w*\)*:'hs=s+1	contained contains=vim9CommentTitleLeader,vimTodo,@vimCommentGroup
 
 " allowed anywhere in the file
 if !s:vim9script
@@ -2371,6 +2504,8 @@ if !exists("skip_vim_syntax_inits")
 
  hi def link vimAbb	vimCommand
  hi def link vimAddress	vimMark
+ hi def link vimAt	vimCommand
+ hi def link vimAtArg	Special
  hi def link vimAugroupBang	vimBang
  hi def link vimAugroupError	vimError
  hi def link vimAugroupKey	vimCommand
@@ -2387,8 +2522,18 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimBehaveModel	vimBehave
  hi def link vimBehave	vimCommand
  hi def link vimBracket	Delimiter
+ hi def link vimBreakaddFunc	Special
+ hi def link vimBreakaddFile	Special
+ hi def link vimBreakaddHere	Special
+ hi def link vimBreakaddExpr	Special
+ hi def link vimBreakpointGlob	Special
+ hi def link vimBreakadd	vimCommand
+ hi def link vimBreakdel	vimCommand
+ hi def link vimBreaklist	vimCommand
  hi def link vimCall	vimCommand
  hi def link vimCatch	vimCommand
+ hi def link vimCd	vimCommand
+ hi def link vimCdBang	vimBang
  hi def link vimCmplxRepeat	SpecialChar
  hi def link vimCommand	Statement
  hi def link vimCommandModifier	vimCommand
@@ -2404,6 +2549,7 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimContinueString	vimString
  hi def link vimCount	Number
  hi def link vimCtrlChar	SpecialChar
+ hi def link vimDebug	vimCommand
  hi def link vimDebuggreedy	vimCommand
  hi def link vimDef	vimCommand
  hi def link vimDefBang	vimBang
@@ -2416,6 +2562,8 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimDelfunctionBang	vimBang
  hi def link vimDoautocmd	vimCommand
  hi def link vimDoautocmdMod	Special
+ hi def link vimDoCommand	vimCommand
+ hi def link vimDoCommandBang	vimBang
  hi def link vimEcho	vimCommand
  hi def link vimEchohlNone	vimGroup
  hi def link vimEchohl	vimCommand
@@ -2451,11 +2599,16 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimGrep	vimCommand
  hi def link vimGrepadd	vimCommand
  hi def link vimGrepBang	vimBang
+ hi def link vimGroup	Type
  hi def link vimGroupAdd	vimSynOption
+ hi def link vimGroupListEquals	vimSynOption
+ hi def link vimGroupListContinue		vimContinue
+ hi def link vimGroupListContinueComment	vimContinueComment
  hi def link vimGroupName	Normal
  hi def link vimGroupRem	vimSynOption
  hi def link vimGroupSpecial	Special
- hi def link vimGroup	Type
+ hi def link vimHelp	vimCommand
+ hi def link vimHelpBang	vimBang
  hi def link vimHelpgrep	vimCommand
  hi def link vimHiAttrib	PreProc
  hi def link vimHiBang	vimBang
@@ -2476,6 +2629,8 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimHiStartStop	vimHiTerm
  hi def link vimHiTerm	Type
  hi def link vimHLGroup	vimGroup
+ hi def link vimHistory	vimCommand
+ hi def link vimHistoryName	Special
  hi def link vimImport	vimCommand
  hi def link vimImportAutoload	Special
  hi def link vimImportAs	vimImport
@@ -2485,6 +2640,9 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimKeymapTailComment	vimComment
  hi def link vimLambdaBrace	Delimiter
  hi def link vimLambdaOperator	vimOper
+ hi def link vimLanguage	vimCommand
+ hi def link vimLanguageCategory	Special
+ hi def link vimLanguageNameReserved	Constant
  hi def link vimLet	vimCommand
  hi def link vimLetHeredoc	vimString
  hi def link vimLetHeredocStart	Special
@@ -2545,6 +2703,7 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimProfileBang	vimBang
  hi def link vimProfdel	vimCommand
  hi def link vimProfdelArg	vimSpecial
+ hi def link vimPrompt	vimCommand
  hi def link vimPython	vimCommand
  hi def link vimPython3	vimCommand
  hi def link vimPythonX	vimCommand
@@ -2612,7 +2771,7 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimSynFoldlevel	Type
  hi def link vimSynIskeyword	Type
  hi def link vimSynIskeywordSep	Delimiter
- hi def link vimSynKeyContainedin	vimSynContains
+ hi def link vimSynContainedin	vimSynContains
  hi def link vimSynKeyOpt	vimSynOption
  hi def link vimSynMtchGrp	vimSynOption
  hi def link vimSynMtchOpt	vimSynOption
@@ -2640,6 +2799,8 @@ if !exists("skip_vim_syntax_inits")
  hi def link vimTodo	Todo
  hi def link vimType	Type
  hi def link vimTypeAny	vimType
+ hi def link vimTypeObject	vimType
+ hi def link vimTypeObjectBracket	vimTypeObject
  hi def link vimUniq	vimCommand
  hi def link vimUniqBang	vimBang
  hi def link vimUniqOptions	Special
@@ -2731,7 +2892,9 @@ if !exists("skip_vim_syntax_inits")
  hi def link vim9TypeEquals	vimOper
  hi def link vim9Variable	vimVar
  hi def link vim9VariableType	vimType
- hi def link vim9VariableTypeAny	vimType
+ hi def link vim9VariableTypeAny	vimTypeAny
+ hi def link vim9VariableTypeObject	vimTypeObject
+ hi def link vim9VariableTypeObjectBracket	vimTypeObjectBracket
  hi def link vim9Var	vimCommand
  hi def link vim9Vim9ScriptArg	Special
  hi def link vim9Vim9Script	vimCommand

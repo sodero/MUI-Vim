@@ -876,4 +876,66 @@ func Test_blob_items()
   call v9.CheckSourceLegacyAndVim9Success(lines)
 endfunc
 
+" Test for setting a byte in a blob with invalid value
+func Test_blob_byte_set_invalid_value()
+  let lines =<< trim END
+    VAR b = 0zD0C3E4E18E1B
+    LET b[0] = 229539777187355
+  END
+  call v9.CheckSourceLegacyAndVim9Failure(lines, 'E1239: Invalid value for blob:')
+endfunc
+
+" Test when converting a blob to a string, and there is an empty line (newline
+" followed directly by another newline).
+func Test_blob2str_empty_line()
+  let stuff =<< trim END
+  Hello
+
+  World!
+  END
+
+  let b = str2blob(stuff)
+  call assert_equal(['Hello', '', 'World!'], blob2str(b))
+endfunc
+
+func Test_blob2str_multi_byte_encodings()
+  " UTF-16LE: "Hello" = 48 00 65 00 6C 00 6C 00 6F 00
+  call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf-16le'}))
+  call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf16le'}))
+
+  " UTF-16BE: "Hello" = 00 48 00 65 00 6C 00 6C 00 6F
+  call assert_equal(['Hello'], blob2str(0z00480065006C006C006F, {'encoding': 'utf-16be'}))
+  call assert_equal(['Hello'], blob2str(0z00480065006C006C006F, {'encoding': 'utf16be'}))
+
+  " UCS-2LE: "Hello" = 48 00 65 00 6C 00 6C 00 6F 00
+  call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs-2le'}))
+  call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs2le'}))
+
+  " UCS-2BE: "Hello" = 00 48 00 65 00 6C 00 6C 00 6F
+  call assert_equal(['Hello'], blob2str(0z00480065006C006C006F, {'encoding': 'ucs-2be'}))
+  call assert_equal(['Hello'], blob2str(0z00480065006C006C006F, {'encoding': 'ucs2be'}))
+
+  " UTF-32LE: "Hi" = 48 00 00 00 69 00 00 00
+  call assert_equal(['Hi'], blob2str(0z4800000069000000, {'encoding': 'utf-32le'}))
+  call assert_equal(['Hi'], blob2str(0z4800000069000000, {'encoding': 'utf32le'}))
+
+  " UTF-32BE: "Hi" = 00 00 00 48 00 00 00 69
+  call assert_equal(['Hi'], blob2str(0z0000004800000069, {'encoding': 'utf-32be'}))
+  call assert_equal(['Hi'], blob2str(0z0000004800000069, {'encoding': 'utf32be'}))
+
+  " UCS-4LE: "Hi" = 48 00 00 00 69 00 00 00
+  call assert_equal(['Hi'], blob2str(0z4800000069000000, {'encoding': 'ucs-4le'}))
+  call assert_equal(['Hi'], blob2str(0z4800000069000000, {'encoding': 'ucs4le'}))
+
+  " UCS-4BE: "Hi" = 00 00 00 48 00 00 00 69
+  call assert_equal(['Hi'], blob2str(0z0000004800000069, {'encoding': 'ucs-4be'}))
+  call assert_equal(['Hi'], blob2str(0z0000004800000069, {'encoding': 'ucs4be'}))
+
+  " UTF-16LE with newlines: "Hi\nBye" = 48 00 69 00 0A 00 42 00 79 00 65 00
+  call assert_equal(['Hi', 'Bye'], blob2str(0z48006900.0A004200.79006500, {'encoding': 'utf-16le'}))
+
+  " UTF-32LE with newlines: "A\nB" = 41 00 00 00 0A 00 00 00 42 00 00 00
+  call assert_equal(['A', 'B'], blob2str(0z41000000.0A000000.42000000, {'encoding': 'utf-32le'}))
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

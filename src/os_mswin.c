@@ -16,7 +16,6 @@
 #include "vim.h"
 
 #include <sys/types.h>
-#include <signal.h>
 #include <limits.h>
 
 #include <process.h>
@@ -106,12 +105,42 @@ mch_exit_g(int r)
 
 
 /*
+ * Get version number including build number
+ */
+typedef BOOL (WINAPI *PfnRtlGetVersion)(LPOSVERSIONINFOW);
+DWORD win_version;
+    static void
+win_version_init(void)
+{
+    OSVERSIONINFOW	osver;
+    HMODULE		hNtdll;
+    PfnRtlGetVersion	pRtlGetVersion;
+
+    hNtdll = GetModuleHandle("ntdll.dll");
+    if (hNtdll == NULL)
+	return;
+
+    pRtlGetVersion =
+	(PfnRtlGetVersion) GetProcAddress(hNtdll, "RtlGetVersion");
+    if (pRtlGetVersion == NULL)
+	return;
+
+    osver.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
+    pRtlGetVersion(&osver);
+    win_version =
+	MAKE_VER(osver.dwMajorVersion, osver.dwMinorVersion,
+		 osver.dwBuildNumber);
+}
+
+/*
  * Init the tables for toupper() and tolower().
  */
     void
 mch_early_init(void)
 {
     int		i;
+
+    win_version_init();
 
     PlatformId();
 
@@ -407,7 +436,19 @@ mswin_stat_impl(const WCHAR *name, stat_T *stp, const int resolve)
     DWORD		flag = 0;
     WIN32_FIND_DATAW    findDataW;
 
-#ifdef _UCRT
+#if 0 && defined(_UCRT)
+    // This code was disabled because the behavior of MSVC's _wstat (actually
+    // _wstat64) for empty symlinks varies depending on the C runtime you link
+    // to.
+    //
+    // The expected behavior here is for _wstat() to fail for empty symlinks.
+    // The expected behavior occurs when linking to a static runtime.  However,
+    // the expected behavior does not occur when linking to a dynamic runtime,
+    // and it succeeds for empty symlinks.  This causes Test_glob_symlinks in
+    // test_functions.vim to fail when linking to a dynamic runtime.
+    //
+    // For more details, see:
+    // https://github.com/koron/vc-stat-behavior-verification
     if (resolve)
 	// Universal CRT can handle symlinks properly.
 	return _wstat(name, stp);
@@ -623,13 +664,7 @@ mch_has_wildcard(char_u *p)
 {
     for ( ; *p; MB_PTR_ADV(p))
     {
-	if (vim_strchr((char_u *)
-#ifdef VIM_BACKTICK
-				    "?*$[`"
-#else
-				    "?*$["
-#endif
-						, *p) != NULL
+	if (vim_strchr((char_u *)"?*$[`", *p) != NULL
 		|| (*p == '~' && p[1] != NUL))
 	    return TRUE;
     }
@@ -1157,8 +1192,6 @@ AbortProc(HDC hdcPrn UNUSED, int iCode UNUSED)
     return !*bUserAbort;
 }
 
-# if !defined(FEAT_GUI) || defined(VIMDLL)
-
     static UINT_PTR CALLBACK
 PrintHookProc(
 	HWND hDlg,	// handle to dialog box
@@ -1211,7 +1244,6 @@ PrintHookProc(
 
     return FALSE;
 }
-# endif
 
     void
 mch_print_cleanup(void)
@@ -1227,7 +1259,7 @@ mch_print_cleanup(void)
 
     if (prt_dlg.hDC != NULL)
 	DeleteDC(prt_dlg.hDC);
-    if (!*bUserAbort)
+    if (!*bUserAbort && hDlgPrint != NULL)
 	SendMessage(hDlgPrint, WM_COMMAND, 0, 0);
 }
 
@@ -1365,18 +1397,11 @@ mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
 	prt_dlg.hDevMode = stored_dm;
 	prt_dlg.hDevNames = stored_devn;
 	prt_dlg.lCustData = stored_nCopies; // work around bug in print dialog
-# if !defined(FEAT_GUI) || defined(VIMDLL)
-#  ifdef VIMDLL
-	if (!gui.in_use)
-#  endif
-	{
-	    /*
-	     * Use hook to prevent console window being sent to back
-	     */
-	    prt_dlg.lpfnPrintHook = PrintHookProc;
-	    prt_dlg.Flags |= PD_ENABLEPRINTHOOK;
-	}
-# endif
+	/*
+	 * Use hook to prevent print dialog being sent to back.
+	 */
+	prt_dlg.lpfnPrintHook = PrintHookProc;
+	prt_dlg.Flags |= PD_ENABLEPRINTHOOK;
 	prt_dlg.Flags |= stored_nFlags;
     }
 
@@ -1593,7 +1618,7 @@ mch_print_begin(prt_settings_T *psettings)
 mch_print_end(prt_settings_T *psettings UNUSED)
 {
     EndDoc(prt_dlg.hDC);
-    if (!*bUserAbort)
+    if (!*bUserAbort && hDlgPrint != NULL)
 	SendMessage(hDlgPrint, WM_COMMAND, 0, 0);
 }
 
@@ -2234,7 +2259,7 @@ enumWindowsGetNames(HWND hwnd, LPARAM lparam)
 
     // Add the name to the list
     ga_concat(ga, (char_u *)server);
-    ga_concat(ga, (char_u *)"\n");
+    GA_CONCAT_LITERAL(ga, "\n");
     return TRUE;
 }
 
@@ -2633,7 +2658,7 @@ struct charset_pair
     BYTE	charset;
 };
 
-#define STRING_INIT(s) \
+# define STRING_INIT(s) \
     {(char_u *)(s), STRLEN_LITERAL(s)}
 static struct charset_pair
 charset_pairs[] =
@@ -2687,7 +2712,7 @@ quality_pairs[] = {
 # endif
     {STRING_INIT("DEFAULT"),		DEFAULT_QUALITY}
 };
-#undef STRING_INIT
+# undef STRING_INIT
 
 /*
  * Convert a charset ID to a name.
@@ -2727,7 +2752,7 @@ quality_id2name(DWORD id)
 
 // The default font height in 100% scaling (96dpi).
 // (-16 in 96dpi equates to roughly 12pt)
-#define DEFAULT_FONT_HEIGHT	(-16)
+# define DEFAULT_FONT_HEIGHT	(-16)
 
 static const LOGFONTW s_lfDefault =
 {

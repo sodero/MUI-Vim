@@ -283,7 +283,7 @@ tv_get_bool_or_number_chk(
 		{
 		    class_T *cl = varp->vval.v_object->obj_class;
 		    if (cl != NULL && IS_ENUM(cl))
-			semsg(_(e_using_enum_str_as_number), cl->class_name);
+			semsg(_(e_using_enum_str_as_number), cl->class_name.string);
 		    else
 			emsg(_(e_using_object_as_number));
 		}
@@ -391,15 +391,15 @@ tv_get_float_chk(typval_T *varp, int *error)
 	    emsg(_(e_using_special_value_as_float));
 	    break;
 	case VAR_JOB:
-# ifdef FEAT_JOB_CHANNEL
+#ifdef FEAT_JOB_CHANNEL
 	    emsg(_(e_using_job_as_float));
 	    break;
-# endif
+#endif
 	case VAR_CHANNEL:
-# ifdef FEAT_JOB_CHANNEL
+#ifdef FEAT_JOB_CHANNEL
 	    emsg(_(e_using_channel_as_float));
 	    break;
-# endif
+#endif
 	case VAR_BLOB:
 	    emsg(_(e_using_blob_as_float));
 	    break;
@@ -1248,7 +1248,7 @@ tv_get_string_buf_chk_strict(typval_T *varp, char_u *buf, int strict)
 		{
 		    class_T *cl = varp->vval.v_object->obj_class;
 		    if (cl != NULL && IS_ENUM(cl))
-			semsg(_(e_using_enum_str_as_string), cl->class_name);
+			semsg(_(e_using_enum_str_as_string), cl->class_name.string);
 		    else
 			emsg(_(e_using_object_as_string));
 		}
@@ -1886,6 +1886,11 @@ typval_compare_object(
     {
 	*res = obj1 == obj2 ? res_match : !res_match;
 	return OK;
+    }
+    else if (tv1->v_type != tv2->v_type)
+    {
+	emsg(_(e_can_only_compare_object_with_object));
+	return FAIL;
     }
 
     *res = object_equal(obj1, obj2, ic) ? res_match : !res_match;

@@ -433,9 +433,9 @@ may_do_incsearch_highlighting(
     int		skiplen, patlen;
     int		found;  // do_search() result
     pos_T	end_pos;
-#ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
     searchit_arg_T sia;
-#endif
+# endif
     int		next_char;
     int		use_last_pat;
     int		did_do_incsearch = is_state->did_incsearch;
@@ -505,18 +505,18 @@ may_do_incsearch_highlighting(
 	if (search_first_line != 0)
 	    search_flags += SEARCH_START;
 	ccline.cmdbuff[skiplen + patlen] = NUL;
-#ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
 	CLEAR_FIELD(sia);
 	// Set the time limit to half a second.
 	sia.sa_tm = 500;
-#endif
+# endif
 	found = do_search(NULL, firstc == ':' ? '/' : firstc, search_delim,
 				 ccline.cmdbuff + skiplen, patlen, count, search_flags,
-#ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
 		&sia
-#else
+# else
 		NULL
-#endif
+# endif
 		);
 	ccline.cmdbuff[skiplen + patlen] = next_char;
 	--emsg_off;
@@ -1167,7 +1167,7 @@ cmdline_erase_chars(
 	{
 #ifdef FEAT_RIGHTLEFT
 	    if (cmdmsg_rl)
-		msg_col = Columns;
+		msg_col = cmdline_width;
 	    else
 #endif
 		msg_col = 0;
@@ -1340,14 +1340,14 @@ cmdline_left_right_mouse(int c, int *ignore_drag_release)
 	*ignore_drag_release = TRUE;
     else
 	*ignore_drag_release = FALSE;
-# ifdef FEAT_GUI
+#ifdef FEAT_GUI
     // When GUI is active, also move when 'mouse' is empty
     if (!gui.in_use)
-# endif
+#endif
 	if (!mouse_has(MOUSE_COMMAND))
 	    return;
-# ifdef FEAT_CLIPBOARD
-    if (mouse_row < cmdline_row && clip_star.available)
+#ifdef FEAT_CLIPBOARD
+    if (mouse_row < cmdline_row && (clip_star.available || clip_plus.available))
     {
 	int	    button, is_click, is_drag;
 
@@ -1366,7 +1366,7 @@ cmdline_left_right_mouse(int c, int *ignore_drag_release)
 	clip_modeless(button, is_click, is_drag);
 	return;
     }
-# endif
+#endif
 
     set_cmdspos();
     for (ccline.cmdpos = 0; ccline.cmdpos < ccline.cmdlen;
@@ -1375,8 +1375,8 @@ cmdline_left_right_mouse(int c, int *ignore_drag_release)
 	int	i;
 
 	i = cmdline_charsize(ccline.cmdpos);
-	if (mouse_row <= cmdline_row + ccline.cmdspos / Columns
-		&& mouse_col < ccline.cmdspos % Columns + i)
+	if (mouse_row <= cmdline_row + ccline.cmdspos / cmdline_width
+		&& mouse_col < ccline.cmdspos % cmdline_width + i)
 	    break;
 	if (has_mbyte)
 	{
@@ -1871,6 +1871,12 @@ getcmdline_int(
 				// that occurs while typing a command should
 				// cause the command not to be executed.
 
+	if (ex_normal_busy == 0 && stuff_empty() && typebuf.tb_len == 0)
+	    // There is no pending input from sources other than user input, so
+	    // Vim is going to wait for the user to type a key.  Consider the
+	    // command line typed even if next key will trigger a mapping.
+	    some_key_typed = TRUE;
+
 	// Trigger SafeState if nothing is pending.
 	may_trigger_safestate(xpc.xp_numfiles <= 0);
 
@@ -1892,6 +1898,21 @@ getcmdline_int(
 	    cursorcmd();		// set the cursor on the right spot
 	    c = safe_vgetc();
 	} while (c == K_IGNORE || c == K_NOP);
+
+	// If the cmdline was replaced externally (e.g. by setcmdline()
+	// during an <expr> mapping), clean up the wildmenu completion
+	// state to avoid using stale completion data.
+	if (ccline.cmdbuff_replaced && xpc.xp_numfiles > 0)
+	{
+	    if (cmdline_pum_active())
+		cmdline_pum_remove(&ccline, FALSE);
+	    (void)ExpandOne(&xpc, NULL, NULL, 0, WILD_FREE);
+	    did_wild_list = FALSE;
+	    xpc.xp_context = EXPAND_NOTHING;
+	    wim_index = 0;
+	    wildmenu_cleanup(&ccline);
+	}
+	ccline.cmdbuff_replaced = FALSE;
 
 	// Skip wildmenu during history navigation via Up/Down keys
 	if (c == K_WILD && did_hist_navigate)
@@ -1988,7 +2009,7 @@ getcmdline_int(
 
 	int key_is_wc = (c == p_wc && KeyTyped) || c == p_wcm;
 	if ((cmdline_pum_active() || wild_menu_showing || did_wild_list)
-		&& !key_is_wc)
+		&& !key_is_wc && xpc.xp_numfiles > 0)
 	{
 	    // Ctrl-Y: Accept the current selection and close the popup menu.
 	    // Ctrl-E: cancel the cmdline popup menu and return the original
@@ -2108,7 +2129,7 @@ getcmdline_int(
 		    goto cmdline_changed;
 		if (!cmd_silent)
 		{
-		    windgoto(msg_row, 0);
+		    windgoto(msg_row, cmdline_col_off);
 		    out_flush();
 		}
 		break;
@@ -2279,7 +2300,7 @@ getcmdline_int(
 		    if (ccline.cmdpos >= ccline.cmdlen)
 			break;
 		    i = cmdline_charsize(ccline.cmdpos);
-		    if (KeyTyped && ccline.cmdspos + i >= Columns * Rows)
+		    if (KeyTyped && ccline.cmdspos + i >= cmdline_width * Rows)
 			break;
 		    ccline.cmdspos += i;
 		    if (has_mbyte)
@@ -2337,27 +2358,27 @@ getcmdline_int(
 		goto cmdline_not_changed;	// Ignore mouse
 
 	case K_MIDDLEMOUSE:
-# ifdef FEAT_GUI
+#ifdef FEAT_GUI
 		// When GUI is active, also paste when 'mouse' is empty
 		if (!gui.in_use)
-# endif
+#endif
 		    if (!mouse_has(MOUSE_COMMAND))
 			goto cmdline_not_changed;   // Ignore mouse
-# ifdef FEAT_CLIPBOARD
+#ifdef FEAT_CLIPBOARD
 		if (clip_star.available)
 		    cmdline_paste('*', TRUE, TRUE);
 		else
-# endif
+#endif
 		    cmdline_paste(0, TRUE, TRUE);
 		redrawcmd();
 		goto cmdline_changed;
 
-# ifdef FEAT_DND
+#ifdef FEAT_DND
 	case K_DROP:
 		cmdline_paste('~', TRUE, FALSE);
 		redrawcmd();
 		goto cmdline_changed;
-# endif
+#endif
 
 	case K_LEFTDRAG:
 	case K_LEFTRELEASE:
@@ -3004,8 +3025,8 @@ set_cmdspos_cursor(void)
     set_cmdspos();
     if (KeyTyped)
     {
-	m = Columns * Rows;
-	if (m < 0)	// overflow, Columns or Rows at weird value
+	m = cmdline_width * Rows;
+	if (m < 0)	// overflow, cmdline_width or Rows at weird value
 	    m = MAXCOL;
     }
     else
@@ -3037,7 +3058,7 @@ correct_cmdspos(int idx, int cells)
 {
     if ((*mb_ptr2len)(ccline.cmdbuff + idx) > 1
 		&& (*mb_ptr2cells)(ccline.cmdbuff + idx) > 1
-		&& ccline.cmdspos % Columns + cells > Columns)
+		&& ccline.cmdspos % cmdline_width + cells > cmdline_width)
 	ccline.cmdspos++;
 }
 
@@ -3237,7 +3258,7 @@ redraw:
 		    }
 		}
 		msg_clr_eos();
-		windgoto(msg_row, msg_col);
+		windgoto(msg_row, cmdline_col_off + msg_col);
 		continue;
 	    }
 
@@ -3310,7 +3331,7 @@ redraw:
 	line_ga.ga_len += len;
 	escaped = FALSE;
 
-	windgoto(msg_row, msg_col);
+	windgoto(msg_row, cmdline_col_off + msg_col);
 	pend = (char_u *)(line_ga.ga_data) + line_ga.ga_len;
 
 	// We are done when a NL is entered, but not when it comes after a
@@ -3350,7 +3371,7 @@ cmdline_overstrike(void)
     return ccline.overstrike;
 }
 
-# if defined(MCH_CURSOR_SHAPE) || defined(FEAT_GUI) || defined(FEAT_MOUSESHAPE)
+#if defined(MCH_CURSOR_SHAPE) || defined(FEAT_GUI) || defined(FEAT_MOUSESHAPE)
 /*
  * Return TRUE if the cursor is at the end of the cmdline.
  */
@@ -3426,8 +3447,8 @@ redrawcmd_preedit(void)
 	    cmdpos  += preedit_start_col;
 	}
 
-	msg_row = cmdline_row + (cmdspos / (int)Columns);
-	msg_col = cmdspos % (int)Columns;
+	msg_row = cmdline_row + (cmdspos / cmdline_width);
+	msg_col = cmdspos % cmdline_width;
 	if (msg_row >= Rows)
 	    msg_row = Rows - 1;
 
@@ -3802,7 +3823,7 @@ put_on_cmdline(char_u *str, int len, int redraw)
 		msg_col -= i;
 		if (msg_col < 0)
 		{
-		    msg_col += Columns;
+		    msg_col += cmdline_width;
 		    --msg_row;
 		}
 	    }
@@ -3821,8 +3842,8 @@ put_on_cmdline(char_u *str, int len, int redraw)
 	}
 	if (KeyTyped)
 	{
-	    m = Columns * Rows;
-	    if (m < 0)	// overflow, Columns or Rows at weird value
+	    m = cmdline_width * Rows;
+	    if (m < 0)	// overflow, cmdline_width or Rows at weird value
 		m = MAXCOL;
 	}
 	else
@@ -4046,7 +4067,7 @@ redrawcmdprompt(void)
     if (ccline.cmdprompt != NULL)
     {
 	msg_puts_attr((char *)ccline.cmdprompt, ccline.cmdattr);
-	ccline.cmdindent = msg_col + (msg_row - cmdline_row) * Columns;
+	ccline.cmdindent = msg_col + (msg_row - cmdline_row) * cmdline_width;
 	// do the reverse of set_cmdspos()
 	if (ccline.cmdfirstc != NUL)
 	    --ccline.cmdindent;
@@ -4070,7 +4091,7 @@ redrawcmd(void)
     // when 'incsearch' is set there may be no command line while redrawing
     if (ccline.cmdbuff == NULL)
     {
-	windgoto(cmdline_row, 0);
+	windgoto(cmdline_row, cmdline_col_off);
 	msg_clr_eos();
 	return;
     }
@@ -4125,21 +4146,21 @@ cursorcmd(void)
 #ifdef FEAT_RIGHTLEFT
     if (cmdmsg_rl)
     {
-	msg_row = cmdline_row  + (ccline.cmdspos / (int)(Columns - 1));
-	msg_col = (int)Columns - (ccline.cmdspos % (int)(Columns - 1)) - 1;
+	msg_row = cmdline_row  + (ccline.cmdspos / (cmdline_width - 1));
+	msg_col = cmdline_width - (ccline.cmdspos % (cmdline_width - 1)) - 1;
 	if (msg_row <= 0)
 	    msg_row = Rows - 1;
     }
     else
 #endif
     {
-	msg_row = cmdline_row + (ccline.cmdspos / (int)Columns);
-	msg_col = ccline.cmdspos % (int)Columns;
+	msg_row = cmdline_row + (ccline.cmdspos / cmdline_width);
+	msg_col = ccline.cmdspos % cmdline_width;
 	if (msg_row >= Rows)
 	    msg_row = Rows - 1;
     }
 
-    windgoto(msg_row, msg_col);
+    windgoto(msg_row, cmdline_col_off + msg_col);
 #if defined(FEAT_XIM) && defined(FEAT_GUI_GTK)
     if (p_imst == IM_ON_THE_SPOT)
 	redrawcmd_preedit();
@@ -4155,13 +4176,13 @@ gotocmdline(int clr)
     msg_start();
 #ifdef FEAT_RIGHTLEFT
     if (cmdmsg_rl)
-	msg_col = Columns - 1;
+	msg_col = cmdline_width - 1;
     else
 #endif
 	msg_col = 0;	    // always start in column 0
     if (clr)		    // clear the bottom line(s)
 	msg_clr_eos();	    // will reset clear_cmdline
-    windgoto(cmdline_row, 0);
+    windgoto(cmdline_row, cmdline_col_off);
 }
 
 /*
@@ -4325,9 +4346,9 @@ get_cmdline_type(void)
 	return NUL;
     if (p->cmdfirstc == NUL)
 	return
-# ifdef FEAT_EVAL
+#ifdef FEAT_EVAL
 	    (p->input_fn) ? '@' :
-# endif
+#endif
 	    '-';
     return p->cmdfirstc;
 }
@@ -4475,7 +4496,7 @@ f_getcmdscreenpos(typval_T *argvars UNUSED, typval_T *rettv)
 {
     cmdline_info_T *p = get_ccline_ptr();
 
-    rettv->vval.v_number = p != NULL ? p->cmdspos + 1 : 0;
+    rettv->vval.v_number = p != NULL ? cmdline_col_off + p->cmdspos + 1 : 0;
 }
 
 /*
@@ -4512,6 +4533,7 @@ set_cmdline_str(char_u *str, int pos)
 
     p->cmdpos = pos < 0 || pos > p->cmdlen ? p->cmdlen : pos;
     new_cmdpos = p->cmdpos;
+    p->cmdbuff_replaced = TRUE;
 
     redrawcmd();
 
@@ -4701,9 +4723,9 @@ open_cmdwin(void)
     // Can't do this recursively.  Can't do it when typing a password.
     if (text_or_buf_locked()
 	    || cmdwin_type != 0
-# if defined(FEAT_CRYPT) || defined(FEAT_EVAL)
+#if defined(FEAT_CRYPT) || defined(FEAT_EVAL)
 	    || cmdline_star > 0
-# endif
+#endif
 	    )
     {
 	beep_flush();
@@ -4779,10 +4801,10 @@ open_cmdwin(void)
 #ifdef FEAT_FOLDING
     curwin->w_p_fen = FALSE;
 #endif
-# ifdef FEAT_RIGHTLEFT
+#ifdef FEAT_RIGHTLEFT
     curwin->w_p_rl = cmdmsg_rl;
     cmdmsg_rl = FALSE;
-# endif
+#endif
     RESET_BINDING(curwin);
 
     // Don't allow switching to another buffer.
@@ -4846,6 +4868,7 @@ open_cmdwin(void)
 
     State = MODE_NORMAL;
     setmouse();
+    clear_showcmd();
 
     // Reset here so it can be set by a CmdwinEnter autocommand.
     cmdwin_result = 0;
@@ -4865,17 +4888,17 @@ open_cmdwin(void)
 
     RedrawingDisabled = save_RedrawingDisabled;
 
-# ifdef FEAT_FOLDING
+#ifdef FEAT_FOLDING
     save_KeyTyped = KeyTyped;
-# endif
+#endif
 
     // Trigger CmdwinLeave autocommands.
     trigger_cmd_autocmd(cmdwin_type, EVENT_CMDWINLEAVE);
 
-# ifdef FEAT_FOLDING
+#ifdef FEAT_FOLDING
     // Restore KeyTyped in case it is modified by autocommands
     KeyTyped = save_KeyTyped;
-# endif
+#endif
 
     cmdwin_type = 0;
     cmdwin_buf = NULL;
@@ -4892,11 +4915,11 @@ open_cmdwin(void)
     }
     else
     {
-# if defined(FEAT_EVAL)
+#if defined(FEAT_EVAL)
 	// autocmds may abort script processing
 	if (aborting() && cmdwin_result != K_IGNORE)
 	    cmdwin_result = Ctrl_C;
-# endif
+#endif
 	// Set the new command line from the cmdline buffer.
 	dealloc_cmdbuff();
 
@@ -4958,10 +4981,10 @@ open_cmdwin(void)
 		ccline.cmdpos = ccline.cmdlen;
 	}
 
-# ifdef FEAT_CONCEAL
+#ifdef FEAT_CONCEAL
 	// Avoid command-line window first character being concealed.
 	curwin->w_p_cole = 0;
-# endif
+#endif
 	// First go back to the original window.
 	wp = curwin;
 	set_bufref(&bufref, curbuf);
@@ -4995,9 +5018,9 @@ open_cmdwin(void)
 
     ga_clear(&winsizes);
     restart_edit = save_restart_edit;
-# ifdef FEAT_RIGHTLEFT
+#ifdef FEAT_RIGHTLEFT
     cmdmsg_rl = save_cmdmsg_rl;
-# endif
+#endif
 
     State = save_State;
     may_trigger_modechanged();
@@ -5093,12 +5116,12 @@ get_user_input(
 
     prompt = tv_get_string_chk(&argvars[0]);
 
-#ifdef NO_CONSOLE_INPUT
+# ifdef NO_CONSOLE_INPUT
     // While starting up, there is no place to enter text. When running tests
     // with --not-a-term we assume feedkeys() will be used.
     if (no_console_input() && !is_not_a_term())
 	return;
-#endif
+# endif
 
     cmd_silent = FALSE;		// Want to see the prompt.
     if (prompt != NULL)

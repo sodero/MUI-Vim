@@ -168,9 +168,16 @@ func Test_statusline()
   call assert_match('^0,Top\s*$', s:get_statusline())
   norm G
   call assert_match('^100,Bot\s*$', s:get_statusline())
-  9000
-  " Don't check the exact percentage as it depends on the window size
-  call assert_match('^90,\(Top\|Bot\|\d\+%\)\s*$', s:get_statusline())
+  " The exact percentage depends on the window height, so create a window with
+  " known height.
+  9000 | botright 10split | setlocal scrolloff=0 | normal! zb
+  call assert_match('^90,89%\s*$', s:get_statusline())
+  normal! zt
+  call assert_match('^90,90%\s*$', s:get_statusline())
+  " %P should result in a string with 3 in length when not translated.
+  normal! 500zb
+  call assert_match('^5, 4%\s*$', s:get_statusline())
+  close
 
   " %q: "[Quickfix List]", "[Location List]" or empty.
   set statusline=%q
@@ -698,6 +705,20 @@ func Test_statusline_in_sandbox()
   set equalalways& statusline&
   delfunc SandboxStatusLine
   delfunc Check_statusline_in_sandbox
+endfunc
+
+" This used to call memmove with a negative size and crash Vim
+func Test_statusline_singlebyte_negative()
+  let [_columns, _ls, _stl, _enc]  = [&columns, &ls, &stl, &enc]
+  set encoding=latin1
+  set laststatus=2 columns=15
+  setl stl=%#ErrorMsg#abcdtàØ?}}o@`s`ÿæCú\xE%#Normal#
+  vsp
+  setl stl=%#ErrorMsg#abcdtàØ?}}o@`s`ÿæCú\xE%#Normal#
+  redraw!
+  redrawstatus
+  bw!
+  let [&columns, &ls, &stl, &enc] = [_columns, _ls, _stl, _enc]
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

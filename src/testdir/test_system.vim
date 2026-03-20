@@ -140,4 +140,74 @@ func Test_system_with_shell_quote()
   endtry
 endfunc
 
+" Check that Vim does not execute anything from current directory
+func Test_windows_external_cmd_in_cwd()
+  CheckMSWindows
+
+  " just in case
+  call system('rd /S /Q Xfolder')
+  call mkdir('Xfolder', 'R')
+  cd Xfolder
+
+  let contents = ['@echo off', 'echo filename1.txt:1:AAAA']
+  call writefile(contents, 'findstr.cmd')
+
+  let file1 = ['AAAA', 'THIS FILE SHOULD NOT BE FOUND']
+  let file2 = ['BBBB', 'THIS FILE SHOULD BE FOUND']
+
+  call writefile(file1, 'filename1.txt')
+  call writefile(file2, 'filename2.txt')
+
+  if has('quickfix')
+    " use silent to avoid hit-enter-prompt
+    sil grep BBBB filename*.txt
+    call assert_equal('filename2.txt', @%)
+  endif
+
+  let output = system('findstr BBBB filename*')
+  " Match trailing newline byte
+  call assert_match('filename2.txt:BBBB.', output)
+
+  if has('gui')
+    set guioptions+=!
+    let output = system('findstr BBBB filename*')
+    call assert_match('filename2.txt:BBBB.', output)
+  endif
+
+  cd -
+  set guioptions&
+endfunc
+
+func Test_system_with_powershell()
+  CheckPowerShell
+
+  let shell_save = &shell
+  let shellcmdflag_save = &shellcmdflag
+  let shellxquote_save = &shellxquote
+  let shellpipe_save = &shellpipe
+  let shellredir_save = &shellredir
+  try
+    if executable('powershell')
+       let &shell = 'powershell'
+       let &shellcmdflag = '-Command'
+       let &shellredir = '2>&1 | Out-File -Encoding default'
+    else
+       let &shell = 'pwsh'
+       let &shellcmdflag = '-c'
+       let &shellredir = '>%s 2>&1'
+    endif
+    let &shellxquote = has('win32') ? '"' : ''
+    let &shellpipe = &shellredir
+
+    " Make sure compound commands are handled properly.
+    call assert_equal("123\n456\n", system('echo 123; echo 456'))
+  finally
+    let &shell = shell_save
+    let &shellcmdflag = shellcmdflag_save
+    let &shellxquote = shellxquote_save
+    let &shellpipe = shellpipe_save
+    let &shellredir = shellredir_save
+  endtry
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab
