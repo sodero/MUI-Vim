@@ -5,6 +5,7 @@ Type:         text/edit
 Architecture: __ARC__
 URL:          https://github.com/sodero/MUI-Vim
 Requires:     dev/mui/MCC_TheBar-26.22.lha
+Replaces:     text/edit/Vim_9.2-__ARC__.lha
 Version:      __VER__
 Distribution: Aminet
 

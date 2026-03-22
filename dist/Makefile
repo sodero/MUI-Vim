@@ -26,7 +26,7 @@ SRC:=$(TOP)/src
 VIM:=$(SRC)/vim
 VI:=$(SRC)/vi
 EXT:=extras
-DST:=Vim
+DST:=MUI-Vim
 VER?=0
 REV?=0
 
@@ -34,9 +34,9 @@ REV?=0
 # Create archive and Aminet readme
 #------------------------------------------------------------------------------------------
 .PHONY: all
-all: tmp/$(DST)_$(VER)-$(ANM).lha tmp/$(DST)_$(VER)-$(ANM).readme
+all: tmp/$(DST)-$(ANM).lha tmp/$(DST)-$(ANM).readme
 
-$(DST)_$(VER)-$(ANM).lha: $(DST)/gVim $(DST)/vi
+$(DST)-$(ANM).lha: $(DST)/gVim $(DST)/vi
 	$(LHA) $(LHAFLAGS) $@ $(DST)
 	$(LHA) $(LHAFLAGS) $@ $(DST).info
 ifeq ($(UNM),AROS)
@@ -50,11 +50,11 @@ endif
 #------------------------------------------------------------------------------------------
 # Populate temp
 #------------------------------------------------------------------------------------------
-tmp/$(DST)_$(VER)-$(ANM).readme: | tmp
+tmp/$(DST)-$(ANM).readme: | tmp
 	cat aminet/README.bin | $(SED) -e "s/__VER__/$(VER).$(REV)/" | \
 	$(SED) -e "s/__ARC__/$(ANM)/" > $@
 
-tmp/$(DST)_$(VER)-$(ANM).lha: $(DST)_$(VER)-$(ANM).lha | tmp
+tmp/$(DST)-$(ANM).lha: $(DST)-$(ANM).lha | tmp
 	mv $< $@
 
 tmp:
