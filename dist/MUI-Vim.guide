@@ -67,7 +67,7 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
-@{B}2026-03-22{UB}
+@{B}2026-03-22@{UB}
 - Update to VIM 9.2.219
 - AROS x86-64 toolbar crash fixed
 
