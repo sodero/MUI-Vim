@@ -1,5 +1,5 @@
 ; Vim
-; $VER: Vim 9.2.219
+; $VER: MUI-Vim __VER__
 
 (set @app-name "Vim")
 (set @default-dest (getassign "VIM"))
@@ -34,14 +34,14 @@
 
 (if (= @language "svenska")
     (
-        (set #welcome_str_p "Installation av Vim")
-        (set #destination_str_p "Vänligen välj var Vim ska installeras.\nKatalogen \"Vim\" kommer att skapas där.")
+        (set #welcome_str_p "Installation av MUI-Vim")
+        (set #destination_str_p "Vänligen välj var MUI-Vim ska installeras.\nKatalogen \"Vim\" kommer att skapas där.")
         (set #destination_str_h "")
         (set #copy_str_p "Kopierar program och programdata...")
         (set #toolbar_str_p "Vänligen välj knappradstema")
-        (set #assign_str_p "Skapa tilldelning och utöka sökvägen i \"user-startup\"?")
+        (set #assign_str_p "Skapa tilldelning och utöka sökvägen med MUI-Vim i \"user-startup\"?")
         (set #assign_str_h "")
-        (set #install_str_p "Vänligen välj vilka / vilken variant(er) av Vim som ska installeras")
+        (set #install_str_p "Vänligen välj vilka / vilken variant(er) av MUI-Vim som ska installeras")
         (set #install_str_h "")
         (set #gvim_str "gVim - Full Vim med GUI")
         (set #vi_str "Vi - Endast konsollgränssnitt")
@@ -49,14 +49,14 @@
     )
     ; else
     (
-        (set #welcome_str_p "Welcome to the Vim installer")
-        (set #destination_str_p "Please choose a location for installing Vim.\nA drawer called \"Vim\" will be created there.")
+        (set #welcome_str_p "Welcome to the MUI-Vim installer")
+        (set #destination_str_p "Please choose a location for installing MUI-Vim.\nA drawer called \"Vim\" will be created there.")
         (set #destination_str_h "")
         (set #copy_str_p "Copying executables and runtime data...")
         (set #toolbar_str_p "Please choose toolbar theme")
-        (set #assign_str_p "Create Vim assign and add Vim to path in \"user-startup\"?")
+        (set #assign_str_p "Create Vim assign and add MUI-Vim to path in \"user-startup\"?")
         (set #assign_str_h "")
-        (set #install_str_p "Please choose what flavor(s) of Vim to install")
+        (set #install_str_p "Please choose what flavor(s) of MUI-Vim to install")
         (set #install_str_h "")
         (set #gvim_str "gVim - Full Vim with GUI")
         (set #vi_str "Vi - Console only interface")

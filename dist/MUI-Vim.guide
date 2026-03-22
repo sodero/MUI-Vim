@@ -1,7 +1,7 @@
 @DATABASE "Default"
-@NODE Main "MUI-Vim Guide"
+@NODE Main "MUI-Vim __VER__ guide"
 @TOC Contents
-@$VER: MUI-Vim.guide 9.2.219 (26.03.22) english
+@$VER: MUI-Vim.guide __VER__ (26.03.22) english
 @{B}Contents@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
@@ -67,6 +67,9 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}The complete changelog@{UB}
 @{B}-----------------------------------------------------------------------------@{UB}
+@{B}2026-NOT-YET@{UB}
+- Update to VIM __VER__
+
 @{B}2026-03-22@{UB}
 - Update to VIM 9.2.219
 - AROS x86-64 toolbar crash fixed

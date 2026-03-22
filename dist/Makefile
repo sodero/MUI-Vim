@@ -66,8 +66,8 @@ tmp:
 $(DST)/$(DST).info: | $(DST)
 	cp -r $(TOP)/runtime $(DST)
 	cp $(EXT)/$(UNM)/* $(DST)
-	cp "Vim installer" $(DST)
-	cp *.guide $(DST)
+	cat "Install" | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DST)/Install
+	cat $(DST).guide | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DST)/$(DST).guide
 	cp *.png $(DST)
 
 $(DST).info: | $(DST)/$(DST).info
