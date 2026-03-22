@@ -12,7 +12,7 @@
  * *****************************************************************
  * *****************************************************************
  *
- * MUI support by Ola Söder. AmigaOS4 port by KAS1E.
+ * MUI support by Ola Sï¿½der. AmigaOS4 port by KAS1E.
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
  * Do ":help credits" in Vim to see a list of people who contributed.
@@ -1923,8 +1923,24 @@ METHOD(VimToolbar, AddButton, ID, Label, Help)
     {
         if(unlikely(b->help && !strcmp((const char *) msg->Label, b->help)))
         {
-            DoMethod(me, MUIM_TheBar_Notify, (IPTR) b->ID, MUIA_Pressed, FALSE,
-                Con, 2, M_ID(VimCon, Callback), (IPTR) msg->ID);
+#ifdef __AROS__
+            // Use MUIM_TheBar_GetObject + standard MUIM_Notify instead of
+            // MUIM_TheBar_Notify. TheBar.mcc stores follow params as ULONG
+            // which truncates 64-bit pointers on AROS x86_64.
+            Object *btn = (Object *) DoMethod(me, MUIM_TheBar_GetObject,
+                (IPTR) b->ID);
+
+            if(likely(btn))
+            {
+                DoMethod(btn, MUIM_Notify, (IPTR) MUIA_Pressed,
+                    (IPTR) FALSE, (IPTR) Con, (IPTR) 2,
+                    (IPTR) M_ID(VimCon, Callback), (IPTR) msg->ID);
+            }
+#else
+            DoMethod(me, MUIM_TheBar_Notify, (IPTR) b->ID, (IPTR) MUIA_Pressed,
+                (IPTR) FALSE, (IPTR) Con, (IPTR) 2,
+                (IPTR) M_ID(VimCon, Callback), (IPTR) msg->ID);
+#endif
 
             // Save the Vim menu item pointer as the parent class of the button.
             // Used to translate from menu item to MUI button ID.
@@ -1957,8 +1973,8 @@ METHOD(VimToolbar, DisableButton, ID, Grey)
         if(unlikely(msg->ID == (IPTR) b->_class))
         {
             // ID found. Use TheBar method to disable / enable the button.
-            DoMethod(me, MUIM_TheBar_SetAttr, b->ID, MUIV_TheBar_Attr_Disabled,
-                msg->Grey);
+            DoMethod(me, MUIM_TheBar_SetAttr, (IPTR) b->ID,
+                (IPTR) MUIV_TheBar_Attr_Disabled, (IPTR) msg->Grey);
             return TRUE;
         }
 
@@ -2140,7 +2156,8 @@ METHOD(VimMenu, Grey, ID, Grey)
     if(unlikely(menu_is_toolbar(menu->name) ||
         (menu->parent && menu_is_toolbar(menu->parent->name))))
     {
-        DoMethod(Tlb, MUIM_VimToolbar_DisableButton, menu, msg->Grey);
+        DoMethod(Tlb, MUIM_VimToolbar_DisableButton, (IPTR) menu,
+            (IPTR) msg->Grey);
         return TRUE;
     }
 
@@ -2210,7 +2227,8 @@ METHOD(VimMenu, AddSpacer, ParentID)
     }
 
     // No MUI user data needed, spacers have no callback
-    Object *i = MUI_NewObject(MUIC_Menuitem, MUIA_Menuitem_Title, NM_BARLABEL,
+    Object *i = MUI_NewObject(MUIC_Menuitem,
+        (IPTR) MUIA_Menuitem_Title, (IPTR) NM_BARLABEL,
         TAG_END);
 
     if(unlikely(!i))
@@ -2244,8 +2262,9 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
     }
 
     // Vim menu type pointers used as MUI user data
-    Object *i = MUI_NewObject(MUIC_Menu, MUIA_Menu_Title, msg->Label,
-        MUIA_UserData, msg->ID, TAG_END);
+    Object *i = MUI_NewObject(MUIC_Menu,
+        (IPTR) MUIA_Menu_Title, (IPTR) msg->Label,
+        (IPTR) MUIA_UserData, (IPTR) msg->ID, TAG_END);
 
     if(unlikely(!i))
     {
@@ -2258,7 +2277,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
 
     // Make sure that the AlwaysLast menu really is last.
     Object *l = (Object *) DoMethod(me, MUIM_FindUData,
-        MUIV_VimMenu_AddMenu_AlwaysLast);
+        (IPTR) MUIV_VimMenu_AddMenu_AlwaysLast);
 
     if(likely(l))
     {
@@ -2288,8 +2307,9 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
     }
 
     // Vim menu type pointers used as MUI user data
-    Object *i = MUI_NewObject(MUIC_Menuitem, MUIA_Menuitem_Title, msg->Label,
-        MUIA_UserData, msg->ID, TAG_END);
+    Object *i = MUI_NewObject(MUIC_Menuitem,
+        (IPTR) MUIA_Menuitem_Title, (IPTR) msg->Label,
+        (IPTR) MUIA_UserData, (IPTR) msg->ID, TAG_END);
 
     if(unlikely(!i))
     {
@@ -2299,8 +2319,9 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
 
     // Add item to menu and set callback
     DoMethod(m, MUIM_Family_AddTail, i);
-    DoMethod(i, MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime, Con, 2,
-        M_ID(VimCon, Callback), msg->ID);
+    DoMethod(i, MUIM_Notify, (IPTR) MUIA_Menuitem_Trigger,
+        (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 2,
+        (IPTR) M_ID(VimCon, Callback), (IPTR) msg->ID);
 
     return (IPTR) i;
 }
@@ -2684,7 +2705,7 @@ METHOD0(VimScrollbar, Uninstall)
     }
 
     // Hide scrollbar before removing it.
-    DoMethod(me, MUIM_VimScrollbar_Show, FALSE);
+    DoMethod(me, MUIM_VimScrollbar_Show, (IPTR) FALSE);
     DoMethod(my->grp, MUIM_Group_InitChange);
     DoMethod(my->grp, OM_REMMEMBER, me);
     DoMethod(my->grp, MUIM_Group_ExitChange);
@@ -2727,8 +2748,9 @@ MUIDSP IPTR VimScrollbarNew(Class *cls, Object *obj, struct opSet *msg)
     my->weight = my->top = 0;
 
     // We notify ourselves when a dragging event occurs.
-    DoMethod(obj, MUIM_Notify, MUIA_Prop_First, MUIV_EveryTime, (IPTR) obj, 2,
-        MUIM_VimScrollbar_Drag, MUIV_TriggerValue);
+    DoMethod(obj, MUIM_Notify, (IPTR) MUIA_Prop_First, (IPTR) MUIV_EveryTime,
+        (IPTR) obj, (IPTR) 2, (IPTR) MUIM_VimScrollbar_Drag,
+        (IPTR) MUIV_TriggerValue);
 
     return (IPTR) obj;
 }
@@ -2843,7 +2865,8 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
         return;
     }
 
-    (void) DoMethod(sb->id, M_ID(VimScrollbar, Show), flag ? TRUE : FALSE);
+    (void) DoMethod(sb->id, M_ID(VimScrollbar, Show),
+        (IPTR) (flag ? TRUE : FALSE));
 }
 #else
 void gui_mch_enable_scrollbar(scrollbar_T *sb UNUSED, int flag UNUSED)
@@ -2858,7 +2881,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb UNUSED, int flag UNUSED)
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient UNUSED)
 {
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
-        MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
+        (IPTR) MUIA_VimScrollbar_Sb, (IPTR) sb, TAG_END);
 
     if(unlikely(!obj))
     {
@@ -2885,8 +2908,9 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
         return;
     }
 
-    SetAttrs(sb->id, MUIA_Prop_Entries, max, MUIA_Prop_Visible, size,
-        MUIA_Prop_First, val, TAG_DONE);
+    SetAttrs(sb->id, (IPTR) MUIA_Prop_Entries, (IPTR) max,
+        (IPTR) MUIA_Prop_Visible, (IPTR) size,
+        (IPTR) MUIA_Prop_First, (IPTR) val, TAG_DONE);
 }
 #else
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb UNUSED, int val UNUSED,
@@ -3100,7 +3124,8 @@ int gui_mch_wait_for_chars(int wtime)
     // Don't enable timeouts for now, it might cause problems in the MUI message
     // loop. Passing the control over to Vim at any time is not safe.
     #warning Timeout support will cause MUI message loop problems
-    (void) DoMethod(Con, M_ID(VimCon, SetTimeout), wtime > 0 ? wtime : 0);
+    (void) DoMethod(Con, M_ID(VimCon, SetTimeout),
+        (IPTR) (wtime > 0 ? wtime : 0));
 #else
 int gui_mch_wait_for_chars(int wtime UNUSED)
 #endif
@@ -3147,7 +3172,7 @@ int gui_mch_wait_for_chars(int wtime UNUSED)
 //------------------------------------------------------------------------------
 void gui_mch_set_fg_color(guicolor_T fg)
 {
-    (void) DoMethod(Con, M_ID(VimCon, SetFgColor), fg);
+    (void) DoMethod(Con, M_ID(VimCon, SetFgColor), (IPTR) fg);
 }
 
 //------------------------------------------------------------------------------
@@ -3155,7 +3180,7 @@ void gui_mch_set_fg_color(guicolor_T fg)
 //------------------------------------------------------------------------------
 void gui_mch_set_bg_color(guicolor_T bg)
 {
-    (void) DoMethod(Con, M_ID(VimCon, SetBgColor), bg);
+    (void) DoMethod(Con, M_ID(VimCon, SetBgColor), (IPTR) bg);
 }
 
 //------------------------------------------------------------------------------
@@ -3163,7 +3188,7 @@ void gui_mch_set_bg_color(guicolor_T bg)
 //------------------------------------------------------------------------------
 void gui_mch_set_sp_color(guicolor_T sp)
 {
-    (void) DoMethod(Con, M_ID(VimCon, SetFgColor), sp);
+    (void) DoMethod(Con, M_ID(VimCon, SetFgColor), (IPTR) sp);
 }
 
 //------------------------------------------------------------------------------
@@ -3171,8 +3196,9 @@ void gui_mch_set_sp_color(guicolor_T sp)
 //------------------------------------------------------------------------------
 void gui_mch_draw_string(int row, int col, char_u *s, int len, int flags)
 {
-    (void) DoMethod(Con, M_ID(VimCon, DrawString), row, col, s, len, flags &
-        (DRAW_UNDERL|DRAW_BOLD|DRAW_TRANSP));
+    (void) DoMethod(Con, M_ID(VimCon, DrawString), (IPTR) row, (IPTR) col,
+        (IPTR) s, (IPTR) len,
+        (IPTR) (flags & (DRAW_UNDERL|DRAW_BOLD|DRAW_TRANSP)));
 }
 
 //------------------------------------------------------------------------------
@@ -3219,8 +3245,8 @@ void gui_mch_set_shellsize(int width UNUSED, int height UNUSED,
 //------------------------------------------------------------------------------
 void gui_mch_clear_block(int row1, int col1, int row2, int col2)
 {
-    (void) DoMethod(Con, M_ID(VimCon, FillBlock), row1, col1, row2, col2,
-        gui.back_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, FillBlock), (IPTR) row1, (IPTR) col1,
+        (IPTR) row2, (IPTR) col2, (IPTR) gui.back_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3228,9 +3254,10 @@ void gui_mch_clear_block(int row1, int col1, int row2, int col2)
 //------------------------------------------------------------------------------
 void gui_mch_delete_lines(int row, int num_lines)
 {
-    (void) DoMethod(Con, M_ID(VimCon, DeleteLines), row, num_lines,
-        gui.scroll_region_left, gui.scroll_region_right,
-        gui.scroll_region_bot, gui.back_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, DeleteLines), (IPTR) row,
+        (IPTR) num_lines, (IPTR) gui.scroll_region_left,
+        (IPTR) gui.scroll_region_right, (IPTR) gui.scroll_region_bot,
+        (IPTR) gui.back_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3238,9 +3265,10 @@ void gui_mch_delete_lines(int row, int num_lines)
 //------------------------------------------------------------------------------
 void gui_mch_insert_lines(int row, int num_lines)
 {
-    (void) DoMethod(Con, M_ID(VimCon, DeleteLines), row, -num_lines,
-        gui.scroll_region_left, gui.scroll_region_right, gui.scroll_region_bot,
-        gui.back_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, DeleteLines), (IPTR) row,
+        (IPTR) -num_lines, (IPTR) gui.scroll_region_left,
+        (IPTR) gui.scroll_region_right, (IPTR) gui.scroll_region_bot,
+        (IPTR) gui.back_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3255,8 +3283,8 @@ void gui_mch_set_font(GuiFont font UNUSED)
 //------------------------------------------------------------------------------
 void gui_mch_clear_all()
 {
-    (void) DoMethod(Con, M_ID(VimCon, FillBlock), 0, 0, gui.num_rows,
-        gui.num_cols, gui.back_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, FillBlock), (IPTR) 0, (IPTR) 0,
+        (IPTR) gui.num_rows, (IPTR) gui.num_cols, (IPTR) gui.back_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3362,66 +3390,79 @@ int gui_mch_init(void)
 
     // Set up the class hierachy
     App = MUI_NewObject(MUIC_Application,
-        MUIA_Application_UsedClasses, classes,
-        MUIA_Application_Menustrip, Mnu =
+        (IPTR) MUIA_Application_UsedClasses, (IPTR) classes,
+        (IPTR) MUIA_Application_Menustrip, (IPTR) (Mnu =
             NewObject(VimMenuClass->mcc_Class, NULL,
-            MUIA_Menustrip_Enabled, TRUE,
-            MUIA_Family_Child, MUI_NewObject(MUIC_Menu,
-                MUIA_Menu_Title, "MUI",
-                    MUIA_UserData, MUIV_VimMenu_AddMenu_AlwaysLast,
-                    MUIA_Family_Child, Set = MUI_NewObject(MUIC_Menuitem,
-                        MUIA_Menuitem_Title, "MUI Settings...",
+            (IPTR) MUIA_Menustrip_Enabled, (IPTR) TRUE,
+            (IPTR) MUIA_Family_Child, (IPTR) MUI_NewObject(MUIC_Menu,
+                (IPTR) MUIA_Menu_Title, (IPTR) "MUI",
+                    (IPTR) MUIA_UserData,
+                        (IPTR) MUIV_VimMenu_AddMenu_AlwaysLast,
+                    (IPTR) MUIA_Family_Child,
+                        (IPTR) (Set = MUI_NewObject(MUIC_Menuitem,
+                        (IPTR) MUIA_Menuitem_Title,
+                            (IPTR) "MUI Settings...",
+                    TAG_END)),
+                    (IPTR) MUIA_Family_Child,
+                        (IPTR) MUI_NewObject(MUIC_Menuitem,
+                        (IPTR) MUIA_Menuitem_Title, (IPTR) NM_BARLABEL,
                     TAG_END),
-                    MUIA_Family_Child, MUI_NewObject(MUIC_Menuitem,
-                        MUIA_Menuitem_Title, NM_BARLABEL,
-                    TAG_END),
-                    MUIA_Family_Child, Abo = MUI_NewObject(MUIC_Menuitem,
-                        MUIA_Menuitem_Title, "About MUI...",
-                    TAG_END),
+                    (IPTR) MUIA_Family_Child,
+                        (IPTR) (Abo = MUI_NewObject(MUIC_Menuitem,
+                        (IPTR) MUIA_Menuitem_Title,
+                            (IPTR) "About MUI...",
+                    TAG_END)),
                 TAG_END),
-        TAG_END),
-        MUIA_Application_Base, "Vim",
-        MUIA_Application_Description, "The ubiquitous editor",
-        MUIA_Application_Title, "Vim",
-        MUIA_Application_Version, vs,
-        MUIA_Application_DiskObject,
+        TAG_END)),
+        (IPTR) MUIA_Application_Base, (IPTR) "Vim",
+        (IPTR) MUIA_Application_Description,
+            (IPTR) "The ubiquitous editor",
+        (IPTR) MUIA_Application_Title, (IPTR) "Vim",
+        (IPTR) MUIA_Application_Version, (IPTR) vs,
+        (IPTR) MUIA_Application_DiskObject,
 #ifdef __amigaos4__
-            GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColorsMason"),
+            (IPTR) GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColorsMason"),
 #else
-            GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColors"),
+            (IPTR) GetDiskObject((STRPTR) "VIM:icons/Vim_LodsaColors"),
 #endif
-        MUIA_Application_Window, Win =
+        (IPTR) MUIA_Application_Window, (IPTR) (Win =
             MUI_NewObject(MUIC_Window,
-            MUIA_Window_Title, vs,
-            MUIA_Window_ScreenTitle, vs,
-            MUIA_Window_ID, MAKE_ID('W','D','L','A'),
-            MUIA_Window_AppWindow, TRUE,
-            MUIA_Window_DisableKeys, 0xffffffff,
-            MUIA_Window_RootObject, MUI_NewObject(MUIC_Group,
-                MUIA_Group_Horiz, FALSE,
-                MUIA_Group_Child, Tlb =
+            (IPTR) MUIA_Window_Title, (IPTR) vs,
+            (IPTR) MUIA_Window_ScreenTitle, (IPTR) vs,
+            (IPTR) MUIA_Window_ID,
+                (IPTR) MAKE_ID('W','D','L','A'),
+            (IPTR) MUIA_Window_AppWindow, (IPTR) TRUE,
+            (IPTR) MUIA_Window_DisableKeys, (IPTR) 0xffffffff,
+            (IPTR) MUIA_Window_RootObject,
+                (IPTR) MUI_NewObject(MUIC_Group,
+                (IPTR) MUIA_Group_Horiz, (IPTR) FALSE,
+                (IPTR) MUIA_Group_Child, (IPTR) (Tlb =
                     NewObject(VimToolbarClass->mcc_Class, NULL,
-                    TAG_END),
-                MUIA_Group_Child, MUI_NewObject(MUIC_Group,
-                    MUIA_Group_Horiz, TRUE,
-                    MUIA_Group_Child, Lsg = MUI_NewObject(MUIC_Group,
-                        MUIA_Group_Horiz, FALSE,
-                        MUIA_ShowMe, FALSE,
-                        TAG_END),
-                    MUIA_Group_Child, Bsg = MUI_NewObject(MUIC_Group,
-                        MUIA_Group_Horiz, FALSE,
-                        MUIA_ShowMe, TRUE,
-                        MUIA_Group_Child, Con =
+                    TAG_END)),
+                (IPTR) MUIA_Group_Child,
+                    (IPTR) MUI_NewObject(MUIC_Group,
+                    (IPTR) MUIA_Group_Horiz, (IPTR) TRUE,
+                    (IPTR) MUIA_Group_Child,
+                        (IPTR) (Lsg = MUI_NewObject(MUIC_Group,
+                        (IPTR) MUIA_Group_Horiz, (IPTR) FALSE,
+                        (IPTR) MUIA_ShowMe, (IPTR) FALSE,
+                        TAG_END)),
+                    (IPTR) MUIA_Group_Child,
+                        (IPTR) (Bsg = MUI_NewObject(MUIC_Group,
+                        (IPTR) MUIA_Group_Horiz, (IPTR) FALSE,
+                        (IPTR) MUIA_ShowMe, (IPTR) TRUE,
+                        (IPTR) MUIA_Group_Child, (IPTR) (Con =
                             NewObject(VimConClass->mcc_Class, NULL,
-                            TAG_END),
-                        TAG_END),
-                    MUIA_Group_Child, Rsg = MUI_NewObject(MUIC_Group,
-                        MUIA_Group_Horiz, FALSE,
-                        MUIA_ShowMe, FALSE,
-                        TAG_END),
+                            TAG_END)),
+                        TAG_END)),
+                    (IPTR) MUIA_Group_Child,
+                        (IPTR) (Rsg = MUI_NewObject(MUIC_Group,
+                        (IPTR) MUIA_Group_Horiz, (IPTR) FALSE,
+                        (IPTR) MUIA_ShowMe, (IPTR) FALSE,
+                        TAG_END)),
                     TAG_END),
                 TAG_END),
-            TAG_END),
+            TAG_END)),
         TAG_END);
 
     if(unlikely(!App))
@@ -3437,26 +3478,30 @@ int gui_mch_init(void)
     set(Win, MUIA_Window_DefaultObject, Con);
 
     // Exit application upon close request (trap this later on)
-    (void) DoMethod(Win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
-        (IPTR) App, 2, MUIM_Application_ReturnID,
-        MUIV_Application_ReturnID_Quit);
+    (void) DoMethod(Win, MUIM_Notify, (IPTR) MUIA_Window_CloseRequest,
+        (IPTR) TRUE, (IPTR) App, (IPTR) 2,
+        (IPTR) MUIM_Application_ReturnID,
+        (IPTR) MUIV_Application_ReturnID_Quit);
 
     // Set up drag and drop notifications
-    (void) DoMethod(Win, MUIM_Notify, MUIA_AppMessage, MUIV_EveryTime,
-        (IPTR) Con, 2, M_ID(VimCon, AppMessage), MUIV_TriggerValue);
+    (void) DoMethod(Win, MUIM_Notify, (IPTR) MUIA_AppMessage,
+        (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 2,
+        (IPTR) M_ID(VimCon, AppMessage), (IPTR) MUIV_TriggerValue);
 
     // Let us know if the application gets iconified.
-    (void) DoMethod(App, MUIM_Notify, MUIA_Application_Iconified,
-        MUIV_EveryTime, (IPTR) Con, 2, M_ID(VimCon, IconState),
-        MUIV_TriggerValue);
+    (void) DoMethod(App, MUIM_Notify, (IPTR) MUIA_Application_Iconified,
+        (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 2,
+        (IPTR) M_ID(VimCon, IconState), (IPTR) MUIV_TriggerValue);
 
     // MUI specific menu parts
     if(likely(Abo && Set))
     {
-        (void) DoMethod(Abo, MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-            Con, 1, M_ID(VimCon, AboutMUI));
-        (void) DoMethod(Set, MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-            Con, 1, M_ID(VimCon, MUISettings));
+        (void) DoMethod(Abo, MUIM_Notify, (IPTR) MUIA_Menuitem_Trigger,
+            (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 1,
+            (IPTR) M_ID(VimCon, AboutMUI));
+        (void) DoMethod(Set, MUIM_Notify, (IPTR) MUIA_Menuitem_Trigger,
+            (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 1,
+            (IPTR) M_ID(VimCon, MUISettings));
     }
 
     return OK;
@@ -3566,8 +3611,8 @@ void gui_mch_exit(int rc UNUSED)
 //------------------------------------------------------------------------------
 void gui_mch_draw_hollow_cursor(guicolor_T color UNUSED)
 {
-    (void) DoMethod(Con, M_ID(VimCon, DrawHollowCursor), gui.row, gui.col,
-        gui.norm_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, DrawHollowCursor), (IPTR) gui.row,
+        (IPTR) gui.col, (IPTR) gui.norm_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3575,8 +3620,8 @@ void gui_mch_draw_hollow_cursor(guicolor_T color UNUSED)
 //------------------------------------------------------------------------------
 void gui_mch_draw_part_cursor(int w, int h, guicolor_T color UNUSED)
 {
-    (void) DoMethod(Con, M_ID(VimCon, DrawPartCursor), gui.row, gui.col, w, h,
-        gui.norm_pixel);
+    (void) DoMethod(Con, M_ID(VimCon, DrawPartCursor), (IPTR) gui.row,
+        (IPTR) gui.col, (IPTR) w, (IPTR) h, (IPTR) gui.norm_pixel);
 }
 
 //------------------------------------------------------------------------------
@@ -3592,7 +3637,8 @@ void gui_mch_set_text_area_pos(int x UNUSED, int y UNUSED, int w UNUSED,
 //------------------------------------------------------------------------------
 void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 {
-    (void) DoMethod(Con, M_ID(VimCon, GetScreenDim), screen_w, screen_h);
+    (void) DoMethod(Con, M_ID(VimCon, GetScreenDim), (IPTR) screen_w,
+        (IPTR) screen_h);
 }
 
 //------------------------------------------------------------------------------
@@ -3605,8 +3651,8 @@ void gui_mch_add_menu(vimmenu_T *menu, int index UNUSED)
         return;
     }
 
-    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenu), menu->parent, menu,
-        menu->dname);
+    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenu), (IPTR) menu->parent,
+        (IPTR) menu, (IPTR) menu->dname);
 }
 
 //------------------------------------------------------------------------------
@@ -3634,21 +3680,21 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index UNUSED)
     // Menu items can be proper menu items or toolbar buttons
     if(unlikely(menu_is_toolbar(p->name) && !menu_is_separator(menu->name)))
     {
-        (void) DoMethod(Tlb, M_ID(VimToolbar, AddButton), menu, menu->dname,
-            menu->dname);
+        (void) DoMethod(Tlb, M_ID(VimToolbar, AddButton), (IPTR) menu,
+            (IPTR) menu->dname, (IPTR) menu->dname);
         return;
     }
 
     // A menu spacer?
     if(unlikely(menu_is_separator(menu->name)))
     {
-        (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), menu->parent);
+        (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), (IPTR) menu->parent);
         return;
     }
 
     // A normal menu item.
-    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenuItem), menu->parent, menu,
-        menu->dname);
+    (void) DoMethod(Mnu, M_ID(VimMenu, AddMenuItem), (IPTR) menu->parent,
+        (IPTR) menu, (IPTR) menu->dname);
 }
 
 //------------------------------------------------------------------------------
@@ -3656,7 +3702,7 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index UNUSED)
 //------------------------------------------------------------------------------
 void gui_mch_show_toolbar(int showit)
 {
-    (void) DoMethod(Tlb, MUIM_Set, MUIA_ShowMe, showit);
+    (void) DoMethod(Tlb, MUIM_Set, (IPTR) MUIA_ShowMe, (IPTR) showit);
 }
 
 //------------------------------------------------------------------------------
@@ -3664,7 +3710,7 @@ void gui_mch_show_toolbar(int showit)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_menu(vimmenu_T *menu)
 {
-    (void) DoMethod(Mnu, M_ID(VimMenu, RemoveMenu), menu);
+    (void) DoMethod(Mnu, M_ID(VimMenu, RemoveMenu), (IPTR) menu);
 }
 
 //------------------------------------------------------------------------------
@@ -3672,7 +3718,7 @@ void gui_mch_destroy_menu(vimmenu_T *menu)
 //------------------------------------------------------------------------------
 void gui_mch_menu_grey(vimmenu_T *menu, int grey)
 {
-    (void) DoMethod(Mnu, M_ID(VimMenu, Grey), menu, grey);
+    (void) DoMethod(Mnu, M_ID(VimMenu, Grey), (IPTR) menu, (IPTR) grey);
 }
 
 //------------------------------------------------------------------------------
@@ -3743,7 +3789,8 @@ void gui_mch_iconify(void)
 //------------------------------------------------------------------------------
 void gui_mch_invert_rectangle(int row, int col, int nr, int nc)
 {
-    (void) DoMethod(Con, M_ID(VimCon, InvertRect), row, col, nr, nc);
+    (void) DoMethod(Con, M_ID(VimCon, InvertRect), (IPTR) row, (IPTR) col,
+        (IPTR) nr, (IPTR) nc);
 }
 
 //------------------------------------------------------------------------------
@@ -3766,7 +3813,7 @@ void clip_mch_lose_selection(Clipboard_T *cbd UNUSED)
 //------------------------------------------------------------------------------
 void clip_mch_request_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) DoMethod(Con, M_ID(VimCon, Paste), cbd);
+    (void) DoMethod(Con, M_ID(VimCon, Paste), (IPTR) cbd);
 }
 
 //------------------------------------------------------------------------------
@@ -3774,7 +3821,7 @@ void clip_mch_request_selection(Clipboard_T *cbd UNUSED)
 //------------------------------------------------------------------------------
 void clip_mch_set_selection(Clipboard_T *cbd UNUSED)
 {
-    (void) DoMethod(Con, M_ID(VimCon, Copy), cbd);
+    (void) DoMethod(Con, M_ID(VimCon, Copy), (IPTR) cbd);
 }
 
 //------------------------------------------------------------------------------
@@ -3814,7 +3861,8 @@ void gui_mch_destroy_scrollbar(scrollbar_T *sb UNUSED)
 char_u *gui_mch_browse(int saving UNUSED, char_u *title, char_u *dflt UNUSED,
     char_u *ext UNUSED, char_u *initdir, char_u *filter UNUSED)
 {
-    return (char_u *) DoMethod(Con, M_ID(VimCon, Browse), title, initdir);
+    return (char_u *) DoMethod(Con, M_ID(VimCon, Browse), (IPTR) title,
+        (IPTR) initdir);
 }
 
 //------------------------------------------------------------------------------
@@ -3822,7 +3870,8 @@ char_u *gui_mch_browse(int saving UNUSED, char_u *title, char_u *dflt UNUSED,
 //------------------------------------------------------------------------------
 void gui_mch_set_blinking(long wait, long on, long off)
 {
-    (void) DoMethod(Con, M_ID(VimCon, SetBlinking), wait, on, off);
+    (void) DoMethod(Con, M_ID(VimCon, SetBlinking), (IPTR) wait, (IPTR) on,
+        (IPTR) off);
 }
 
 //------------------------------------------------------------------------------
@@ -3862,5 +3911,5 @@ int gui_mch_is_blink_off(void)
 //------------------------------------------------------------------------------
 void gui_mch_settitle(char_u *title, char_u *icon UNUSED)
 {
-    (void) DoMethod(Con, M_ID(VimCon, SetTitle), title);
+    (void) DoMethod(Con, M_ID(VimCon, SetTitle), (IPTR) title);
 }
