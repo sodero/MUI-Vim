@@ -71,7 +71,7 @@ jobs:
       if: matrix.build-type == 'mui'
       uses: actions/upload-artifact@v6
       with:
-        name: Vim-${{ github.sha }}-${{ matrix.platform.short }}
+        name: MUI-Vim-${{ github.sha }}-${{ matrix.platform.short }}
         path: |
           dist/tmp/*
         retention-days: 30
