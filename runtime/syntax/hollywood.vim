@@ -1,6 +1,6 @@
 " Vim syntax file
 " Language:     Hollywood 10.0
-" Maintainer:   Ola Söder <rolfkopman@gmail.com>
+" Maintainer:	Ola SÃ¶der <rolfkopman@gmail.com>
 " First Author: Tom Crecelius <holly@net-eclipse.net>
 " Last Change:  2024 Jun 20
 " Highlighting Issues:
