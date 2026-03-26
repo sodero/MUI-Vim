@@ -2,8 +2,6 @@
 @NODE Main "MUI-Vim __VER__ guide"
 @TOC Contents
 @$VER: MUI-Vim.guide __VER__ (26.03.22) english
-@{B}Contents@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
 @{" Installation     " LINK "Installation"} Installing MUI-Vim
 @{" Compatibility    " LINK "Compatibility"} Plugin compatibility
@@ -15,24 +13,20 @@
 @ENDNODE
 
 @NODE "Introduction" "What's MUI-Vim?"
+@TITLE "What's MUI-Vim?"
 @TOC "Main"
-@{B}What's MUI-Vim?@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
-A port of Vim including a MUI GUI.
+MUI-Vim is a Vim port with a MUI GUI. The console variant and the modeless
+'easy' Vim are also included.
 
 @ENDNODE
 
 @NODE "Installation" "Installing MUI-Vim"
 @TOC "Main"
-@{B}Installing MUI-Vim@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 The recommended method of installation is using the included installer.
 @ENDNODE
 
 @NODE "Compatibility" "Notes on plugin compatibility"
 @TOC "Main"
-@{B}Notes on plugin compatibility@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 MUI-Vim should work with plugins that use Vim script. There are exceptions to
 this, e.g NetRW which will crash badly occasionally.
 
@@ -40,8 +34,6 @@ this, e.g NetRW which will crash badly occasionally.
 
 @NODE "Limitations" "Known limitations"
 @TOC "Main"
-@{B}Known limitations@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 When running Vim in text mode on MorphOS and AROS, window resizing isn't
 detected by Vim. After a window resize, press Ctrl + L to resize and redraw
 the Vim console.
@@ -50,8 +42,6 @@ the Vim console.
 
 @NODE "Contributions" "Contributions"
 @TOC "Main"
-@{B}Contributions@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 @{B}kas1e@{UB}:
 AmigaOS4 port, numerous improvements, fixes and ideas.
 
@@ -65,10 +55,10 @@ Hollywood syntax highlighting.
 
 @NODE "Changelog" "Changelog"
 @TOC "Main"
-@{B}The complete changelog@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 @{B}2026-NOT-YET@{UB}
 - Update to VIM __VER__
+- AmigaDOS syntax highlighting updated
+- AmigaGuide syntax highlighting updated
 
 @{B}2026-03-22@{UB}
 - Update to VIM 9.2.219
@@ -260,9 +250,6 @@ Hollywood syntax highlighting.
 
 @NODE "License" "License"
 @TOC "Main"
-
-@{B}MUI-Vim software license@{UB}
-@{B}-----------------------------------------------------------------------------@{UB}
 MUI-Vim is distributed under the same license as the official Vim, see below.
 
 @{B}VIM LICENSE@{UB}
