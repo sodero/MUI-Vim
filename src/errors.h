@@ -312,7 +312,7 @@ EXTERN char e_function_name_required[]
 // E130 unused
 EXTERN char e_cannot_delete_function_str_it_is_in_use[]
 	INIT(= N_("E131: Cannot delete function %s: It is in use"));
-EXTERN char e_function_call_depth_is_higher_than_macfuncdepth[]
+EXTERN char e_function_call_depth_is_higher_than_maxfuncdepth[]
 	INIT(= N_("E132: Function call depth is higher than 'maxfuncdepth'"));
 EXTERN char e_return_not_inside_function[]
 	INIT(= N_("E133: :return not inside a function"));
@@ -3795,8 +3795,6 @@ EXTERN char e_osc_response_timed_out[]
 #ifdef FEAT_EVAL
 EXTERN char e_cannot_add_listener_in_listener_callback[]
 	INIT(= N_("E1569: Cannot use listener_add in a listener callback"));
-#endif
-#ifdef FEAT_EVAL
 EXTERN char e_cannot_add_redraw_listener_in_listener_callback[]
 	INIT(= N_("E1570: Cannot use redraw_listener_add in a redraw listener callback"));
 EXTERN char e_no_redraw_listener_callbacks_defined[]
@@ -3809,4 +3807,8 @@ EXTERN char e_cannot_listen_on_port[]
 	INIT(= N_("E1573: Cannot listen on port"));
 EXTERN char e_gethostbyname_in_channel_listen[]
 	INIT(= N_("E1574: gethostbyname(): cannot resolve hostname in channel_listen()"));
+#endif
+#ifdef FEAT_EVAL
+EXTERN char e_cannot_create_pipes[]
+	INIT(= N_("E1575: Cannot create pipes"));
 #endif
