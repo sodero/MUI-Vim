@@ -405,7 +405,7 @@ jobs:
       - name: Codecov
         timeout-minutes: 20
         if: matrix.coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           flags: linux,${{ matrix.features }}-${{ matrix.compiler }}-${{ join(matrix.extra, '-') }}
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -609,7 +609,7 @@ jobs:
           echo "SODIUM_DIR=${SODIUM_DIR}" >> $GITHUB_ENV
           echo "GETTEXT_PATH=D:\gettext${{ matrix.arch == 'x64' && '64' || '32' }}" >> $GITHUB_ENV
 
-      - uses: msys2/setup-msys2@v2
+      - uses: msys2/setup-msys2@v2.31.1
         if: matrix.toolchain == 'mingw'
         with:
           update: true
@@ -846,7 +846,7 @@ jobs:
       - name: Codecov
         timeout-minutes: 20
         if: matrix.coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           directory: src
           flags: windows,${{ matrix.toolchain }}-${{ matrix.arch }}-${{ matrix.features }}
