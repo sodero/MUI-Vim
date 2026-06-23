@@ -248,13 +248,16 @@ NEW_TESTS = \
 	test_plugin_helpcurwin \
 	test_plugin_helptoc \
 	test_plugin_man \
+	test_plugin_matchit \
 	test_plugin_matchparen \
 	test_plugin_netrw \
+	test_plugin_python3complete \
 	test_plugin_osc52 \
 	test_plugin_tar \
 	test_plugin_termdebug \
 	test_plugin_tohtml \
 	test_plugin_tutor \
+	test_plugin_vimball \
 	test_plugin_zip \
 	test_plus_arg_edit \
 	test_popup \
@@ -336,6 +339,7 @@ NEW_TESTS = \
 	test_textformat \
 	test_textobjects \
 	test_textprop \
+	test_textprop2 \
 	test_timers \
 	test_true_false \
 	test_trycatch \
@@ -524,13 +528,16 @@ NEW_TESTS_RES = \
 	test_plugin_helpcurwin.res \
 	test_plugin_helptoc.res \
 	test_plugin_man.res \
+	test_plugin_matchit.res \
 	test_plugin_matchparen.res \
 	test_plugin_netrw.res \
+	test_plugin_python3complete.res \
 	test_plugin_osc52.res \
 	test_plugin_tar.res \
 	test_plugin_termdebug.res \
 	test_plugin_tohtml.res \
 	test_plugin_tutor.res \
+	test_plugin_vimball.res \
 	test_plugin_zip.res \
 	test_plus_arg_edit.res \
 	test_popup.res \
@@ -599,6 +606,7 @@ NEW_TESTS_RES = \
 	test_textformat.res \
 	test_textobjects.res \
 	test_textprop.res \
+	test_textprop2.res \
 	test_timers.res \
 	test_true_false.res \
 	test_trycatch.res \

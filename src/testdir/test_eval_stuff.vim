@@ -765,13 +765,19 @@ func s:Paste(reg)
     else
       return ("c", [])
     endif
+  endif
 
+  if exists("g:vim_paste_recursive")
+    call getreg(a:reg)
   endif
 endfunc
 
 func s:Copy(reg, type, lines)
   if exists("g:vim_copy_count")
     let g:vim_copy_count[a:reg] += 1
+  endif
+  if exists("g:vim_copy_recursive")
+    call setreg(a:reg, a:lines)
   endif
 
   let g:vim_copy = {
@@ -964,7 +970,7 @@ func Test_clipboard_provider_no_unamedplus()
   set clipmethod&
 endfunc
 
-" Same as Test_clipboard_provider_registers() but do it when +clipboard isnt
+" Same as Test_clipboard_provider_registers() but do it when +clipboard isn't
 " enabled.
 func Test_clipboard_provider_no_clipboard()
   CheckFeature clipboard_provider
@@ -1126,6 +1132,52 @@ func Test_clipboard_provider_accessed_once()
   call assert_equal(1, g:vim_copy_count['+'])
 
   bw!
+
+  new
+  " Emitting TextPutPre/TextPutPost/TextYankPost may cause a clipboard access
+  "
+  " Note that TextPutPost will always cause a second clipboard access, since a
+  " TextPutPre may have changed the clipboard, meaning another "paste" call is
+  " needed to make sure everything is up to date.
+  augroup TextAutocmd
+    autocmd!
+    autocmd TextPutPost * let g:putpost = 1
+    autocmd TextPutPre * let g:putpre = 1
+    autocmd TextYankPost * let g:yankpost = 1
+  augroup END
+
+  let g:putpost = 0
+  let g:putpre = 0
+  let g:yankpost = 0
+
+  let g:vim_paste_count = {'*': 0, '+': 0}
+  let g:vim_copy_count = {'*': 0, '+': 0}
+
+  call setline(1, "hello world!")
+
+  yank +
+
+  yank *
+
+  put +
+
+  put *
+
+  call assert_equal(2, g:vim_paste_count['+'])
+  call assert_equal(1, g:vim_copy_count['+'])
+
+  call assert_equal(2, g:vim_paste_count['*'])
+  call assert_equal(1, g:vim_copy_count['*'])
+
+  call assert_equal(1, g:putpost)
+  call assert_equal(1, g:putpre)
+  call assert_equal(1, g:yankpost)
+
+  bw!
+  unlet g:putpost
+  unlet g:putpre
+  unlet g:yankpost
+  autocmd! TextAutocmd
 
   set clipmethod&
   set clipboard&
@@ -1301,6 +1353,36 @@ func Test_clipboard_provider_clipboard_option()
 
   set clipmethod&
   set clipboard&
+endfunc
+
+" Test that callback aren't called recursively
+func Test_clipboard_provider_recursive()
+  let v:clipproviders["test"] = {
+        \ "paste": {
+        \       '+': function("s:Paste"),
+        \       '*': function("s:Paste")
+        \   },
+        \ "copy": {
+        \       '+': function("s:Copy"),
+        \       '*': function("s:Copy")
+        \   }
+        \ }
+  set clipmethod=test
+
+  let g:vim_paste = "count"
+  let g:vim_paste_count = {'*': 0, '+': 0}
+  let g:vim_copy_count = {'*': 0, '+': 0}
+  let g:vim_paste_recursive = 1
+  let g:vim_copy_recursive = 1
+
+  call getreg('+')
+  call assert_equal(1, g:vim_paste_count['+'])
+  call setreg('+', 'test')
+  call assert_equal(1, g:vim_copy_count['+'])
+
+  set clipmethod&
+  unlet g:vim_paste_recursive
+  unlet g:vim_copy_recursive
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

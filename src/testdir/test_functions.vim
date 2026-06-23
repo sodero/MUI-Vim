@@ -328,9 +328,12 @@ func Test_strptime()
 
   call assert_equal(1484653763, strptime('%Y-%m-%d %T', '2017-01-17 11:49:23'))
 
-  " Force DST and check that it's considered
-  let $TZ = 'WINTER0SUMMER,J1,J365'
-  call assert_equal(1484653763 - 3600, strptime('%Y-%m-%d %T', '2017-01-17 11:49:23'))
+  " Force DST and check that it's considered.
+  " MS-Windows CRT tzset() does not parse POSIX TZ strings with DST rules.
+  if !has('win32')
+    let $TZ = 'WINTER0SUMMER,J1,J365'
+    call assert_equal(1484653763 - 3600, strptime('%Y-%m-%d %T', '2017-01-17 11:49:23'))
+  endif
 
   call assert_fails('call strptime()', 'E119:')
   call assert_fails('call strptime("xxx")', 'E119:')
@@ -4367,8 +4370,27 @@ func Test_slice()
 endfunc
 
 
+" Test for getbgcolor()
+" The actual value depends on terminal capability and highlight settings, so
+" only verify the documented shape: either [] or [r, g, b] with each
+" component an integer in 0..255.
+func Test_getbgcolor()
+  let bg = getbgcolor()
+  call assert_equal(v:t_list, type(bg))
+  if !empty(bg)
+    call assert_equal(3, len(bg))
+    for c in bg
+      call assert_equal(v:t_number, type(c))
+      call assert_true(c >= 0 && c <= 255, $'component out of range: {c}')
+    endfor
+  endif
+endfunc
+
 " Test for getcellpixels() for unix system
-" Pixel size of a cell is terminal-dependent, so in the test, only the list and size 2 are checked.
+" Pixel size of a cell is terminal-dependent.  When the host terminal of the
+" RunVimInTerminal vterm exposes neither ws_xpixel/ws_ypixel via TIOCGWINSZ
+" nor a CSI 14 t reply, getcellpixels() returns an empty list -- accept
+" both shapes here, just verify the syntax is a (possibly empty) list.
 func Test_getcellpixels_for_unix()
   CheckNotMSWindows
   CheckRunVimInTerminal
@@ -4381,7 +4403,7 @@ func Test_getcellpixels_for_unix()
   call term_sendkeys(buf, ":redi END\<CR>")
   call term_sendkeys(buf, "P")
 
-  call WaitForAssert({-> assert_match("\[\d+, \d+\]", term_getline(buf, 3))}, 1000)
+  call WaitForAssert({-> assert_match('\[\(\d\+,\s*\d\+\)\?\]', term_getline(buf, 3))}, 1000)
 
   call StopVimInTerminal(buf)
 endfunc
@@ -4491,6 +4513,20 @@ func Test_str2blob()
     call assert_equal(0zABBB0AABBB, str2blob(['«»', '«»'], {'encoding': 'latin1'}))
     call assert_equal(0zC2ABC2BB, str2blob(['«»'], {'encoding': 'utf8'}))
 
+    if has('iconv')
+      call assert_equal(0z480065006C006C006F00, str2blob(['Hello'], {'encoding': 'utf-16le'}))
+      call assert_equal(0z480065006C006C006F00, str2blob(['Hello'], {'encoding': 'utf16le'}))
+      call assert_equal(0z00480065006C006C006F, str2blob(['Hello'], {'encoding': 'utf-16be'}))
+      call assert_equal(0z48006900.0A004200.79006500, str2blob(['Hi', 'Bye'], {'encoding': 'utf-16le'}))
+      call assert_equal(0z61000A006200, str2blob(["a\nb"], {'encoding': 'utf-16le'}))
+      call assert_equal(0z, str2blob([''], {'encoding': 'utf-16le'}))
+      call assert_equal(0z0A00, str2blob(['', ''], {'encoding': 'utf-16le'}))
+      for enc in ['utf-16le', 'utf-16be', 'ucs-2le', 'utf-32le', 'utf-32be']
+        call assert_equal(['Hello', 'World'],
+              \ blob2str(str2blob(['Hello', 'World'], {'encoding': enc}), {'encoding': enc}), enc)
+      endfor
+    endif
+
     call assert_equal(0z62, str2blob(["b"], test_null_dict()))
     call assert_equal(0z63, str2blob(["c"], {'encoding': test_null_string()}))
 
@@ -4559,12 +4595,14 @@ func Test_blob2str()
     call assert_fails("call blob2str(0z6162, {'encoding': []})", 'E730: Using a List as a String')
     call assert_fails("call blob2str(0z6162, {'encoding': 'ab12xy'})", 'E1515: Unable to convert from ''ab12xy'' encoding')
 
-    #" UTF-16LE encoding
-    call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf-16le'}))
-    call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf16le'}))
-    #" UCS-2LE encoding
-    call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs-2le'}))
-    call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs2le'}))
+    if has("iconv")
+      #" UTF-16LE encoding
+      call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf-16le'}))
+      call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'utf16le'}))
+      #" UCS-2LE encoding
+      call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs-2le'}))
+      call assert_equal(['Hello'], blob2str(0z480065006C006C006F00, {'encoding': 'ucs2le'}))
+    endif
   END
   call v9.CheckLegacyAndVim9Success(lines)
 endfunc
@@ -4624,6 +4662,43 @@ func Test_uriencoding()
     call assert_equal(cstr, uri_decode(expected))
   END
   call v9.CheckLegacyAndVim9Success(lines)
+endfunc
+
+" Note: legacy func, not vim9 def, to avoid the test file being vim9script
+func Test_vim9_def_fc_sandbox()
+  sandbox def! g:Bad()
+    system('echo unsafe')
+  enddef
+
+  call assert_fails('call g:Bad()', 'E48:')
+  delfunction g:Bad
+endfunc
+
+func Test_vim9_def_call_dfunc_fc_sandbox()
+  " Inner has FC_SANDBOX, outer does not.
+  " Calling outer goes through call_dfunc into inner, exercising
+  " the sandbox handling in call_dfunc and func_return.
+  sandbox def! g:Inner()
+    system('echo unsafe')
+  enddef
+
+  def! g:Outer()
+    g:Inner()
+  enddef
+
+  call assert_fails('call g:Outer()', 'E48:')
+  delfunction g:Inner
+  delfunction g:Outer
+endfunc
+
+" Deferred body inside a sandboxed def function must still run sandboxed.
+func Test_vim9_def_defer_fc_sandbox()
+  sandbox def! g:BadDefer()
+    defer system('echo unsafe')
+  enddef
+
+  call assert_fails('call g:BadDefer()', 'E48:')
+  delfunction g:BadDefer
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

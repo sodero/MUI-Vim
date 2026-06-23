@@ -265,7 +265,7 @@ viminfo_readstring(
     if (virp->vir_line[off] == Ctrl_V && vim_isdigit(virp->vir_line[off + 1]))
     {
 	len = atol((char *)virp->vir_line + off + 1);
-	if (len > 0 && len < 1000000)
+	if (len > 1 && len < 1000000)
 	    retval = lalloc(len, TRUE);
 	if (retval == NULL)
 	{
@@ -435,6 +435,8 @@ write_viminfo_bufferlist(FILE *fp)
     fputs(_("\n# Buffer list:\n"), fp);
     FOR_ALL_BUFFERS(buf)
     {
+	size_t	linelen;
+
 	if (buf->b_fname == NULL
 		|| !buf->b_p_bl
 		|| bt_quickfix(buf)
@@ -445,8 +447,8 @@ write_viminfo_bufferlist(FILE *fp)
 	if (max_buffers-- == 0)
 	    break;
 	putc('%', fp);
-	home_replace(NULL, buf->b_ffname, line, MAXPATHL, TRUE);
-	vim_snprintf_add((char *)line, LINE_BUF_LEN, "\t%ld\t%d",
+	linelen = home_replace(NULL, buf->b_ffname, line, MAXPATHL, TRUE);
+	vim_snprintf((char *)line + linelen, LINE_BUF_LEN - linelen, "\t%ld\t%d",
 			(long)buf->b_last_cursor.lnum,
 			buf->b_last_cursor.col);
 	viminfo_writestring(fp, line);
@@ -1054,7 +1056,7 @@ barline_parse(vir_T *virp, char_u *text, garray_T *values)
 		// Length includes the quotes.
 		++p;
 		len = getdigits(&p);
-		buf = alloc((int)(len + 1));
+		buf = alloc(len + 1);
 		if (buf == NULL)
 		    return TRUE;
 		p = buf;
@@ -1706,7 +1708,7 @@ read_viminfo_register(vir_T *virp, int force)
 	    if (size == limit)
 	    {
 		string_T *new_array = (string_T *)
-					   alloc(limit * 2 * sizeof(string_T));
+				    alloc((size_t)limit * 2 * sizeof(string_T));
 
 		if (new_array == NULL)
 		{
@@ -2533,7 +2535,7 @@ check_marks_read(void)
 
     // Always set b_marks_read; needed when 'viminfo' is changed to include
     // the ' parameter after opening a buffer.
-    curbuf->b_marks_read = TRUE;
+    curbuf->b_marks_read = true;
 }
 
     static int

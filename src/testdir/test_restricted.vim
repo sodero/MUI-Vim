@@ -70,6 +70,7 @@ func Test_restricted_mode()
     if has('channel')
       call assert_fails("call ch_logfile('Xlog')", 'E145:')
       call assert_fails("call ch_open('localhost:8765')", 'E145:')
+      call assert_fails("call ch_setoptions('localhost:8765', {})", 'E145:')
     endif
 
     if has('job')
@@ -95,6 +96,7 @@ func Test_restricted_mode()
     if has('unix')
       call assert_fails('cd `pwd`', 'E145:')
     endif
+    call assert_fails("call setqflist([], 'a', {'id': 1, 'quickfixtextfunc': 'tr'})", 'E145:')
 
     call writefile(v:errors, 'Xresult')
     qa!
@@ -218,6 +220,51 @@ func Test_restricted_cscope()
     call assert_equal(['blocked'], readfile('XResult_cscope'))
   endif
   call delete('XResult_cscope')
+endfunc
+
+func Test_vim9_storeenv_sandbox()
+  let lines =<< trim END
+    vim9script
+
+    function g:LegacySetEnv()
+      let $VIM_SANDBOX_TEST = 'legacy'
+    endfunc
+
+    def Vim9SetEnv()
+      $VIM_SANDBOX_TEST = 'vim9_bypass'
+    enddef
+
+    # Legacy path should be blocked by check_secure()
+    var legacy_blocked = false
+    try
+      legacy sandbox call LegacySetEnv()
+    catch /E48/
+      legacy_blocked = true
+    endtry
+    assert_true(legacy_blocked, 'legacy $ENV assignment should be blocked in sandbox')
+    assert_false(exists('$VIM_SANDBOX_TEST'))
+
+    # Vim9 path should also be blocked by check_secure()
+    var vim9_blocked = false
+    try
+      sandbox Vim9SetEnv()
+    catch /E48/
+      vim9_blocked = true
+    endtry
+    assert_true(vim9_blocked, 'Vim9 ISN_STOREENV should be blocked in sandbox')
+    assert_false(exists('$VIM_SANDBOX_TEST'))
+    writefile([
+    legacy_blocked,
+    vim9_blocked,
+    string(v:errors)], 'XResult_storeenv')
+    qa
+  END
+  call writefile(lines, 'Xtest_storeenv_sandbox.vim', 'D')
+  let expected = ['true', 'true', '[]']
+  if RunVim([], [], '-u NONE -N -i NONE --not-a-term -S Xtest_storeenv_sandbox.vim')
+    call assert_equal(expected, readfile('XResult_storeenv'))
+  endif
+  call delete('XResult_storeenv')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

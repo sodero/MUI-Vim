@@ -1,24 +1,89 @@
 #
-# Makefile for AROS, AmigaOS4 and MorphOS.
+# Makefile for AROS, AmigaOS 3.x, AmigaOS 4 and MorphOS.
 #
-BIN = vim
-CC ?= gcc
+CC := m68k-amigaos-gcc
+BIN ?= vim
 LD = $(CC)
-UNM ?= $(shell uname)
-DEBUG ?= no
-BUILD ?= mui
-CFLAGS = -c -O3 -DMODIFIED_BY=\"'Ola Söder et al.'\"
 SHELL = sh
 
-# Common compiler flags
-CFLAGS += \
-	-DUSE_TMPNAM \
-	-I proto \
+BUILD ?= mui
+
+TARGET := $(shell $(CC) -dumpmachine | cut -d '-' -f1,2)
+
+ENDIAN := \
+	$(shell echo | $(CC) -dM -E - | grep \
+	"__BYTE_ORDER__.*BIG*" > /dev/null && echo be || echo le)
+
+CONFIG := \
+	-DHAVE_GETTIMEOFDAY \
+	-DHAVE_SYS_TIME_H \
+	-DHAVE_STAT_H \
+	-DHAVE_LOCALE_H \
+	-DHAVE_STDLIB_H \
+	-DHAVE_STRING_H \
+	-DHAVE_FCNTL_H \
+	-DHAVE_STRICMP \
+	-DHAVE_STRNICMP \
+	-DHAVE_STRFTIME \
+	-DHAVE_SETENV \
+	-DHAVE_MEMSET \
+	-DHAVE_QSORT \
+	-DHAVE_DATE_TIME \
+	-DHAVE_STDARG_H \
+	-DHAVE_STDINT_H \
+	-DHAVE_MATH_H \
+	-DHAVE_AVAIL_MEM \
+	-DHAVE_ISNAN \
+	-DHAVE_ISINF \
+	-DHAVE_ERRNO_H \
+	-DUSE_TMPNAM
+
+ifeq ($(ENDIAN),be)
+CONFIG += -DWORDS_BIGENDIAN
+endif
+
+ifeq ($(TARGET),m68k-amigaos)
+ifeq ($(BUILD),mui)
+override BUILD := huge
+endif
+endif
+
+CUSTOM := \
+	-DMODIFIED_BY=\"'Ola Sï¿½der et al.'\"
+
+CFLAGS := \
+	-c -O3 \
 	-Wall \
 	-Wextra \
 	-Wno-pointer-sign \
 	-Wno-int-conversion \
-	-Wno-deprecated-declarations
+	-Wno-deprecated-declarations \
+	-I proto \
+	$(CONFIG) \
+	$(CUSTOM)
+
+ifeq ($(TARGET),ppc-amigaos)
+LDFLAGS = -lauto
+CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__
+else
+ifeq ($(TARGET),m68k-amigaos)
+CFLAGS += -mcrt=clib2 -std=gnu99
+LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
+else
+ifeq ($(TARGET),ppc-morphos)
+CFLAGS += -noixemul
+LDFLAGS = -ldebug -lm -noixemul
+else
+ifeq ($(TARGET),i386-aros)
+CFLAGS += -DHAVE_FSYNC
+else
+ifeq ($(TARGET),x86_64-aros)
+CFLAGS += -DHAVE_FSYNC
+endif
+endif
+endif
+endif
+endif
 
 # Vim 'huge' build with MUI GUI
 ifeq ($(BUILD),mui)
@@ -31,24 +96,17 @@ CFLAGS += \
 SRC := \
 	gui.c \
 	gui_mui.c
-ifneq ($(UNM),AROS)
-CFLAGS += -DMUIVIM_FEAT_SCROLLBAR
-endif
 else
 
 # Vim 'huge' build
 ifeq ($(BUILD),huge)
 CFLAGS += \
-	-DFEAT_BROWSE \
-	-DFEAT_MOUSE \
 	-DFEAT_HUGE
 else
 
 # Vim 'normal' build
 ifeq ($(BUILD),normal)
-CFLAGS +=\
-	-DFEAT_BROWSE \
-	-DFEAT_MOUSE \
+CFLAGS += \
 	-DFEAT_NORMAL
 else
 
@@ -62,23 +120,6 @@ ifeq ($(BUILD),tiny)
 CFLAGS += -DFEAT_TINY
 endif
 endif
-endif
-endif
-endif
-
-# OS specific compiler flags
-ifeq ($(UNM),AmigaOS)
-LDFLAGS = -lauto
-CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__
-else
-ifeq ($(UNM),AROS)
-CFLAGS += -DHAVE_FSYNC
-else
-ifeq ($(UNM),MorphOS)
-CFLAGS += -noixemul
-LDFLAGS = -ldebug -lm -noixemul
-else
-CFLAGS += -DNO_ARP
 endif
 endif
 endif
@@ -181,6 +222,9 @@ SRC += \
 	session.c \
 	sha256.c \
 	sign.c \
+	sixel.c \
+	kitty.c \
+	cairo.c \
 	spell.c \
 	spellfile.c \
 	spellsuggest.c \
@@ -224,9 +268,9 @@ OBJ = $(SRC:.c=.o)
 
 # Build everything - Ignoring header dependencies.
 $(BIN): $(OBJ)
-	${LD} -o $(BIN) $(OBJ) $(LDFLAGS)
+	$(LD) -o $(BIN) $(OBJ) $(LDFLAGS)
 
 # Clean up
 .PHONY: clean
 clean:
-	$(RM) -fv $(OBJ) $(BIN)
+	$(RM) -fv $(shell find . -name '*.o') vi vim gvim evim egvim

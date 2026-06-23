@@ -2424,10 +2424,11 @@ mch_inchar(
 # endif
 
     // Keep looping until there is something in the typeahead buffer and more
-    // to get and still room in the buffer (up to two bytes for a char and
-    // three bytes for a modifier).
+    // to get and still room in the buffer.  A mouse event uses up to
+    // 10 bytes: 3 (modifier) + 3 (scroll event) + 4 (coordinates), and a
+    // keyboard input uses up to 7 bytes: 3 (modifier) + 4 (UTF-8 char).
     while ((typeaheadlen == 0 || WaitForChar(0L, FALSE))
-			  && typeaheadlen + 5 + TYPEAHEADSPACE <= TYPEAHEADLEN)
+			  && typeaheadlen + 10 + TYPEAHEADSPACE <= TYPEAHEADLEN)
     {
 	if (typebuf_changed(tb_change_cnt))
 	{
@@ -2729,10 +2730,7 @@ executable_exists(
     {
 	pathext.string = mch_getenv("PATHEXT");
 	if (pathext.string == NULL)
-	{
-	    pathext.string = (char_u *)".com;.exe;.bat;.cmd";
-	    pathext.length = 19;
-	}
+	    STR_LITERAL_SET(pathext, ".com;.exe;.bat;.cmd");
 	else
 	    pathext.length = STRLEN(pathext.string);
 
@@ -2773,10 +2771,7 @@ executable_exists(
 
     // Prepend single "." to pathext, it means no extension added.
     if (pathext.string == NULL)
-    {
-	pathext.string = (char_u *)".";
-	pathext.length = 1;
-    }
+	STR_LITERAL_SET(pathext, ".");
     else if (noext == TRUE)
     {
 	char_u  *tmp;
@@ -2827,10 +2822,7 @@ executable_exists(
      * is an executable file.
      */
     if (pathbuf.string == NULL)
-    {
-	pathbuf.string = (char_u *)".";
-	pathbuf.length = 1;
-    }
+	STR_LITERAL_SET(pathbuf, ".");
     p = pathbuf.string;
     while (*p)
     {
@@ -4689,6 +4681,313 @@ mch_set_winsize_now(void)
     }
     suppress_winsize = 0;
 }
+
+/*
+ * Synchronously ask the terminal for its window pixel dimensions via the
+ * xterm CSI 14 t query and parse the CSI 4 ; H ; W t response.  Returns OK
+ * and fills *win_w and *win_h on success.  Returns FAIL on any error
+ * (no console handles, no response within ~200ms, malformed reply).
+ *
+ * Used as a fallback for ConPTY-hosted terminals (Windows Terminal, VS Code,
+ * ...) where GetCurrentConsoleFontEx() returns dwFontSize = (0, *) because
+ * the pty stub does not own a font.  Real terminals (mintty, Windows
+ * Terminal recent builds, WezTerm, ...) reply to CSI 14 t with their
+ * rendered window pixel size.
+ */
+    static int
+query_terminal_pixel_size_w32(int *win_w, int *win_h)
+{
+    HANDLE	hOut = g_hConOut;
+    HANDLE	hIn = g_hConIn;
+    DWORD	mode_in_old = 0;
+    int		restored = 0;
+    DWORD	nWritten = 0;
+    char	buf[64];
+    int		n = 0;
+    DWORD	deadline;
+    char	*p, *semi, *end;
+    int		hpx, wpx;
+
+    if (hOut == INVALID_HANDLE_VALUE || hIn == INVALID_HANDLE_VALUE)
+	return FAIL;
+
+    if (GetConsoleMode(hIn, &mode_in_old))
+    {
+	DWORD mode_new = mode_in_old;
+
+	// Read raw bytes; deliver xterm response as VT input.
+	mode_new &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT
+						    | ENABLE_PROCESSED_INPUT);
+	mode_new |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+	if (SetConsoleMode(hIn, mode_new))
+	    restored = 1;
+    }
+
+    if (!WriteFile(hOut, "\033[14t", 5, &nWritten, NULL) || nWritten != 5)
+    {
+	if (restored)
+	    SetConsoleMode(hIn, mode_in_old);
+	return FAIL;
+    }
+
+    deadline = GetTickCount() + 200;
+    while (n < (int)sizeof(buf) - 1)
+    {
+	DWORD		now = GetTickCount();
+	DWORD		remaining;
+	INPUT_RECORD	ir;
+	DWORD		count = 0;
+
+	if ((int)(deadline - now) <= 0)
+	    break;
+	remaining = deadline - now;
+
+	if (WaitForSingleObject(hIn, remaining) != WAIT_OBJECT_0)
+	    break;
+	if (!ReadConsoleInputW(hIn, &ir, 1, &count) || count != 1)
+	    break;
+	if (ir.EventType != KEY_EVENT
+		|| !ir.Event.KeyEvent.bKeyDown
+		|| ir.Event.KeyEvent.uChar.AsciiChar == 0)
+	    continue;
+	buf[n++] = ir.Event.KeyEvent.uChar.AsciiChar;
+	if (buf[n - 1] == 't')
+	    break;
+    }
+    buf[n] = 0;
+
+    if (restored)
+	SetConsoleMode(hIn, mode_in_old);
+
+    // expected: ESC [ 4 ; H ; W t
+    p = (char *)vim_strchr((char_u *)buf, '\033');
+    if (p == NULL || p[1] != '[' || p[2] != '4' || p[3] != ';')
+	return FAIL;
+    p += 4;
+    semi = (char *)vim_strchr((char_u *)p, ';');
+    if (semi == NULL)
+	return FAIL;
+    end = (char *)vim_strchr((char_u *)semi, 't');
+    if (end == NULL)
+	return FAIL;
+    {
+	varnumber_T	v;
+
+	// 0 = recognise decimal only.
+	vim_str2nr((char_u *)p, NULL, NULL, 0, &v, NULL, 0, FALSE, NULL);
+	hpx = (int)v;
+	vim_str2nr((char_u *)(semi + 1), NULL, NULL, 0, &v, NULL, 0,
+								  FALSE, NULL);
+	wpx = (int)v;
+    }
+    if (hpx <= 0 || wpx <= 0)
+	return FAIL;
+
+    *win_w = wpx;
+    *win_h = hpx;
+    return OK;
+}
+
+/*
+ * Try to get the current terminal cell size in pixels.
+ *
+ * Strategy:
+ *   1. GetCurrentConsoleFontEx() — works on the legacy conhost, where the
+ *      console owns the font and returns real cell metrics.
+ *   2. CSI 14 t / window-size-in-cells fallback — for ConPTY hosts
+ *      (Windows Terminal, VS Code, ...) where GetCurrentConsoleFontEx()
+ *      returns a zero or default-stub font size.  The result is cached
+ *      so the synchronous probe is paid at most once per session.
+ *
+ * On failure, sets cs_xpixel and cs_ypixel to -1.
+ */
+    void
+mch_calc_cell_size(struct cellsize *cs_out)
+{
+    CONSOLE_FONT_INFOEX cfi;
+    static int		csi14_state = -1;	// -1 unknown, 0 fail, 1 ok
+    static int		csi14_cell_x = 0;
+    static int		csi14_cell_y = 0;
+
+    cs_out->cs_xpixel = -1;
+    cs_out->cs_ypixel = -1;
+
+# ifdef VIMDLL
+    if (gui.in_use)
+	return;
+# endif
+    if (g_hConOut == INVALID_HANDLE_VALUE)
+	return;
+
+    cfi.cbSize = sizeof(cfi);
+    if (GetCurrentConsoleFontEx(g_hConOut, FALSE, &cfi)
+	    && cfi.dwFontSize.X > 0 && cfi.dwFontSize.Y > 0)
+    {
+	cs_out->cs_xpixel = cfi.dwFontSize.X;
+	cs_out->cs_ypixel = cfi.dwFontSize.Y;
+	return;
+    }
+
+    // ConPTY fallback: ask the host terminal via CSI 14 t and divide by
+    // the current window cell count to get cell pixel size.  Cache the
+    // result -- cell pixel size is invariant under window resize so long
+    // as the font size stays the same; caching the raw window pixel size
+    // would go stale after a resize.
+    if (csi14_state == 1)
+    {
+	cs_out->cs_xpixel = csi14_cell_x;
+	cs_out->cs_ypixel = csi14_cell_y;
+	return;
+    }
+    if (csi14_state == 0)
+	return;
+
+    csi14_state = 0;
+    {
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	int wpx, hpx, cols, rows;
+
+	if (!GetConsoleScreenBufferInfo(g_hConOut, &csbi))
+	    return;
+	cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+	rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+	if (cols <= 0 || rows <= 0)
+	    return;
+
+	if (query_terminal_pixel_size_w32(&wpx, &hpx) != OK)
+	    return;
+	if (wpx / cols <= 0 || hpx / rows <= 0)
+	    return;
+
+	csi14_cell_x = wpx / cols;
+	csi14_cell_y = hpx / rows;
+	csi14_state = 1;
+	cs_out->cs_xpixel = csi14_cell_x;
+	cs_out->cs_ypixel = csi14_cell_y;
+    }
+}
+
+# if defined(FEAT_IMAGE_KITTY) || defined(PROTO)
+/*
+ * Synchronously probe the host terminal for kitty graphics protocol
+ * support.  Windows console counterpart of popup_kitty_probe() in
+ * popupwin.c: sends the same
+ *	\e_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\e\\\e[c
+ * query (kitty answer + DA1 sentinel) and feeds the reply to the shared
+ * kitty_probe_parse().  The reply is read from the console input handle
+ * with ENABLE_VIRTUAL_TERMINAL_INPUT set, the same technique as
+ * query_terminal_pixel_size_w32() above.
+ *
+ * Returns TRUE on a positive `_Gi=31;OK` response.  Missing handles,
+ * a non-VT console and timeouts (~500ms) all yield FALSE.
+ */
+    int
+mch_kitty_probe(void)
+{
+    HANDLE	hOut = g_hConOut;
+    HANDLE	hIn = g_hConIn;
+    DWORD	mode_in_old = 0;
+    int		restored = 0;
+    DWORD	nWritten = 0;
+    char	buf[256];
+    int		n = 0;
+    DWORD	deadline;
+    DWORD	da1_deadline;
+    static const char	query[] =
+		    "\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\033\\\033[c";
+
+#  ifdef VIMDLL
+    if (gui.in_use)
+	return FALSE;
+#  endif
+    if (hOut == INVALID_HANDLE_VALUE || hIn == INVALID_HANDLE_VALUE)
+	return FALSE;
+    // Without VT output processing the query would be echoed onto the
+    // legacy console as raw text, and the kitty APC image sequences could
+    // not reach a terminal anyway.
+    if (!vtp_working)
+	return FALSE;
+
+    if (GetConsoleMode(hIn, &mode_in_old))
+    {
+	DWORD mode_new = mode_in_old;
+
+	// Read raw bytes; deliver the terminal responses as VT input.
+	mode_new &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT
+						| ENABLE_PROCESSED_INPUT);
+	mode_new |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+	if (SetConsoleMode(hIn, mode_new))
+	    restored = 1;
+    }
+
+    if (!WriteFile(hOut, query, sizeof(query) - 1, &nWritten, NULL)
+	    || nWritten != sizeof(query) - 1)
+    {
+	if (restored)
+	    SetConsoleMode(hIn, mode_in_old);
+	return FALSE;
+    }
+
+    // Read until the kitty reply lands or we time out.  Unlike the UNIX
+    // probe, the DA1 reply cannot serve as a hard "no kitty support"
+    // sentinel here: under ConPTY the DA1 answer is generated by conhost
+    // itself, while the kitty APC query has to round-trip through the
+    // attached terminal (possibly over ssh), so the DA1 answer usually
+    // arrives first.  Treat DA1 as "wrap up soon" instead and keep
+    // reading for a short grace period after it.
+    deadline = GetTickCount() + 500;
+    da1_deadline = 0;		    // 0: DA1 reply not seen yet
+    while (n < (int)sizeof(buf) - 1)
+    {
+	DWORD		now = GetTickCount();
+	DWORD		until = deadline;
+	INPUT_RECORD	ir;
+	DWORD		count = 0;
+
+	if (da1_deadline != 0 && (int)(da1_deadline - until) < 0)
+	    until = da1_deadline;
+	if ((int)(until - now) <= 0)
+	    break;
+	if (WaitForSingleObject(hIn, until - now) != WAIT_OBJECT_0)
+	    break;
+	if (!ReadConsoleInputW(hIn, &ir, 1, &count) || count != 1)
+	    break;
+	if (ir.EventType != KEY_EVENT
+		|| !ir.Event.KeyEvent.bKeyDown
+		|| ir.Event.KeyEvent.uChar.AsciiChar == 0)
+	    continue;
+	buf[n++] = ir.Event.KeyEvent.uChar.AsciiChar;
+	buf[n] = NUL;
+	// Stop as soon as the kitty APC reply is complete (terminated by
+	// ESC \) -- positive or negative, nothing later changes the verdict.
+	if (n >= 2 && buf[n - 1] == '\\' && buf[n - 2] == '\033'
+		&& strstr(buf, "_Gi=31;") != NULL)
+	    break;
+	// DA1 reply ends with a primary 'c' that is preceded by '?';
+	// once seen, allow a little more time for a passthrough kitty
+	// reply, then give up.
+	if (da1_deadline == 0
+		&& buf[n - 1] == 'c' && n >= 3 && buf[n - 2] != '\033')
+	{
+	    int i;
+
+	    for (i = n - 2; i > 0; --i)
+		if (buf[i] == '?' && buf[i - 1] == '[')
+		    break;
+	    if (i > 0)
+		da1_deadline = GetTickCount() + 250;
+	}
+    }
+    buf[n] = NUL;
+
+    if (restored)
+	SetConsoleMode(hIn, mode_in_old);
+
+    // Filter the probe responses out of the read-back bytes (pushing user
+    // keystrokes back into the input buffer) and check for a positive reply.
+    return kitty_probe_parse(buf, n);
+}
+# endif
 #endif
 
     static BOOL
@@ -7112,9 +7411,19 @@ cursor_visible(BOOL fVisible)
     s_cursor_visible = fVisible;
 
     if (vtp_working)
+    {
+	// In vtp mode, visibility is controlled solely by DECTCEM.  Skip
+	// mch_update_cursor() since shape is independent of visibility and
+	// re-emitting DECSCUSR can cause the terminal to briefly redisplay
+	// the cursor while a redraw is in progress.
 	vtp_printf("\033[?25%c", fVisible ? 'h' : 'l');
+	return;
+    }
 
 # ifdef MCH_CURSOR_SHAPE
+    // Non-vtp Windows console: SetConsoleCursorInfo() consults
+    // s_cursor_visible inside mch_set_cursor_shape(), so the call is needed
+    // to apply the new visibility.
     mch_update_cursor();
 # endif
 }
@@ -8098,7 +8407,8 @@ mch_fopen(const char *name, const char *mode)
     vim_free(wm);
 
 #if defined(DEBUG) && _MSC_VER >= 1400
-    _set_fmode(oldMode);
+    if (oldMode != 0)
+	_set_fmode(oldMode);
 #endif
     return f;
 }
@@ -8613,13 +8923,15 @@ fix_arg_enc(void)
 	    if (used_file_diff_mode && mch_isdir(str) && GARGCOUNT > 0
 				      && !mch_isdir(alist_name(&GARGLIST[0])))
 	    {
-		char_u	    *r;
+		char_u	    *tail;
+		string_T    ret;
 
-		r = concat_fnames(str, gettail(alist_name(&GARGLIST[0])), TRUE);
-		if (r != NULL)
+		tail = gettail(alist_name(&GARGLIST[0]));
+		concat_fnames(str, STRLEN(str), tail, STRLEN(tail), TRUE, &ret);
+		if (ret.string != NULL)
 		{
 		    vim_free(str);
-		    str = r;
+		    str = ret.string;
 		}
 	    }
 #endif

@@ -689,6 +689,43 @@ func Test_syn_zsub()
   bw!
 endfunc
 
+func s:SynDumpBuffer(ft, lines)
+  new
+  syntax on
+  execute 'setfiletype ' .. a:ft
+  call setline(1, a:lines)
+  let result = []
+  for lnum in range(1, line('$'))
+    for col in range(1, max([1, len(getline(lnum))]))
+      call add(result, synIDattr(synID(lnum, col, 1), 'name'))
+    endfor
+  endfor
+  bwipe!
+  return result
+endfunc
+
+" The in_id_list() cache is a speed optimization only: highlighting must be
+" identical with the cache on (default) and off.  Compare full-buffer synID()
+" output both ways across filetypes that use "contains"/cluster lists.
+func Test_syntax_idlist_cache_unchanged()
+  let samples = {
+        \ 'c': ['#define M 0x1F', "char c = '\\n';",
+        \       'int f(int a) { return a + 0xAB; }'],
+        \ 'vim': ['func <SID>Foo() abort', '  let x = [1, 2] + {"k": 0z1f}',
+        \         'endfunc'],
+        \ 'python': ['class C:', '    def m(self): return {1: "s", 2: r"\d"}'],
+        \ 'sh': ['case $x in', '  a) echo "${y:-0xAB}";;', 'esac'],
+        \ }
+  for ft in sort(keys(samples))
+    call test_override('syn_idlist_cache', 0)
+    let l:on = s:SynDumpBuffer(ft, samples[ft])
+    call test_override('syn_idlist_cache', 1)
+    let l:off = s:SynDumpBuffer(ft, samples[ft])
+    call test_override('ALL', 0)
+    call assert_equal(l:off, l:on, 'filetype ' .. ft)
+  endfor
+endfunc
+
 " Using \z() in a region with NFA failing should not crash.
 func Test_syn_wrong_z_one()
   new
@@ -988,5 +1025,30 @@ func Test_WinEnter_synstack_synID()
   bw!
 endfunc
 
+" This was going beyond the end of the "foo" line
+func Test_syn_sync_grouphere_shorter_next_line()
+  let lines =<< trim END
+    if [[ "$var1" == 1 ]]; then
+      foo
+    else
+      bar
+    fi
+  END
+  let lines = ['a']->repeat(50) + lines + ['a']->repeat(48)
+
+  20new
+  call setline(1, lines)
+  syn region shIf transparent
+        \ start="\<if\_s" skip=+-fi\>+ end="\<;\_s*then\>" end="\<fi\>"
+  syn sync minlines=20 maxlines=40
+  syn sync match shIfSync grouphere shIf "\<if\>"
+  redraw!
+
+  normal! G
+  " Should not go beyond end of line
+  redraw!
+
+  bw!
+endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

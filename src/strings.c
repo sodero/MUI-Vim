@@ -626,6 +626,8 @@ vim_strchr(char_u *string, int c)
     int		b;
 
     p = string;
+    if (enc_utf8 && c > 0 && c < 0x80)
+	return vim_strbyte(string, c);
     if (enc_utf8 && c >= 0x80)
     {
 	while (*p != NUL)
@@ -1260,43 +1262,42 @@ blob_from_string(char_u *str, blob_T *blob)
     static int
 string_from_blob(blob_T *blob, long *start_idx, string_T *ret)
 {
-    garray_T	str_ga;
-    long	blen;
-    int		idx;
+    long	blen = blob_len(blob);
+    long	start = *start_idx;
+    char_u	*src;
+    char_u	*nl;
+    long	line_len;
 
-    ga_init2(&str_ga, sizeof(char), 80);
-
-    blen = blob_len(blob);
-
-    for (idx = *start_idx; idx < blen; idx++)
-    {
-	char_u byte = (char_u)blob_get(blob, idx);
-	if (byte == NL)
-	{
-	    idx++;
-	    break;
-	}
-
-	if (byte == NUL)
-	    byte = NL;
-
-	ga_append(&str_ga, byte);
-    }
-
-    if (str_ga.ga_data != NULL)
-    {
-	ret->string = vim_strnsave(str_ga.ga_data, str_ga.ga_len);
-	ret->length = str_ga.ga_len;
-    }
-    else
+    if (start >= blen)
     {
 	ret->string = vim_strsave((char_u *)"");
 	ret->length = 0;
+	*start_idx = blen;
+	return (ret->string == NULL) ? FAIL : OK;
     }
-    *start_idx = idx;
 
-    ga_clear(&str_ga);
-    return (ret->string == NULL) ? FAIL : OK;
+    src = (char_u *)blob->bv_ga.ga_data + start;
+    nl = (char_u *)memchr(src, NL, (size_t)(blen - start));
+    line_len = (nl == NULL) ? (blen - start) : (long)(nl - src);
+
+    ret->string = alloc(line_len + 1);
+    if (ret->string == NULL)
+    {
+	ret->length = 0;
+	return FAIL;
+    }
+    if (line_len > 0)
+	mch_memmove(ret->string, src, (size_t)line_len);
+    ret->string[line_len] = NUL;
+    ret->length = (size_t)line_len;
+
+    // A NUL byte in the blob represents a NL in the resulting string.
+    for (long i = 0; i < line_len; i++)
+	if (ret->string[i] == NUL)
+	    ret->string[i] = NL;
+
+    *start_idx = start + line_len + (nl != NULL ? 1 : 0);
+    return OK;
 }
 
 /*
@@ -1484,11 +1485,14 @@ f_blob2str(typval_T *argvars, typval_T *rettv)
 	garray_T blob_ga;
 	int nul_size = (from_prop & ENC_4BYTE) ? 4 : 2;
 	ga_init2(&blob_ga, 1, blen + nul_size);
-	for (long i = 0; i < blen; i++)
-	    ga_append(&blob_ga, (int)(unsigned char)blob_get(blob, i));
-	// Add NUL terminator (2 bytes for UTF-16/UCS-2, 4 bytes for UTF-32/UCS-4)
-	for (int i = 0; i < nul_size; i++)
-	    ga_append(&blob_ga, NUL);
+	if (ga_grow(&blob_ga, blen + nul_size) == OK)
+	{
+	    if (blen > 0)
+		mch_memmove(blob_ga.ga_data, blob->bv_ga.ga_data, (size_t)blen);
+	    // NUL terminator (2 bytes for UTF-16/UCS-2, 4 bytes for UTF-32/UCS-4)
+	    vim_memset((char_u *)blob_ga.ga_data + blen, 0, (size_t)nul_size);
+	    blob_ga.ga_len = blen + nul_size;
+	}
 
 	// Convert the entire blob at once
 	vimconv_T vimconv;
@@ -1580,6 +1584,7 @@ f_str2blob(typval_T *argvars, typval_T *rettv)
 	return;
 
     char_u	*to_encoding = NULL;
+    char_u	*to_encoding_raw = NULL;  // Encoding name with endianness preserved for iconv
     if (argvars[1].v_type != VAR_UNKNOWN)
     {
 	dict_T *d = argvars[1].vval.v_dict;
@@ -1587,53 +1592,144 @@ f_str2blob(typval_T *argvars, typval_T *rettv)
 	{
 	    char_u *enc = dict_get_string(d, "encoding", FALSE);
 	    if (enc != NULL)
-		to_encoding = enc_canonize(enc_skip(enc));
+	    {
+		char_u *enc_skipped = enc_skip(enc);
+		to_encoding = enc_canonize(enc_skipped);
+
+		// For iconv, preserve the endianness suffix by creating a
+		// normalized version with hyphens: "utf16le" -> "utf-16le"
+		to_encoding_raw = normalize_encoding_name(enc_skipped);
+		if (to_encoding_raw == NULL)
+		{
+		    emsg(_(e_out_of_memory));
+		    VIM_CLEAR(to_encoding);
+		    return;
+		}
+	    }
 	}
     }
 
-    FOR_ALL_LIST_ITEMS(list, li)
+    // Special handling for UTF-16/UCS-2/UTF-32/UCS-4 target encodings: join the
+    // list items with a newline and convert the whole string at once, so that
+    // the wide-encoded newline separators and embedded NUL bytes are preserved
+    // (mirrors blob2str()).  convert_string() cannot be used here because it
+    // treats every Unicode encoding as utf-8, leaving the bytes unconverted.
+    int to_prop = 0;
+    if (to_encoding != NULL)
+	to_prop = enc_canon_props(to_encoding);
+    if (to_encoding != NULL && (to_prop & (ENC_2BYTE | ENC_4BYTE | ENC_2WORD)))
     {
-	if (li->li_tv.v_type != VAR_STRING)
-	    continue;
+	garray_T	str_ga;
 
-	string_T    str = {li->li_tv.vval.v_string, 0};
-
-	if (str.string == NULL)
+	ga_init2(&str_ga, 1, 256);
+	FOR_ALL_LIST_ITEMS(list, li)
 	{
-	    str.string = (char_u *)"";
-	    str.length = 0;
+	    char_u *s;
+
+	    if (li->li_tv.v_type != VAR_STRING)
+		continue;
+
+	    s = li->li_tv.vval.v_string;
+
+	    // Each list string item is separated by a newline in the blob
+	    if (li != list->lv_first)
+		ga_append(&str_ga, NL);
+	    if (s != NULL && *s != NUL)
+	    {
+		int slen = (int)STRLEN(s);
+
+		if (ga_grow(&str_ga, slen) == FAIL)
+		{
+		    ga_clear(&str_ga);
+		    goto done;
+		}
+		mch_memmove((char_u *)str_ga.ga_data + str_ga.ga_len, s,
+								(size_t)slen);
+		str_ga.ga_len += slen;
+	    }
 	}
-	else
-	    str.length = STRLEN(str.string);
 
-	if (to_encoding != NULL)
+	if (str_ga.ga_len > 0)
 	{
-	    int		res;
-	    string_T	converted;
+	    vimconv_T	vimconv;
 
-	    res = convert_string(&str, p_enc, to_encoding, &converted);
-	    if (res != OK)
+	    vimconv.vc_type = CONV_NONE;
+	    if (convert_setup_ext(&vimconv, p_enc, FALSE, to_encoding_raw, FALSE)
+								    == FAIL)
+	    {
+		ga_clear(&str_ga);
+		semsg(_(e_str_encoding_to_failed), to_encoding);
+		goto done;
+	    }
+	    vimconv.vc_fail = TRUE;
+
+	    int		len = str_ga.ga_len;
+	    char_u	*converted = string_convert_ext(&vimconv,
+				    (char_u *)str_ga.ga_data, &len, NULL);
+	    convert_setup(&vimconv, NULL, NULL);
+	    ga_clear(&str_ga);
+
+	    if (converted == NULL)
 	    {
 		semsg(_(e_str_encoding_to_failed), to_encoding);
 		goto done;
 	    }
-	    str.string = converted.string;
-	    str.length = converted.length;
+	    if (len > 0 && ga_grow(&blob->bv_ga, len) == OK)
+	    {
+		mch_memmove((char_u *)blob->bv_ga.ga_data + blob->bv_ga.ga_len,
+						    converted, (size_t)len);
+		blob->bv_ga.ga_len += len;
+	    }
+	    vim_free(converted);
 	}
+	else
+	    ga_clear(&str_ga);
+    }
+    else
+    {
+	FOR_ALL_LIST_ITEMS(list, li)
+	{
+	    if (li->li_tv.v_type != VAR_STRING)
+		continue;
 
-	if (li != list->lv_first)
-	    // Each list string item is separated by a newline in the blob
-	    ga_append(&blob->bv_ga, NL);
+	    string_T	str = {li->li_tv.vval.v_string, 0};
 
-	blob_from_string(str.string, blob);
+	    if (str.string == NULL)
+		STR_LITERAL_SET(str, "");
+	    else
+		str.length = STRLEN(str.string);
 
-	if (to_encoding != NULL)
-	    vim_free(str.string);
+	    if (to_encoding != NULL)
+	    {
+		int	    res;
+		string_T    converted;
+
+		res = convert_string(&str, p_enc, to_encoding, &converted);
+		if (res != OK)
+		{
+		    semsg(_(e_str_encoding_to_failed), to_encoding);
+		    goto done;
+		}
+		str.string = converted.string;
+		str.length = converted.length;
+	    }
+
+	    if (li != list->lv_first)
+		// Each list string item is separated by a newline in the blob
+		ga_append(&blob->bv_ga, NL);
+
+	    blob_from_string(str.string, blob);
+
+	    if (to_encoding != NULL)
+		vim_free(str.string);
+	}
     }
 
 done:
     if (to_encoding != NULL)
 	vim_free(to_encoding);
+    if (to_encoding_raw != NULL)
+	vim_free(to_encoding_raw);
 }
 
 /*
@@ -3012,22 +3108,22 @@ format_typename(
     switch (format_typeof(type))
     {
 	case TYPE_INT:
-	    return _(typename_int);
+	    return typename_int;
 
 	case TYPE_LONGINT:
-	    return _(typename_longint);
+	    return typename_longint;
 
 	case TYPE_LONGLONGINT:
-	    return _(typename_longlongint);
+	    return typename_longlongint;
 
 	case TYPE_UNSIGNEDINT:
-	    return _(typename_unsignedint);
+	    return typename_unsignedint;
 
 	case TYPE_UNSIGNEDLONGINT:
-	    return _(typename_unsignedlongint);
+	    return typename_unsignedlongint;
 
 	case TYPE_UNSIGNEDLONGLONGINT:
-	    return _(typename_unsignedlonglongint);
+	    return typename_unsignedlonglongint;
 
 	case TYPE_POINTER:
 	    return _(typename_pointer);
@@ -3036,13 +3132,13 @@ format_typename(
 	    return _(typename_percent);
 
 	case TYPE_CHAR:
-	    return _(typename_char);
+	    return typename_char;
 
 	case TYPE_STRING:
 	    return _(typename_string);
 
 	case TYPE_FLOAT:
-	    return _(typename_float);
+	    return typename_float;
     }
 
     return _(typename_unknown);

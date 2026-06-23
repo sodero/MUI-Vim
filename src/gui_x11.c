@@ -1146,7 +1146,7 @@ gui_mch_prepare(int *argc, char **argv)
 #ifdef FEAT_NETBEANS_INTG
 	    if (strncmp("-nb", argv[arg], 3) == 0)
 	{
-	    gui.dofork = FALSE;	// don't fork() when starting GUI
+	    gui.dofork = false;	// don't fork() when starting GUI
 	    netbeansArg = argv[arg];
 	    mch_memmove(&argv[arg], &argv[arg + 1],
 					    (--*argc - arg) * sizeof(char *));
@@ -1197,7 +1197,7 @@ gui_mch_init_check(void)
 #endif
     if (app_context == NULL || gui.dpy == NULL)
     {
-	gui.dying = TRUE;
+	gui.dying = true;
 	emsg(_(e_cannot_open_display));
 	return FAIL;
     }
@@ -1418,9 +1418,6 @@ gui_mch_init(void)
     XtVaSetValues(vimShell, XmNiconPixmap, icon, XmNiconMask, icon_mask, NULL);
 #endif
     }
-
-    if (gui.color_approx)
-	emsg(_(e_cannot_allocate_colormap_entry_some_colors_may_be_incorrect));
 
 #ifdef FEAT_BEVAL_GUI
     gui_init_tooltip_font();

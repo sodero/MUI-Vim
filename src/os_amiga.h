@@ -14,38 +14,11 @@
 #define SPACE_IN_FILENAME
 #define USE_FNAME_CASE		    // adjust case of file names
 #define USE_TERM_CONSOLE
-#define HAVE_AVAIL_MEM
-
-#ifndef HAVE_CONFIG_H
-# if defined(AZTEC_C) || defined(__amigaos4__)
-#  define HAVE_STAT_H
-# endif
-# define HAVE_LOCALE_H
-# define HAVE_STDLIB_H
-# define HAVE_STRING_H
-# define HAVE_FCNTL_H
-# define HAVE_STRICMP
-# define HAVE_STRNICMP
-# define HAVE_STRFTIME	    // guessed
-# define HAVE_SETENV
-# define HAVE_MEMSET
-# define HAVE_QSORT
-# if defined(__DATE__) && defined(__TIME__)
-#  define HAVE_DATE_TIME
-# endif
-# define HAVE_STDARG_H
-# define HAVE_STDINT_H
-# define HAVE_MATH_H
-# define OSPEED_EXTERN
-# define UP_BC_PC_EXTERN
-# define HAVE_GETTIMEOFDAY
-# define HAVE_SYS_TIME_H
-# define HAVE_ISNAN
-# define HAVE_ISINF
-#endif // !HAVE_CONFIG_H
+#define OSPEED_EXTERN
+#define UP_BC_PC_EXTERN
 
 #ifndef	DFLT_ERRORFILE
-# define DFLT_ERRORFILE		"AztecC.Err"	// Should this change?
+# define DFLT_ERRORFILE		"errors.err"
 #endif
 
 #ifndef	DFLT_RUNTIMEPATH
@@ -68,44 +41,35 @@
 #include <libraries/dos.h>
 #include <libraries/dosextens.h>
 
-// Currently, all Amiga compilers except AZTEC C have these...
-#ifndef AZTEC_C
-# include <proto/exec.h>
-# include <proto/dos.h>
-# include <proto/intuition.h>
+#ifdef __MORPHOS__
+# include <dos/var.h>
 #endif
+
+#include <proto/exec.h>
+#include <proto/dos.h>
+#include <proto/intuition.h>
 
 #define FNAME_ILLEGAL ";*?`#%" // illegal characters in a file name
 
-/*
- * Manx doesn't have off_t, define it here.
- */
-#ifdef AZTEC_C
-typedef long off_t;
-#endif
+#include <sys/stat.h>
+#include <unistd.h>
+#include <limits.h>
+#include <errno.h>
+#include <pwd.h>
+#include <grp.h>
+#include <dirent.h>
 
-#ifdef LATTICE
-# define USE_TMPNAM	// use tmpnam() instead of mktemp()
-#endif
-
-#ifdef __GNUC__
-# include <sys/stat.h>
-# include <unistd.h>
-# include <limits.h>
-# include <errno.h>
-# include <pwd.h>
-# include <grp.h>
-# include <dirent.h>
+// Classic AmigaOS 3.x with GCC/libnix does not provide fchown, fchmod, or
+// ftruncate.  Stub them as no-ops.  (OS4 has these via clib2; MorphOS and
+// AROS provide them in their respective C libraries.)
+#if defined(__GNUC__) && defined(AMIGA) && !defined(__amigaos4__) \
+	&& !defined(__AROS__) && !defined(__MORPHOS__)
+# define fchown(fd, uid, gid) (0)
+# define fchmod(fd, mode) (0)
+# define ftruncate(fd, len) (0)
 #endif
 
 #include <time.h>	// for strftime() and others
-
-/*
- * arpbase.h must be included before functions.h
- */
-#ifdef FEAT_ARP
-# include <libraries/arpbase.h>
-#endif
 
 /*
  * This won't be needed if you have a version of Lattice 4.01 without broken
@@ -203,19 +167,11 @@ typedef long off_t;
 #endif
 
 #ifndef DFLT_MAXMEM
-# if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-#  define DFLT_MAXMEM	(5*1024)	// use up to 5 Mbyte for buffer
-# else
-#  define DFLT_MAXMEM	256		// use up to 256Kbyte for buffer
-# endif
+# define DFLT_MAXMEM	(5*1024)	// use up to 5 Mbyte for buffer
 #endif
 
 #ifndef DFLT_MAXMEMTOT
-# if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-#  define DFLT_MAXMEMTOT	(10*1024)	// use up to 10 Mbyte for Vim
-# else
-#  define DFLT_MAXMEMTOT	512		// use up to 512Kbyte for Vim
-# endif
+# define DFLT_MAXMEMTOT	(10*1024)	// use up to 10 Mbyte for Vim
 #endif
 
 // Use OS4 FIB_* macros on MorphOS and AROS as well.
@@ -227,12 +183,14 @@ typedef long off_t;
 				 (FIB)->fib_DirEntryType != ST_SOFTLINK)
 #endif
 
-#if defined(SASC)
-int setenv(const char *, const char *);
+#define mch_remove(X) remove((const char *) (X))
+#define mch_rename(X, Y) rename((const char *) (X), (const char *) (Y))
+#define mch_chdir(X) chdir((const char *) (X))
+#define mch_rmdir(X) rmdir((const char *) (X))
+#define vim_mkdir(X, Y) mkdir((const char *) (X), Y)
+#ifdef __MORPHOS__
+# define mch_setenv(X, Y, Z) SetVar((X), (Y), -1, GVF_GLOBAL_ONLY|LV_VAR)
+#else
+# define mch_setenv(X, Y, Z) setenv((const char *) (X), (const char *) (Y), Z)
 #endif
-
-#define mch_remove(x) remove((const char *) x)
-#define mch_rename(s, d) rename((const char *) s, (const char *) d)
-#define mch_chdir(s) chdir((const char *) s)
-#define mch_rmdir(s) rmdir((const char *) s)
-#define vim_mkdir(x, m) mkdir((const char *) x, m)
+#define mch_getenv(X) (char_u *) getenv((const char *)(X))

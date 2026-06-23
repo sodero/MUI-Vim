@@ -37,13 +37,14 @@ int mch_get_shellsize(void);
 void mch_set_shellsize(void);
 void mch_new_shellsize(void);
 int mch_call_shell(char_u *cmd, int options);
+char_u *mch_get_cmd_output_direct(char **argv, char_u *infile, int flags, int *ret_len);
 void mch_breakcheck(int force);
 int mch_expandpath(garray_T *gap, char_u *pat, int flags);
 int mch_has_exp_wildcard(char_u *p);
 int mch_has_wildcard(char_u *p);
-char_u *mch_getenv(char_u *var);
-int mch_setenv(char *var, char *value, int x);
 void mch_setmouse(int on);
 int mch_is_console(char_u *name);
 int mch_get_random(char_u *buf, int len);
+const void *mch_disable_volume_requester(void);
+void mch_enable_volume_requester(const void *req_handle);
 /* vim: set ft=c : */

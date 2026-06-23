@@ -249,6 +249,76 @@ function Test_tabpanel_mouse()
   let &showtabline = save_showtabline
 endfunc
 
+func g:TplClickTestFunc(info)
+  let g:tpl_click_info = a:info
+  return 0
+endfunc
+
+function Test_tabpanel_click_handler()
+  let save_mouse = &mouse
+  let save_stal = &showtabline
+  let save_stpl = &showtabpanel
+  let save_tpl = &tabpanel
+  let save_tplo = &tabpanelopt
+  set mouse=a
+  set showtabline=0
+  set showtabpanel=2
+  set tabpanelopt=columns:16
+  tabnew
+  tabnew
+
+  " Place two adjacent %[FuncName] regions on every tab label.
+  set tabpanel=%1[TplClickTestFunc][A]%[]%2[TplClickTestFunc][B]%[]
+  redraw!
+
+  " Click on [A] region in the first tab label (row 1).
+  call test_setmouse(1, 2)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:tpl_click_info'))
+  call assert_equal('l', g:tpl_click_info.button)
+  call assert_equal(1, g:tpl_click_info.nclicks)
+  call assert_equal(1, g:tpl_click_info.minwid)
+  call assert_equal(0, g:tpl_click_info.winid)
+  call assert_equal('tabpanel', g:tpl_click_info.area)
+  call assert_equal(1, g:tpl_click_info.tabnr)
+  unlet! g:tpl_click_info
+
+  " Click on [B] region in the second tab label (row 2).
+  call test_setmouse(2, 5)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:tpl_click_info'))
+  call assert_equal(2, g:tpl_click_info.minwid)
+  call assert_equal(2, g:tpl_click_info.tabnr)
+  unlet! g:tpl_click_info
+
+  " Middle click on [A] in tab 3.
+  call test_setmouse(3, 2)
+  call feedkeys("\<MiddleMouse>\<MiddleRelease>", 'xt')
+  call assert_true(exists('g:tpl_click_info'))
+  call assert_equal('m', g:tpl_click_info.button)
+  call assert_equal(1, g:tpl_click_info.minwid)
+  call assert_equal(3, g:tpl_click_info.tabnr)
+  unlet! g:tpl_click_info
+
+  " A click outside any region (but still in the panel) must not fire the
+  " callback, and should fall through to the normal tab selection.
+  set tabpanel=xxx%1[TplClickTestFunc][Y]%[]
+  redraw!
+  tabfirst
+  call test_setmouse(2, 1)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_false(exists('g:tpl_click_info'))
+  call assert_equal(2, tabpagenr())
+
+  tabonly!
+  call s:reset()
+  let &tabpanel = save_tpl
+  let &tabpanelopt = save_tplo
+  let &showtabpanel = save_stpl
+  let &showtabline = save_stal
+  let &mouse = save_mouse
+endfunc
+
 function Test_tabpanel_drawing()
   CheckScreendump
 
@@ -302,7 +372,7 @@ function Test_tabpanel_drawing_2()
   END
   call writefile(lines, 'XTest_tabpanel_drawing_2', 'D')
 
-  let buf = RunVimInTerminal('-S XTest_tabpanel_drawing_2', {'rows': 10, 'cols': 78})
+  let buf = RunVimInTerminal('-S XTest_tabpanel_drawing_2', {'rows': 10, 'cols': 65})
   call term_sendkeys(buf, "ggo")
   call VerifyScreenDump(buf, 'Test_tabpanel_drawing_2_0', {})
 
@@ -481,6 +551,7 @@ function Test_tabpanel_visual()
 
   let buf = RunVimInTerminal('-S XTest_tabpanel_visual', {'rows': 10, 'cols': 45})
   call term_sendkeys(buf, "v2w")
+  call WaitForAssert({-> assert_match('VISUAL.*\d', term_getline(buf, 10))}, 1000)
   call VerifyScreenDump(buf, 'Test_tabpanel_visual_0', {})
   call term_sendkeys(buf, "\<Esc>0jw")
   call term_sendkeys(buf, "v2wge")
@@ -870,6 +941,299 @@ function Test_tabpanel_showtabpanel_via_cmd_arg()
 
   tabonly
   set showtabpanel& noruler&
+endfunc
+
+func Test_tabpanel_no_modeline()
+  let _tpl = &tabpanel
+  let _mls = &modelineexpr
+
+  set nomodelineexpr
+  setlocal modeline
+  new
+  call writefile(['/* vim: set tabpanel=test: */'], 'Xtabpanel.txt', 'D')
+  call assert_fails(':e Xtabpanel.txt', 'E992:')
+
+  let &tabpanel = _tpl
+  let &modelineexpr = _mls
+  bw!
+endfunc
+
+func Test_tabpanel_large_columns()
+  call assert_fails(':set tabpanelopt=columns:10001', 'E474:')
+  call assert_fails(':set tabpanelopt=columns:-1', 'E474:')
+endfunc
+
+func Test_tabpanel_scroll_many_tabs()
+  let save_lines = &lines
+  let save_showtabpanel = &showtabpanel
+  let save_tabpanelopt = &tabpanelopt
+
+  " Make the screen short so the tab page list exceeds the visible height.
+  set lines=8
+  set showtabpanel=2
+  set tabpanelopt=
+  for i in range(20)
+    tabnew
+  endfor
+
+  " Should not crash with many tabs (scroll behaviour is always on).
+  redraw!
+
+  " Toggling scrollbar must also not crash.
+  set tabpanelopt=scrollbar
+  redraw!
+
+  set tabpanelopt=
+  redraw!
+
+  " Right alignment with scrollbar.
+  set tabpanelopt=align:right,scrollbar
+  redraw!
+
+  " Vertical separator with scrollbar.
+  set tabpanelopt=columns:10,vert,scrollbar
+  redraw!
+
+  " Cleanup.
+  %bwipeout!
+  let &tabpanelopt = save_tabpanelopt
+  let &showtabpanel = save_showtabpanel
+  let &lines = save_lines
+endfunc
+
+" The scrollbar thumb must follow the current tab when it is moved by
+" gt/gT/:tabnext/:tablast, so that the selected tab is always visible.
+func Test_tabpanel_scrollbar_follows_curtab()
+  let save_lines = &lines
+  let save_columns = &columns
+  let save_showtabpanel = &showtabpanel
+  let save_tabpanelopt = &tabpanelopt
+
+  set lines=10 columns=40
+  set showtabpanel=2 tabpanelopt=scrollbar,columns:8
+  for i in range(49)
+    tabnew
+  endfor
+  let sb_col = 8
+
+  " With curtab at the top of the list, row 1 shows the thumb and the
+  " last row shows the track.  Record the two attrs for comparison.
+  tabfirst
+  redraw
+  let attr_thumb = screenattr(1, sb_col)
+  let attr_track = screenattr(&lines, sb_col)
+  call assert_notequal(attr_thumb, attr_track)
+
+  " Jump to a tab far outside the visible range: thumb must leave the top.
+  30tabnext
+  redraw
+  call assert_equal(attr_track, screenattr(1, sb_col))
+
+  " Back to the first tab: thumb returns to the top.
+  tabfirst
+  redraw
+  call assert_equal(attr_thumb, screenattr(1, sb_col))
+  call assert_equal(attr_track, screenattr(&lines, sb_col))
+
+  " gT from the first tab wraps to the last: thumb moves to the bottom.
+  normal! gT
+  redraw
+  call assert_equal(attr_track, screenattr(1, sb_col))
+  call assert_equal(attr_thumb, screenattr(&lines, sb_col))
+
+  " gt from the last tab wraps to the first: thumb returns to the top.
+  normal! gt
+  redraw
+  call assert_equal(attr_thumb, screenattr(1, sb_col))
+  call assert_equal(attr_track, screenattr(&lines, sb_col))
+
+  %bwipeout!
+  let &tabpanelopt = save_tabpanelopt
+  let &showtabpanel = save_showtabpanel
+  let &lines = save_lines
+  let &columns = save_columns
+endfunc
+
+" With 31 tabs on 24 rows, :tablast must place the scrollbar thumb's
+" bottom at the last screen row.  Before the fix, integer truncation in
+" thumb_top left a one-row gap at the bottom.
+func Test_tabpanel_scrollbar_reaches_bottom()
+  let save_lines = &lines
+  let save_columns = &columns
+  let save_showtabpanel = &showtabpanel
+  let save_tabpanelopt = &tabpanelopt
+
+  set lines=24 columns=40
+  set showtabpanel=2 tabpanelopt=scrollbar,columns:8
+  for i in range(30)
+    tabnew
+  endfor
+  let sb_col = 8
+
+  " Identify the thumb attr while the thumb is at the top.
+  tabfirst
+  redraw
+  let attr_thumb = screenattr(1, sb_col)
+  let attr_track = screenattr(&lines, sb_col)
+  call assert_notequal(attr_thumb, attr_track)
+
+  " :tablast must push the thumb all the way to the bottom.
+  tablast
+  redraw
+  call assert_equal(attr_thumb, screenattr(&lines, sb_col))
+
+  %bwipeout!
+  let &tabpanelopt = save_tabpanelopt
+  let &showtabpanel = save_showtabpanel
+  let &lines = save_lines
+  let &columns = save_columns
+endfunc
+
+func Test_tabpanel_variable_height()
+
+  let save_lines = &lines
+  let save_showtabpanel = &showtabpanel
+  let save_tabpanel = &tabpanel
+
+  set lines=10
+  tabnew | tabnew | tabnew | tabnew | tabnew
+
+  let g:tpl_n = 0
+  func! GetTpl() abort
+    let g:tpl_n += 1
+    return g:tpl_n <= 5 ? "x\nx" : "x"
+  endfunc
+
+  set showtabpanel=2
+  let &tabpanel = "%!GetTpl()"
+
+  " Should not crash
+  redraw!
+
+  " Cleanup
+  let &tabpanel = save_tabpanel
+  let &showtabpanel = save_showtabpanel
+  let &lines = save_lines
+  delfunc GetTpl
+  unlet g:tpl_n
+  %bwipeout!
+endfunc
+
+func Test_tabpanel_empty()
+  set showtabpanel=2 tabpanel=%!'%{}%'
+  try
+  redraw!
+  catch
+  endtry
+  set showtabpanel&
+  set tabpanel&
+endfunc
+
+func Test_tabpanel_carry_hl()
+  CheckScreendump
+
+  " %#XX# / %N* set on one row of a tabpanel should persist on subsequent
+  " rows until %* (or another %# / %*) changes it.  Both "%@" and "\n" are
+  " accepted as line breaks in 'tabpanel'.
+  let lines =<< trim END
+    func MyTabPanel()
+      return "L1A\n"
+        \ .. "%#Search#L1B\n"
+        \ .. "L2 carried Search\n"
+        \ .. "%*L3 reset\n"
+        \ .. "%2*L4 user2\n"
+        \ .. "L5 carried\n"
+        \ .. "%*L6 reset"
+    endfunc
+
+    hi User2 ctermfg=Yellow ctermbg=Blue
+    set showtabpanel=2
+    set tabpanelopt=columns:20
+    set tabpanel=%!MyTabPanel()
+  END
+  call writefile(lines, 'XTest_tabpanel_carry_hl', 'D')
+
+  let buf = RunVimInTerminal('-S XTest_tabpanel_carry_hl', {'rows': 9, 'cols': 60})
+  call VerifyScreenDump(buf, 'Test_tabpanel_carry_hl_01', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_tabpanel_getinfo_and_scroll()
+  CheckScreendump
+
+  let lines =<< trim END
+    set showtabpanel=2 tabpanelopt=columns:20
+    set showtabline=0
+    for i in range(40)
+      tabnew
+    endfor
+    tabfirst
+    redraw
+    func WriteResult(label)
+      call writefile([a:label, string(tabpanel_getinfo())], 'Xresult', 'a')
+    endfunc
+    call delete('Xresult')
+    call WriteResult('initial')
+    let g:r1 = tabpanel_scroll(1)
+    redraw
+    call WriteResult('after_scroll_1')
+    call tabpanel_scroll(-10)
+    redraw
+    call WriteResult('after_scroll_minus10')
+    let g:max = tabpanel_getinfo().max_offset
+    call tabpanel_scroll(g:max, #{absolute: 1})
+    redraw
+    call WriteResult('after_abs_max')
+    call tabpanel_scroll(99999, #{absolute: 1})
+    redraw
+    call WriteResult('after_abs_overflow')
+    call tabpanel_scroll(-5, #{absolute: 1})
+    redraw
+    call WriteResult('after_abs_negative')
+    let g:r_zero = tabpanel_scroll(0, #{absolute: 1})
+    let g:r_neg_at_zero = tabpanel_scroll(-1)
+    call writefile([
+          \ 'r1=' .. g:r1,
+          \ 'max=' .. g:max,
+          \ 'r_zero=' .. g:r_zero,
+          \ 'r_neg_at_zero=' .. g:r_neg_at_zero,
+          \ ], 'Xflags')
+  END
+  call writefile(lines, 'XTest_tabpanel_getinfo', 'D')
+
+  let buf = RunVimInTerminal('-S XTest_tabpanel_getinfo', {'rows': 10, 'cols': 45})
+  call WaitForAssert({-> assert_true(filereadable('Xflags'))})
+  call StopVimInTerminal(buf)
+
+  let results = readfile('Xresult')
+  let flags = readfile('Xflags')
+  call delete('Xresult')
+  call delete('Xflags')
+
+  " Parse [label, dict] pairs.
+  let info = {}
+  for i in range(0, len(results) - 1, 2)
+    let info[results[i]] = eval(results[i + 1])
+  endfor
+
+  call assert_equal('left', info.initial.align)
+  call assert_equal(20, info.initial.columns)
+  call assert_false(has_key(info.initial, 'scroll'))
+  call assert_equal(0, info.initial.offset)
+  call assert_true(info.initial.total > 0)
+  call assert_true(info.initial.max_offset > 0)
+
+  call assert_equal(1, info.after_scroll_1.offset)
+  call assert_equal(0, info.after_scroll_minus10.offset)
+
+  let max = info.initial.max_offset
+  call assert_equal(max, info.after_abs_max.offset)
+  call assert_equal(max, info.after_abs_overflow.offset)
+  call assert_equal(0, info.after_abs_negative.offset)
+
+  call assert_equal(['r1=v:true', 'max=' .. max,
+        \ 'r_zero=v:false', 'r_neg_at_zero=v:false'], flags)
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

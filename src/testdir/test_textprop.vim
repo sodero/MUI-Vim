@@ -3565,11 +3565,61 @@ func Test_props_with_text_after_nowrap()
   let buf = RunVimInTerminal('-S XscriptPropsAfterNowrap', #{rows: 12, cols: 60})
   call VerifyScreenDump(buf, 'Test_prop_with_text_after_nowrap_1', {})
 
-  call term_sendkeys(buf, ":set signcolumn=yes foldcolumn=3 cursorline\<CR>")
+  call term_sendkeys(buf, ":set signcolumn=yes foldcolumn=3 cursorline\<CR>\<C-L>")
   call VerifyScreenDump(buf, 'Test_prop_with_text_after_nowrap_2', {})
 
   call term_sendkeys(buf, "j")
   call VerifyScreenDump(buf, 'Test_prop_with_text_after_nowrap_3', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_props_with_text_after_wide_char_at_end()
+  CheckScreendump
+  CheckRunVimInTerminal
+
+  " The buffer line ends with a double-width character exactly at the window
+  " width and has wrapping "after" virtual text.  This must not leave blank
+  " lines or "@@@", see issue #20384.
+  let lines =<< trim END
+      vim9script
+      set nowrap
+      setline(1, [repeat('x', 43) .. '口', 'second line', 'third line'])
+      prop_type_add('errtype', {highlight: 'WarningMsg', text_wrap: 'wrap'})
+      prop_add(1, 0, {type: 'errtype', text_padding_left: 3, text: 'E>'})
+  END
+  call writefile(lines, 'XscriptPropsAfterWideChar', 'D')
+  let buf = RunVimInTerminal('-S XscriptPropsAfterWideChar', #{rows: 8, cols: 45})
+  call VerifyScreenDump(buf, 'Test_prop_with_text_after_wide_char_1', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_props_with_text_after_wide_char_overflow()
+  CheckScreendump
+  CheckRunVimInTerminal
+
+  " Like above, but the last character reaches the rightmost column without
+  " starting on it: a double-width character that does not fit in the last
+  " column, and a <Tab> that expands up to the window width.  Both must be
+  " detected as filling the line so the wrapping "after" text does not cause
+  " blank lines, "@@@" or a spurious wrap with 'nowrap'.
+  let lines =<< trim END
+      vim9script
+      set nowrap tabstop=8 noexpandtab
+      setline(1, [
+          repeat('x', 39) .. '口',
+          'between line',
+          repeat('x', 32) .. "\t",
+          'last line',
+      ])
+      prop_type_add('errtype', {highlight: 'WarningMsg', text_wrap: 'wrap'})
+      prop_add(1, 0, {type: 'errtype', text_padding_left: 3, text: 'E>'})
+      prop_add(3, 0, {type: 'errtype', text_padding_left: 3, text: 'E>'})
+  END
+  call writefile(lines, 'XscriptPropsAfterWideOverflow', 'D')
+  let buf = RunVimInTerminal('-S XscriptPropsAfterWideOverflow', #{rows: 8, cols: 40})
+  call VerifyScreenDump(buf, 'Test_prop_with_text_after_wide_char_2', {})
 
   call StopVimInTerminal(buf)
 endfunc
@@ -3606,7 +3656,7 @@ func Test_props_with_text_below_nowrap()
       vim9script
       edit foobar
       set nowrap
-      set showbreak=+++\ 
+      set showbreak=+++
       setline(1, ['onasdf asdf asdf sdf df asdf asdf e asdf asdf asdf asdf asd fas df', 'two'])
       prop_type_add('test', {highlight: 'Special'})
       prop_add(1, 0, {
@@ -3975,15 +4025,15 @@ func Test_removed_prop_with_text_cleans_up_array()
   call setline(1, 'some text here')
   call prop_type_add('some', #{highlight: 'ErrorMsg'})
   let id1 = prop_add(1, 5, #{type: 'some', text: "SOME"})
-  call assert_equal(-1, id1)
+  call assert_true(id1 < 0)
   let id2 = prop_add(1, 10, #{type: 'some', text: "HERE"})
-  call assert_equal(-2, id2)
+  call assert_true(id2 < id1)
 
-  " removing the props resets the index
+  " IDs are not recycled after removal; new IDs keep decreasing.
   call prop_remove(#{id: id1})
   call prop_remove(#{id: id2})
-  let id1 = prop_add(1, 5, #{type: 'some', text: "SOME"})
-  call assert_equal(-1, id1)
+  let id3 = prop_add(1, 5, #{type: 'some', text: "SOME"})
+  call assert_true(id3 < id2)
 
   call prop_type_delete('some')
   bwipe!
@@ -4273,7 +4323,7 @@ func Test_text_after_wrap_showbreak()
     set shiftwidth=4
 
     set breakindent
-    set showbreak=>\ 
+    let &showbreak = '> '
     set breakindentopt=shift:2,min:64
 
     call setline(1, ['        " 1234567890', 'foo', 'bar'])
@@ -4672,7 +4722,7 @@ func Test_error_when_using_negative_id()
 
   " Negative id is always rejected.  Before the fix, prop_add() with a negative
   " id succeeded when no virtual text existed, then prop_list() would dereference
-  " a NULL pointer (b_textprop_text.ga_data) and crash.
+  " a NULL pointer and crash.
   call assert_fails("call prop_add(1, 1, #{type: 'test1', length: 1, id: -1})", 'E1293:')
   call assert_equal([], prop_list(1))
 
@@ -4907,4 +4957,38 @@ func Test_textprop_materialize_list()
 	call assert_equal([], prop_list(1, #{ids: 3->range()}))
 endfunc
 
+func Test_prop_find_floating_vtext()
+  new
+  call setline(1, ['111', '222', '333'])
+  let tn = 'test'
+  call prop_type_add(tn, {'highlight': 'Search'})
+  for ln in range(1, 3)
+    call prop_add(ln, 0, {'type': tn, 'text': '-----', 'text_align': 'above'})
+  endfor
+  " forward search must find the virtual text on the starting line
+  let found = prop_find({'type': tn, 'lnum': 1, 'col': 1})
+  call assert_equal(1, found.lnum)
+  call assert_equal('-----', found.text)
+  " backward search must also find the virtual text on the starting line
+  let found = prop_find({'type': tn, 'lnum': 1, 'col': 1}, 'b')
+  call assert_equal(1, found.lnum)
+  call assert_equal('-----', found.text)
+  bwipe!
+  call prop_type_delete(tn)
+  " Also cover 'below' and 'right' aligned virtual text (also tp_col==MAXCOL)
+  for align in ['below', 'right']
+    new
+    call setline(1, ['aaa', 'bbb'])
+    call prop_type_add(tn, {'highlight': 'Search'})
+    call prop_add(1, 0, {'type': tn, 'text': 'VT', 'text_align': align})
+    let found = prop_find({'type': tn, 'lnum': 1, 'col': 1})
+    call assert_equal(1, found.lnum, 'forward, align=' .. align)
+    call assert_equal('VT', found.text, 'forward, align=' .. align)
+    let found = prop_find({'type': tn, 'lnum': 1, 'col': 1}, 'b')
+    call assert_equal(1, found.lnum, 'backward, align=' .. align)
+    call assert_equal('VT', found.text, 'backward, align=' .. align)
+    bwipe!
+    call prop_type_delete(tn)
+  endfor
+endfunc
 " vim: shiftwidth=2 sts=2 expandtab

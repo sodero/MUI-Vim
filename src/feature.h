@@ -297,6 +297,14 @@
 #endif
 
 /*
+ * +gtk_print		Native GTK print dialog for :hardcopy (GTK4).
+ *			Uses GtkPrintOperation + Pango/Cairo instead of PostScript.
+ */
+#if defined(FEAT_PRINTER) && defined(FEAT_GUI_GTK) && defined(USE_GTK4)
+# define FEAT_GUI_GTK_PRINT
+#endif
+
+/*
  * +diff		Displaying diffs in a nice way.
  *			Can be enabled in autoconf already.
  */
@@ -436,6 +444,10 @@
 # else
 // #  define FEAT_XFONTSET
 # endif
+#else
+# if defined(USE_GTK4)
+#  undef FEAT_XFONTSET
+# endif
 #endif
 
 /*
@@ -505,7 +517,8 @@
 /*
  * GUI dark theme variant
  */
-#if (defined(FEAT_GUI_GTK) && defined(USE_GTK3)) || defined(FEAT_GUI_MSWIN)
+#if (defined(FEAT_GUI_GTK) && (defined(USE_GTK3) || defined(USE_GTK4))) \
+	|| defined(FEAT_GUI_MSWIN)
 # define FEAT_GUI_DARKTHEME
 #endif
 
@@ -805,7 +818,7 @@
  * +X11			Unix only.  Include code for xterm title saving and X
  *			clipboard.  Only works if HAVE_X11 is also defined.
  */
-#if defined(FEAT_NORMAL) || defined(FEAT_GUI_MOTIF)
+#if (defined(FEAT_NORMAL) || defined(FEAT_GUI_MOTIF)) && !defined(USE_GTK4)
 # define WANT_X11
 #endif
 
@@ -910,7 +923,8 @@
 
 #if defined(FEAT_NORMAL) \
 	&& (defined(UNIX) || defined(VMS)) \
-	&& defined(WANT_X11) && defined(HAVE_X11)
+	&& defined(WANT_X11) && defined(HAVE_X11) \
+	&& !defined(USE_GTK4)
 # define FEAT_XCLIPBOARD
 # ifndef FEAT_CLIPBOARD
 #  define FEAT_CLIPBOARD
@@ -923,13 +937,6 @@
 # ifndef FEAT_CLIPBOARD
 #  define FEAT_CLIPBOARD
 # endif
-#endif
-
-/*
- * +wayland_focus_steal	    Focus stealing support for Wayland clipboard
- */
-#if !defined(FEAT_WAYLAND_CLIPBOARD) && defined(FEAT_WAYLAND_CLIPBOARD_FS)
-# undef FEAT_WAYLAND_CLIPBOARD_FS
 #endif
 
 /*
@@ -950,9 +957,16 @@
 #endif
 
 /*
- * +socketserver	 Use UNIX domain sockets for clientserver communication
+ * The +channel feature requires +eval.
  */
-#if defined(UNIX) && defined(WANT_SOCKETSERVER)
+#if !defined(FEAT_EVAL) && defined(FEAT_JOB_CHANNEL)
+# undef FEAT_JOB_CHANNEL
+#endif
+
+/*
+ * +socketserver	 Use channels for clientserver communication
+ */
+#if (defined(UNIX) || defined(MSWIN)) && defined(FEAT_JOB_CHANNEL)
 # define FEAT_SOCKETSERVER
 #endif
 
@@ -963,6 +977,9 @@
 #if (defined(MSWIN) || defined(FEAT_XCLIPBOARD) || defined(FEAT_SOCKETSERVER)) \
     && defined(FEAT_EVAL)
 # define FEAT_CLIENTSERVER
+# if defined(FEAT_SOCKETSERVER) && (defined(FEAT_XCLIPBOARD) || defined(MSWIN))
+#  define FEAT_CLIENTSERVER_BACKENDS
+# endif
 #endif
 
 /*
@@ -1020,14 +1037,6 @@
 #endif
 
 /*
- * +ARP			Amiga only. Use arp.library, DOS 2.0 is not required.
- */
-#if defined(AMIGA) && !defined(NO_ARP) && !defined(__amigaos4__) \
-	&& !defined(__MORPHOS__) && !defined(__AROS__)
-# define FEAT_ARP
-#endif
-
-/*
  * +ole			Win32 OLE automation: Use Makefile.ovc.
  */
 
@@ -1049,14 +1058,6 @@
  * +terminfo
  * +tgetent
  */
-
-
-/*
- * The +channel feature requires +eval.
- */
-#if !defined(FEAT_EVAL) && defined(FEAT_JOB_CHANNEL)
-# undef FEAT_JOB_CHANNEL
-#endif
 
 /*
  * The Netbeans feature requires +eval and +job_channel
@@ -1091,6 +1092,45 @@
  */
 #if defined(FEAT_EVAL) && defined(FEAT_SYN_HL)
 # define FEAT_PROP_POPUP
+#endif
+
+/*
+ * +image		RGB image rendering inside popup windows.
+ * +image_sixel		terminal backend: emit DEC sixel DCS sequences.
+ * +image_kitty		terminal backend: emit kitty graphics protocol APC
+ *			sequences.  Selected at runtime when the host
+ *			terminal advertises kitty graphics support and
+ *			falls back to sixel otherwise.
+ * +image_gdi		Windows GUI backend: BitBlt a cached DIB section onto
+ *			the GUI canvas.
+ * +image_cairo		Cairo GUI backend: composite a cairo_image_surface_t
+ *			onto gui.surface; covers GTK2/3/4 today.
+ *
+ * The parent FEAT_IMAGE flag enables the popup "image" attribute and the
+ * shared RGB plumbing; at least one backend has to be enabled to actually
+ * paint anything.
+ */
+#if defined(FEAT_HUGE) && defined(FEAT_PROP_POPUP)
+# define FEAT_IMAGE
+#endif
+
+#if defined(FEAT_IMAGE) && !defined(ALWAYS_USE_GUI)
+# define FEAT_IMAGE_SIXEL
+# ifdef USE_INPUT_BUF
+#  define FEAT_IMAGE_KITTY
+# endif
+#endif
+
+#if defined(FEAT_IMAGE) && defined(FEAT_GUI_MSWIN)
+# define FEAT_IMAGE_GDI
+#endif
+
+#if defined(FEAT_IMAGE) && defined(FEAT_GUI_GTK)
+# ifdef USE_GTK4_SNAPSHOT
+#  define FEAT_IMAGE_GDK
+# else
+#  define FEAT_IMAGE_CAIRO
+# endif
 #endif
 
 /*
@@ -1213,4 +1253,11 @@
 
 #if defined(FEAT_NORMAL) && defined(HAVE_XATTR) && !defined(MACOS_X)
 # define FEAT_XATTR
+#endif
+
+/*
+ * +volume_requester
+ */
+#ifdef AMIGA
+# define FEAT_VOLUME_REQUESTER
 #endif

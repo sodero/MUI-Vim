@@ -3,7 +3,7 @@ vim9script
 # Vim functions for file type detection
 #
 # Maintainer:		The Vim Project <https://github.com/vim/vim>
-# Last Change:		2026 Mar 24
+# Last Change:		2026 Jun 14
 # Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 # These functions are moved here from runtime/filetype.vim to make startup
@@ -14,7 +14,13 @@ var prolog_pattern = '^\s*\(:-\|%\+\(\s\|$\)\|\/\*\)\|\.\s*$'
 def IsObjectScriptRoutine(): bool
   var line1 = getline(1)
   line1 = substitute(line1, '^\ufeff', '', '')
-  return line1 =~? '^\s*routine\>\s\+[%A-Za-z][%A-Za-z0-9_.]*\%(\s*\[\|\s*;\|$\)'
+  if line1 =~? '^\s*routine\>'
+    return true
+  endif
+  if line1 =~? '\<iris\>'
+    return true
+  endif
+  return join(getline(1, 3), '') =~# '%RO'
 enddef
 
 export def Check_inp()
@@ -55,6 +61,21 @@ export def FTapp()
     endif
     return
   endfor
+enddef
+
+# This function checks for Kawasaki robots AS file or atlas file type.
+export def FTas()
+  if exists("g:filetype_as")
+    exe "setf " .. g:filetype_as
+    return
+  endif
+  for lnum in range(1, min([line("$"), 30]))
+    if getline(lnum) =~ '^\.NETCONF'
+      setf kawasaki_as
+      return
+    endif
+  endfor
+  setf atlas
 enddef
 
 # This function checks for the kind of assembly that is wanted by the user, or
@@ -541,7 +562,7 @@ export def FThtml()
 
   while n < 40 && n <= line("$")
     # Check for Angular
-    if getline(n) =~ '@\(if\|for\|defer\|switch\)\|\*\(ngIf\|ngFor\|ngSwitch\|ngTemplateOutlet\)\|ng-template\|ng-content'
+    if getline(n) =~ '@\(if\|for\|defer\|switch\)\|\*\(ngIf\|ngFor\|ngSwitch\|ngTemplateOutlet\)\|\<ng-template\|\<ng-content'
       setf htmlangular
       return
     endif
@@ -792,9 +813,14 @@ export def FTnroff(): number
 enddef
 
 export def FTmm()
+  if exists("g:filetype_mm")
+    exe "setf " .. g:filetype_mm
+    return
+  endif
+
   var n = 1
   while n < 20
-    if getline(n) =~ '^\s*\(#\s*\(include\|import\)\>\|@import\>\|/\*\)'
+    if getline(n) =~ '^\s*\(//\|#\s*\(include\|import\)\>\|@import\>\|/\*\)'
       setf objcpp
       return
     endif
@@ -909,7 +935,7 @@ export def FTinc()
       elseif line =~ '^\s*\%({\|(\*\)' || line =~? ft_pascal_keywords
         setf pascal
         return
-      elseif line =~# '\<\%(require\|inherit\)\>' || line =~# '[A-Z][A-Za-z0-9_:${}/]*\s\+\%(??\|[?:+.]\)\?=.\? '
+      elseif line =~# '^\s*\<\%(require\|inherit\)\>' || line =~# '^\s*[A-Z][A-Za-z0-9_:${}/]*\%(\[[A-Za-z0-9_:/]\+\]\)*\s\+\%(??=\|[?:+.]=\|=[+.]\?\)\s\+'
         setf bitbake
         return
       endif
@@ -1472,14 +1498,25 @@ enddef
 
 # Determine if a *.tf file is TF mud client or terraform
 export def FTtf()
-  var numberOfLines = line('$')
-  for i in range(1, numberOfLines)
-    var currentLine = trim(getline(i))
-    var firstCharacter = currentLine[0]
-    if firstCharacter !=? ";" && firstCharacter !=? "/" && firstCharacter !=? ""
-      setf terraform
-      return
+  if exists("g:filetype_tf")
+    exe "setf " .. g:filetype_tf
+    return
+  endif
+
+  var continuation: bool = false
+  for lnum in range(1, min([line("$"), 100]))
+    var line = getline(lnum)
+    # TF supports backslash line continuation, so a continued line may begin
+    # with any character.  Only test the first character of a line that does
+    # not continue a previous one.
+    if !continuation
+      var firstchar = trim(line)[0]
+      if firstchar !=? ";" && firstchar !=? "/" && firstchar !=? ""
+        setf terraform
+        return
+      endif
     endif
+    continuation = line =~ '\\$'
   endfor
   setf tf
 enddef
@@ -1720,6 +1757,8 @@ const ft_from_ext = {
   "tdf": "ahdl",
   # AIDL
   "aidl": "aidl",
+  # Algol 68
+  "a68": "algol68",
   # AMPL
   "run": "ampl",
   # ANTLR / PCCTS
@@ -1758,7 +1797,6 @@ const ft_from_ext = {
   "astro": "astro",
   # Atlas
   "atl": "atlas",
-  "as": "atlas",
   # Atom is based on XML
   "atom": "xml",
   # Authzed
@@ -1792,6 +1830,7 @@ const ft_from_ext = {
   # BDF font
   "bdf": "bdf",
   # Beancount
+  "bean": "beancount",
   "beancount": "beancount",
   # BibTeX bibliography database file
   "bib": "bib",
@@ -2286,6 +2325,8 @@ const ft_from_ext = {
   # KAREL
   "kl": "karel",
   "KL": "karel",
+  # Kawasaki AS
+  "pg": "kawasaki_as",
   # KDL
   "kdl": "kdl",
   # KerML
@@ -2306,6 +2347,8 @@ const ft_from_ext = {
   "kts": "kotlin",
   # KDE script
   "ks": "kscript",
+  # Kaitai struct
+  "ksy": "yaml",
   # Kyaml
   "kyaml": "yaml",
   "kyml": "yaml",
@@ -2607,6 +2650,8 @@ const ft_from_ext = {
   "qmd": "quarto",
   # QuickBms
   "bms": "quickbms",
+  # Popcap Reanimation files
+  "reanim": "xml",
   # Racket (formerly detected as "scheme")
   "rkt": "racket",
   "rktd": "racket",
@@ -2669,6 +2714,8 @@ const ft_from_ext = {
   "rst": "rst",
   # RTF
   "rtf": "rtf",
+  # ObjectScript Routine
+  "rtn": "objectscript_routine",
   # Ruby
   "rb": "ruby",
   "rbw": "ruby",
@@ -2699,6 +2746,8 @@ const ft_from_ext = {
   "mill": "scala",
   # SBT - Scala Build Tool
   "sbt": "sbt",
+  # SGF, Smart Game Format
+  "sgf": "sgf",
   # Slang Shading Language
   "slang": "shaderslang",
   # Slint
@@ -2727,6 +2776,8 @@ const ft_from_ext = {
   "sieve": "sieve",
   # TriG
   "trig": "trig",
+  # Tolk
+  "tolk": "tolk",
   # Zig and Zig Object Notation (ZON)
   "zig": "zig",
   "zon": "zig",
@@ -3105,7 +3156,9 @@ const ft_from_ext = {
   "bp": "bp",
   # Tiltfile
   "Tiltfile": "tiltfile",
-  "tiltfile": "tiltfile"
+  "tiltfile": "tiltfile",
+  # Ghostty
+  "ghostty": "ghostty",
 }
 # Key: file name (the final path component, excluding the drive and root)
 # Value: filetype

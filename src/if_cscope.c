@@ -829,11 +829,11 @@ cs_create_connection(int i)
     int		to_cs[2], from_cs[2];
 # endif
     int		cmdlen;
-    int		len;
     char	*prog, *cmd, *ppath = NULL;
     size_t	proglen;
 # ifdef MSWIN
     int		fd;
+    int		len;
     SECURITY_ATTRIBUTES sa;
     PROCESS_INFORMATION pi;
     STARTUPINFO si;
@@ -872,7 +872,6 @@ err_closing:
     else if (csinfo[i].pid == 0)	// child: run cscope.
     {
 	char **argv = NULL;
-	int argc = 0;
 
 	if (dup2(to_cs[0], STDIN_FILENO) == -1)
 	    PERROR("cs_create_connection 1");
@@ -956,48 +955,93 @@ err_closing:
 
 	// run the cscope command
 # ifdef UNIX
-	vim_snprintf(cmd, cmdlen, "/bin/sh -c \"exec %s -dl -f %s",
-							prog, csinfo[i].fname);
-# else
-	vim_snprintf(cmd, cmdlen, "%s -dl -f %s", prog, csinfo[i].fname);
-# endif
-	if (csinfo[i].ppath != NULL)
 	{
-	    len = (int)STRLEN(cmd);
-	    vim_snprintf(cmd + len, cmdlen - len, " -P%s", csinfo[i].ppath);
-	}
-	if (csinfo[i].flags != NULL)
-	{
-	    len = (int)STRLEN(cmd);
-	    vim_snprintf(cmd + len, cmdlen - len, " %s", csinfo[i].flags);
-	}
-# ifdef UNIX
-	// terminate the -c command argument
-	STRCAT(cmd, "\"");
+	    garray_T	ga_argv;
+	    char	**tok = NULL;
+	    int		tokc = 0;
 
-	// on Win32 we still need prog
-	vim_free(prog);
-# endif
-	vim_free(ppath);
+	    ga_init2(&ga_argv, sizeof(char *), 8);
 
-# if defined(UNIX)
+	    // 'cscopeprg' may be multi-word (e.g. "cscope --foo");
+	    // split it into separate argv entries.
+	    if (build_argv_from_string((char_u *)prog, &tok, &tokc) == FAIL)
+		exit(EXIT_FAILURE);
+	    for (int k = 0; k < tokc; ++k)
+	    {
+		if (ga_grow(&ga_argv, 1) == FAIL)
+		    exit(EXIT_FAILURE);
+		((char **)ga_argv.ga_data)[ga_argv.ga_len++] = tok[k];
+	    }
+	    VIM_CLEAR(tok);
+
+	    // Literal arguments: "-dl", "-f", fname.
+	    if (ga_grow(&ga_argv, 3) == FAIL)
+		exit(EXIT_FAILURE);
+	    ((char **)ga_argv.ga_data)[ga_argv.ga_len++] =
+				    (char *)vim_strsave((char_u *)"-dl");
+	    ((char **)ga_argv.ga_data)[ga_argv.ga_len++] =
+				    (char *)vim_strsave((char_u *)"-f");
+	    ((char **)ga_argv.ga_data)[ga_argv.ga_len++] =
+				(char *)vim_strsave((char_u *)csinfo[i].fname);
+
+	    // "-P<ppath>" as a single argv entry, if set.
+	    if (ppath != NULL)
+	    {
+		size_t	plen = STRLEN(ppath) + 3;
+		char	*parg = alloc(plen);
+
+		if (parg == NULL || ga_grow(&ga_argv, 1) == FAIL)
+		    exit(EXIT_FAILURE);
+		vim_snprintf(parg, plen, "-P%s", ppath);
+		((char **)ga_argv.ga_data)[ga_argv.ga_len++] = parg;
+	    }
+
+	    // 'flags' is intended to be a sequence of cscope tokens
+	    // like "-q -i somefile"; split it the same way as prog.
+	    if (csinfo[i].flags != NULL)
+	    {
+		if (build_argv_from_string((char_u *)csinfo[i].flags,
+							&tok, &tokc) == FAIL)
+		    exit(EXIT_FAILURE);
+		for (int k = 0; k < tokc; ++k)
+		{
+		    if (ga_grow(&ga_argv, 1) == FAIL)
+			exit(EXIT_FAILURE);
+		    ((char **)ga_argv.ga_data)[ga_argv.ga_len++] = tok[k];
+		}
+		vim_free(tok);
+	    }
+
+	    // NULL-terminate argv.
+	    if (ga_grow(&ga_argv, 1) == FAIL)
+		exit(EXIT_FAILURE);
+	    ((char **)ga_argv.ga_data)[ga_argv.ga_len] = NULL;
+
+	    vim_free(prog);
+	    vim_free(ppath);
+	    vim_free(cmd);
+
 #  if defined(HAVE_SETSID) || defined(HAVE_SETPGID)
-	// Change our process group to avoid cscope receiving SIGWINCH.
+	    // Change our process group to avoid cscope receiving SIGWINCH.
 #   if defined(HAVE_SETSID)
-	(void)setsid();
+	    (void)setsid();
 #   else
-	if (setpgid(0, 0) == -1)
-	    PERROR(_("cs_create_connection setpgid failed"));
+	    if (setpgid(0, 0) == -1)
+		PERROR(_("cs_create_connection setpgid failed"));
 #   endif
 #  endif
-	if (build_argv_from_string((char_u *)cmd, &argv, &argc) == FAIL)
-	    exit(EXIT_FAILURE);
 
-	if (execvp(argv[0], argv) == -1)
-	    PERROR(_("cs_create_connection exec failed"));
+	    argv = (char **)ga_argv.ga_data;
+	    if (argv[0] == NULL || execvp(argv[0], argv) == -1)
+	    {
+		fprintf(stderr, "%s\n",
+		    _("cs_create_connection exec failed"));
+		fflush(stderr);
+	    }
 
-	exit(127);
-	// NOTREACHED
+	    exit(127);
+	    // NOTREACHED
+	}
     }
     else	// parent.
     {
@@ -1016,6 +1060,19 @@ err_closing:
     }
 # else
     // MSWIN
+    vim_snprintf(cmd, cmdlen, "%s -dl -f %s", prog, csinfo[i].fname);
+    if (csinfo[i].ppath != NULL)
+    {
+	len = (int)STRLEN(cmd);
+	vim_snprintf(cmd + len, cmdlen - len, " -P%s", csinfo[i].ppath);
+    }
+    if (csinfo[i].flags != NULL)
+    {
+	len = (int)STRLEN(cmd);
+	vim_snprintf(cmd + len, cmdlen - len, " %s", csinfo[i].flags);
+    }
+    vim_free(ppath);
+
     // Create a new process to run cscope and use pipes to talk with it
     GetStartupInfo(&si);
     si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
@@ -2413,28 +2470,35 @@ cs_reset(exarg_T *eap UNUSED)
 cs_resolve_file(int i, char *name)
 {
     char	*fullname;
+    string_T	csdir = {NULL, 0};
+    size_t	namelen;
+    size_t	ppathlen = 0;
     int		len;
-    char_u	*csdir = NULL;
 
     /*
      * Ppath is freed when we destroy the cscope connection.
      * Fullname is freed after cs_make_vim_style_matches, after it's been
      * copied into the tag buffer used by Vim.
      */
-    len = (int)(strlen(name) + 2);
+    namelen = STRLEN(name);
+    len = (int)namelen + 2;
     if (csinfo[i].ppath != NULL)
-	len += (int)strlen(csinfo[i].ppath);
+    {
+	ppathlen = STRLEN(csinfo[i].ppath);
+	len += (int)ppathlen;
+    }
     else if (p_csre && csinfo[i].fname != NULL)
     {
 	// If 'cscoperelative' is set and ppath is not set, use cscope.out
 	// path in path resolution.
-	csdir = alloc(MAXPATHL);
-	if (csdir != NULL)
+	csdir.string = alloc(MAXPATHL);
+	if (csdir.string != NULL)
 	{
-	    vim_strncpy(csdir, (char_u *)csinfo[i].fname,
+	    vim_strncpy(csdir.string, (char_u *)csinfo[i].fname,
 					  gettail((char_u *)csinfo[i].fname)
 						 - (char_u *)csinfo[i].fname);
-	    len += (int)STRLEN(csdir);
+	    csdir.length = STRLEN(csdir.string);
+	    len += (int)csdir.length;
 	}
     }
 
@@ -2442,7 +2506,7 @@ cs_resolve_file(int i, char *name)
     // "../.." and the prefix path is also "../..".  if something like this
     // happens, you are screwed up and need to fix how you're using cscope.
     if (csinfo[i].ppath != NULL
-	    && (strncmp(name, csinfo[i].ppath, strlen(csinfo[i].ppath)) != 0)
+	    && (strncmp(name, csinfo[i].ppath, ppathlen) != 0)
 	    && (name[0] != '/')
 # ifdef MSWIN
 	    && name[0] != '\\' && name[1] != ':'
@@ -2452,18 +2516,20 @@ cs_resolve_file(int i, char *name)
 	if ((fullname = alloc(len)) != NULL)
 	    (void)sprintf(fullname, "%s/%s", csinfo[i].ppath, name);
     }
-    else if (csdir != NULL && csinfo[i].fname != NULL && *csdir != NUL)
+    else if (csdir.string != NULL && csinfo[i].fname != NULL && *csdir.string != NUL)
     {
+	string_T    ret;
+
 	// Check for csdir to be non empty to avoid empty path concatenated to
 	// cscope output.
-	fullname = (char *)concat_fnames(csdir, (char_u *)name, TRUE);
+	fullname = (char *)concat_fnames(csdir.string, csdir.length, (char_u *)name, namelen, TRUE, &ret);
     }
     else
     {
-	fullname = (char *)vim_strsave((char_u *)name);
+	fullname = (char *)vim_strnsave((char_u *)name, namelen);
     }
 
-    vim_free(csdir);
+    vim_free(csdir.string);
     return fullname;
 }
 

@@ -704,6 +704,8 @@ func Test_mswin_event_mouse()
   CheckMSWindows
   new
 
+  let g:test_is_flaky = 1
+
   set mousemodel=extend
   call test_override('no_query_mouse', 1)
   call WaitForResponses()

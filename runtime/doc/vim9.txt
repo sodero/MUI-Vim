@@ -1,4 +1,4 @@
-*vim9.txt*	For Vim version 9.2.  Last change: 2026 Feb 14
+*vim9.txt*	For Vim version 9.2.  Last change: 2026 May 21
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -1117,7 +1117,7 @@ should be used.
 			*false* *true* *null* *null_blob* *null_channel*
 			*null_class* *null_dict* *null_function* *null_job*
 			*null_list* *null_object* *null_partial* *null_string*
-			*E1034*
+			*E1034* *E1395*
 In Vim9 script one can use the following predefined values: >
 	true
 	false
@@ -2355,11 +2355,6 @@ in Vim9 script.
 
 	let &laststatus=v:true
 	vim9cmd &laststatus = true
-<
-  - Not using a string where an argument requires a string (|E1174|) >vim
-
-	echo substitute('Hallo', 'a', 'e', v:true)
-	vim9cmd echo substitute('Hallo', 'a', 'e', true)  # E1174: String...
 <
 One consequence is that the item type of a list or dict given to |map()| must
 not change when its type is either declared or inferred.  For example, this

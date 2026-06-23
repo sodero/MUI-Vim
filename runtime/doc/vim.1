@@ -1,4 +1,4 @@
-.TH VIM 1 "2025 Jun 27"
+.TH VIM 1 "2026 Jun 05"
 .SH NAME
 vim \- Vi IMproved, a programmer's text editor
 .SH SYNOPSIS
@@ -193,6 +193,17 @@ script.
 Start
 .B Vim
 in Ex mode, just like the executable was called "ex".
+.TP
+\-display {display}
+Run
+.B Vim
+on
+.IR {display} ,
+connecting to that X server instead of the one in $DISPLAY.
+The "\-\-display" long form is accepted only by the GTK+ 2 or GTK+ 3 GUI.
+Both forms require the
+.B +xterm_clipboard
+feature.
 .TP
 \-E
 Start
@@ -504,9 +515,12 @@ socketserver backend is being used, if the name starts with "/", "./", or "../",
 it is taken as either an absolute, relative or relative path to the socket.
 .TP
 \-\-clientserver {backend}
-Use {backend} as the backend for clientserver functionality, either "socket" or
-"x11" respectively.  Only available when compiled with both socketserver and X11
-features present
+Use {backend} as the backend for clientserver functionality, either "socket",
+"x11", or "mswin" respectively.  Only available when compiled with both
+socketserver and X11 features present, or if compiled with socketserver on
+MS-Windows. The $VIM_CLIENTSERVER environment variable may also be set which
+will be interpreted in the same way, but the --clientserver argument will always
+take priority.
 .TP
 \-\-socketid {id}
 GTK GUI only: Use the GtkPlug mechanism to run gVim in another window.
@@ -515,7 +529,7 @@ GTK GUI only: Use the GtkPlug mechanism to run gVim in another window.
 During startup write timing messages to the file {fname}.
 .TP
 \-\-ttyfail
-When stdin or stdout is not a a terminal (tty) then exit right away.
+When stdin or stdout is not a terminal (tty) then exit right away.
 .TP
 \-\-version
 Print version information and exit.

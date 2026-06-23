@@ -277,6 +277,8 @@ map_add(
     else
     {
 	mp->m_script_ctx = current_sctx;
+	if (cmdmod.cmod_flags & CMOD_LEGACY)
+	    mp->m_script_ctx.sc_version = 1;
 	mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
     }
 #endif
@@ -658,20 +660,26 @@ do_map(
 		// vi-compatible way.
 		if (has_mbyte)
 		{
-		    int	first, last;
-		    int	same = -1;
+		    int		first, last;
+		    int		same = -1;
+		    char_u	keys_unescaped[MAXMAPLEN + 1];
+		    size_t	keys_unescaped_len;
 
-		    first = vim_iswordp(keys);
+		    mch_memmove(keys_unescaped, keys, (size_t)(len + 1));
+		    keys_unescaped_len = vim_unescape_csi(keys_unescaped);
+		    p = keys_unescaped;
+
+		    first = vim_iswordp(p);
 		    last = first;
-		    p = keys + (*mb_ptr2len)(keys);
+		    MB_PTR_ADV(p);
 		    n = 1;
-		    while (p < keys + len)
+		    while (p < keys_unescaped + keys_unescaped_len)
 		    {
 			++n;			// nr of (multi-byte) chars
 			last = vim_iswordp(p);	// type of last char
 			if (same == -1 && last != first)
 			    same = n - 1;	// count of same char type
-			p += (*mb_ptr2len)(p);
+			MB_PTR_ADV(p);
 		    }
 		    if (last && n > 2 && same >= 0 && same < n - 1)
 		    {
@@ -871,6 +879,8 @@ do_map(
 #ifdef FEAT_EVAL
 				    mp->m_expr = expr;
 				    mp->m_script_ctx = current_sctx;
+				    if (cmdmod.cmod_flags & CMOD_LEGACY)
+					mp->m_script_ctx.sc_version = 1;
 				    mp->m_script_ctx.sc_lnum += SOURCING_LNUM;
 #endif
 				    mp_result[keyround - 1] = mp;
@@ -1677,8 +1687,7 @@ check_abbr(
 		if (qe != NULL)
 		{
 		    q = qe;
-		    vim_unescape_csi(q);
-		    qlen = (int)STRLEN(q);
+		    qlen = (int)vim_unescape_csi(q);
 		}
 	    }
 
@@ -1822,11 +1831,10 @@ eval_map_expr(
     save_cursor = curwin->w_cursor;
     save_msg_col = msg_col;
     save_msg_row = msg_row;
+
+    current_sctx.sc_version = mp->m_script_ctx.sc_version;
     if (mp->m_script_ctx.sc_version == SCRIPT_VERSION_VIM9)
-    {
 	current_sctx.sc_sid = mp->m_script_ctx.sc_sid;
-	current_sctx.sc_version = SCRIPT_VERSION_VIM9;
-    }
 
     // Note: the evaluation may make "mp" invalid.
     p = eval_to_string(expr, FALSE, FALSE);
@@ -1899,8 +1907,9 @@ vim_strsave_escape_csi(char_u *p)
 /*
  * Remove escaping from CSI and K_SPECIAL characters.  Reverse of
  * vim_strsave_escape_csi().  Works in-place.
+ * Returns the number of bytes in the unescaped string.
  */
-    void
+    size_t
 vim_unescape_csi(char_u *p)
 {
     char_u	*s = p, *d = p;
@@ -1922,6 +1931,7 @@ vim_unescape_csi(char_u *p)
 	    *d++ = *s++;
     }
     *d = NUL;
+    return (size_t)(d - p);
 }
 
 /*
@@ -2084,13 +2094,19 @@ makemap(
 					did_cpo = TRUE;
 			if (did_cpo)
 			{
-			    if (fprintf(fd, "let s:cpo_save=&cpo") < 0
+			    if (fprintf(fd, "cpo_save = &cpo") < 0
 				    || put_eol(fd) < 0
 				    || fprintf(fd, "set cpo&vim") < 0
 				    || put_eol(fd) < 0)
 				return FAIL;
 			}
 		    }
+#ifdef FEAT_EVAL
+		    // If it is not vim9 use legacy
+		    if (mp->m_expr && mp->m_script_ctx.sc_version < SCRIPT_VERSION_VIM9
+			    && fputs("legacy ", fd) < 0)
+			return FAIL;
+#endif
 		    if (c1 && putc(c1, fd) < 0)
 			return FAIL;
 		    if (mp->m_noremap != REMAP_YES && fprintf(fd, "nore") < 0)
@@ -2125,9 +2141,7 @@ makemap(
 	}
 
     if (did_cpo)
-	if (fprintf(fd, "let &cpo=s:cpo_save") < 0
-		|| put_eol(fd) < 0
-		|| fprintf(fd, "unlet s:cpo_save") < 0
+	if (fprintf(fd, "&cpo = cpo_save") < 0
 		|| put_eol(fd) < 0)
 	    return FAIL;
     return OK;
@@ -2745,6 +2759,9 @@ f_mapset(typval_T *argvars, typval_T *rettv UNUSED)
     char_u	*arg;
     int		dict_only;
     mapblock_T	*mp_result[2] = {NULL, NULL};
+
+    if (check_secure())
+	return;
 
     // If first arg is a dict, then that's the only arg permitted.
     dict_only = argvars[0].v_type == VAR_DICT;

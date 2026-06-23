@@ -476,7 +476,7 @@ func Test_xxd_buffer_overflow()
   endif
   new
   let input = repeat('A', 256)
-  call writefile(['-9223372036854775808: ' . repeat("\e[1;32m41\e[0m ", 256) . ' ' . "\e[1;32m" . repeat('A', 256) . "\e[0m"], 'Xxdexpected', 'D')
+  call writefile(['9223372036854775808: ' . repeat("\e[1;32m41\e[0m ", 256) . ' ' . "\e[1;32m" . repeat('A', 256) . "\e[0m"], 'Xxdexpected', 'D')
   exe 'r! printf ' . input . '| ' . s:xxd_cmd . ' -Ralways -g1 -c256 -d -o 9223372036854775808 > Xxdout'
   call assert_equalfile('Xxdexpected', 'Xxdout')
   call delete('Xxdout')
@@ -663,6 +663,22 @@ call writefile(data,'Xinput')
 
 endfunc
 
+func Test_xxd_color_bits()
+  " Binary output (-b) should be colored per byte like the hex output,
+  " see issue #20385.  Bytes cover the white/yellow/green/blue color groups.
+  let s:test = 1
+  call writefile(0z000941FF, 'Xxxdbits')
+
+  %d
+  exe '0r! ' . s:xxd_cmd . ' -b -R always -c 4 Xxxdbits'
+  $d
+  let expected = [
+      \ "00000000: \e[1;37m00000000\e[0m \e[1;33m00001001\e[0m \e[1;32m01000001\e[0m \e[1;34m11111111\e[0m  \e[1;37m.\e[0m\e[1;33m.\e[0m\e[1;32mA\e[0m\e[1;34m.\e[0m"]
+  call assert_equal(expected, getline(1, '$'), s:Mess(s:test))
+
+  call delete('Xxxdbits')
+endfunc
+
 func Test_xxd_color2()
   CheckScreendump
   CheckUnix
@@ -696,7 +712,7 @@ func Test_xxd_color2()
 
   let $PS1='$ '
   " This needs dash, plain bashs sh does not seem to work :(
-  let buf = RunVimInTerminal('', #{rows: 20, cmd: 'sh'})
+  let buf = RunVimInTerminal('', #{rows: 20, cmd: 'dash'})
   call term_sendkeys(buf,  s:xxd_cmd .. " -R never  < XXDfile_colors\<cr>")
   call TermWait(buf)
   redraw

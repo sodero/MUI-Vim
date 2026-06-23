@@ -30,6 +30,7 @@ void x11_export_final_selection(void);
 void clip_free_selection(Clipboard_T *cbd);
 void clip_get_selection(Clipboard_T *cbd);
 void clip_yank_selection(int type, char_u *str, long len, Clipboard_T *cbd);
+int clip_convert_selection_offset(char_u **str, long_u *len, int offset, Clipboard_T *cbd);
 int clip_convert_selection(char_u **str, long_u *len, Clipboard_T *cbd);
 int may_get_selection(int regname);
 void may_set_selection(void);
@@ -44,4 +45,5 @@ void call_clip_provider_request(int reg);
 void call_clip_provider_set(int reg);
 void inc_clip_provider(void);
 void dec_clip_provider(void);
+int clip_convert_data(char_u **buf, long *len_store, int *motion, bool vim, bool vimenc, char_u **tofree);
 /* vim: set ft=c : */

@@ -442,27 +442,29 @@ repeat:
 
 	if (p != NULL)
 	{
+	    size_t  dirnamelen = 0;
+
 	    if (c == '.')
 	    {
-		size_t	namelen;
-
 		mch_dirname(dirname, MAXPATHL);
 		if (has_homerelative)
 		{
 		    s = vim_strsave(dirname);
 		    if (s != NULL)
 		    {
-			home_replace(NULL, s, dirname, MAXPATHL, TRUE);
+			dirnamelen = home_replace(NULL, s, dirname, MAXPATHL, TRUE);
 			vim_free(s);
 		    }
 		}
-		namelen = STRLEN(dirname);
+
+		if (dirnamelen == 0)
+		    dirnamelen = STRLEN(dirname);
 
 		// Do not call shorten_fname() here since it removes the prefix
 		// even though the path does not have a prefix.
-		if (fnamencmp(p, dirname, namelen) == 0)
+		if (fnamencmp(p, dirname, dirnamelen) == 0)
 		{
-		    p += namelen;
+		    p += dirnamelen;
 		    if (vim_ispathsep(*p))
 		    {
 			while (*p && vim_ispathsep(*p))
@@ -480,11 +482,11 @@ repeat:
 	    }
 	    else
 	    {
-		home_replace(NULL, p, dirname, MAXPATHL, TRUE);
+		dirnamelen = home_replace(NULL, p, dirname, MAXPATHL, TRUE);
 		// Only replace it when it starts with '~'
 		if (*dirname == '~')
 		{
-		    s = vim_strsave(dirname);
+		    s = vim_strnsave(dirname, dirnamelen);
 		    if (s != NULL)
 		    {
 			*fnamep = s;
@@ -822,6 +824,9 @@ f_chdir(typval_T *argvars, typval_T *rettv)
 
     rettv->v_type = VAR_STRING;
     rettv->vval.v_string = NULL;
+
+    if (check_secure())
+	return;
 
     if (argvars[0].v_type != VAR_STRING)
     {
@@ -1727,6 +1732,8 @@ f_readdir(typval_T *argvars, typval_T *rettv)
 
     if (rettv_list_alloc(rettv) == FAIL)
 	return;
+    if (check_secure())
+	return;
 
     if (in_vim9script()
 	    && (check_for_string_arg(argvars, 0) == FAIL
@@ -1779,6 +1786,8 @@ f_readdirex(typval_T *argvars, typval_T *rettv)
     int		sort = READDIR_SORT_BYTE;
 
     if (rettv_list_alloc(rettv) == FAIL)
+	return;
+    if (check_secure())
 	return;
 
     if (in_vim9script()
@@ -2051,6 +2060,9 @@ read_file_or_blob(typval_T *argvars, typval_T *rettv, int always_blob)
     void
 f_readblob(typval_T *argvars, typval_T *rettv)
 {
+    if (check_secure())
+	return;
+
     if (in_vim9script()
 	    && (check_for_string_arg(argvars, 0) == FAIL
 		|| check_for_opt_number_arg(argvars, 1) == FAIL
@@ -2067,6 +2079,9 @@ f_readblob(typval_T *argvars, typval_T *rettv)
     void
 f_readfile(typval_T *argvars, typval_T *rettv)
 {
+    if (check_secure())
+	return;
+
     if (in_vim9script()
 	    && (check_for_nonempty_string_arg(argvars, 0) == FAIL
 		|| check_for_opt_string_arg(argvars, 1) == FAIL
@@ -2711,7 +2726,7 @@ f_filecopy(typval_T *argvars, typval_T *rettv)
  * 'src'.
  * If anything fails (except when out of space) dst equals src.
  */
-    void
+    size_t
 home_replace(
     buf_T	*buf,	// when not NULL, check for help files
     char_u	*src,	// input file name
@@ -2724,21 +2739,19 @@ home_replace(
     size_t	len;
     char_u	*homedir_env, *homedir_env_orig;
     char_u	*p;
+    char_u	*dst_start;
 
     if (src == NULL)
     {
 	*dst = NUL;
-	return;
+	return 0;
     }
 
     /*
      * If the file is a help file, remove the path completely.
      */
     if (buf != NULL && buf->b_help)
-    {
-	vim_snprintf((char *)dst, dstlen, "%s", gettail(src));
-	return;
-    }
+	return vim_snprintf_safelen((char *)dst, dstlen, "%s", gettail(src));
 
     /*
      * We check both the value of the $HOME environment variable and the
@@ -2780,6 +2793,7 @@ home_replace(
 
     if (!one)
 	src = skipwhite(src);
+    dst_start = dst;		// remember the start
     while (*src && dstlen > 0)
     {
 	/*
@@ -2829,6 +2843,8 @@ home_replace(
 
     if (homedir_env != homedir_env_orig)
 	vim_free(homedir_env);
+
+    return (size_t)(dst - dst_start);
 }
 
 /*
@@ -3178,19 +3194,25 @@ vim_fnamencmp(char_u *x, char_u *y, size_t len)
  * Only add a '/' or '\\' when 'sep' is TRUE and it is necessary.
  */
     char_u  *
-concat_fnames(char_u *fname1, char_u *fname2, int sep)
+concat_fnames(char_u *fname1, size_t fname1len, char_u *fname2, size_t fname2len, int sep, string_T *ret)
 {
-    char_u  *dest;
+    ret->string = alloc(fname1len + (sep ? STRLEN_LITERAL(PATHSEPSTR) : 0) + fname2len + 1);
+    if (ret->string == NULL)
+	ret->length = 0;
+    else
+    {
+	STRCPY(ret->string, fname1);
+	ret->length = fname1len;
+	if (sep && *ret->string != NUL && !after_pathsep(ret->string, ret->string + ret->length))
+	{
+	    STRCPY(ret->string + ret->length, PATHSEPSTR);
+	    ret->length += STRLEN_LITERAL(PATHSEPSTR);
+	}
+	STRCPY(ret->string + ret->length, fname2);
+	ret->length += fname2len;
+    }
 
-    dest = alloc(STRLEN(fname1) + STRLEN(fname2) + 3);
-    if (dest == NULL)
-	return NULL;
-
-    STRCPY(dest, fname1);
-    if (sep)
-	add_pathsep(dest);
-    STRCAT(dest, fname2);
-    return dest;
+    return ret->string;
 }
 
 /*
@@ -3200,8 +3222,14 @@ concat_fnames(char_u *fname1, char_u *fname2, int sep)
     void
 add_pathsep(char_u *p)
 {
-    if (*p != NUL && !after_pathsep(p, p + STRLEN(p)))
-	STRCAT(p, PATHSEPSTR);
+    size_t  plen;
+
+    if (*p == NUL)
+	return;
+
+    plen = STRLEN(p);
+    if (!after_pathsep(p, p + plen))
+	STRCPY(p + plen, PATHSEPSTR);
 }
 
 /*
@@ -4133,7 +4161,7 @@ gen_expand_wildcards(
 	     */
 	    if ((has_env_var(p) && !(flags & EW_NOTENV)) || *p == '~')
 	    {
-		p = expand_env_save_opt(p, TRUE);
+		p = expand_env_save_opt(p, TRUE, (char_u *)PATH_ESC_WILDCARDS);
 		if (p == NULL)
 		    p = pat[i];
 #ifdef UNIX

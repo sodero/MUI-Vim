@@ -49,7 +49,8 @@ static int	value_changed(char_u *str, char_u **last);
 static int build_stl_str_hl_local(stl_mode_T mode, win_T *wp,
 		char_u *out, size_t outlen, char_u **fmt_arg,
 		char_u *opt_name, int opt_scope, int fillchar, int maxwidth,
-		stl_hlrec_T **hltab, stl_hlrec_T **tabtab, int *lbreaks);
+		stl_hlrec_T **hltab, stl_hlrec_T **tabtab,
+		stl_clickrec_T **clicktab, int *lbreaks, int *carry_hl);
 #endif
 static int	append_arg_number(win_T *wp, char_u *buf, size_t buflen, int add_file);
 static void	free_buffer(buf_T *);
@@ -258,7 +259,7 @@ open_buffer(
     // The autocommands in readfile() may change the buffer, but only AFTER
     // reading the file.
     set_bufref(&old_curbuf, curbuf);
-    curbuf->b_modified_was_set = FALSE;
+    curbuf->b_modified_was_set = false;
 
     // mark cursor position as being invalid
     curwin->w_valid = 0;
@@ -277,7 +278,7 @@ open_buffer(
     {
 	int old_msg_silent = msg_silent;
 #ifdef UNIX
-	int save_bin = curbuf->b_p_bin;
+	int	save_bin = curbuf->b_p_bin;
 	int perm;
 #endif
 #ifdef FEAT_NETBEANS_INTG
@@ -735,6 +736,11 @@ aucmd_abort:
 	unblock_autocmds();
     }
 
+    // When a quickfix buffer is deleted from a window, clear the
+    // 'winfixheight' option.
+    if (bt_quickfix(buf) && win_valid && win->w_buffer == buf)
+	win->w_p_wfh = FALSE;
+
     // Remember if the buffer may be hidden soon, or is already hidden.
     hiding_buf = buf->b_nwindows <= 0 || ((win_valid || closed_popup)
 	    && win->w_buffer == buf && buf->b_nwindows == 1);
@@ -823,7 +829,7 @@ aucmd_abort:
 	    buf->b_flags = BF_CHECK_RO | BF_NEVERLOADED;
 
 	    // Init the options when loaded again.
-	    buf->b_p_initialized = FALSE;
+	    buf->b_p_initialized = false;
 	}
 	buf_clear_file(buf);
 	if (del_buf)
@@ -846,7 +852,7 @@ buf_clear_file(buf_T *buf)
 {
     buf->b_ml.ml_line_count = 1;
     unchanged(buf, TRUE, TRUE);
-    buf->b_shortname = FALSE;
+    buf->b_shortname = false;
     buf->b_p_eof = FALSE;
     buf->b_start_eof = FALSE;
     buf->b_p_eol = TRUE;
@@ -1115,9 +1121,6 @@ free_buffer_stuff(
 #endif
 #ifdef FEAT_NETBEANS_INTG
     netbeans_file_killed(buf);
-#endif
-#ifdef FEAT_PROP_POPUP
-    ga_clear_strings(&buf->b_textprop_text);
 #endif
     map_clear_mode(buf, MAP_ALL_MODES, TRUE, FALSE);  // clear local mappings
     map_clear_mode(buf, MAP_ALL_MODES, TRUE, TRUE);   // clear local abbrevs
@@ -2003,8 +2006,8 @@ enter_buffer(buf_T *buf)
     curwin->w_cursor.lnum = 1;
     curwin->w_cursor.col = 0;
     curwin->w_cursor.coladd = 0;
-    curwin->w_set_curswant = TRUE;
-    curwin->w_topline_was_set = FALSE;
+    curwin->w_set_curswant = true;
+    curwin->w_topline_was_set = false;
 
     // mark cursor position as being invalid
     curwin->w_valid = 0;
@@ -2016,7 +2019,7 @@ enter_buffer(buf_T *buf)
 	// ":ball" used in an autocommand.  If there already is a filetype we
 	// might prefer to keep it.
 	if (*curbuf->b_p_ft == NUL)
-	    curbuf->b_did_filetype = FALSE;
+	    curbuf->b_did_filetype = false;
 
 	open_buffer(FALSE, NULL, 0);
     }
@@ -2296,7 +2299,7 @@ buflist_new(
 	free_buffer_stuff(buf, FALSE);	// delete local variables et al.
 
 	// Init the options.
-	buf->b_p_initialized = FALSE;
+	buf->b_p_initialized = false;
 	buf_copy_options(buf, BCO_ENTER);
 
 #ifdef FEAT_KEYMAP
@@ -2376,15 +2379,15 @@ buflist_new(
     buf->b_fname = buf->b_sfname;
 #ifdef UNIX
     if (st.st_dev == (dev_T)-1)
-	buf->b_dev_valid = FALSE;
+	buf->b_dev_valid = false;
     else
     {
-	buf->b_dev_valid = TRUE;
+	buf->b_dev_valid = true;
 	buf->b_dev = st.st_dev;
 	buf->b_ino = st.st_ino;
     }
 #endif
-    buf->b_u_synced = TRUE;
+    buf->b_u_synced = true;
     buf->b_flags = BF_CHECK_RO | BF_NEVERLOADED;
     if (flags & BLN_DUMMY)
 	buf->b_flags |= BF_DUMMY;
@@ -2627,7 +2630,7 @@ buflist_getfile(
 	    curwin->w_cursor.col = col;
 	    check_cursor_col();
 	    curwin->w_cursor.coladd = 0;
-	    curwin->w_set_curswant = TRUE;
+	    curwin->w_set_curswant = true;
 	}
 	retval = OK;
     }
@@ -2657,7 +2660,7 @@ buflist_getfpos(void)
 	curwin->w_cursor.col = fpos->col;
 	check_cursor_col();
 	curwin->w_cursor.coladd = 0;
-	curwin->w_set_curswant = TRUE;
+	curwin->w_set_curswant = true;
     }
 }
 
@@ -3346,7 +3349,7 @@ get_winopts(buf_T *buf)
 #endif
 #ifdef FEAT_FOLDING
 	curwin->w_fold_manual = wp->w_fold_manual;
-	curwin->w_foldinvalid = TRUE;
+	curwin->w_foldinvalid = true;
 	cloneFoldGrowArray(&wp->w_folds, &curwin->w_folds);
 #endif
     }
@@ -3356,7 +3359,7 @@ get_winopts(buf_T *buf)
 	copy_winopt(&wip->wi_opt, &curwin->w_onebuf_opt);
 #ifdef FEAT_FOLDING
 	curwin->w_fold_manual = wip->wi_fold_manual;
-	curwin->w_foldinvalid = TRUE;
+	curwin->w_foldinvalid = true;
 	cloneFoldGrowArray(&wip->wi_folds, &curwin->w_folds);
 #endif
     }
@@ -3673,16 +3676,16 @@ setfname(
     buf->b_fname = buf->b_sfname;
 #ifdef UNIX
     if (st.st_dev == (dev_T)-1)
-	buf->b_dev_valid = FALSE;
+	buf->b_dev_valid = false;
     else
     {
-	buf->b_dev_valid = TRUE;
+	buf->b_dev_valid = true;
 	buf->b_dev = st.st_dev;
 	buf->b_ino = st.st_ino;
     }
 #endif
 
-    buf->b_shortname = FALSE;
+    buf->b_shortname = false;
 
     buf_name_changed(buf);
     return OK;
@@ -3896,12 +3899,12 @@ buf_setino(buf_T *buf)
 
     if (buf->b_fname != NULL && mch_stat((char *)buf->b_fname, &st) >= 0)
     {
-	buf->b_dev_valid = TRUE;
+	buf->b_dev_valid = true;
 	buf->b_dev = st.st_dev;
 	buf->b_ino = st.st_ino;
     }
     else
-	buf->b_dev_valid = FALSE;
+	buf->b_dev_valid = false;
 }
 
 /*
@@ -3950,9 +3953,8 @@ fileinfo(
 	    name = curbuf->b_fname;
 	else
 	    name = curbuf->b_ffname;
-	home_replace(shorthelp ? curbuf : NULL, name, (char_u *)buffer + bufferlen,
-					  IOSIZE - (int)bufferlen, TRUE);
-	bufferlen += STRLEN(buffer + bufferlen);
+	bufferlen += home_replace(shorthelp ? curbuf : NULL, name,
+	    (char_u *)buffer + bufferlen, IOSIZE - (int)bufferlen, TRUE);
     }
 
     bufferlen += vim_snprintf_safelen(
@@ -4083,7 +4085,7 @@ maketitle(void)
 	    if (stl_syntax & STL_IN_TITLE)
 		build_stl_str_hl(curwin, title_str, sizeof(buf), p_titlestring,
 				    (char_u *)"titlestring", 0,
-				    0, maxlen, NULL, NULL);
+				    0, maxlen, NULL, NULL, NULL);
 	    else
 #endif
 		title_str = p_titlestring;
@@ -4254,7 +4256,8 @@ maketitle(void)
 #ifdef FEAT_STL_OPT
 	    if (stl_syntax & STL_IN_ICON)
 		build_stl_str_hl(curwin, icon_str, sizeof(buf), p_iconstring,
-				 (char_u *)"iconstring", 0, 0, 0, NULL, NULL);
+				 (char_u *)"iconstring", 0, 0, 0, NULL, NULL,
+				 NULL);
 	    else
 #endif
 		icon_str = p_iconstring;
@@ -4350,8 +4353,10 @@ typedef struct
 	Separate,
 	Highlight,
 	TabPage,
+	ClickFunc,
 	Trunc
     }		stl_type;
+    char_u	*stl_clickfunc;	// function name for ClickFunc items
 } stl_item_T;
 
 static size_t		stl_items_len = 20; // Initial value, grows as needed.
@@ -4359,6 +4364,7 @@ static stl_item_T      *stl_items = NULL;
 static int	       *stl_groupitem = NULL;
 static stl_hlrec_T     *stl_hltab = NULL;
 static stl_hlrec_T     *stl_tabtab = NULL;
+static stl_clickrec_T  *stl_clicktab = NULL;
 static int		*stl_separator_locations = NULL;
 
 /*
@@ -4386,10 +4392,12 @@ build_stl_str_hl(
     int		fillchar,
     int		maxwidth,
     stl_hlrec_T **hltab,	// return: HL attributes (can be NULL)
-    stl_hlrec_T **tabtab)	// return: tab page nrs (can be NULL)
+    stl_hlrec_T **tabtab,	// return: tab page nrs (can be NULL)
+    stl_clickrec_T **clicktab)	// return: click func regions (can be NULL)
 {
     return build_stl_str_hl_local(STL_MODE_SINGLE, wp, out, outlen, &fmt,
-	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, NULL);
+	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, clicktab,
+	    NULL, NULL);
 }
 
     int
@@ -4403,10 +4411,14 @@ build_stl_str_hl_mline(
     int		fillchar,
     int		maxwidth,
     stl_hlrec_T **hltab,	// return: HL attributes (can be NULL)
-    stl_hlrec_T **tabtab)	// return: tab page nrs (can be NULL)
+    stl_hlrec_T **tabtab,	// return: tab page nrs (can be NULL)
+    stl_clickrec_T **clicktab,	// return: click func regions (can be NULL)
+    int		*carry_hl)	// (in/out) %# / %* highlight carried across
+				// line breaks (can be NULL)
 {
     return build_stl_str_hl_local(STL_MODE_MULTI, wp, out, outlen, fmt,
-	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, NULL);
+	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, clicktab,
+	    NULL, carry_hl);
 }
 
 # ifdef ENABLE_STL_MODE_MULTI_NL
@@ -4421,10 +4433,14 @@ build_stl_str_hl_mline_nl(
     int		fillchar,
     int		maxwidth,
     stl_hlrec_T **hltab,	// return: HL attributes (can be NULL)
-    stl_hlrec_T **tabtab)	// return: tab page nrs (can be NULL)
+    stl_hlrec_T **tabtab,	// return: tab page nrs (can be NULL)
+    stl_clickrec_T **clicktab,	// return: click func regions (can be NULL)
+    int		*carry_hl)	// (in/out) %# / %* highlight carried across
+				// line breaks (can be NULL)
 {
     return build_stl_str_hl_local(STL_MODE_MULTI_NL, wp, out, outlen, fmt,
-	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, NULL);
+	    opt_name, opt_scope, fillchar, maxwidth, hltab, tabtab, clicktab,
+	    NULL, carry_hl);
 }
 # endif
 
@@ -4445,7 +4461,8 @@ get_stl_rendered_height(
     ++emsg_off;
     (void)build_stl_str_hl_local(STL_MODE_GET_RENDERED_HEIGHT,
 	    wp, buf, sizeof(buf), &fmt,
-	    opt_name, opt_scope, 0, 0, NULL, NULL, &rendered_height);
+	    opt_name, opt_scope, 0, 0, NULL, NULL, NULL, &rendered_height,
+	    NULL);
     --emsg_off;
     return rendered_height;
 }
@@ -4480,7 +4497,10 @@ build_stl_str_hl_local(
     int		maxwidth,
     stl_hlrec_T **hltab,	// return: HL attributes (can be NULL)
     stl_hlrec_T **tabtab,	// return: tab page nrs (can be NULL)
-    int		*rendered_height)   // return: stl rendered height (can be NULL)
+    stl_clickrec_T **clicktab,	// return: click func regions (can be NULL)
+    int		*rendered_height,   // return: stl rendered height (can be NULL)
+    int		*carry_hl)	// (in/out) %# / %* highlight carried across
+				// line breaks (can be NULL)
 {
     linenr_T	lnum;
     colnr_T	len;
@@ -4541,6 +4561,7 @@ build_stl_str_hl_local(
 	// end of the list.
 	stl_hltab  = ALLOC_MULT(stl_hlrec_T, stl_items_len + 1);
 	stl_tabtab = ALLOC_MULT(stl_hlrec_T, stl_items_len + 1);
+	stl_clicktab = ALLOC_MULT(stl_clickrec_T, stl_items_len + 1);
 
 	stl_separator_locations = ALLOC_MULT(int, stl_items_len);
     }
@@ -4604,6 +4625,18 @@ build_stl_str_hl_local(
 # endif
     p = out;
     curitem = 0;
+
+    // Pre-insert a Highlight item from carry_hl so that %# / %* set on a
+    // previous multi-line statusline row continues to apply on this row.
+    if (carry_hl != NULL && *carry_hl != 0)
+    {
+	stl_items[curitem].stl_type = Highlight;
+	stl_items[curitem].stl_start = p;
+	stl_items[curitem].stl_minwid = *carry_hl;
+	stl_items[curitem].stl_clickfunc = NULL;
+	curitem++;
+    }
+
     prevchar_isflag = TRUE;
     prevchar_isitem = FALSE;
     for (s = usefmt; *s != NUL; )
@@ -4635,6 +4668,12 @@ build_stl_str_hl_local(
 		break;
 	    stl_tabtab = new_hlrec;
 
+	    stl_clickrec_T *new_clickrec = vim_realloc(stl_clicktab,
+				      sizeof(stl_clickrec_T) * (new_len + 1));
+	    if (new_clickrec == NULL)
+		break;
+	    stl_clicktab = new_clickrec;
+
 	    int *new_separator_locs = vim_realloc(stl_separator_locations,
 					    sizeof(int) * new_len);
 	    if (new_separator_locs == NULL)
@@ -4643,6 +4682,8 @@ build_stl_str_hl_local(
 
 	    stl_items_len = new_len;
 	}
+
+	stl_items[curitem].stl_clickfunc = NULL;
 
 	if (*s != '%')
 	    prevchar_isflag = prevchar_isitem = FALSE;
@@ -4678,8 +4719,39 @@ build_stl_str_hl_local(
 	if (*s == NUL)  // ignore trailing %
 	    break;
 
+	if (*s == STL_CLICKFUNC)
+	{
+	    // %[] - end click region
+	    if (s[1] == ']')
+	    {
+		stl_items[curitem].stl_type = ClickFunc;
+		stl_items[curitem].stl_start = p;
+		stl_items[curitem].stl_minwid = 0;
+		stl_items[curitem].stl_clickfunc = NULL;
+		s += 2;
+		curitem++;
+		continue;
+	    }
+	    // %[FuncName] - start click region
+	    if (ASCII_ISALPHA(s[1]) || s[1] == '_')
+	    {
+		char_u *rb = vim_strchr(s + 1, ']');
+		if (rb != NULL)
+		{
+		    stl_items[curitem].stl_type = ClickFunc;
+		    stl_items[curitem].stl_start = p;
+		    stl_items[curitem].stl_minwid = 0;
+		    stl_items[curitem].stl_clickfunc =
+					  vim_strnsave(s + 1, rb - s - 1);
+		    s = rb + 1;
+		    curitem++;
+		    continue;
+		}
+	    }
+	}
 	if (*s == STL_LINEBREAK)
 	{
+	    // Plain %@ - line break
 	    if (mode == STL_MODE_MULTI
 # ifdef ENABLE_STL_MODE_MULTI_NL
 		    || mode == STL_MODE_MULTI_NL
@@ -4792,7 +4864,9 @@ build_stl_str_hl_local(
 		p = p - n + 1;
 
 		// Fill up space left over by half a double-wide char.
-		while (++l < stl_items[stl_groupitem[groupdepth]].stl_minwid)
+		int minwid_fixed = MIN(stl_items[stl_groupitem[groupdepth]].stl_minwid,
+				       stl_items[stl_groupitem[groupdepth]].stl_maxwid);
+		while (++l < minwid_fixed)
 		    MB_CHAR2BYTES(fillchar, p);
 
 		// correct the start of the items for the truncation
@@ -4808,25 +4882,30 @@ build_stl_str_hl_local(
 	    {
 		// fill
 		n = stl_items[stl_groupitem[groupdepth]].stl_minwid;
+		int fillchar_len = MB_CHAR2LEN(fillchar);
 		if (n < 0)
 		{
 		    // fill by appending characters
 		    n = 0 - n;
-		    while (l++ < n && p + 1 < out + outlen)
+		    while (l++ < n && p + fillchar_len < out + outlen)
 			MB_CHAR2BYTES(fillchar, p);
 		}
 		else
 		{
 		    // fill by inserting characters
-		    l = (n - l) * MB_CHAR2LEN(fillchar);
-		    mch_memmove(t + l, t, (size_t)(p - t));
+		    n = n - l;
+		    l = n * fillchar_len;
 		    if (p + l >= out + outlen)
-			l = (long)((out + outlen) - p - 1);
+		    {
+			n = (long)((out + outlen) - p - 1) / fillchar_len;
+			l = n * fillchar_len;
+		    }
+		    mch_memmove(t + l, t, (size_t)(p - t));
 		    p += l;
+		    for ( ; n > 0; n--)
+			MB_CHAR2BYTES(fillchar, t);
 		    for (n = stl_groupitem[groupdepth] + 1; n < curitem; n++)
 			stl_items[n].stl_start += l;
-		    for ( ; l > 0; l--)
-			MB_CHAR2BYTES(fillchar, t);
 		}
 	    }
 	    continue;
@@ -4897,6 +4976,9 @@ build_stl_str_hl_local(
 		    maxwid = 50;
 	    }
 	}
+	// Keep the uncapped value for %N[FuncName] click-region IDs; the 50
+	// cap below applies only when minwid is used as a padding width.
+	int raw_minwid = minwid * l;
 	minwid = (minwid > 50 ? 50 : minwid) * l;
 	if (*s == '(')
 	{
@@ -4971,7 +5053,8 @@ build_stl_str_hl_local(
 
 	    if (reevaluate)
 		s++;
-	    itemisflag = TRUE;
+	    // %0{} keeps the result verbatim
+	    itemisflag = zeropad ? FALSE : TRUE;
 	    t = p;
 	    while ((*s != '}' || (reevaluate && s[-1] != '%'))
 					  && *s != NUL && p + 1 < out + outlen)
@@ -4979,7 +5062,7 @@ build_stl_str_hl_local(
 	    if (*s != '}')	// missing '}' or out of space
 		break;
 	    s++;
-	    if (reevaluate)
+	    if (reevaluate && p > out)
 		p[-1] = NUL; // remove the % at the end of %{% expr %}
 	    else
 		*p = NUL;
@@ -5008,7 +5091,7 @@ build_stl_str_hl_local(
 	    do_unlet((char_u *)"g:actual_curbuf", TRUE);
 	    do_unlet((char_u *)"g:actual_curwin", TRUE);
 
-	    if (str != NULL && *str != NUL)
+	    if (!zeropad && str != NULL && *str != NUL)
 	    {
 		if (*skipdigits(str) == NUL)
 		{
@@ -5236,6 +5319,44 @@ build_stl_str_hl_local(
 		    ++s;
 		continue;
 	    }
+
+	case STL_CLICKFUNC:
+	    // %N[] - end click region (with minwid, minwid is ignored)
+	    if (*s == ']')
+	    {
+		stl_items[curitem].stl_type = ClickFunc;
+		stl_items[curitem].stl_start = p;
+		stl_items[curitem].stl_minwid = 0;
+		stl_items[curitem].stl_clickfunc = NULL;
+		s++;
+		curitem++;
+		continue;
+	    }
+	    // %N[FuncName] with minwid
+	    if (ASCII_ISALPHA(*s) || *s == '_')
+	    {
+		char_u *rb = vim_strchr(s, ']');
+		if (rb != NULL)
+		{
+		    stl_items[curitem].stl_type = ClickFunc;
+		    stl_items[curitem].stl_start = p;
+		    // The stl_minwid field is overloaded: it may be the
+		    // "min" part of %<min>.<max> used for padding, or an
+		    // identifier passed to the %N[FuncName] callback.  Store
+		    // the uncapped value so IDs above 50 are preserved.
+		    stl_items[curitem].stl_minwid = raw_minwid;
+		    stl_items[curitem].stl_clickfunc =
+					      vim_strnsave(s, rb - s);
+		    s = rb + 1;
+		    curitem++;
+		    continue;
+		}
+	    }
+	    continue;
+
+	case STL_LINEBREAK:
+	    // %N@ - line break (already handled above, fallback)
+	    continue;
 	}
 
 	stl_items[curitem].stl_start = p;
@@ -5356,6 +5477,17 @@ find_linebreak:
     outputlen = (size_t)(p - out);
     itemcnt = curitem;
 
+    // Remember the most recent %# / %* highlight so the next row of a
+    // multi-line statusline can resume it.
+    if (carry_hl != NULL)
+    {
+	int last_hl = 0;
+	for (l = 0; l < itemcnt; l++)
+	    if (stl_items[l].stl_type == Highlight)
+		last_hl = stl_items[l].stl_minwid;
+	*carry_hl = last_hl;
+    }
+
     if (mode == STL_MODE_MULTI
 # ifdef ENABLE_STL_MODE_MULTI_NL
 		    || mode == STL_MODE_MULTI_NL
@@ -5391,6 +5523,10 @@ find_linebreak:
 
     if (mode == STL_MODE_GET_RENDERED_HEIGHT)
     {
+	// Free click function names that were allocated during parsing.
+	for (l = 0; l < itemcnt; l++)
+	    if (stl_items[l].stl_type == ClickFunc)
+		vim_free(stl_items[l].stl_clickfunc);
 	if (rendered_height != NULL)
 	    *rendered_height = rheight;
 	return 0;
@@ -5562,6 +5698,34 @@ find_linebreak:
 	}
 	sp->start = NULL;
 	sp->userhl = 0;
+    }
+
+    // Store the info about click function regions.
+    if (clicktab != NULL)
+    {
+	stl_clickrec_T *cp;
+
+	*clicktab = stl_clicktab;
+	cp = stl_clicktab;
+	for (l = 0; l < itemcnt; l++)
+	{
+	    if (stl_items[l].stl_type == ClickFunc)
+	    {
+		cp->start = stl_items[l].stl_start;
+		cp->funcname = stl_items[l].stl_clickfunc;
+		cp->minwid = stl_items[l].stl_minwid;
+		cp++;
+	    }
+	}
+	cp->start = NULL;
+	cp->funcname = NULL;
+    }
+    else
+    {
+	// Free click function names when caller doesn't need them.
+	for (l = 0; l < itemcnt; l++)
+	    if (stl_items[l].stl_type == ClickFunc)
+		vim_free(stl_items[l].stl_clickfunc);
     }
 
     redraw_not_allowed = save_redraw_not_allowed;

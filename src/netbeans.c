@@ -40,6 +40,11 @@
 #define GUARDEDOFFSET 1000000 // base for "guarded" sign id's
 #define MAX_COLOR_LENGTH 32 // max length of color name in defineAnnoType
 
+// Characters valid in a sign/highlight group name
+#define VALID_CHARS         (char_u *)"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+#define VALID_SIGNNAME_CHARS    VALID_CHARS "_"
+#define VALID_COLOR_CHARS       VALID_CHARS "#"
+
 // The first implementation (working only with Netbeans) returned "1.1".  The
 // protocol implemented here also supports A-A-P.
 static char *ExtEdProtocolVersion = "2.5";
@@ -76,6 +81,22 @@ static int dosetvisible = FALSE;
 
 static int needupdate = 0;
 static int inAtomic = 0;
+
+/*
+ * Return TRUE if "str" contains only characters from "allowed".
+ * Used to validate NetBeans-supplied strings before interpolating them
+ * into Ex commands via coloncmd().
+ */
+    static int
+nb_is_safe_string(char_u *str, char_u *allowed)
+{
+    if (str == NULL)
+	return FALSE;
+    for (char_u *p = str; *p != NUL; p++)
+	if (vim_strchr(allowed, *p) == NULL)
+	    return FALSE;
+    return TRUE;
+}
 
 /*
  * Callback invoked when the channel is closed.
@@ -465,7 +486,7 @@ nb_parse_cmd(char_u *cmd)
 	buf_T	*buf;
 
 	FOR_ALL_BUFFERS(buf)
-	    buf->b_has_sign_column = FALSE;
+	    buf->b_has_sign_column = false;
 
 	// The IDE is breaking the connection.
 	netbeans_close();
@@ -574,8 +595,8 @@ nb_free(void)
 	vim_free(buf.signmap);
 	if (buf.bufp != NULL && buf_valid(buf.bufp))
 	{
-	    buf.bufp->b_netbeans_file = FALSE;
-	    buf.bufp->b_was_netbeans_file = FALSE;
+	    buf.bufp->b_netbeans_file = false;
+	    buf.bufp->b_was_netbeans_file = false;
 	}
     }
     VIM_CLEAR(buf_list);
@@ -937,7 +958,7 @@ nb_partialremove(linenr_T lnum, colnr_T first, colnr_T last)
 	return;
     if (lastbyte >= oldlen)
 	lastbyte = oldlen - 1;
-    newtext = alloc(oldlen - (int)(lastbyte - first));
+    newtext = alloc(oldlen - (lastbyte - first));
     if (newtext == NULL)
 	return;
 
@@ -1949,6 +1970,15 @@ nb_do_cmd(
 		VIM_CLEAR(typeName);
 		parse_error = TRUE;
 	    }
+	    else if (!nb_is_safe_string(typeName, VALID_SIGNNAME_CHARS) ||
+		    (*fg != NUL && !nb_is_safe_string(fg, VALID_COLOR_CHARS)) ||
+		    (*bg != NUL && !nb_is_safe_string(bg, VALID_COLOR_CHARS)))
+	    {
+		nbdebug(("    invalid chars in typeName/fg/bg in defineAnnoType\n"));
+		emsg(_(e_invalid_identifier_in_defineannotype));
+		VIM_CLEAR(typeName);
+		parse_error = TRUE;
+	    }
 	    else if (typeName != NULL && tooltip != NULL && glyphFile != NULL)
 		addsigntype(buf, typeNum, typeName, tooltip, glyphFile, fg, bg);
 
@@ -2181,11 +2211,11 @@ nb_do_cmd(
 	    }
 	    if (*args == 'T')
 	    {
-		buf->bufp->b_netbeans_file = TRUE;
-		buf->bufp->b_was_netbeans_file = TRUE;
+		buf->bufp->b_netbeans_file = true;
+		buf->bufp->b_was_netbeans_file = true;
 	    }
 	    else
-		buf->bufp->b_netbeans_file = FALSE;
+		buf->bufp->b_netbeans_file = false;
 // =====================================================================
 	}
 	else if (streq((char *)cmd, "specialKeys"))
@@ -2321,10 +2351,24 @@ special_keys(char_u *args)
 
 	if (strlen(tok) + i < KEYBUFLEN)
 	{
-	    vim_strncpy((char_u *)&keybuf[i], (char_u *)tok, KEYBUFLEN - i - 1);
-	    vim_snprintf(cmdbuf, sizeof(cmdbuf),
-				 "<silent><%s> :nbkey %s<CR>", keybuf, keybuf);
-	    do_map(MAPTYPE_MAP, (char_u *)cmdbuf, MODE_NORMAL, FALSE);
+	    // Only allow alphanumeric and function-key name characters.
+	    // Reject anything else to prevent map command injection.
+	    int safe = TRUE;
+	    for (char_u *tp = (char_u *)tok; *tp != NUL; tp++)
+	    {
+		if (!ASCII_ISALNUM(*tp) && *tp != '-')
+		{
+		    safe = FALSE;
+		    break;
+		}
+	    }
+	    if (safe)
+	    {
+		vim_strncpy((char_u *)&keybuf[i], (char_u *)tok, KEYBUFLEN - i - 1);
+		vim_snprintf(cmdbuf, sizeof(cmdbuf),
+				"<silent><%s> :nbkey %s<CR>", keybuf, keybuf);
+		do_map(MAPTYPE_MAP, (char_u *)cmdbuf, MODE_NORMAL, FALSE);
+	    }
 	}
 	tok = strtok(NULL, " ");
     }
@@ -3060,21 +3104,25 @@ netbeans_draw_multisign_indicator(int row)
     if (!NETBEANS_OPEN)
 	return;
 
+    x = 0;
+    y = row * gui.char_height + 2;
+
 # if GTK_CHECK_VERSION(3,0,0)
+#  ifdef USE_GTK4_SNAPSHOT
+    cr = gui_gtk4_get_multisign_context(x, y, 5, gui.char_height);
+#  else
     cr = cairo_create(gui.surface);
+#  endif
     cairo_set_source_rgba(cr,
 	    gui.fgcolor->red, gui.fgcolor->green, gui.fgcolor->blue,
 	    gui.fgcolor->alpha);
 # endif
 
-    x = 0;
-    y = row * gui.char_height + 2;
-
     for (i = 0; i < gui.char_height - 3; i++)
 # if GTK_CHECK_VERSION(3,0,0)
 	cairo_rectangle(cr, x+2, y++, 1, 1);
 # else
-	gdk_draw_point(drawable, gui.text_gc, x+2, y++);
+    gdk_draw_point(drawable, gui.text_gc, x+2, y++);
 # endif
 
 # if GTK_CHECK_VERSION(3,0,0)

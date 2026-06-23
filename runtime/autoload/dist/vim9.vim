@@ -3,7 +3,7 @@ vim9script
 # Vim runtime support library
 #
 # Maintainer:   The Vim Project <https://github.com/vim/vim>
-# Last Change:  2026 Mar 10
+# Last Change:  2026 May 30
 
 export def IsSafeExecutable(filetype: string, executable: string): bool
   if empty(exepath(executable))
@@ -51,7 +51,7 @@ if has('unix')
         execute $'silent !cmd /c start "" /b {args} {Redir()}' | redraw!
       enddef
     endif
-  elseif exists('$WSL_DISTRO_NAME') # use cmd.exe to start GUI apps in WSL
+  elseif exists('$WSL_DISTRO_NAME') && executable('cmd.exe') # use cmd.exe to start GUI apps in WSL
     export def Launch(args: string)
       const command = (args =~? '\v<\f+\.(exe|com|bat|cmd)>')
         ? $'cmd.exe /c start /b {args} {Redir()}'
@@ -62,7 +62,7 @@ if has('unix')
     export def Launch(args: string)
       # Use job_start, because using !xdg-open is known not to work with zsh
       # ignore signals on exit
-      job_start(split(args), {'stoponexit': ''})
+      job_start(['sh', '-c', args], {'stoponexit': '', 'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
     enddef
   endif
 elseif has('win32')
@@ -131,19 +131,16 @@ enddef
 export def Open(file: string)
   # disable shellslash for shellescape, required on Windows #17995
   if exists('+shellslash') && &shellslash
-    &shellslash = false
     defer setbufvar('%', '&shellslash', true)
+    &shellslash = false
   endif
   if &shell == 'pwsh' || &shell == 'powershell'
-    const shell = &shell
+    defer setbufvar('%', '&shell', &shell)
     setlocal shell&
-    defer setbufvar('%', '&shell', shell)
   endif
   if has('unix') && !has('win32unix') && !exists('$WSL_DISTRO_NAME')
-    # Linux: using job_start, so do not use shellescape.
-    Launch($"{Viewer()} {file}")
+    Launch($"{Viewer()} {shellescape(file)}")
   else
-    # Windows/WSL/Cygwin: NEEDS shellescape because Launch uses '!'
     Launch($"{Viewer()} {shellescape(file, 1)}")
   endif
 enddef

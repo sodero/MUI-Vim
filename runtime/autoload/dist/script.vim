@@ -4,7 +4,7 @@ vim9script
 # Invoked from "scripts.vim" in 'runtimepath'
 #
 # Maintainer:	The Vim Project <https://github.com/vim/vim>
-# Last Change:	2025 Dec 22
+# Last Change:	2026 Apr 09
 # Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 export def DetectFiletype()
@@ -45,6 +45,8 @@ def DetectFromHashBang(firstline: string)
     name = substitute(line1, '^#!.*\<env\>\s\+\(\i\+\).*', '\1', '')
   elseif line1 =~ '^#!\s*[^/\\ ]*\>\([^/\\]\|$\)'
     name = substitute(line1, '^#!\s*\([^/\\ ]*\>\).*', '\1', '')
+  elseif line1 =~ '^#!.*\<busybox\>'
+    name = substitute(line1, '^#!.*\<busybox\>\s\+\(\i\+\).*', '\1', '')
   else
     name = substitute(line1, '^#!\s*\S*[/\\]\(\f\+\).*', '\1', '')
   endif
@@ -67,7 +69,7 @@ enddef
 # Returns an empty string when not recognized.
 export def Exe2filetype(name: string, line1: string): string
     # Bourne-like shell scripts: bash bash2 dash ksh ksh93 sh
-  if name =~ '^\(bash\d*\|dash\|ksh\d*\|sh\)\>'
+  if name =~ '^\(bash\d*\|d\?ash\|ksh\d*\|sh\)\>'
     return dist#ft#SetFileTypeSH(line1, false)
 
     # csh scripts
@@ -115,7 +117,7 @@ export def Exe2filetype(name: string, line1: string): string
     return 'php'
 
     # Python
-  elseif name =~ 'python'
+  elseif name =~ 'python' || (name == 'uv' && line1 =~ '\<uv run\>')
     return 'python'
 
     # Groovy

@@ -3,26 +3,28 @@
 
 # Source files for all source archives.
 SRC_ALL =	\
-		.cirrus.yml \
 		.gitattributes \
 		.git-blame-ignore-revs \
 		.github/MAINTAINERS \
 		.github/ISSUE_TEMPLATE/bug_report.yml \
 		.github/ISSUE_TEMPLATE/feature_request.md \
+		.github/workflows/ci-linux.yml \
+		.github/workflows/ci-linux_asan.yml \
+		.github/workflows/ci-macos.yml \
+		.github/workflows/ci-windows.yml \
 		.github/workflows/ci.yml \
 		.github/workflows/codeql-analysis.yml \
-		.github/workflows/coverity.yml \
 		.github/workflows/link-check.yml \
+		.github/actions/build_vim_on_linux/action.yml \
 		.github/actions/test_artifacts/action.yml \
 		.github/dependabot.yml \
 		.gitignore \
 		.hgignore \
-		.appveyor.yml \
 		.clang-format \
 		.codecov.yml \
 		.editorconfig \
-		ci/appveyor.bat \
 		ci/config.mk*.sed \
+		ci/gen_testset.py \
 		ci/if_ver*.vim \
 		ci/if_feat_check.vim \
 		ci/lychee.toml \
@@ -145,12 +147,17 @@ SRC_ALL =	\
 		src/session.c \
 		src/sha256.c \
 		src/sign.c \
+		src/sixel.c \
+		src/kitty.c \
+		src/cairo.c \
+		src/socketserver.c \
 		src/sound.c \
 		src/spell.c \
 		src/spell.h \
 		src/spellfile.c \
 		src/spellsuggest.c \
 		src/strings.c \
+		src/strptime.c \
 		src/structs.h \
 		src/syntax.c \
 		src/tabpanel.c \
@@ -343,6 +350,10 @@ SRC_ALL =	\
 		src/proto/session.pro \
 		src/proto/sha256.pro \
 		src/proto/sign.pro \
+		src/proto/sixel.pro \
+		src/proto/kitty.pro \
+		src/proto/cairo.pro \
+		src/proto/socketserver.pro \
 		src/proto/sound.pro \
 		src/proto/spell.pro \
 		src/proto/spellfile.pro \
@@ -440,6 +451,7 @@ SRC_ALL =	\
 		src/libvterm/t/66screen_extent.test \
 		src/libvterm/t/67screen_dbl_wh.test \
 		src/libvterm/t/68screen_termprops.test \
+		src/libvterm/t/69screen_pushline.test \
 		src/libvterm/t/69screen_reflow.test \
 		src/libvterm/t/90vttest_01-movement-1.test \
 		src/libvterm/t/90vttest_01-movement-2.test \
@@ -496,6 +508,13 @@ SRC_UNIX =	\
 		src/gui_gtk_f.c \
 		src/gui_gtk_f.h \
 		src/gui_gtk_x11.c \
+		src/gui_gtk4.c \
+		src/gui_gtk4_f.c \
+		src/gui_gtk4_f.h \
+		src/gui_gtk4_cb.c \
+		src/gui_gtk4_cb.h \
+		src/gui_gtk4_da.c \
+		src/gui_gtk4_da.h \
 		src/gui_gtk_res.xml \
 		src/gui_motif.c \
 		src/gui_xmdlg.c \
@@ -525,6 +544,7 @@ SRC_UNIX =	\
 		src/proto/gui_gtk.pro \
 		src/proto/gui_gtk_x11.pro \
 		src/proto/gui_gtk_gresources.pro \
+		src/proto/gui_gtk4.pro \
 		src/proto/gui_motif.pro \
 		src/proto/gui_xmdlg.pro \
 		src/proto/gui_x11.pro \
@@ -678,6 +698,7 @@ SRC_AMI =	\
 		src/Make_ami.mak \
 		src/os_amiga.c \
 		src/os_amiga.h \
+		src/os_amiga_stubs.c \
 		src/proto/os_amiga.pro \
 		src/testdir/Make_amiga.mak \
 		src/testdir/util/amiga.vim \
@@ -1190,10 +1211,10 @@ LANG_DOS = \
 # be excluded from distribution tarballs and the like.
 # This excludes them from the CI check for unlisted files.
 IGNORE = \
-		.appveyor.yml \
 		.github/FUNDING.yml \
 		.github/labeler.yml \
 		.github/workflows/label.yml \
+		AGENTS.md \
 		SECURITY.md \
 		ci/unlisted.make \
 		ci/hlgroups.make \

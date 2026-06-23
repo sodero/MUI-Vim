@@ -501,7 +501,7 @@ newFoldLevelWin(win_T *wp)
 	fp = (fold_T *)wp->w_folds.ga_data;
 	for (i = 0; i < wp->w_folds.ga_len; ++i)
 	    fp[i].fd_flags = FD_LEVEL;
-	wp->w_fold_manual = FALSE;
+	wp->w_fold_manual = false;
     }
     changed_window_setting_win(wp);
 }
@@ -692,7 +692,7 @@ foldCreate(linenr_T start, linenr_T end)
     if (use_level && !closed && level < curwin->w_p_fdl)
 	closeFold(start, 1L);
     if (!use_level)
-	curwin->w_fold_manual = TRUE;
+	curwin->w_fold_manual = true;
     fp->fd_flags = FD_CLOSED;
     fp->fd_small = MAYBE;
 
@@ -805,7 +805,7 @@ deleteFold(
 clearFolding(win_T *win)
 {
     deleteFoldRecurse(&win->w_folds);
-    win->w_foldinvalid = FALSE;
+    win->w_foldinvalid = false;
 }
 
 // foldUpdate() {{{2
@@ -875,7 +875,7 @@ foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
     void
 foldUpdateAll(win_T *win)
 {
-    win->w_foldinvalid = TRUE;
+    win->w_foldinvalid = true;
     redraw_win_later(win, UPD_NOT_VALID);
 }
 
@@ -1219,7 +1219,7 @@ checkupdate(win_T *wp)
 	return;
 
     foldUpdate(wp, (linenr_T)1, (linenr_T)MAXLNUM); // will update all
-    wp->w_foldinvalid = FALSE;
+    wp->w_foldinvalid = false;
 }
 
 // setFoldRepeat() {{{2
@@ -1387,7 +1387,7 @@ setManualFoldWin(
 	    found->fd_flags = FD_CLOSED;
 	    done |= DONE_ACTION;
 	}
-	wp->w_fold_manual = TRUE;
+	wp->w_fold_manual = true;
 	if (done & DONE_ACTION)
 	    changed_window_setting_win(wp);
 	done |= DONE_FOLD;
@@ -2177,7 +2177,7 @@ foldUpdateIEMS(win_T *wp, linenr_T top, linenr_T bot)
 	// Need to update all folds.
 	top = 1;
 	bot = wp->w_buffer->b_ml.ml_line_count;
-	wp->w_foldinvalid = FALSE;
+	wp->w_foldinvalid = false;
 
 	// Mark all folds as maybe-small.
 	setSmallMaybe(&wp->w_folds);
@@ -2679,14 +2679,14 @@ foldUpdateIEMSRecurse(
 		    // The first fold depends on the containing fold.
 		    if (topflags == FD_OPEN)
 		    {
-			flp->wp->w_fold_manual = TRUE;
+			flp->wp->w_fold_manual = true;
 			fp->fd_flags = FD_OPEN;
 		    }
 		    else if (i <= 0)
 		    {
 			fp->fd_flags = topflags;
 			if (topflags != FD_LEVEL)
-			    flp->wp->w_fold_manual = TRUE;
+			    flp->wp->w_fold_manual = true;
 		    }
 		    else
 			fp->fd_flags = (fp - 1)->fd_flags;
@@ -3548,7 +3548,7 @@ put_folds(FILE *fd, win_T *wp)
     {
 	if (put_line(fd, "silent! normal! zE") == FAIL
 		|| put_folds_recurse(fd, &wp->w_folds, (linenr_T)0) == FAIL
-		|| put_line(fd, "let &fdl = &fdl") == FAIL)
+		|| put_line(fd, "&fdl = &fdl") == FAIL)
 	    return FAIL;
     }
 
@@ -3576,7 +3576,7 @@ put_folds_recurse(FILE *fd, garray_T *gap, linenr_T off)
 	// Do nested folds first, they will be created closed.
 	if (put_folds_recurse(fd, &fp->fd_nested, off + fp->fd_top) == FAIL)
 	    return FAIL;
-	if (fprintf(fd, "sil! %ld,%ldfold", fp->fd_top + off,
+	if (fprintf(fd, "sil! :%ld,%ldfold", fp->fd_top + off,
 					fp->fd_top + off + fp->fd_len - 1) < 0
 		|| put_eol(fd) == FAIL)
 	    return FAIL;
@@ -3610,7 +3610,7 @@ put_foldopen_recurse(
 	    {
 		// open nested folds while this fold is open
 		// ignore errors
-		if (fprintf(fd, "%ld", fp->fd_top + off) < 0
+		if (fprintf(fd, ":%ld", fp->fd_top + off) < 0
 			|| put_eol(fd) == FAIL
 			|| put_line(fd, "sil! normal! zo") == FAIL)
 		    return FAIL;
@@ -3651,7 +3651,7 @@ put_foldopen_recurse(
     static int
 put_fold_open_close(FILE *fd, fold_T *fp, linenr_T off)
 {
-    if (fprintf(fd, "%ld", fp->fd_top + off) < 0
+    if (fprintf(fd, ":%ld", fp->fd_top + off) < 0
 	    || put_eol(fd) == FAIL
 	    || fprintf(fd, "sil! normal! z%c",
 			   fp->fd_flags == FD_CLOSED ? 'c' : 'o') < 0

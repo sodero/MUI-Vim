@@ -5,11 +5,41 @@ import './util/vim9.vim' as v9
 
 func Test_abbreviation()
   new
-  " abbreviation with 0x80 should work
+
+  " abbreviation with 0x80 (full-id)
   inoreab чкпр   vim
   call feedkeys("Goчкпр \<Esc>", "xt")
   call assert_equal('vim ', getline('$'))
   iunab чкпр
+
+  " abbreviation with 0x80 (non-id)
+  inoreab abc⁀ abc^
+  inoreab ⁀ ^
+  call feedkeys("Goabc⁀ def⁀ ⁀ \<Esc>", "xt")
+  call assert_equal('abc^ def⁀ ^ ', getline('$'))
+  iunab abc⁀
+  iunab ⁀
+
+  " abbreviation with 0x9b (non-id)
+  inoreab abc； abc;
+  inoreab ； ;
+  call feedkeys("Goabc； def； ； \<Esc>", "xt")
+  call assert_equal('abc; def； ; ', getline('$'))
+  iunab abc；
+  iunab ；
+
+  " abbreviation with composing chars (end-id)
+  inoreab ..ã a^~
+  inoreab ..β̃ β^~
+  inoreab ..π̃ π^~
+  inoreab ..Λ̃ Λ^~
+  call feedkeys("Go..ã ..β̃ ..π̃ ..Λ̃ \<Esc>", "xt")
+  call assert_equal('a^~ β^~ π^~ Λ^~ ', getline('$'))
+  iunab ..ã
+  iunab ..β̃
+  iunab ..π̃
+  iunab ..Λ̃
+
   bwipe!
 endfunc
 
@@ -1124,7 +1154,11 @@ func Test_map_cmdkey()
   call setline(1, ['some short lines', 'of test text'])
   call feedkeys(":bar\<F2>x\<C-B>\"\r", 'xt')
   call assert_equal('"barx', @:)
-  unmap! <F2>
+
+  " test for chars with 0x80 or 0x9b bytes
+  map <F2> <Cmd>let x = '洛固四最倒倀'<CR>
+  call feedkeys("\<F2>", 'xt')
+  call assert_equal('洛固四最倒倀', x)
 
   " test for calling a <SID> function
   let lines =<< trim END
@@ -1137,7 +1171,10 @@ func Test_map_cmdkey()
   source Xscript
   call feedkeys("\<F2>", 'xt')
   call assert_equal(32, g:x)
+  unlet g:x
 
+  unmap <F2>
+  unmap! <F2>
   unmap <F3>
   unmap! <F3>
   %bw!

@@ -765,6 +765,7 @@ func Test_visual_sbr()
   let buf = RunVimInTerminal('-S Xtest_visual_sbr', {'rows': 6,'columns': 60})
 
   call term_sendkeys(buf, "v$")
+  call WaitForAssert({-> assert_match('VISUAL.*\d\+\s\+\d', term_getline(buf, 6))}, 1000)
   call VerifyScreenDump(buf, 'Test_visual_sbr_1', {})
 
   " clean up
@@ -820,6 +821,8 @@ endfunc
 " Test for 'highlight' option
 func Test_highlight_opt()
   let save_hl = &highlight
+  " "K" is intentionally an unused 'highlight' flag character; if you add a
+  " new HLF_ entry, pick a different letter or update this test.
   call assert_fails('set highlight=K:b', 'E474:')
   set highlight=f\ r
   call assert_equal('f r', &highlight)
@@ -1431,7 +1434,7 @@ func Test_winhighlight()
 
   call VerifyScreenDump(buf, 'Test_winhighlight_10', {})
 
-  " Make last focused window the other window, which should have no hightlight
+  " Make last focused window the other window, which should have no highlight
   " in tabline.
   call term_sendkeys(buf, "\<Esc>:tabn 1\<CR>\<Esc>:wincmd h\<CR>\<Esc>:tabn 3\<CR>")
   call TermWait(buf)
@@ -1462,7 +1465,7 @@ func Test_winhighlight()
 
   call VerifyScreenDump(buf, 'Test_winhighlight_14', {})
 
-  " Check that overridding Normal group maps to HLF_WIN in 'highlight'.
+  " Check that overriding Normal group maps to HLF_WIN in 'highlight'.
   call term_sendkeys(buf, "\<Esc>:setlocal whl=Normal:ErrorMsg\<CR>")
   call TermWait(buf)
 
@@ -1621,7 +1624,7 @@ func Test_winhighlight_popupwin()
   hi B ctermbg=blue ctermfg=white
 
   redraw! # Remove intro message
-  win_execute(g:id, "set filetype=c whl=Pmenu:A,cType:B")
+  win_execute(g:id, "set filetype=c whl=Popup:A,PopupBorder:A,cType:B")
   END
   call writefile(lines, 'Xtest_winhighlight_popupwin', 'D')
 
@@ -1676,6 +1679,95 @@ func Test_winhighlight_occasion()
   call TermWait(buf)
 
   call VerifyScreenDump(buf, 'Test_winhighlight_occasion_1', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_VertSplitNC()
+  CheckScreendump
+
+  let lines =<< trim END
+    hi StatusLine ctermfg=White ctermbg=DarkBlue cterm=NONE
+    hi StatusLineNC ctermfg=Black ctermbg=Gray cterm=NONE
+    hi VertSplit ctermfg=Green ctermbg=NONE cterm=NONE
+    hi VertSplitNC ctermfg=DarkGray ctermbg=NONE cterm=NONE
+    call setline(1, repeat(['VertSplitNC test'], 20))
+    vsplit
+    vsplit
+  END
+  call writefile(lines, 'Xtest_vertsplitNC', 'D')
+
+  let buf = RunVimInTerminal('-S Xtest_vertsplitNC', {'rows': 12})
+  call TermWait(buf)
+
+  " Left window is current: left separator is VertSplit, right is VertSplitNC
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_1', {})
+
+  " Move to middle window: both separators should be VertSplit
+  call term_sendkeys(buf, "\<C-W>l")
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_2', {})
+
+  " Move to right window: right separator is VertSplitNC, left is VertSplit
+  call term_sendkeys(buf, "\<C-W>l")
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_3', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test that 'winhighlight' of window left of separator does not apply when
+" drawing the window to the right of the separator.
+func Test_VertSplitNC_winhighlight()
+  CheckScreendump
+
+  let lines =<< trim END
+    vsplit
+    set winhighlight=StatusLine:ErrorMsg
+  END
+  call writefile(lines, 'Xtest_vertsplitNC_winhighlight', 'D')
+
+  let buf = RunVimInTerminal('-S Xtest_vertsplitNC_winhighlight', {'rows': 12})
+  call TermWait(buf)
+
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_whl1', {})
+
+  call term_sendkeys(buf, "\<C-w>\<C-l>") " Go to window with empty winhighlight
+  call TermWait(buf)
+
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_whl2', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test that VertSplit (not VertSplitNC) is used for the separator rows
+" adjacent to a window with a winbar.
+func Test_VertSplitNC_winbar()
+  CheckScreendump
+
+  let lines =<< trim END
+    hi StatusLine ctermfg=White ctermbg=DarkBlue cterm=NONE
+    hi StatusLineNC ctermfg=Black ctermbg=Gray cterm=NONE
+    hi VertSplit ctermfg=Green ctermbg=NONE cterm=NONE
+    hi VertSplitNC ctermfg=DarkGray ctermbg=NONE cterm=NONE
+    call setline(1, repeat(['winbar test'], 20))
+    vsplit
+    wincmd w
+    nnoremenu 1.10 WinBar.Item :echo 'test'<CR>
+  END
+  call writefile(lines, 'Xtest_vertsplitNC_winbar', 'D')
+
+  let buf = RunVimInTerminal('-S Xtest_vertsplitNC_winbar', {'rows': 12})
+  call TermWait(buf)
+
+  " Right window (with winbar) is current: the separator should use
+  " VertSplit for all rows including the winbar row.
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_winbar_1', {})
+
+  " Move to left window: the separator should use VertSplitNC.
+  call term_sendkeys(buf, "\<C-W>h")
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_VertSplitNC_winbar_2', {})
 
   call StopVimInTerminal(buf)
 endfunc

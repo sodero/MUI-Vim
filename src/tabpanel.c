@@ -17,6 +17,10 @@
 
 static void do_by_tplmode(int tplmode, int col_start, int col_end,
 	int *pcurtab_row, int *ptabpagenr);
+static void tabpanel_free_click_regions(void);
+static void tabpanel_append_click_regions(stl_clickrec_T *clicktab,
+	char_u *buf, int row, int col_start, int col_end, int tabnr);
+static void draw_tabpanel_scrollbar(int screen_col);
 
 // set pcurtab_row. don't redraw tabpanel.
 #define TPLMODE_GET_CURTAB_ROW	0
@@ -28,6 +32,7 @@ static void do_by_tplmode(int tplmode, int col_start, int col_end,
 #define TPL_FILLCHAR		' '
 
 #define VERT_LEN		1
+#define SCROLL_LEN		1
 
 // tpl_align's values
 #define ALIGN_LEFT		0
@@ -37,7 +42,12 @@ static char_u *opt_name = (char_u *)"tabpanel";
 static int opt_scope = OPT_LOCAL;
 static int tpl_align = ALIGN_LEFT;
 static int tpl_columns = 20;
-static int tpl_is_vert = FALSE;
+static bool tpl_is_vert = false;
+static bool tpl_scrollbar = false;
+static int tpl_scroll_offset = 0;
+static int tpl_total_rows = 0;
+static int tpl_scrollbar_col = -1;  // screen column of scrollbar, -1 if none
+static tabpage_T *tpl_last_curtab = NULL;   // last curtab seen by draw_tabpanel
 
 typedef struct {
     win_T   *wp;
@@ -57,8 +67,9 @@ tabpanelopt_changed(void)
 {
     char_u	*p;
     int		new_align = ALIGN_LEFT;
-    int		new_columns = 20;
-    int		new_is_vert = FALSE;
+    long	new_columns = 20;
+    bool	new_is_vert = false;
+    bool	new_scrollbar = false;
 
     p = p_tplo;
     while (*p != NUL)
@@ -83,11 +94,18 @@ tabpanelopt_changed(void)
 	{
 	    p += 8;
 	    new_columns = getdigits(&p);
+	    if (new_columns < 0 || new_columns > 1000)
+		return FAIL;
 	}
 	else if (STRNCMP(p, "vert", 4) == 0)
 	{
 	    p += 4;
-	    new_is_vert = TRUE;
+	    new_is_vert = true;
+	}
+	else if (STRNCMP(p, "scrollbar", 9) == 0)
+	{
+	    p += 9;
+	    new_scrollbar = true;
 	}
 
 	if (*p != ',' && *p != NUL)
@@ -99,9 +117,24 @@ tabpanelopt_changed(void)
     tpl_align = new_align;
     tpl_columns = new_columns;
     tpl_is_vert = new_is_vert;
+    tpl_scrollbar = new_scrollbar;
+
+    // Re-center the current tab on the next redraw.
+    tpl_last_curtab = NULL;
 
     shell_new_columns();
     return OK;
+}
+
+/*
+ * Drop any internal reference to "tp", so draw_tabpanel() never compares
+ * against a dangling pointer after the tabpage has been freed.
+ */
+    void
+tabpanel_forget_tabpage(const tabpage_T *tp)
+{
+    if (tpl_last_curtab == tp)
+	tpl_last_curtab = NULL;
 }
 
 /*
@@ -134,6 +167,133 @@ tabpanel_leftcol(void)
 }
 
 /*
+ * Free previously resolved 'tabpanel' click regions.
+ */
+    static void
+tabpanel_free_click_regions(void)
+{
+    int n;
+
+    if (tabpanel_stl_click != NULL)
+    {
+	for (n = 0; n < tabpanel_stl_click_count; n++)
+	    vim_free(tabpanel_stl_click[n].funcname);
+	VIM_CLEAR(tabpanel_stl_click);
+    }
+    tabpanel_stl_click_count = 0;
+}
+
+/*
+ * Convert click records produced by build_stl_str_hl() for one line of
+ * 'tabpanel' into screen-column based regions and append them to the global
+ * tabpanel_stl_click array.  The caller keeps ownership of the funcname
+ * strings inside "clicktab" — this function makes its own copies.
+ */
+    static void
+tabpanel_append_click_regions(
+	stl_clickrec_T	*clicktab,
+	char_u		*buf,
+	int		row,
+	int		col_start,
+	int		col_end,
+	int		tabnr)
+{
+    int		count = 0;
+    int		n;
+    int		base_col;
+    int		acc_width = 0;
+    int		max_w = col_end - col_start;
+    char_u	*p;
+    char_u	*cur_funcname = NULL;
+    int		cur_minwid = 0;
+    int		region_start_col;
+    stl_click_region_T *new_arr;
+    int		limit;
+
+    if (clicktab == NULL)
+	return;
+
+    for (n = 0; clicktab[n].start != NULL; n++)
+	count++;
+    if (count == 0)
+	return;
+
+    base_col = (tpl_align == ALIGN_RIGHT ? topframe->fr_width : 0) + col_start;
+    region_start_col = base_col;
+
+    // Grow the global array to make room for up to "count" more regions
+    // (one close for each record plus a possible trailing region).
+    new_arr = vim_realloc(tabpanel_stl_click,
+	    sizeof(stl_click_region_T) * (tabpanel_stl_click_count + count + 1));
+    if (new_arr == NULL)
+	return;
+    tabpanel_stl_click = new_arr;
+
+    p = buf;
+    for (n = 0; clicktab[n].start != NULL; n++)
+    {
+	acc_width += vim_strnsize(p, (int)(clicktab[n].start - p));
+	p = clicktab[n].start;
+	limit = acc_width < max_w ? acc_width : max_w;
+
+	if (cur_funcname != NULL)
+	{
+	    stl_click_region_T *r =
+				&tabpanel_stl_click[tabpanel_stl_click_count];
+	    r->row = row;
+	    r->col_start = region_start_col;
+	    r->col_end = base_col + limit;
+	    r->funcname = vim_strsave(cur_funcname);
+	    r->minwid = cur_minwid;
+	    r->tabnr = tabnr;
+	    tabpanel_stl_click_count++;
+	}
+
+	cur_funcname = clicktab[n].funcname;
+	cur_minwid = clicktab[n].minwid;
+	region_start_col = base_col + limit;
+    }
+
+    // Close the final region if it extends to the end.
+    if (cur_funcname != NULL)
+    {
+	stl_click_region_T *r = &tabpanel_stl_click[tabpanel_stl_click_count];
+	r->row = row;
+	r->col_start = region_start_col;
+	r->col_end = base_col + max_w;
+	r->funcname = vim_strsave(cur_funcname);
+	r->minwid = cur_minwid;
+	r->tabnr = tabnr;
+	tabpanel_stl_click_count++;
+    }
+}
+
+/*
+ * Ensure the current tab is visible by adjusting tpl_scroll_offset when
+ * the selected tab has changed since the previous redraw.  Mouse wheel or
+ * scrollbar drag operations leave curtab unchanged, so the user's chosen
+ * offset is preserved in those cases.
+ */
+    static void
+follow_curtab_if_needed(int curtab_row)
+{
+    if (Rows <= 0 || curtab == tpl_last_curtab)
+	return;
+
+    if (curtab_row < tpl_scroll_offset)
+	tpl_scroll_offset = curtab_row;
+    else if (curtab_row >= tpl_scroll_offset + Rows)
+	tpl_scroll_offset = curtab_row - Rows + 1;
+
+    int max_offset = tpl_total_rows > Rows ? tpl_total_rows - Rows : 0;
+
+    if (tpl_scroll_offset < 0)
+	tpl_scroll_offset = 0;
+    else if (tpl_scroll_offset > max_offset)
+	tpl_scroll_offset = max_offset;
+}
+
+/*
  * draw the tabpanel.
  */
     void
@@ -148,49 +308,92 @@ draw_tabpanel(void)
     int is_right = tpl_align == ALIGN_RIGHT;
 
     if (maxwidth == 0)
+    {
+	tabpanel_free_click_regions();
 	return;
+    }
+
+    // Discard old click regions — they'll be rebuilt during redraw below.
+    tabpanel_free_click_regions();
 
     // Reset got_int to avoid build_stl_str_hl() isn't evaluated.
     got_int = FALSE;
 
+    int sb_len = tpl_scrollbar ? SCROLL_LEN : 0;
+    int sb_screen_col = -1;
+
+    // The scrollbar is always placed at the right edge of the tabpanel,
+    // regardless of 'align'.  The vertical separator sits at the panel's
+    // boundary with the buffer area (left edge for align:right, right edge
+    // for align:left).
     if (tpl_is_vert)
     {
 	if (is_right)
 	{
-	    // draw main contents in tabpanel
+	    // Panel on the right: vert at panel's left edge, scrollbar at
+	    // panel's right edge (= screen's right edge).
 	    do_by_tplmode(TPLMODE_GET_CURTAB_ROW, VERT_LEN,
-		    maxwidth - VERT_LEN, &curtab_row, NULL);
-	    do_by_tplmode(TPLMODE_REDRAW, VERT_LEN, maxwidth, &curtab_row,
-		    NULL);
-	    // draw vert separator in tabpanel
+		    maxwidth - sb_len, &curtab_row, NULL);
+	    follow_curtab_if_needed(curtab_row);
+	    do_by_tplmode(TPLMODE_REDRAW, VERT_LEN, maxwidth - sb_len,
+		    &curtab_row, NULL);
 	    for (vsrow = 0; vsrow < Rows; vsrow++)
 		screen_putchar(curwin->w_fill_chars.tpl_vert, vsrow,
 			topframe->fr_width, vs_attr);
+	    if (tpl_scrollbar)
+		sb_screen_col = topframe->fr_width + maxwidth - SCROLL_LEN;
 	}
 	else
 	{
-	    // draw main contents in tabpanel
-	    do_by_tplmode(TPLMODE_GET_CURTAB_ROW, 0, maxwidth - VERT_LEN,
+	    // Panel on the left: scrollbar just left of vert, vert at
+	    // panel's right edge (boundary with buffer).
+	    do_by_tplmode(TPLMODE_GET_CURTAB_ROW, 0,
+		    maxwidth - VERT_LEN - sb_len, &curtab_row, NULL);
+	    follow_curtab_if_needed(curtab_row);
+	    do_by_tplmode(TPLMODE_REDRAW, 0, maxwidth - VERT_LEN - sb_len,
 		    &curtab_row, NULL);
-	    do_by_tplmode(TPLMODE_REDRAW, 0, maxwidth - VERT_LEN,
-		    &curtab_row, NULL);
-	    // draw vert separator in tabpanel
 	    for (vsrow = 0; vsrow < Rows; vsrow++)
 		screen_putchar(curwin->w_fill_chars.tpl_vert, vsrow,
 			maxwidth - VERT_LEN, vs_attr);
+	    if (tpl_scrollbar)
+		sb_screen_col = maxwidth - VERT_LEN - SCROLL_LEN;
 	}
     }
     else
     {
-	do_by_tplmode(TPLMODE_GET_CURTAB_ROW, 0, maxwidth, &curtab_row, NULL);
-	do_by_tplmode(TPLMODE_REDRAW, 0, maxwidth, &curtab_row, NULL);
+	if (is_right)
+	{
+	    // Panel on the right, no vert: scrollbar at screen's right edge.
+	    do_by_tplmode(TPLMODE_GET_CURTAB_ROW, 0, maxwidth - sb_len,
+		    &curtab_row, NULL);
+	    follow_curtab_if_needed(curtab_row);
+	    do_by_tplmode(TPLMODE_REDRAW, 0, maxwidth - sb_len,
+		    &curtab_row, NULL);
+	    if (tpl_scrollbar)
+		sb_screen_col = topframe->fr_width + maxwidth - SCROLL_LEN;
+	}
+	else
+	{
+	    do_by_tplmode(TPLMODE_GET_CURTAB_ROW, 0, maxwidth - sb_len,
+		    &curtab_row, NULL);
+	    follow_curtab_if_needed(curtab_row);
+	    do_by_tplmode(TPLMODE_REDRAW, 0, maxwidth - sb_len,
+		    &curtab_row, NULL);
+	    if (tpl_scrollbar)
+		sb_screen_col = maxwidth - SCROLL_LEN;
+	}
     }
+
+    tpl_scrollbar_col = sb_screen_col;
+    if (sb_screen_col >= 0)
+	draw_tabpanel_scrollbar(sb_screen_col);
 
     got_int |= saved_got_int;
 
     // A user function may reset KeyTyped, restore it.
     KeyTyped = saved_KeyTyped;
 
+    tpl_last_curtab = curtab;
     redraw_tabpanel = FALSE;
 }
 
@@ -443,8 +646,7 @@ do_by_tplmode(
     args.col_end = col_end;
 
     if (tplmode != TPLMODE_GET_CURTAB_ROW && args.maxrow > 0)
-	while (args.offsetrow + args.maxrow <= *pcurtab_row)
-	    args.offsetrow += args.maxrow;
+	args.offsetrow = tpl_scroll_offset;
 
     tp = first_tabpage;
 
@@ -464,11 +666,9 @@ do_by_tplmode(
 	{
 	    args.attr = attr_tpls;
 	    if (tplmode == TPLMODE_GET_CURTAB_ROW)
-	    {
+		// Capture the row of the current tab and keep iterating so
+		// tpl_total_rows receives the true content height below.
 		*pcurtab_row = row;
-		do_unlet((char_u *)"g:actual_curtabpage", TRUE);
-		break;
-	    }
 	}
 	else
 	    args.attr = attr_tpl;
@@ -488,13 +688,17 @@ do_by_tplmode(
 
 	if (usefmt != NULL && *usefmt != NUL)
 	{
+	    int	carry_hl = 0;
+
 	    while (*usefmt != NUL)
 	    {
 		char_u	buf[IOSIZE];
 		stl_hlrec_T	*hltab;
 		stl_hlrec_T	*tabtab;
+		stl_clickrec_T	*clicktab = NULL;
 
-		if (args.maxrow <= row - args.offsetrow)
+		if (tplmode != TPLMODE_GET_CURTAB_ROW
+			&& args.maxrow <= row - args.offsetrow)
 		    break;
 
 		buf[0] = NUL;
@@ -505,12 +709,32 @@ do_by_tplmode(
 #endif
 			(args.cwp, buf, sizeof(buf),
 			&usefmt, opt_name, opt_scope, TPL_FILLCHAR,
-			args.col_end - args.col_start, &hltab, &tabtab);
+			args.col_end - args.col_start, &hltab, &tabtab,
+			tplmode == TPLMODE_REDRAW ? &clicktab : NULL,
+			&carry_hl);
 
 		args.prow = &row;
 		args.pcol = &col;
 
 		draw_tabpanel_with_highlight(tplmode, buf, hltab, &args);
+
+		// Record any %[FuncName] click regions for this line once
+		// the text has been drawn.  Only visible rows participate.
+		if (tplmode == TPLMODE_REDRAW && clicktab != NULL)
+		{
+		    int screen_row = row - args.offsetrow;
+		    int m;
+
+		    if (screen_row >= 0 && screen_row < args.maxrow)
+			tabpanel_append_click_regions(clicktab, buf,
+				screen_row, args.col_start, args.col_end,
+				(int)v.vval.v_number);
+		    // We took ownership of the click records — free the
+		    // function names (matches the non-NULL clicktab path in
+		    // build_stl_str_hl()).
+		    for (m = 0; clicktab[m].start != NULL; m++)
+			vim_free(clicktab[m].funcname);
+		}
 
 		// Move to next line for %@
 		if (*usefmt != NUL)
@@ -542,8 +766,252 @@ do_by_tplmode(
     }
 
     // fill the area of TabPanelFill.
-    screen_fill_tailing_area(tplmode, row - args.offsetrow, args.maxrow,
+    screen_fill_tailing_area(tplmode, MAX(row - args.offsetrow, 0), args.maxrow,
 	    args.col_start, args.col_end, attr_tplf);
+
+    // Capture the true content height during the GET_CURTAB_ROW pass, which
+    // ignores maxrow and therefore walks every tab.  REDRAW stops at the
+    // visible edge so its "row" is clamped and unusable here.
+    if (tplmode == TPLMODE_GET_CURTAB_ROW)
+	tpl_total_rows = row;
+}
+
+/*
+ * Draw the tabpanel scrollbar (track + thumb) at screen column 'screen_col'.
+ * The scrollbar spans the full screen height.  The thumb position and size
+ * are derived from tpl_scroll_offset, tpl_total_rows and Rows.
+ */
+    static void
+draw_tabpanel_scrollbar(int screen_col)
+{
+    int attr_sb = HL_ATTR(HLF_PSB);
+    int attr_thumb = HL_ATTR(HLF_PST);
+    int thumb_top = 0;
+    int thumb_height = 0;
+
+    if (tpl_total_rows > Rows && Rows > 0)
+    {
+	int max_offset = tpl_total_rows - Rows;
+	int track_range;
+
+	thumb_height = Rows * Rows / tpl_total_rows;
+	if (thumb_height < 1)
+	    thumb_height = 1;
+
+	// Map tpl_scroll_offset onto the track: at offset 0 the thumb's top
+	// is at row 0, at the maximum offset its bottom reaches the last
+	// row.  This is the exact inverse of tabpanel_drag_scrollbar().
+	track_range = Rows - thumb_height;
+	if (track_range > 0 && max_offset > 0)
+	    thumb_top = track_range * tpl_scroll_offset / max_offset;
+	else
+	    thumb_top = 0;
+	if (thumb_top + thumb_height > Rows)
+	    thumb_top = Rows - thumb_height;
+	if (thumb_top < 0)
+	    thumb_top = 0;
+    }
+
+    for (int r = 0; r < Rows; r++)
+    {
+	bool on_thumb = thumb_height > 0
+	    && r >= thumb_top && r < thumb_top + thumb_height;
+	screen_putchar(TPL_FILLCHAR, r, screen_col,
+		on_thumb ? attr_thumb : attr_sb);
+    }
+}
+
+/*
+ * Return true if the mouse is currently positioned over the tabpanel area.
+ */
+    bool
+mouse_on_tabpanel(void)
+{
+    if (tabpanel_width() == 0)
+	return false;
+    return mouse_col < firstwin->w_wincol
+	|| mouse_col >= firstwin->w_wincol + topframe->fr_width;
+}
+
+/*
+ * Return true if the mouse is currently on the scrollbar column.
+ * The scrollbar column is tracked by draw_tabpanel() and is -1 when the
+ * scrollbar is not enabled or not yet drawn.
+ */
+    bool
+mouse_on_tabpanel_scrollbar(void)
+{
+    return tpl_scrollbar && tpl_scrollbar_col >= 0
+	&& mouse_col == tpl_scrollbar_col;
+}
+
+/*
+ * Move the scrollbar thumb so it is vertically centred on screen row
+ * 'screen_row', updating tpl_scroll_offset accordingly.  Used for both
+ * initial clicks and subsequent drag events.
+ * Returns true if the event was consumed (offset changed or not).
+ */
+    bool
+tabpanel_drag_scrollbar(int screen_row)
+{
+    int thumb_height;
+    int max_offset;
+    int track_range;
+    int thumb_top;
+    int new_offset;
+
+    if (!tpl_scrollbar || Rows <= 0 || tpl_total_rows <= Rows)
+	return false;
+
+    thumb_height = Rows * Rows / tpl_total_rows;
+    if (thumb_height < 1)
+	thumb_height = 1;
+    track_range = Rows - thumb_height;
+    if (track_range <= 0)
+	return true;
+
+    max_offset = tpl_total_rows - Rows;
+    thumb_top = screen_row - thumb_height / 2;
+    if (thumb_top < 0)
+	thumb_top = 0;
+    if (thumb_top > track_range)
+	thumb_top = track_range;
+
+    new_offset = thumb_top * max_offset / track_range;
+    if (new_offset != tpl_scroll_offset)
+    {
+	tpl_scroll_offset = new_offset;
+	redraw_tabpanel = TRUE;
+    }
+    return true;
+}
+
+/*
+ * Scroll the tabpanel by 'count' rows in direction 'dir' (1 = down, -1 = up).
+ * Returns true if the offset changed and a redraw was scheduled.
+ */
+    bool
+tabpanel_scroll(int dir, int count)
+{
+    int max_offset;
+    int new_offset;
+
+    if (tabpanel_width() == 0)
+	return false;
+
+    max_offset = tpl_total_rows - Rows;
+    if (max_offset < 0)
+	max_offset = 0;
+
+    new_offset = tpl_scroll_offset + (dir > 0 ? count : -count);
+    if (new_offset < 0)
+	new_offset = 0;
+    if (new_offset > max_offset)
+	new_offset = max_offset;
+    if (new_offset == tpl_scroll_offset)
+	return false;
+
+    tpl_scroll_offset = new_offset;
+    redraw_tabpanel = TRUE;
+    return true;
+}
+
+/*
+ * Set the tabpanel scroll offset to "offset" (clamped to the valid range).
+ * Returns true if the offset changed and a redraw was scheduled.
+ */
+    bool
+tabpanel_set_offset(int offset)
+{
+    int max_offset;
+
+    if (tabpanel_width() == 0)
+	return false;
+
+    max_offset = tpl_total_rows - Rows;
+    if (max_offset < 0)
+	max_offset = 0;
+
+    if (offset < 0)
+	offset = 0;
+    if (offset > max_offset)
+	offset = max_offset;
+    if (offset == tpl_scroll_offset)
+	return false;
+
+    tpl_scroll_offset = offset;
+    redraw_tabpanel = TRUE;
+    return true;
+}
+
+/*
+ * "tabpanel_getinfo()" function
+ */
+    void
+f_tabpanel_getinfo(typval_T *argvars UNUSED, typval_T *rettv)
+{
+    dict_T	*d;
+    int		max_offset;
+
+    if (rettv_dict_alloc(rettv) == FAIL)
+	return;
+    d = rettv->vval.v_dict;
+
+    max_offset = tpl_total_rows - Rows;
+    if (max_offset < 0)
+	max_offset = 0;
+
+    dict_add_string(d, "align",
+	    (char_u *)(tpl_align == ALIGN_RIGHT ? "right" : "left"));
+    dict_add_number(d, "columns", tabpanel_width());
+    dict_add_bool(d, "scrollbar", tpl_scrollbar);
+    dict_add_number(d, "offset", tpl_scroll_offset);
+    dict_add_number(d, "total", tpl_total_rows);
+    dict_add_number(d, "max_offset", max_offset);
+}
+
+/*
+ * "tabpanel_scroll()" function
+ */
+    void
+f_tabpanel_scroll(typval_T *argvars, typval_T *rettv)
+{
+    varnumber_T	n;
+    int		absolute = 0;
+    bool	changed;
+
+    rettv->v_type = VAR_BOOL;
+    rettv->vval.v_number = VVAL_FALSE;
+
+    if (in_vim9script()
+	    && (check_for_number_arg(argvars, 0) == FAIL
+		|| check_for_opt_dict_arg(argvars, 1) == FAIL))
+	return;
+
+    n = tv_get_number_chk(&argvars[0], NULL);
+    if (argvars[1].v_type != VAR_UNKNOWN)
+    {
+	if (argvars[1].v_type != VAR_DICT || argvars[1].vval.v_dict == NULL)
+	{
+	    emsg(_(e_dictionary_required));
+	    return;
+	}
+	absolute = dict_get_bool(argvars[1].vval.v_dict, "absolute", FALSE);
+    }
+
+    // Clamp to int range to avoid signed overflow when casting and negating.
+    if (n > INT_MAX)
+	n = INT_MAX;
+    else if (n < -INT_MAX)
+	n = -INT_MAX;
+
+    if (absolute)
+	changed = tabpanel_set_offset((int)n);
+    else
+	changed = tabpanel_scroll(n >= 0 ? 1 : -1,
+				  (int)(n >= 0 ? n : -n));
+
+    rettv->vval.v_number = changed ? VVAL_TRUE : VVAL_FALSE;
 }
 
 #endif // FEAT_TABPANEL

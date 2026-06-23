@@ -1390,6 +1390,64 @@ func Test_out_cb_lambda()
   endtry
 endfunc
 
+func Test_out_cb_blob_mode()
+  let g:Ch_blob_bytes = []
+  func OutBlobCb(chan, msg)
+    call assert_equal(v:t_blob, type(a:msg))
+    let g:Ch_blob_bytes += blob2list(a:msg)
+  endfunc
+
+  let cmd = [s:python, '-c',
+        \ 'import sys,time;'
+        \ .. 'sys.stdout.buffer.write(bytes([0, 1, 2, 10, 255]));'
+        \ .. 'sys.stdout.flush();'
+        \ .. 'time.sleep(0.1)']
+  let job = job_start(cmd, #{
+        \ out_mode: 'blob',
+        \ out_cb: 'OutBlobCb',
+        \ })
+  try
+    call WaitForAssert({-> assert_equal([0, 1, 2, 10, 255], g:Ch_blob_bytes)})
+  finally
+    call job_stop(job)
+    delfunc OutBlobCb
+    unlet g:Ch_blob_bytes
+  endtry
+endfunc
+
+func Test_pty_out_cb_blob_mode()
+  CheckUnix
+
+  let g:Ch_blob_bytes = []
+  func PtyBlobCb(chan, msg)
+    call assert_equal(v:t_blob, type(a:msg))
+    let g:Ch_blob_bytes += blob2list(a:msg)
+  endfunc
+
+  " Put the pty in raw mode so the line discipline does not translate LF
+  " to CRLF or strip NUL bytes, then write bytes that include NULs on
+  " both sides of an embedded LF.
+  let cmd = [s:python, '-c',
+        \ 'import os,sys,time;'
+        \ .. 'os.system("stty raw -echo");'
+        \ .. 'sys.stdout.buffer.write(bytes([65, 0, 66, 10, 67, 0, 68]));'
+        \ .. 'sys.stdout.flush();'
+        \ .. 'time.sleep(0.1)']
+  let job = job_start(cmd, #{
+        \ pty: 1,
+        \ out_mode: 'blob',
+        \ out_cb: 'PtyBlobCb',
+        \ })
+  try
+    call WaitForAssert({-> assert_equal(
+          \ [65, 0, 66, 10, 67, 0, 68], g:Ch_blob_bytes)})
+  finally
+    call job_stop(job)
+    delfunc PtyBlobCb
+    unlet g:Ch_blob_bytes
+  endtry
+endfunc
+
 func Test_close_and_exit_cb()
   let g:test_is_flaky = 1
   let g:retdict = {'ret': {}}
@@ -2763,15 +2821,22 @@ endfunc
 
 let g:server_received_addr = ''
 let g:server_received_msg = ''
+let g:server_received_input = ''
+
+func s:test_listen_input(ch, msg)
+    let g:server_received_input = a:msg
+endfunc
 
 func s:test_listen_accept(ch, addr)
     let g:server_received_addr = a:addr
     let g:server_received_msg = ch_readraw(a:ch)
+
+    call ch_setoptions(a:ch, #{mode: "raw", callback: function('s:test_listen_input')})
 endfunction
 
 func Test_listen()
     call ch_log('Test_listen()')
-    let server = ch_listen('127.0.0.1:12345', {'callback': function('s:test_listen_accept')})
+    let server = ch_listen('12345', {'callback': function('s:test_listen_accept')})
     if ch_status(server) == 'fail'
         call assert_report("Can't listen channel")
         return
@@ -2782,42 +2847,46 @@ func Test_listen()
         return
     endif
     call ch_sendraw(handle, 'hello')
-    call WaitFor('"" != g:server_received_msg')
+    call WaitFor('"hello" == g:server_received_msg')
+    call ch_sendraw(handle, 'notify')
+    call WaitFor('"notify" == g:server_received_input')
+
     call ch_close(handle)
     call ch_close(server)
     call assert_equal('hello', g:server_received_msg)
     call assert_match('127.0.0.1:', g:server_received_addr)
 endfunc
 
-func Test_listen_invalid_address()
-    call ch_log('Test_listen_invalid_address()')
-
-    " empty address
-    call assert_fails("call ch_listen('')", 'E475:')
+func Test_listen_invalid_argument()
+    call ch_log('Test_listen_invalid_argument()')
 
     " missing port
-    call assert_fails("call ch_listen('localhost')", 'E475:')
+    call assert_fails("call ch_listen('')", 'E475:')
 
     " port number too large
-    call assert_fails("call ch_listen('localhost:99999')", 'E475:')
+    call assert_fails("call ch_listen('99999')", 'E475:')
 
     " port number zero should let the OS assign an available port
-    let ch = ch_listen('localhost:0')
+    let ch = ch_listen('0')
     call assert_equal('open', ch_status(ch))
     call assert_notequal(0, ch_info(ch).port)
     call ch_close(ch)
 
     " port number negative
-    call assert_fails("call ch_listen('localhost:-1')", 'E475:')
+    call assert_fails("call ch_listen('-1')", 'E475:')
 
-    " invalid ipv6 format (missing closing bracket)
-    call assert_fails("call ch_listen('[::1:8765')", 'E475:')
-
-    " invalid ipv6 format (missing port)
+    " make sure we don't accept hostname/IP address
+    call assert_fails("call ch_listen('127.0.0.1:4500')", 'E475:')
+    call assert_fails("call ch_listen('127.0.0.1')", 'E475:')
+    call assert_fails("call ch_listen('localhost:4500')", 'E475:')
+    call assert_fails("call ch_listen('localhost')", 'E475:')
     call assert_fails("call ch_listen('[::1]')", 'E475:')
+endfunc
 
-    " TODO: IPv6 should actually work
-    call assert_fails("call ch_listen('[::1]:9999')", 'E1574:')
+func Test_listen_info_no_hostname()
+    let ch = ch_listen('0')
+    call assert_fails("call ch_info(ch).hostname", 'E716:')
+    call ch_close(ch)
 endfunc
 
 func Test_channel_lsp_mode()
@@ -2911,24 +2980,26 @@ func Test_error_callback_terminal()
   call assert_equal('RAW', dict.err_mode)
   call assert_equal('pipe', dict.err_io)
   call term_sendkeys(buf, "XXXX\<cr>")
-  call term_wait(buf)
+  " term_wait() does not wait for the err_io 'pipe' callback to fire, so use
+  " WaitForAssert() to poll until sh has written the error message.
+  call WaitForAssert({-> assert_match('sh:.*XXXX:.*not found', g:error)}, 5000)
   call term_sendkeys(buf, "exit\<cr>")
-  call term_wait(buf)
-  call assert_match('XXX.*exit', g:out)
-  call assert_match('sh:.*XXXX:.*not found', g:error)
+  call WaitForAssert({-> assert_match('XXX.*exit', g:out)}, 5000)
 
   delfunc s:Out
   delfunc s:Err
   unlet! g:out g:error
 endfunc
 
-" Verify that term_start() with out_cb/err_cb delivers one line per callback
-" call (no embedded newlines, no trailing CR), matching the user's expectation.
-func Test_term_start_cb_per_line()
+" Verify that term_start() with out_cb/err_cb delivers data in RAW mode,
+" preserving embedded newlines in the raw chunk received from read().  If
+" per-line handling is desired, it is the callback's responsibility to split
+" on NL and strip the trailing CR.
+func Test_term_start_cb_raw_chunk()
   CheckUnix
   CheckFeature terminal
   let g:Ch_msgs = []
-  let script_file = 'Xterm_cb_per_line.sh'
+  let script_file = 'Xterm_cb_raw_chunk.sh'
   call writefile(["#!/bin/sh",
         \         "printf 'err:1\\nerr:2\\n' >&2",
         \         "printf 'out:3\\n'"], script_file, 'D')
@@ -2936,10 +3007,16 @@ func Test_term_start_cb_per_line()
   let ptybuf = term_start('./' .. script_file, {
         \ 'out_cb': {ch, msg -> add(g:Ch_msgs, msg)},
         \ 'err_cb': {ch, msg -> add(g:Ch_msgs, msg)}})
-  call WaitForAssert({-> assert_equal(3, len(g:Ch_msgs))}, 5000)
-  " Each line must arrive as a separate callback call with no embedded CR/NL.
-  call assert_equal(['err:1', 'err:2', 'out:3'], g:Ch_msgs)
+  " Wait until both the raw stderr chunk and a stdout chunk have arrived.
+  call WaitForAssert({-> assert_true(
+        \ index(g:Ch_msgs, "err:1\nerr:2\n") >= 0
+        \ && match(g:Ch_msgs, 'out:3') >= 0)}, 5000)
+  " stderr (via pipe) arrives as a single raw chunk with embedded NL,
+  " not split per line.  stdout (via PTY) is delivered, but its exact
+  " CR/LF shape depends on the PTY line discipline, so we only check that
+  " 'out:3' appears somewhere in the received chunks.
   call job_stop(term_getjob(ptybuf))
+  exe 'bwipe! ' .. ptybuf
   unlet g:Ch_msgs
 endfunc
 

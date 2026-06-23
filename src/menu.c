@@ -1074,6 +1074,10 @@ free_menu(vimmenu_T **menup)
     // Also may rebuild a tearoff'ed menu
     if (gui.in_use)
 	gui_mch_destroy_menu(menu);
+# ifdef USE_GTK4
+    // GTK4 uses "menu->label" for action name
+    vim_free((char_u *)menu->label);
+# endif
 #endif
 
     // Don't change *menup until after calling gui_mch_destroy_menu(). The
@@ -2892,15 +2896,17 @@ menuitem_getinfo(char_u *menu_name, vimmenu_T *menu, int modes, dict_T *dict)
     if (status == OK)
     {
 	char_u	buf[NUMBUFLEN];
+	int	buflen;
 
 	if (has_mbyte)
-	    buf[utf_char2bytes(menu->mnemonic, buf)] = NUL;
+	    buflen = utf_char2bytes(menu->mnemonic, buf);
 	else
 	{
 	    buf[0] = (char_u)menu->mnemonic;
-	    buf[1] = NUL;
+	    buflen = (buf[0] == NUL) ? 0 : 1;
 	}
-	status = dict_add_string(dict, "shortcut", buf);
+	buf[buflen] = NUL;
+	status = dict_add_string_len(dict, "shortcut", buf, buflen);
     }
     if (status == OK && menu->children == NULL)
     {
@@ -2913,14 +2919,17 @@ menuitem_getinfo(char_u *menu_name, vimmenu_T *menu, int modes, dict_T *dict)
 	{
 	    if (menu->strings[bit] != NULL)
 	    {
-		char_u *tofree = NULL;
+		if (*menu->strings[bit] == NUL)
+		    status = dict_add_string_len(dict, "rhs",
+			(char_u *)"<Nop>", STRLEN_LITERAL("<Nop>"));
+		else
+		{
+		    char_u *tofree = NULL;
 
-		status = dict_add_string(dict, "rhs",
-			*menu->strings[bit] == NUL
-				? (char_u *)"<Nop>"
-				: (tofree = str2special_save(
-					menu->strings[bit], FALSE, FALSE)));
-		vim_free(tofree);
+		    status = dict_add_string(dict, "rhs",
+			tofree = str2special_save(menu->strings[bit], FALSE, FALSE));
+		    vim_free(tofree);
+		}
 	    }
 	    if (status == OK)
 		status = dict_add_bool(dict, "noremenu",

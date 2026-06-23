@@ -6,6 +6,8 @@
 "               Copyright (C) 2008  Ricardo Salveti <rsalveti@rsalveti.net>
 " Last Change:  2022 Jul 25
 " 2025 Oct 13 by Vim project: update multiline function syntax #18565
+" 2026 Apr 07 by Vim project: update syntax script #19931
+" 2026 Apr 15 by Vim project: allow forward-slashes in bitbake varflags #19983
 "
 " This file is licensed under the MIT license, see COPYING.MIT in
 " this source distribution for the terms.
@@ -58,18 +60,18 @@ syn match bbVarValue            ".*$" contained contains=bbString,bbVarDeref,bbV
 syn region bbVarPyValue         start=+${@+ skip=+\\$+ end=+}+ contained contains=@python
 
 " Vars metadata flags
-syn match bbVarFlagDef          "^\([a-zA-Z0-9\-_\.]\+\)\(\[[a-zA-Z0-9\-_\.+]\+\]\)\@=" contains=bbIdentifier nextgroup=bbVarFlagFlag
+syn match bbVarFlagDef          "^\([a-zA-Z0-9\-_\.+/]\+\)\(\[[a-zA-Z0-9\-_\.+/]\+\]\)\@=" contains=bbIdentifier nextgroup=bbVarFlagFlag
 syn region bbVarFlagFlag        matchgroup=bbArrayBrackets start="\[" end="\]\s*\(:=\|=\|.=\|=.|+=\|=+\|?=\)\@=" contained contains=bbIdentifier nextgroup=bbVarEq
 
 " Includes and requires
-syn keyword bbInclude           inherit include require contained 
+syn keyword bbInclude           inherit inherit_defer include include_all require contained
 syn match bbIncludeRest         ".*$" contained contains=bbString,bbVarDeref
-syn match bbIncludeLine         "^\(inherit\|include\|require\)\s\+" contains=bbInclude nextgroup=bbIncludeRest
+syn match bbIncludeLine         "^\(inherit\|inherit_defer\|include\|include_all\|require\)\s\+" contains=bbInclude nextgroup=bbIncludeRest
 
 " Add taks and similar
-syn keyword bbStatement         addtask deltask addhandler after before EXPORT_FUNCTIONS contained
+syn keyword bbStatement         addtask deltask addhandler after before EXPORT_FUNCTIONS addpylib contained
 syn match bbStatementRest       ".*$" skipwhite contained contains=bbStatement
-syn match bbStatementLine       "^\(addtask\|deltask\|addhandler\|after\|before\|EXPORT_FUNCTIONS\)\s\+" contains=bbStatement nextgroup=bbStatementRest
+syn match bbStatementLine       "^\(addtask\|deltask\|addhandler\|after\|before\|EXPORT_FUNCTIONS\|addpylib\)\s\+" contains=bbStatement nextgroup=bbStatementRest
 
 " OE Important Functions
 syn keyword bbOEFunctions       do_fetch do_unpack do_patch do_configure do_compile do_stage do_install do_package contained

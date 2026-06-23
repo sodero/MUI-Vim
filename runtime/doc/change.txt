@@ -1,4 +1,4 @@
-*change.txt*	For Vim version 9.2.  Last change: 2026 Feb 14
+*change.txt*	For Vim version 9.2.  Last change: 2026 May 31
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -75,18 +75,21 @@ For inserting text see |insert.txt|.
 					*:d* *:de* *:del* *:delete* *:dl* *:dp*
 :[range]d[elete] [x]	Delete [range] lines (default: current line) [into
 			register x].
-			Note these weird abbreviations:
-			   :dl		delete and list
-			   :dell	idem
-			   :delel	idem
-			   :deletl	idem
-			   :deletel	idem
-			   :dp		delete and print
-			   :dep		idem
-			   :delp	idem
-			   :delep	idem
-			   :deletp	idem
-			   :deletep	idem
+			Note these weird abbreviations applicable only to
+			legacy Vim script:
+			  :dl		delete and list
+			  :dell		idem
+			  :delel	idem
+			  :deletl	idem
+			  :deletel	idem
+			  :dp		delete and print
+			  :dep		idem
+			  :delp		idem
+			  :delep	idem
+			  :deletp	idem
+			  :deletep	idem
+			Warning: These give |E492| in |Vim9| script and `:dl`
+			executes as `:dlist`.
 
 :[range]d[elete] [x] {count}
 			Delete {count} lines, starting with [range]
@@ -798,7 +801,8 @@ out then.  Example: >
 	:%s/TESTING
 This deletes "TESTING" from all lines, but only one per line.
 								*E1270*
-For compatibility with Vi these two exceptions are allowed in legacy script:
+For compatibility with Vi these two exceptions are allowed in legacy Vim
+script:
 "\/{string}/" and "\?{string}?" do the same as "//{string}/r".
 "\&{string}&" does the same as "//{string}/".
 				*pattern-delimiter* *E146* *E1241* *E1242*
@@ -1157,9 +1161,9 @@ inside of strings can change!  Also see 'softtabstop' option. >
 			current line).
 
 							*:ip* *:iput*
-:[line]ip[ut] [x]	like |:put|, but adjust indent to the current line
+:[line]ip[ut] [x]	Like |:put|, but adjust indent to the current line.
 
-:[line]ip[ut]! [x]	like |:put|!, but adjust indent to the current line
+:[line]ip[ut]! [x]	Like |:put|!, but adjust indent to the current line.
 
 ["x]]p		    or					*]p* *]<MiddleMouse>*
 ["x]]<MiddleMouse>	Like "p", but adjust the indent to the current line.

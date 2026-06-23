@@ -46,11 +46,21 @@ def Test_source_files()
     PerformCheck(fname, ';;\+$', 'double semicolon', '')
 
     # some files don't stick to the Vim style rules
-    if fname =~ 'iscygpty.c'
+    if fname =~ 'iscygpty.c' || fname =~ 'strptime.c'
       continue
     endif
 
-    var skip = 'getline(".") =~ "condition) {" || getline(".") =~ "vimglob_func" || getline(".") =~ "{\"" || getline(".") =~ "{\\d" || getline(".") =~ "{{{"'
+    # ignore patterns:
+    #                  - condition) {
+    #                  - vimglob_func
+    #                  - struct initializer: {"
+    #                  - numeric initializer: {\d
+    #                  - fold marker {{{
+    #                  - compound literals: (\w\+) *{
+
+
+    var skip = 'getline(".") =~ "condition) {" || getline(".") =~ "vimglob_func" || getline(".") =~ "{\"" ||'
+        skip ..= ' getline(".") =~ "{\\d" || getline(".") =~ "{{{" || getline(".") =~ "(\\w\\+) *{"'
     PerformCheck(fname, ')\s*{', 'curly after closing paren', skip)
 
     # Examples in comments use double quotes.
@@ -193,6 +203,29 @@ def Test_indent_of_source_files()
     endfor
     close
   endfor
+enddef
+
+def Test_runtime_wrong_shellescape()
+  # Check that shellescape() is called with the {special} argument (a second,
+  # non-zero argument) when its result is used in a ":!" ex command.
+  # This could cause code injection!
+  var pattern = '\<shellescape(\%([^,()]\|([^()]*)\)\+)'
+
+  var q = "['" .. '"]'
+  var bang_exe = '\<\%(exe\%[cute]\|sil\%[ent]\)\>.*' .. q .. '[^"' .. "']*!"
+
+  var skip = 'getline(".") !~ ' .. string(bang_exe)
+    .. ' || getline(".") =~ ' .. string('\<system\%(list\)\=(')
+    .. ' || getline(".") =~ ' .. string('^\s*"')
+
+  for fpath in glob('../../runtime/**/*.vim', 0, 1)
+    g:ignoreSwapExists = 'e'
+    exe 'edit ' .. fpath
+    PerformCheck(fpath, pattern,
+      'shellescape() without {special} flag used in ":!" command', skip)
+  endfor
+
+  :%bwipe!
 enddef
 
 " vim: shiftwidth=2 sts=2 expandtab nofoldenable

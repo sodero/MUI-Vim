@@ -63,6 +63,7 @@ static void f_funcref(typval_T *argvars, typval_T *rettv);
 static void f_function(typval_T *argvars, typval_T *rettv);
 static void f_garbagecollect(typval_T *argvars, typval_T *rettv);
 static void f_get(typval_T *argvars, typval_T *rettv);
+static void f_getbgcolor(typval_T *argvars, typval_T *rettv);
 static void f_getcellpixels(typval_T *argvars, typval_T *rettv);
 static void f_getchangelist(typval_T *argvars, typval_T *rettv);
 static void f_getcharpos(typval_T *argvars, typval_T *rettv);
@@ -1934,6 +1935,11 @@ typedef struct
 #else
 # define TERM_FUNC(name) NULL
 #endif
+#ifdef FEAT_TABPANEL
+# define TABPANEL_FUNC(name) name
+#else
+# define TABPANEL_FUNC(name) NULL
+#endif
 
 static const funcentry_T global_functions[] =
 {
@@ -2184,7 +2190,7 @@ static const funcentry_T global_functions[] =
     {"environ",		0, 0, 0,	    NULL,
 			ret_dict_string,    f_environ},
     {"err_teapot",	0, 1, 0,	    NULL,
-			ret_number_bool,    f_err_teapot},
+			ret_void,	    f_err_teapot},
     {"escape",		2, 2, FEARG_1,	    arg2_string,
 			ret_string,	    f_escape},
     {"eval",		1, 1, FEARG_1,	    arg1_string,
@@ -2265,6 +2271,8 @@ static const funcentry_T global_functions[] =
 			ret_void,	    f_garbagecollect},
     {"get",		2, 3, FEARG_1,	    arg23_get,
 			ret_any,	    f_get},
+    {"getbgcolor",	0, 0, 0,	    NULL,
+			ret_list_any,	    f_getbgcolor},
     {"getbufinfo",	0, 1, FEARG_1,	    arg1_buffer_or_dict_any,
 			ret_list_dict_any,  f_getbufinfo},
     {"getbufline",	2, 3, FEARG_1,	    arg3_buffer_lnum_lnum,
@@ -2750,7 +2758,7 @@ static const funcentry_T global_functions[] =
     {"remote_expr",	2, 4, FEARG_1,	    arg24_remote_expr,
 			ret_string,	    f_remote_expr},
     {"remote_foreground", 1, 1, FEARG_1,    arg1_string,
-			ret_string,	    f_remote_foreground},
+			ret_void,	    f_remote_foreground},
     {"remote_peek",	1, 2, FEARG_1,	    arg2_string,
 			ret_number,	    f_remote_peek},
     {"remote_read",	1, 2, FEARG_1,	    arg2_string_number,
@@ -2991,6 +2999,10 @@ static const funcentry_T global_functions[] =
 			ret_number,	    f_tabpagenr},
     {"tabpagewinnr",	1, 2, FEARG_1,	    arg2_number_string,
 			ret_number,	    f_tabpagewinnr},
+    {"tabpanel_getinfo", 0, 0, 0,	    NULL,
+			ret_dict_any,	    TABPANEL_FUNC(f_tabpanel_getinfo)},
+    {"tabpanel_scroll",	1, 2, FEARG_1,	    arg2_number_dict_any,
+			ret_bool,	    TABPANEL_FUNC(f_tabpanel_scroll)},
     {"tagfiles",	0, 0, 0,	    NULL,
 			ret_list_string,    f_tagfiles},
     {"taglist",		1, 2, FEARG_1,	    arg2_string,
@@ -3080,7 +3092,7 @@ static const funcentry_T global_functions[] =
     {"test_ignore_error", 1, 1, FEARG_1,    arg1_string,
 			ret_void,	    f_test_ignore_error},
     {"test_mswin_event", 2, 2, FEARG_1,     arg2_string_dict,
-			ret_number,	    f_test_mswin_event},
+			ret_bool,	    f_test_mswin_event},
     {"test_null_blob",	0, 0, 0,	    NULL,
 			ret_blob,	    f_test_null_blob},
     {"test_null_channel", 0, 0, 0,	    NULL,
@@ -3499,6 +3511,8 @@ call_internal_func(
 	return FCERR_OTHER;
     argvars[argcount].v_type = VAR_UNKNOWN;
     global_functions[i].f_func(argvars, rettv);
+    if (in_vim9script() && global_functions[i].f_retfunc == ret_void)
+	rettv->v_type = VAR_VOID;
     return FCERR_NONE;
 }
 
@@ -3509,6 +3523,8 @@ call_internal_func_by_idx(
 	typval_T    *rettv)
 {
     global_functions[idx].f_func(argvars, rettv);
+    if (in_vim9script() && global_functions[idx].f_retfunc == ret_void)
+	rettv->v_type = VAR_VOID;
 }
 
 /*
@@ -4386,6 +4402,9 @@ f_did_filetype(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 f_echoraw(typval_T *argvars, typval_T *rettv UNUSED)
 {
     char_u *str;
+
+    if (check_secure())
+	return;
 
     if (in_vim9script() && check_for_string_arg(argvars, 0) == FAIL)
 	return;
@@ -5656,6 +5675,71 @@ f_get(typval_T *argvars, typval_T *rettv)
 }
 
 /*
+ * "getbgcolor()" function
+ *
+ * Returns a list [r, g, b] (0..255) describing the current background
+ * colour: in GUI mode the "Normal" highlight group's bg, in terminal
+ * mode the value reported by the OSC 11 response (see v:termrbgresp).
+ * Returns an empty list when no value is available, e.g. before the
+ * terminal has answered the query, or when "Normal" has no bg colour.
+ */
+    static void
+f_getbgcolor(typval_T *argvars UNUSED, typval_T *rettv)
+{
+    if (rettv_list_alloc(rettv) == FAIL)
+	return;
+
+#if defined(FEAT_GUI) || defined(FEAT_TERMGUICOLORS)
+    {
+	bool try_hl = false;
+
+# ifdef FEAT_GUI
+	if (gui.in_use)
+	    try_hl = true;
+# endif
+# ifdef FEAT_TERMGUICOLORS
+	if (p_tgc)
+	    try_hl = true;
+# endif
+	if (try_hl)
+	{
+	    guicolor_T	fg, bg;
+	    int		hl_id = syn_name2id((char_u *)"Normal");
+
+	    if (hl_id > 0)
+	    {
+		(void)syn_id2colors(hl_id, &fg, &bg);
+		if (bg != INVALCOLOR)
+		{
+		    long_u  rgb = GUI_MCH_GET_RGB(bg);
+
+		    list_append_number(rettv->vval.v_list,
+					    (varnumber_T)((rgb >> 16) & 0xff));
+		    list_append_number(rettv->vval.v_list,
+					    (varnumber_T)((rgb >> 8) & 0xff));
+		    list_append_number(rettv->vval.v_list,
+					    (varnumber_T)(rgb & 0xff));
+		    return;
+		}
+	    }
+	}
+    }
+#endif
+#ifdef FEAT_TERMRESPONSE
+    {
+	char_u	r = 0, g = 0, b = 0;
+
+	if (term_get_bg_color(&r, &g, &b) == OK)
+	{
+	    list_append_number(rettv->vval.v_list, (varnumber_T)r);
+	    list_append_number(rettv->vval.v_list, (varnumber_T)g);
+	    list_append_number(rettv->vval.v_list, (varnumber_T)b);
+	}
+    }
+#endif
+}
+
+/*
  * "getcellpixels()" function
  */
     static void
@@ -5675,7 +5759,7 @@ f_getcellpixels(typval_T *argvars UNUSED, typval_T *rettv)
 #endif
     {
 	struct cellsize cs;
-#if defined(UNIX)
+#if defined(UNIX) || defined(MSWIN)
 	mch_calc_cell_size(&cs);
 #else
 	// Non-Unix CUIs are not supported, so set this to -1x-1.
@@ -6186,8 +6270,8 @@ getregionpos(
 	int	lbr_saved = reset_lbr();
 #endif
 
-	getvvcol(curwin, p1, &sc1, NULL, &ec1);
-	getvvcol(curwin, p2, &sc2, NULL, &ec2);
+	getvvcol(curwin, p1, &sc1, NULL, &ec1, 0);
+	getvvcol(curwin, p2, &sc2, NULL, &ec2, 0);
 
 #ifdef FEAT_LINEBREAK
 	restore_lbr(lbr_saved);
@@ -6687,13 +6771,6 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
-	{"arp",
-#if defined(AMIGA) && defined(FEAT_ARP)
-		1
-#else
-		0
-#endif
-		},
 	{"haiku",
 #ifdef __HAIKU__
 		1
@@ -7119,6 +7196,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
+	{"gui_gtk4",
+#if defined(FEAT_GUI_GTK) && defined(USE_GTK4)
+		1
+#else
+		0
+#endif
+		},
 	{"gui_gnome",
 #ifdef FEAT_GUI_GNOME
 		1
@@ -7141,6 +7225,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
+	{"gui_mui",
+#ifdef FEAT_GUI_MUI
+		1
+#else
+		0
+#endif
+		},
 	{"gui_photon",
 #ifdef FEAT_GUI_PHOTON
 		1
@@ -7157,6 +7248,48 @@ f_has(typval_T *argvars, typval_T *rettv)
 		},
 	{"iconv",
 #if defined(HAVE_ICONV_H) && defined(USE_ICONV)
+		1
+#else
+		0
+#endif
+		},
+	{"image",
+#ifdef FEAT_IMAGE
+		1
+#else
+		0
+#endif
+		},
+	{"image_cairo",
+#ifdef FEAT_IMAGE_CAIRO
+		1
+#else
+		0
+#endif
+		},
+	{"image_gdi",
+#ifdef FEAT_IMAGE_GDI
+		1
+#else
+		0
+#endif
+		},
+	{"image_gdk",
+#ifdef FEAT_IMAGE_GDK
+		1
+#else
+		0
+#endif
+		},
+	{"image_kitty",
+#ifdef FEAT_IMAGE_KITTY
+		1
+#else
+		0
+#endif
+		},
+	{"image_sixel",
+#ifdef FEAT_IMAGE_SIXEL
 		1
 #else
 		0
@@ -7507,6 +7640,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
+	{"statusline_click",
+#ifdef FEAT_STL_OPT
+		1
+#else
+		0
+#endif
+		},
 	{"netbeans_intg",
 #ifdef FEAT_NETBEANS_INTG
 		1
@@ -7648,6 +7788,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 	{"visual", 1},
 	{"visualextra", 1},
 	{"vreplace", 1},
+	{"volume_requester",
+#ifdef FEAT_VOLUME_REQUESTER
+		1
+#else
+		0
+#endif
+		},
 	{"vtp",
 #ifdef FEAT_VTP
 		1
@@ -7664,13 +7811,6 @@ f_has(typval_T *argvars, typval_T *rettv)
 		},
 	{"wayland_clipboard",
 #ifdef FEAT_WAYLAND_CLIPBOARD
-		1
-#else
-		0
-#endif
-		},
-	{"wayland_focus_steal",
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
 		1
 #else
 		0
@@ -10402,6 +10542,7 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
 {
     int		regname;
     char_u	buf[NUMBUFLEN + 2];
+    size_t	buflen;
     long	reglen = 0;
     dict_T	*dict;
     list_T	*list;
@@ -10425,23 +10566,34 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
 	return;
     (void)dict_add_list(dict, "regcontents", list);
 
-    buf[0] = NUL;
-    buf[1] = NUL;
     switch (get_reg_type(regname, &reglen))
     {
-	case MLINE: buf[0] = 'V'; break;
-	case MCHAR: buf[0] = 'v'; break;
+	case MLINE:
+	    buf[0] = 'V';
+	    buf[1] = NUL;
+	    buflen = 1;
+	    break;
+	case MCHAR:
+	    buf[0] = 'v';
+	    buf[1] = NUL;
+	    buflen = 1;
+	    break;
 	case MBLOCK:
-		    vim_snprintf((char *)buf, sizeof(buf), "%c%ld", Ctrl_V,
-			    reglen + 1);
-		    break;
+	    buflen = vim_snprintf_safelen((char *)buf, sizeof(buf),
+		"%c%ld", Ctrl_V, reglen + 1);
+	    break;
+	default:
+	    buf[0] = NUL;
+	    buflen = 0;
+	    break;
     }
-    (void)dict_add_string(dict, (char *)"regtype", buf);
+    (void)dict_add_string_len(dict, (char *)"regtype", buf, (int)buflen);
 
     buf[0] = get_register_name(get_unname_register());
     buf[1] = NUL;
+    buflen = (buf[0] == NUL) ? 0 : 1;
     if (regname == '"')
-	(void)dict_add_string(dict, (char *)"points_to", buf);
+	(void)dict_add_string_len(dict, (char *)"points_to", buf, (int)buflen);
     else
     {
 	dictitem_T	*item = dictitem_alloc((char_u *)"isunnamed");
@@ -10459,11 +10611,11 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
     static void
 return_register(int regname, typval_T *rettv)
 {
-    char_u buf[2] = {0, 0};
+    char_u buf[2] = {NUL, NUL};
 
     buf[0] = (char_u)regname;
     rettv->v_type = VAR_STRING;
-    rettv->vval.v_string = vim_strsave(buf);
+    rettv->vval.v_string = vim_strnsave(buf, (buf[0] == NUL) ? 0 : 1);
 }
 
 /*
@@ -10570,7 +10722,7 @@ repeat_string(typval_T *str_tv, int n, typval_T *rettv)
     int		slen;
     int		len;
     char_u	*r;
-    int		i;
+    int		done;
 
     p = tv_get_string(str_tv);
     rettv->v_type = VAR_STRING;
@@ -10585,8 +10737,17 @@ repeat_string(typval_T *str_tv, int n, typval_T *rettv)
     if (r == NULL)
 	return;
 
-    for (i = 0; i < n; i++)
-	mch_memmove(r + i * slen, p, (size_t)slen);
+    mch_memmove(r, p, (size_t)slen);
+    done = slen;
+    while (done < len)
+    {
+	int copy_len = done;
+
+	if (copy_len > len - done)
+	    copy_len = len - done;
+	mch_memmove(r + done, r, (size_t)copy_len);
+	done += copy_len;
+    }
     r[len] = NUL;
 
     rettv->vval.v_string = r;
@@ -10828,7 +10989,7 @@ search_cmn(typval_T *argvars, pos_T *match_pos, int *flagsp)
     if (flags & SP_NOMOVE)
 	curwin->w_cursor = save_cursor;
     else
-	curwin->w_set_curswant = TRUE;
+	curwin->w_set_curswant = true;
 theend:
     p_ws = save_p_ws;
 
@@ -11420,7 +11581,7 @@ set_position(typval_T *argvars, typval_T *rettv, int charpos)
 	if (curswant >= 0)
 	{
 	    curwin->w_curswant = curswant - 1;
-	    curwin->w_set_curswant = FALSE;
+	    curwin->w_set_curswant = false;
 	}
 	check_cursor();
 	rettv->vval.v_number = 0;
@@ -11971,7 +12132,7 @@ f_spellbadword(typval_T *argvars UNUSED, typval_T *rettv)
 	if (len != 0)
 	{
 	    word = ml_get_cursor();
-	    curwin->w_set_curswant = TRUE;
+	    curwin->w_set_curswant = true;
 	}
     }
     else if (*curbuf->b_s.b_p_spl != NUL)
@@ -12782,7 +12943,7 @@ f_virtcol(typval_T *argvars, typval_T *rettv)
 	    if (fp->col > len)
 		fp->col = len;
 	}
-	getvvcol(curwin, fp, &vcol_start, NULL, &vcol_end);
+	getvvcol(curwin, fp, &vcol_start, NULL, &vcol_end, 0);
 	++vcol_start;
 	++vcol_end;
     }

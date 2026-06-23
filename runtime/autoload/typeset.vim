@@ -2,7 +2,7 @@ vim9script
 
 # Language:           Generic TeX typesetting engine
 # Maintainer:         Nicola Vitacolonna <nvitacolonna@gmail.com>
-# Latest Revision:    2026 Feb 19
+# Latest Revision:    2026 May 20
 
 # Constants and helpers {{{
 const SLASH = !exists("+shellslash") || &shellslash ? '/' : '\'
@@ -60,7 +60,7 @@ def ProcessOutput(qfid: number, wd: string, efm: string, ch: channel, msg: strin
   endif
 
   # Make sure the working directory is correct
-  silent execute "lcd" wd
+  silent execute "lcd" fnameescape(wd)
   setqflist([], 'a', {'id': qfid, 'lines': [msg], 'efm': efm})
   silent lcd -
 enddef

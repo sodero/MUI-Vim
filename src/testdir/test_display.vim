@@ -260,6 +260,7 @@ func Test_display_scroll_update_visual()
 
   let buf = RunVimInTerminal('-S XupdateVisual.vim', #{rows: 8, cols: 60})
   call term_sendkeys(buf, "VG7kk")
+  call WaitForAssert({-> assert_match('VISUAL.*\d\+\s\+\d', term_getline(buf, 8))}, 1000)
   call VerifyScreenDump(buf, 'Test_display_scroll_update_visual', {})
 
   call StopVimInTerminal(buf)
@@ -342,7 +343,7 @@ func Test_eob_fillchars()
   set fillchars=eob:+
   redraw
   call assert_equal('+', Screenline(2))
-  set fillchars=eob:\ 
+  let &fillchars = 'eob: '
   redraw
   call assert_equal(' ', nr2char(screenchar(2, 1)))
   set fillchars&
@@ -413,7 +414,7 @@ func Test_fold_fillchars()
   call assert_equal(expected, lines)
 
   " check setting foldinner
-  set fillchars+=foldinner:\ 
+  let &fillchars = &fillchars .. ',foldinner: '
   let lines = ScreenLines([1, 6], 22)
   let expected = [
         \ ' one                  ',

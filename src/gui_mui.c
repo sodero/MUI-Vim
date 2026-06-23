@@ -46,7 +46,7 @@
 # include <proto/arossupport.h>
 #endif
 
-#ifdef __amigaos4__
+#if defined(__amigaos4__) || defined(__amigaos3__)
 typedef unsigned long IPTR;
 struct Library *MUIMasterBase = NULL;
 struct MUIMasterIFace *IMUIMaster = NULL;
@@ -813,9 +813,24 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
     return TRUE;
 }
 
-#ifdef __amigaos4__
-# define RPTAG_FgColor RPTAG_APenColor
-# define RPTAG_BgColor RPTAG_BPenColor
+#ifndef RPTAG_FgColor
+# ifdef RPTAG_APenColor
+#  define RPTAG_FgColor RPTAG_APenColor
+# else
+#  define RPTAG_FgColor TAG_IGNORE
+# endif
+#endif
+#ifndef RPTAG_BgColor
+# ifdef RPTAG_BPenColor
+#  define RPTAG_BgColor RPTAG_BPenColor
+# else
+#  define RPTAG_BgColor TAG_IGNORE
+# endif
+#endif
+#ifndef RPTAG_PenMode
+# define RPTAG_PenMode TAG_IGNORE
+#endif
+#if defined(__amigaos4__)
 # define ALPHA_MASK 0xFF000000
 #else
 # define ALPHA_MASK 0x00000000
@@ -1026,9 +1041,7 @@ MUIDSP IPTR VimConSetupBitmap(Class *cls, Object *obj)
     InitRastPort(&my->rp);
     my->rp.BitMap = my->bm;
     SetRPAttrs(&my->rp, RPTAG_DrMd, JAM2,
-#ifndef __amigaos4__
         RPTAG_PenMode, FALSE,
-#endif
         RPTAG_FgColor, 0, RPTAG_BgColor, 0, TAG_DONE);
     SetFont(&my->rp, _font(obj));
 
@@ -2352,7 +2365,7 @@ DISPATCH(VimMenu)
 }
 DISPATCH_END
 
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 //------------------------------------------------------------------------------
 // VimScrollbar - MUI custom class handling Vim scrollbars.
 //------------------------------------------------------------------------------
@@ -2857,7 +2870,7 @@ void gui_mch_set_winpos(int x UNUSED, int y UNUSED)
 //------------------------------------------------------------------------------
 // gui_mch_enable_scrollbar
 //------------------------------------------------------------------------------
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 void gui_mch_enable_scrollbar(scrollbar_T *sb, int flag)
 {
     if(unlikely(!sb || !sb->id))
@@ -2877,7 +2890,7 @@ void gui_mch_enable_scrollbar(scrollbar_T *sb UNUSED, int flag UNUSED)
 //------------------------------------------------------------------------------
 // gui_mch_create_scrollbar
 //------------------------------------------------------------------------------
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 void gui_mch_create_scrollbar(scrollbar_T *sb, int orient UNUSED)
 {
     Object *obj = NewObject(VimScrollbarClass->mcc_Class, NULL,
@@ -2900,7 +2913,7 @@ void gui_mch_create_scrollbar(scrollbar_T *sb UNUSED, int orient UNUSED)
 //------------------------------------------------------------------------------
 // gui_mch_set_scrollbar_thumb
 //------------------------------------------------------------------------------
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 void gui_mch_set_scrollbar_thumb(scrollbar_T *sb, int val, int size, int max)
 {
     if(unlikely(!sb->id))
@@ -2922,7 +2935,7 @@ void gui_mch_set_scrollbar_thumb(scrollbar_T *sb UNUSED, int val UNUSED,
 //------------------------------------------------------------------------------
 // gui_mch_set_scrollbar_pos
 //------------------------------------------------------------------------------
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 void gui_mch_set_scrollbar_pos(scrollbar_T *sb, int x UNUSED, int y,
     int w UNUSED, int h)
 {
@@ -3358,7 +3371,7 @@ int gui_mch_init(void)
     VimMenuClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Menustrip, NULL,
          sizeof(struct VimMenuData), (APTR) DISPATCH_GATE(VimMenu));
 
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
     VimScrollbarClass = MUI_CreateCustomClass(NULL, (ClassID) MUIC_Scrollbar,
         NULL, sizeof(struct VimScrollbarData), (APTR)
         DISPATCH_GATE(VimScrollbar));
@@ -3584,7 +3597,7 @@ void gui_mch_exit(int rc UNUSED)
         MUI_DeleteCustomClass(VimToolbarClass);
     }
 
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
     if(likely(VimScrollbarClass))
     {
         MUI_DeleteCustomClass(VimScrollbarClass);
@@ -3827,7 +3840,7 @@ void clip_mch_set_selection(Clipboard_T *cbd UNUSED)
 //------------------------------------------------------------------------------
 // gui_mch_destroy_scrollbar - Not supported
 //------------------------------------------------------------------------------
-#ifdef MUIVIM_FEAT_SCROLLBAR
+#ifndef __AROS__
 void gui_mch_destroy_scrollbar(scrollbar_T *sb)
 {
     if(unlikely(!sb || !sb->id || !DoMethod(sb->id, M_ID(VimScrollbar,

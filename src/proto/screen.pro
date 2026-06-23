@@ -48,7 +48,7 @@ void clearmode(void);
 void draw_tabline(void);
 void get_trans_bufname(buf_T *buf);
 int fillchar_status(int *attr, win_T *wp);
-int fillchar_vsep(int *attr, win_T *wp);
+int fillchar_vsep(int *attr, win_T *wp, int row);
 int redrawing(void);
 int messaging(void);
 void comp_col(void);

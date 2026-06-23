@@ -1,32 +1,21 @@
 #------------------------------------------------------------------------------------------
-# Host settings
+# Settings
 #------------------------------------------------------------------------------------------
-LHA?=lha
-CPU?=$(shell uname -m | tr A-Z a-z | tr -d ower)
-UNM?=$(shell uname)
-ANM:=$(CPU)-$(shell echo $(UNM) | tr A-Z a-z)
-ifeq ($(UNM),AmigaOS)
-LHAFLAGS?=-r a
-else ifeq ($(UNM),MorphOS)
-LHAFLAGS?=-r a
-else
-LHAFLAGS?=ao5
-endif
-ifeq ($(UNM),Darwin)
-SED?=gsed
-else
-SED?=sed
-endif
 
-#------------------------------------------------------------------------------------------
-# General settings
-#------------------------------------------------------------------------------------------
-TOP:=..
+LHA?=lha
+SED?=$(shell which gsed || which sed)
+TARGET:=$(shell $(CC) -dumpmachine | cut -d '-' -f1,2)
+ifeq ($(shell $(LHA) | head -1 | grep 'LHa for UNIX' | wc -l),1)
+LHAFLAGS?=ao5
+else
+LHAFLAGS?=-r a
+endif
+TOP:=$(patsubst %/,%,$(dir $(patsubst %/,%,$(CURDIR))))
 SRC:=$(TOP)/src
 VIM:=$(SRC)/vim
 VI:=$(SRC)/vi
 EXT:=extras
-DST:=MUI-Vim
+DEST:=MUI-Vim
 VER?=0
 REV?=0
 
@@ -34,27 +23,26 @@ REV?=0
 # Create archive and Aminet readme
 #------------------------------------------------------------------------------------------
 .PHONY: all
-all: tmp/$(DST)-$(ANM).lha tmp/$(DST)-$(ANM).readme
+all: tmp/$(DEST)-$(TARGET).lha tmp/$(DEST)-$(TARGET).readme
 
-$(DST)-$(ANM).lha: $(DST)/gVim $(DST)/vi
-	$(LHA) $(LHAFLAGS) $@ $(DST)
-	$(LHA) $(LHAFLAGS) $@ $(DST).info
-ifeq ($(UNM),AROS)
-	# This is a weird workaround for a problem that I don't understand;
-	# for some reason these two directories are left out on AROS unless
-	# they are explicitly included.
-	$(LHA) $(LHAFLAGS) $@ $(DST)/runtime/tutor
-	$(LHA) $(LHAFLAGS) $@ $(DST)/runtime/tools
+$(DEST)-$(TARGET).lha: $(DEST)/gVim $(DEST)/vi
+	lha $(LHAFLAGS) $@ $(DEST)
+	lha $(LHAFLAGS) $@ $(DEST).info
+ifeq ($(LHAFLAGS),ao5)
+	# Workaround for a problem I don't understand; for some reason these two directories
+	# are left out when using LHa for Unix unless they are explicitly included.
+	lha $(LHAFLAGS) $@ $(DEST)/runtime/tutor
+	lha $(LHAFLAGS) $@ $(DEST)/runtime/tools
 endif
 
 #------------------------------------------------------------------------------------------
 # Populate temp
 #------------------------------------------------------------------------------------------
-tmp/$(DST)-$(ANM).readme: | tmp
+tmp/$(DEST)-$(TARGET).readme: | tmp
 	cat aminet/README.bin | $(SED) -e "s/__VER__/$(VER).$(REV)/" | \
-	$(SED) -e "s/__ARC__/$(ANM)/" > $@
+	$(SED) -e "s/__ARC__/$(TARGET)/" > $@
 
-tmp/$(DST)-$(ANM).lha: $(DST)-$(ANM).lha | tmp
+tmp/$(DEST)-$(TARGET).lha: $(DEST)-$(TARGET).lha | tmp
 	mv $< $@
 
 tmp:
@@ -63,23 +51,23 @@ tmp:
 #------------------------------------------------------------------------------------------
 # Gather files
 #------------------------------------------------------------------------------------------
-$(DST)/$(DST).info: | $(DST)
-	cp -r $(TOP)/runtime $(DST)
-	cp $(EXT)/$(UNM)/* $(DST)
-	cat "Install" | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DST)/Install
-	cat $(DST).guide | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DST)/$(DST).guide
-	cp *.png $(DST)
+$(DEST)/$(DEST).info: | $(DEST)
+	cp -r $(TOP)/runtime $(DEST)
+	cp $(EXT)/$(TARGET)/* $(DEST)
+	cat "Install" | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DEST)/Install
+	cat $(DEST).guide | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DEST)/$(DEST).guide
+	cp *.png $(DEST)
 
-$(DST).info: | $(DST)/$(DST).info
-	mv $(DST)/$(DST).info .
+$(DEST).info: | $(DEST)/$(DEST).info
+	mv $(DEST)/$(DEST).info .
 
-$(DST)/gVim: | $(DST).info
+$(DEST)/gVim: | $(DEST).info
 	cp $(VIM) $@
 
-$(DST)/vi: | $(DST).info
+$(DEST)/vi: | $(DEST).info
 	cp $(VI) $@
 
-$(DST):
+$(DEST):
 	mkdir $@
 
 #------------------------------------------------------------------------------------------
@@ -87,4 +75,4 @@ $(DST):
 #------------------------------------------------------------------------------------------
 .PHONY: clean
 clean:
-	rm -Rf $(DST) tmp gVim vi *.info *.lha
+	rm -Rf $(DEST) tmp gVim vi *.info *.lha

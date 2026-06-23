@@ -318,7 +318,7 @@ func Test_set_completion()
 
   " Expand abbreviation of options.
   call feedkeys(":set ts\<C-A>\<C-B>\"\<CR>", 'tx')
-  call assert_equal('"set tabstop termsync thesaurus thesaurusfunc ttyscroll', @:)
+  call assert_equal('"set tabstop tagsecure termsync thesaurus thesaurusfunc ttyscroll', @:)
 
   " Expand current value
   call feedkeys(":set suffixes=\<C-A>\<C-B>\"\<CR>", 'tx')
@@ -593,6 +593,12 @@ func Test_set_completion_string_values()
   if exists('+tabclose')
     call assert_equal('left uselast', join(sort(getcompletion('set tabclose=', 'cmdline'))), ' ')
   endif
+  if has('tabpanel')
+    call assert_equal(['align:', 'columns:', 'scrollbar', 'vert'],
+          \ getcompletion('set tabpanelopt=', 'cmdline'))
+    call assert_equal(['left', 'right'],
+          \ getcompletion('set tabpanelopt=align:', 'cmdline'))
+  endif
   if exists('+termwintype')
     call assert_equal('conpty', getcompletion('set termwintype=', 'cmdline')[1])
   endif
@@ -657,6 +663,22 @@ func Test_set_completion_string_values()
   call feedkeys(":set completepopup=height:10,align:\<Tab>\<C-B>\"\<CR>", 'xt')
   call assert_equal('"set completepopup=height:10,align:item', @:)
   call assert_equal([], getcompletion('set completepopup=bogusname:', 'cmdline'))
+
+  " opacity: numeric, 0..100 only
+  call assert_true(index(getcompletion('set completepopup=', 'cmdline'),
+        \ 'opacity:') >= 0)
+  call assert_true(index(getcompletion('set previewpopup=', 'cmdline'),
+        \ 'opacity:') >= 0)
+  set completepopup=border:on,opacity:0
+  set completepopup=border:on,opacity:50
+  set completepopup=border:on,opacity:100
+  call assert_fails('set completepopup=opacity:101', 'E474:')
+  call assert_fails('set completepopup=opacity:abc', 'E474:')
+  call assert_fails('set completepopup=opacity:-10', 'E474:')
+  set previewpopup=opacity:30
+  call assert_fails('set previewpopup=opacity:200', 'E474:')
+  call assert_fails('set previewpopup=opacity:-10', 'E474:')
+
   set previewpopup& completepopup&
 
   " diffopt: special handling of algorithm:<alg_list> and inline:<inline_type>
@@ -667,7 +689,7 @@ func Test_set_completion_string_values()
 
   " highlight: special parsing, including auto-completing highlight groups
   " after ':'
-  call assert_equal([&hl, '8'], getcompletion('set hl=', 'cmdline')[0:1])
+  call assert_equal([escape(&hl, '|'), '8'], getcompletion('set hl=', 'cmdline')[0:1])
   call assert_equal('8', getcompletion('set hl+=', 'cmdline')[0])
   call assert_equal(['8:', '8b', '8i'], getcompletion('set hl+=8', 'cmdline')[0:2])
   call assert_equal('8bi', getcompletion('set hl+=8b', 'cmdline')[0])
@@ -870,9 +892,6 @@ func Test_set_option_errors()
   call assert_fails('set commentstring=x', 'E537:')
   call assert_fails('let &commentstring = "x"', 'E537:')
   call assert_fails('set complete=x', 'E539:')
-  call assert_fails('set rulerformat=%-', 'E539:')
-  call assert_fails('set rulerformat=%(', 'E542:')
-  call assert_fails('set rulerformat=%15(%%', 'E542:')
 
   " Test for 'statusline' errors
   call assert_fails('set statusline=%$', 'E539:')
@@ -889,6 +908,11 @@ func Test_set_option_errors()
   call assert_fails('set tabline=%{%}', 'E539:')
   call assert_fails('set tabline=%(', 'E542:')
   call assert_fails('set tabline=%)', 'E542:')
+
+  " Test for 'rulerformat' errors
+  call assert_fails('set rulerformat=%-', 'E539:')
+  call assert_fails('set rulerformat=%(', 'E542:')
+  call assert_fails('set rulerformat=%15(%%', 'E542:')
 
   if has('cursorshape')
     " This invalid value for 'guicursor' used to cause Vim to crash.
@@ -1183,7 +1207,7 @@ func Test_backupskip()
       qall
   [CODE]
   call writefile(after, 'Xafter', 'D')
-  let cmd = GetVimProg() . ' --not-a-term -S Xafter --cmd "set enc=utf8"'
+  let cmd = GetVimProg() . ' --clean --not-a-term -S Xafter --cmd "set enc=utf8"'
 
   let saveenv = {}
   for var in ['TMPDIR', 'TMP', 'TEMP']
@@ -1191,9 +1215,9 @@ func Test_backupskip()
     call setenv(var, '/duplicate/path')
   endfor
 
-  " unset $HOME, so that it won't try to read init files
+  " set $HOME='', so that Vim won't try to read init files
   let saveenv['HOME'] = getenv("HOME")
-  call setenv('HOME', v:null)
+  call setenv('HOME', '')
   exe 'silent !' . cmd
   call assert_equal(['errors:'], readfile('Xtestout'))
 
@@ -1426,7 +1450,7 @@ func Test_shortmess_F3()
   if has('nanotime')
     sleep 10m
   else
-    sleep 2
+    sleep 3
   endif
   call writefile(['bar'], 'X_dummy')
   bprev
@@ -1436,7 +1460,7 @@ func Test_shortmess_F3()
   if has('nanotime')
     sleep 10m
   else
-    sleep 2
+    sleep 3
   endif
   call writefile(['baz'], 'X_dummy')
   checktime
@@ -1491,6 +1515,45 @@ func Test_local_scrolloff()
   close
   set so&
   set siso&
+endfunc
+
+func Test_local_scrolloffpad()
+  let save_g_sop = &g:sop
+  let save_l_sop = &l:sop
+  set sop=0
+  call assert_equal(0, &g:sop)
+  call assert_equal(-1, &l:sop)
+  call assert_equal(0, &sop)
+  setglobal sop=1
+  call assert_equal(1, &g:sop)
+  call assert_equal(1, &sop)
+  split
+  call assert_equal(1, &g:sop)
+  call assert_equal(-1, &l:sop)
+  call assert_equal(1, &sop)
+  setlocal sop=0
+  call assert_equal(0, &l:sop)
+  call assert_equal(0, &sop)
+  call assert_equal(1, &g:sop)
+  wincmd p
+  call assert_equal(1, &sop)
+  wincmd p
+  setlocal sop<
+  call assert_equal(-1, &l:sop)
+  call assert_equal(1, &sop)
+  setlocal sop=2
+  call assert_equal(2, &l:sop)
+  call assert_equal(2, &sop)
+  setlocal sop=-1
+  call assert_equal(-1, &l:sop)
+  call assert_equal(1, &sop)  " Uses global value because local is -1
+  call assert_fails("setlocal sop=-2", 'E474:')
+  call assert_equal(-1, &l:sop)
+  call assert_equal(1, &sop)
+  call assert_fails("setlocal sop=foo", 'E521:')
+  close
+  let &g:sop = save_g_sop
+  let &l:sop = save_l_sop
 endfunc
 
 func Test_writedelay()
@@ -1633,7 +1696,7 @@ endfunc
 
 " Test for changing options in a sandbox
 func Test_opt_sandbox()
-  for opt in ['backupdir', 'cdpath', 'exrc', 'findfunc']
+  for opt in ['backupdir', 'cdpath', 'exrc', 'findfunc', 'tagsecure']
     call assert_fails('sandbox set ' .. opt .. '?', 'E48:')
     call assert_fails('sandbox let &' .. opt .. ' = 1', 'E48:')
   endfor
@@ -2409,6 +2472,13 @@ func Test_opt_scrolljump()
          \            'topline':5, 'coladd':0, 'skipcol':0, 'curswant':0},
          \           winsaveview())
 
+  norm! 100Gzt
+  set scrolljump=-100
+  norm! 20k
+  call assert_equal({'lnum':80, 'leftcol':0, 'col':0, 'topfill':0,
+        \            'topline':71, 'coladd':0, 'skipcol':0, 'curswant':0},
+        \           winsaveview())
+
   set scrolljump&
   bw
 endfunc
@@ -2595,6 +2665,8 @@ func Test_string_option_revert_on_failure()
         \ ['selection', 'exclusive', 'a123'],
         \ ['selectmode', 'cmd', 'a123'],
         \ ['sessionoptions', 'options', 'a123'],
+        \ ['shellpipe', '>%s', "%s%s%s"],
+        \ ['shellredir', '>%s', "%s%s%s"],
         \ ['shortmess', 'w', '2'],
         \ ['showbreak', '>>', "\x01"],
         \ ['showcmdloc', 'statusline', 'a123'],

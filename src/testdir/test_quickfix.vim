@@ -2271,7 +2271,7 @@ func Test_switchbuf()
 
   " If opening a file changes 'switchbuf', then the new value should be
   " retained.
-  set modeline&vim
+  set modeline&vim nomodelinestrict
   call writefile(["vim: switchbuf=split"], 'Xqftestfile1', 'D')
   enew | only
   set switchbuf&vim
@@ -2290,7 +2290,7 @@ func Test_switchbuf()
 
   call delete('Xqftestfile2')
   call delete('Xqftestfile3')
-  set switchbuf&vim
+  set switchbuf&vim modelinestrict
 
   enew | only
 endfunc
@@ -2332,6 +2332,53 @@ func Test_adjust_lnum()
   call Xadjust_qflnum('c')
   call setqflist([])
   call Xadjust_qflnum('l')
+endfunc
+
+func Xqf_undo_after_delete(cchar)
+  call s:setup_commands(a:cchar)
+
+  enew | only
+
+  let fname = 'Xqfundofile' . a:cchar
+  call s:create_test_file(fname)
+  exe 'edit ' . fname
+
+  Xgetexpr [fname . ':5:Line5',
+	      \ fname . ':10:Line10',
+	      \ fname . ':15:Line15']
+
+  " Delete the line of the second error and undo the deletion.
+  10delete
+  let l = g:Xgetlist()
+  call assert_equal(5, l[0].lnum)
+  call assert_equal(10, l[1].lnum)
+  call assert_equal(14, l[2].lnum)
+
+  undo
+  call assert_equal('Line10', getline(10))
+  let l = g:Xgetlist()
+  call assert_equal(5, l[0].lnum)
+  call assert_equal(10, l[1].lnum)
+  call assert_equal(15, l[2].lnum)
+
+  " Redo and undo again to make sure the line number does not drift.
+  redo
+  call assert_equal(14, g:Xgetlist()[2].lnum)
+  undo
+  let l = g:Xgetlist()
+  call assert_equal(10, l[1].lnum)
+  call assert_equal(15, l[2].lnum)
+
+  call g:Xsetlist([], 'f')
+  enew!
+  call delete(fname)
+endfunc
+
+func Test_qf_undo_after_delete()
+  call setloclist(0, [])
+  call Xqf_undo_after_delete('c')
+  call setqflist([])
+  call Xqf_undo_after_delete('l')
 endfunc
 
 " Tests for the :grep/:lgrep and :grepadd/:lgrepadd commands
@@ -5004,6 +5051,34 @@ func Test_viscol()
   set efm&
 endfunc
 
+" Test that '%v' is not affected by 'tabstop': a <tab> is always counted as
+" 8 screen columns, matching the column numbers reported by compilers.
+func Test_viscol_tabstop()
+  enew
+  call writefile(["\tABCDEFGH"], 'Xfile1', 'D')
+  edit Xfile1
+  set efm=%f:%l:%v:%m
+
+  " gcc reports column 9 for 'A' (the <tab> expands to 8 columns).  The jump
+  " must land on 'A' (byte 2) for any 'tabstop' value.
+  for ts in [8, 4, 2, 13]
+    exe 'setlocal tabstop=' .. ts
+    cexpr "Xfile1:1:9:XX"
+    call assert_equal(2, col('.'), 'tabstop=' .. ts)
+  endfor
+
+  " A multi-byte character after the tab: 'ä' is 2 bytes but 1 screen cell,
+  " so screen column 10 is the next character 'b' (byte 4).
+  call writefile(["\täbc"], 'Xfile1')
+  edit! Xfile1
+  setlocal tabstop=4
+  cexpr "Xfile1:1:10:XX"
+  call assert_equal(4, col('.'))
+
+  enew | only
+  set efm&
+endfunc
+
 " Test for the quickfix window buffer
 func Xqfbuf_test(cchar)
   call s:setup_commands(a:cchar)
@@ -7004,6 +7079,78 @@ func Test_quickfix_longline_noeol()
   call RunVim([], after, args)
   call WaitForAssert({-> assert_true(filereadable("XDONE"))})
   call assert_equal(['okay'], readfile("XDONE"))
+endfunc
+
+func Test_efm_overlongline()
+  let save_efm = &efm
+  " %r captures the tail.
+  set efm=%+O(%.%#)%r,%f:%l:%m
+
+  " First line is longer than IOSIZE (1025) so the parser puts it in
+  " growbuf; the %r tail then far exceeds IObuff.
+  let lines = ['(short)' .. repeat('x', 4000), 'Xfile:10:msg']
+  call writefile(lines, 'Xqferrlong', 'D')
+
+  " Must complete without hanging or crashing.
+  cgetfile Xqferrlong
+
+  " The well-formed line that follows is still parsed.
+  let well_formed = filter(getqflist(), 'v:val.lnum == 10')
+  call assert_equal(1, len(well_formed))
+  call assert_equal('msg', well_formed[0].text)
+
+  let &efm = save_efm
+  call setqflist([], 'f')
+endfunc
+
+func Xtest_set_qftf_in_sandbox(cchar)
+  call s:setup_commands(a:cchar)
+
+  call g:Xsetlist([{'filename': 'test.c', 'lnum': 1, 'text': 'trigger'}])
+  let g:qftf_fn_called = v:false
+  func Qftf_Fn(d)
+    let g:qftf_fn_called = v:true
+    return []
+  endfunc
+
+  let g:caught_exception = v:false
+  try
+    sandbox call g:Xsetlist([], 'a', #{quickfixtextfunc: 'g:Qftf_Fn'})
+  catch /E48:/
+    let g:caught_exception = v:true
+  endtry
+  copen
+  cclose
+
+  call assert_equal(v:true, g:caught_exception)
+  call assert_equal(v:false, g:qftf_fn_called)
+
+  delfunc Qftf_Fn
+  unlet g:caught_exception
+  unlet g:qftf_fn_called
+  %bw!
+endfunc
+
+" Test for setting the 'quickfixtextfunc' in a sandbox
+func Test_set_qftf_in_sandbox()
+  call Xtest_set_qftf_in_sandbox('c')
+  call Xtest_set_qftf_in_sandbox('l')
+endfunc
+
+" Test for the 'statusline' height remaining at one when the quickfix buffer
+" is wiped out when quickfix window is the only window open.
+func Test_qf_statusline_height()
+  %bw!
+  copen
+  wincmd p
+  let prev_wh = winheight('.')
+  wincmd p
+  only
+  bw!
+  copen
+  wincmd p
+  call assert_equal(prev_wh, winheight('.'))
+  %bw!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

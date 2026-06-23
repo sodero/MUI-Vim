@@ -978,7 +978,7 @@ get_indent_nolabel (linenr_T lnum)	// XXX
 
     fp.col = (colnr_T)(p - l);
     fp.lnum = lnum;
-    getvcol(curwin, &fp, &col, NULL, NULL);
+    getvcol(curwin, &fp, &col, NULL, NULL, 0);
     return (int)col;
 }
 
@@ -1062,7 +1062,7 @@ cin_first_id_amount(void)
     p = skipwhite(p + len);
     fp.lnum = curwin->w_cursor.lnum;
     fp.col = (colnr_T)(p - line);
-    getvcol(curwin, &fp, &col, NULL, NULL);
+    getvcol(curwin, &fp, &col, NULL, NULL, 0);
     return (int)col;
 }
 
@@ -1110,7 +1110,7 @@ cin_get_equal_amount(linenr_T lnum)
 
     fp.lnum = lnum;
     fp.col = (colnr_T)(s - line);
-    getvcol(curwin, &fp, &col, NULL, NULL);
+    getvcol(curwin, &fp, &col, NULL, NULL, 0);
     return (int)col;
 }
 
@@ -1153,7 +1153,7 @@ find_match_char(int c, int ind_maxparen)	// XXX
     cursor_save = curwin->w_cursor;
     ind_maxp_wk = ind_maxparen;
 retry:
-    if ((trypos = findmatchlimit(NULL, c, 0, ind_maxp_wk)) != NULL)
+    if ((trypos = findmatchlimit(NULL, c, FM_SKIPCOMM, ind_maxp_wk)) != NULL)
     {
 	// check if the ( is in a // comment
 	if ((colnr_T)cin_skip2pos(trypos) > trypos->col)
@@ -1217,6 +1217,8 @@ find_last_paren(char_u *l, int start, int end)
     for (i = 0; l[i] != NUL; i++)
     {
 	i = (int)(cin_skipcomment(l + i) - l); // ignore parens in comments
+	if (l[i] == NUL)
+	    break;
 	i = (int)(skip_string(l + i) - l);    // ignore parens in quotes
 	if (l[i] == start)
 	    ++open_count;
@@ -1396,7 +1398,7 @@ cin_iswhileofdo (char_u *p, linenr_T lnum)	// XXX
 	    ++p;
 	    ++curwin->w_cursor.col;
 	}
-	if ((trypos = findmatchlimit(NULL, 0, 0,
+	if ((trypos = findmatchlimit(NULL, 0, FM_SKIPCOMM,
 					      curbuf->b_ind_maxparen)) != NULL
 		&& *cin_skipcomment(ml_get_pos(trypos) + 1) == ';')
 	    retval = TRUE;
@@ -1705,7 +1707,7 @@ get_baseclass_amount(int col)
     else
     {
 	curwin->w_cursor.col = col;
-	getvcol(curwin, &curwin->w_cursor, &vcol, NULL, NULL);
+	getvcol(curwin, &curwin->w_cursor, &vcol, NULL, NULL, 0);
 	amount = (int)vcol;
     }
     if (amount < curbuf->b_ind_cpp_baseclass)
@@ -1732,7 +1734,7 @@ find_start_brace(void)	    // XXX
     static pos_T    pos_copy;
 
     cursor_save = curwin->w_cursor;
-    while ((trypos = findmatchlimit(NULL, '{', FM_BLOCKSTOP, 0)) != NULL)
+    while ((trypos = findmatchlimit(NULL, '{', FM_BLOCKSTOP | FM_SKIPCOMM, 0)) != NULL)
     {
 	pos_copy = *trypos;	// copy pos_T, next findmatch will change it
 	trypos = &pos_copy;
@@ -2265,7 +2267,7 @@ get_c_indent(void)
 	if (trypos  != NULL)
 	{
 	    // find how indented the line beginning the comment is
-	    getvcol(curwin, trypos, &col, NULL, NULL);
+	    getvcol(curwin, trypos, &col, NULL, NULL, 0);
 	    amount = col;
 	    goto theend;
 	}
@@ -2287,7 +2289,7 @@ get_c_indent(void)
 	int	done = FALSE;
 
 	// find how indented the line beginning the comment is
-	getvcol(curwin, comment_pos, &col, NULL, NULL);
+	getvcol(curwin, comment_pos, &col, NULL, NULL, 0);
 	amount = col;
 	*lead_start = NUL;
 	*lead_middle = NUL;
@@ -2413,7 +2415,7 @@ get_c_indent(void)
 		    if (*look != NUL)		    // if something after it
 			comment_pos->col = (colnr_T)(skipwhite(look) - start);
 		}
-		getvcol(curwin, comment_pos, &col, NULL, NULL);
+		getvcol(curwin, comment_pos, &col, NULL, NULL, 0);
 		amount = col;
 		if (curbuf->b_ind_in_comment2 || *look == NUL)
 		    amount += curbuf->b_ind_in_comment;
@@ -2547,7 +2549,7 @@ get_c_indent(void)
 		line = ml_get_curline();
 		look_col = (int)(look - line);
 		curwin->w_cursor.col = look_col + 1;
-		if ((trypos = findmatchlimit(NULL, ')', 0,
+		if ((trypos = findmatchlimit(NULL, ')', FM_SKIPCOMM,
 						      curbuf->b_ind_maxparen))
 								      != NULL
 			  && trypos->lnum == our_paren_pos.lnum
@@ -2615,7 +2617,7 @@ get_c_indent(void)
 		// if we did the above "if".
 		if (our_paren_pos.col > 0)
 		{
-		    getvcol(curwin, &our_paren_pos, &col, NULL, NULL);
+		    getvcol(curwin, &our_paren_pos, &col, NULL, NULL, 0);
 		    if (cur_amount > (int)col)
 			cur_amount = col;
 		}
@@ -2704,7 +2706,7 @@ get_c_indent(void)
 	look = skipwhite(start);
 	if (*look == '{')
 	{
-	    getvcol(curwin, trypos, &col, NULL, NULL);
+	    getvcol(curwin, trypos, &col, NULL, NULL, 0);
 	    amount = col;
 	    if (*start == '{')
 		start_brace = BRACE_IN_COL0;

@@ -61,7 +61,7 @@ change_warning(int col)
 	out_flush();
 	ui_delay(1002L, TRUE); // give the user time to think about it
     }
-    curbuf->b_did_warn = TRUE;
+    curbuf->b_did_warn = true;
     redraw_cmdline = FALSE;	// don't redraw and erase the message
     if (msg_row < Rows - 1)
 	showmode();
@@ -321,6 +321,9 @@ f_listener_add(typval_T *argvars, typval_T *rettv)
     buf_T	*buf = curbuf;
     int		unbuffered = 0;
 
+    if (check_secure())
+	return;
+
     if (recursive)
     {
 	emsg(_(e_cannot_add_listener_in_listener_callback));
@@ -386,6 +389,9 @@ f_listener_flush(typval_T *argvars, typval_T *rettv UNUSED)
 {
     buf_T	*buf = curbuf;
 
+    if (check_secure())
+	return;
+
     if (recursive)
 	return;
 
@@ -438,6 +444,9 @@ f_listener_remove(typval_T *argvars, typval_T *rettv)
     listener_T	*prev;
     int		id;
     buf_T	*buf;
+
+    if (check_secure())
+	return;
 
     if (in_vim9script() && check_for_number_arg(argvars, 0) == FAIL)
 	return;
@@ -693,7 +702,7 @@ changed_common(
 		// This is the first of a new sequence of undo-able changes
 		// and it's at some distance of the last change.  Use a new
 		// position in the changelist.
-		curbuf->b_new_change = FALSE;
+		curbuf->b_new_change = false;
 
 		if (curbuf->b_changelistlen == JUMPLISTSIZE)
 		{
@@ -888,7 +897,7 @@ changedOneline(buf_T *buf, linenr_T lnum)
     else
     {
 	// set the area that must be redisplayed to one line
-	buf->b_mod_set = TRUE;
+	buf->b_mod_set = true;
 	buf->b_mod_top = lnum;
 	buf->b_mod_bot = lnum + 1;
 	buf->b_mod_xlines = 0;
@@ -1026,7 +1035,7 @@ changed_lines_buf(
     else
     {
 	// set the area that must be redisplayed
-	buf->b_mod_set = TRUE;
+	buf->b_mod_set = true;
 	buf->b_mod_top = lnum;
 	buf->b_mod_bot = lnume + xtra;
 	buf->b_mod_xlines = xtra;
@@ -1263,7 +1272,7 @@ ins_char_bytes(char_u *buf, int charlen)
 	    // characters (zero if it's a TAB).  Count the number of bytes to
 	    // be deleted to make room for the new character, counting screen
 	    // cells.  May result in adding spaces to fill a gap.
-	    getvcol(curwin, &curwin->w_cursor, NULL, &vcol, NULL);
+	    getvcol(curwin, &curwin->w_cursor, NULL, &vcol, NULL, 0);
 	    new_vcol = vcol + chartabsize(buf, vcol);
 	    while (oldp[col + oldlen] != NUL && vcol < new_vcol)
 	    {
@@ -2561,7 +2570,7 @@ truncate_line(int fixpos)
  * Saves the lines for undo first if "undo" is TRUE.
  */
     void
-del_lines(long nlines,	int undo)
+del_lines(long nlines, int undo)
 {
     long	n;
     linenr_T	first = curwin->w_cursor.lnum;

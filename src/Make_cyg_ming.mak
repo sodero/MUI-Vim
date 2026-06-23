@@ -744,7 +744,7 @@ XPM = no
  endif
  ifdef XPM
   ifneq ($(XPM),no)
-CFLAGS += -DFEAT_XPM_W32 -I $(XPM)/include -I $(XPM)/../include
+CFLAGS += -DFEAT_XPM_W32 -I $(XPM)/include -I $(XPM)/include/X11 -I $(XPM)/../include
   endif
  endif
 
@@ -877,10 +877,15 @@ OBJ = \
 	$(OUTDIR)/session.o \
 	$(OUTDIR)/sha256.o \
 	$(OUTDIR)/sign.o \
+	$(OUTDIR)/sixel.o \
+	$(OUTDIR)/kitty.o \
+	$(OUTDIR)/cairo.o \
+	$(OUTDIR)/socketserver.o \
 	$(OUTDIR)/spell.o \
 	$(OUTDIR)/spellfile.o \
 	$(OUTDIR)/spellsuggest.o \
 	$(OUTDIR)/strings.o \
+	$(OUTDIR)/strptime.o \
 	$(OUTDIR)/syntax.o \
 	$(OUTDIR)/tabpanel.o \
 	$(OUTDIR)/tag.o \

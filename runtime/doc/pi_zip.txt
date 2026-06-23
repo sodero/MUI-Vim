@@ -1,4 +1,4 @@
-*pi_zip.txt*	For Vim version 9.2.  Last change: 2026 Feb 14
+*pi_zip.txt*	For Vim version 9.2.  Last change: 2026 May 16
 
 				+====================+
 				| Zip File Interface |
@@ -32,6 +32,10 @@ Copyright: Copyright (C) 2005-2015 Charles E Campbell	 *zip-copyright*
    the desired file, then hit the <return> key.  After editing, one may
    also write to the file.  Currently, one may not make a new file in
    zip archives via the plugin.
+
+   The zip plugin tries to detect some common path traversal attack
+   patterns, but it may not catch all possible cases.  Please be very
+   careful when using this plugin with untrusted input.
 
    COMMANDS~
 								*zip-x*
@@ -110,9 +114,9 @@ Copyright: Copyright (C) 2005-2015 Charles E Campbell	 *zip-copyright*
    should be treated as zip files.
 
    Alternatively, one may change *g:zipPlugin_ext* in one's .vimrc.
-   Currently (as of October 2025) it holds: >
+   Currently (as of May 2026) it holds: >
 
-        let g:zipPlugin_ext='*.aar,*.apk,*.celzip,*.crtx,*.docm,*.docx,
+        let g:zipPlugin_ext='*.aar,*.apk,*.cbz,*.celzip,*.crtx,*.docm,*.docx,
        \ *.dotm,*.dotx,*.ear,*.epub,*.gcsx,*.glox,*.gqsx,*.ja,*.jar,*.kmz,
        \ *.odb,*.odc,*.odf,*.odg,*.odi,*.odm,*.odp,*.ods,*.odt,*.otc,*.otf,
        \ *.otg,*.oth,*.oti,*.otp,*.ots,*.ott,*.oxt,*.pkpass,*.potm,*.potx,

@@ -87,7 +87,7 @@ int decode_modifiers(int n);
 bool in_osc_sequence(void);
 int check_termcode(int max_offset, char_u *buf, int bufsize, int *buflen);
 void term_get_fg_color(char_u *r, char_u *g, char_u *b);
-void term_get_bg_color(char_u *r, char_u *g, char_u *b);
+int term_get_bg_color(char_u *r, char_u *g, char_u *b);
 char_u *replace_termcodes(char_u *from, char_u **bufp, scid_T sid_arg, int flags, int *did_simplify);
 void show_termcodes(int flags);
 int show_one_termcode(char_u *name, char_u *code, int printit);
@@ -96,8 +96,8 @@ void swap_tcap(void);
 void ansi_color2rgb(int nr, char_u *r, char_u *g, char_u *b, char_u *ansi_idx);
 void cterm_color2rgb(int nr, char_u *r, char_u *g, char_u *b, char_u *ansi_idx);
 int term_replace_keycodes(char_u *ta_buf, int ta_len, int len_arg);
-void send_decrqm_modes(void);
 void term_disable_dec(void);
 void term_set_win_resize(bool state);
+int sync_output_active(void);
 void term_set_sync_output(int flags);
 /* vim: set ft=c : */

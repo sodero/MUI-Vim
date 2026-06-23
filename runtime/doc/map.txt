@@ -1,4 +1,4 @@
-*map.txt*	For Vim version 9.2.  Last change: 2026 Feb 14
+*map.txt*	For Vim version 9.2.  Last change: 2026 Jun 13
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -208,8 +208,7 @@ be effective in the current buffer only.  Example: >
 Then you can map ",w" to something else in another buffer: >
 	:map <buffer>  ,w  /[#&!]<CR>
 The local buffer mappings are used before the global ones.  See <nowait> below
-to make a short local mapping not taking effect when a longer global one
-exists.
+to make a short local mapping take effect when a longer global one exists.
 The "<buffer>" argument can also be used to clear mappings: >
 	:unmap <buffer> ,w
 	:mapclear <buffer>
@@ -1593,7 +1592,10 @@ reported if any are supplied).  However, it is possible to specify that the
 command can take arguments, using the -nargs attribute.  Valid cases are:
 
 	-nargs=0    No arguments are allowed (the default)
-	-nargs=1    Exactly one argument is required, it includes spaces
+	-nargs=1    Exactly one argument is required, it includes spaces;
+		    completion treats white spaces as argument separation
+	-nargs=_    Exactly one argument is required, it includes spaces;
+		    completion treats white spaces as part of the argument
 	-nargs=*    Any number of arguments are allowed (0, 1, or many),
 		    separated by white space
 	-nargs=?    0 or 1 arguments are allowed
@@ -1601,7 +1603,28 @@ command can take arguments, using the -nargs attribute.  Valid cases are:
 
 Arguments are considered to be separated by (unescaped) spaces or tabs in this
 context, except when there is one argument, then the white space is part of
-the argument.
+the argument. The difference between the "-nargs=1" and "-nargs=_": >
+
+	func MyComplete(ArgLead, CmdLine, CursorPos)
+	  return ["one value", "two values", "three values"]
+		\->matchfuzzy(a:ArgLead)
+	endfunc
+	:command -nargs=1 -complete=customlist,MyComplete MyCmd1 echo <q-args>
+	:command -nargs=_ -complete=customlist,MyComplete MyCmd2 echo <q-args>
+
+Completing ":MyCmd1 two va<tab>" will complete with: >
+
+	:MyCmd1 two one value
+
+Completing ":MyCmd2 two va<tab>" will complete with: >
+
+	:MyCmd2 two values
+
+Use -nargs=_ when the whole argument area should be taken as a single value
+as-is.  When you need several arguments and an individual argument may itself
+contain spaces (so the splitter must keep running), use -nargs=+/* together
+with |:command-completeopt| (-completeopt=escape) instead.
+
 
 Note that arguments are used as text, not as expressions.  Specifically,
 "s:var" will use the script-local variable in the script where the command was
@@ -1693,7 +1716,21 @@ For the "custom" argument, the function should return the completion
 candidates one per line in a newline separated string.
 							*E1303*
 For the "customlist" argument, the function should return the completion
-candidates as a Vim List.  Non-string items in the list are ignored.
+candidates as a Vim List.  Each item may be either a string or a |Dictionary|.
+A Dictionary item may have the following keys:
+	word	(required) the text inserted into the command line when the
+		item is selected
+	abbr	alternative text shown in the popup menu in place of "word",
+		when 'wildoptions' contains "pum"; useful when the inserted
+		text and the displayed text should differ
+	kind	short kind text (one or two characters), shown in the popup
+		menu when 'wildoptions' contains "pum"
+	menu	extra text shown after the match in the popup menu
+	info	long description shown in the info popup; the |+popupwin|
+		feature is required to display it
+Items that are neither a string nor a Dictionary, and Dictionary items without
+a "word" key, are ignored.  When 'wildoptions' does not contain "pum", only
+"word" is shown.
 
 The function arguments are:
 	ArgLead		the leading portion of the argument currently being
@@ -1725,6 +1762,50 @@ the 'path' option: >
     :endfun
 <
 This example does not work for file names with spaces!
+
+							*:command-completeopt*
+For the "custom" and "customlist" types you can further opt into specific
+behaviors with the -completeopt= attribute.  It takes a comma-separated list
+of option names; currently only "escape" is recognized:
+
+	-completeopt=escape
+		The completion function may return matches containing spaces,
+		tabs or backslashes.  When such a match is inserted into the
+		command line each space, tab and backslash is preceded by a
+		backslash so the value is preserved as a single argument.  The
+		unescaped form is used for display (popup menu / wildmenu /
+		|getcompletion()|).  The ArgLead passed to the completion
+		function is also unescaped: when the user types
+		`:Cmd foo\ b<Tab>` the function is called with `foo b`, not
+		`foo\ b` .  In the command's replacement text |<q-args>| and
+		|<f-args>| likewise yield the unescaped value.
+
+Example: >
+    :func MyComplete(ArgLead, CmdLine, CursorPos)
+    :    return filter(['hello world', 'good morning'],
+    :    \              {_, v -> stridx(v, a:ArgLead) ==# 0})
+    :endfunc
+    :com! -nargs=1 -complete=customlist,MyComplete -completeopt=escape MyCmd
+		\ echo <q-args>
+<
+After `:MyCmd <Tab>` the popup shows `hello world` and `good morning`.  Typing
+`:MyCmd hello\ w<Tab>` calls MyComplete with ArgLead set to `hello w` (the
+backslash before the space is removed), the filter finds `hello world`, and
+`<Tab>` inserts it as `:MyCmd hello\ world`.  `<q-args>` then evaluates to the
+logical `hello world`.
+
+Without -completeopt=escape the literal string `hello world` would be inserted
+into the command line, so Vim's argument splitter would treat it as two
+arguments.
+
+-completeopt=escape and -nargs=_ (see |:command-nargs|) target different
+shapes; they are not competing solutions for the same one:
+	"whole line as one argument, no escaping"
+			use -nargs=_
+	"multiple arguments, each may contain spaces"
+			use -nargs=+ or -nargs=* with -completeopt=escape
+Because -nargs=_ disables the argument splitter, escaping has no effect there,
+so combining -nargs=_ with -completeopt=escape is an error (E1579).
 
 
 Range handling ~

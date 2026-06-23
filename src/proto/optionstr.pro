@@ -136,6 +136,8 @@ int expand_set_printoptions(optexpand_T *args, int *numMatches, char_u ***matche
 char *did_set_renderoptions(optset_T *args);
 char *did_set_rightleftcmd(optset_T *args);
 int expand_set_rightleftcmd(optexpand_T *args, int *numMatches, char_u ***matches);
+char *did_set_pumopt(optset_T *args);
+int expand_set_pumopt(optexpand_T *args, int *numMatches, char_u ***matches);
 char *did_set_pumborder(optset_T *args);
 int expand_set_pumborder(optexpand_T *args, int *numMatches, char_u ***matches);
 char *did_set_rulerformat(optset_T *args);
@@ -150,6 +152,7 @@ char *did_set_selectmode(optset_T *args);
 int expand_set_selectmode(optexpand_T *args, int *numMatches, char_u ***matches);
 char *did_set_sessionoptions(optset_T *args);
 int expand_set_sessionoptions(optexpand_T *args, int *numMatches, char_u ***matches);
+char *did_set_shellpipe_redir(optset_T *args);
 char *did_set_shortmess(optset_T *args);
 int expand_set_shortmess(optexpand_T *args, int *numMatches, char_u ***matches);
 char *did_set_showbreak(optset_T *args);

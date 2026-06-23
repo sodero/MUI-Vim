@@ -10,8 +10,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Vim(Serbian)\n"
 "Report-Msgid-Bugs-To: vim-dev@vim.org\n"
-"POT-Creation-Date: 2026-02-19 17:55+0000\n"
-"PO-Revision-Date: 2026-02-20 09:34+0400\n"
+"POT-Creation-Date: 2026-04-29 19:49+0000\n"
+"PO-Revision-Date: 2026-05-01 10:09+0400\n"
 "Last-Translator: Ivan Pešić <ivan.pesic@gmail.com>\n"
 "Language-Team: Serbian\n"
 "Language: sr\n"
@@ -2038,6 +2038,9 @@ msgstr "???ПРАЗАН БЛОК"
 msgid "???LINES MISSING"
 msgstr "???НЕДОСТАЈУ ЛИНИЈЕ"
 
+msgid "???ILLEGAL BLOCK NUMBER"
+msgstr "???НЕИСПРАВАН БРОЈ БЛОКА"
+
 msgid "???BLOCK MISSING"
 msgstr "???НЕДОСТАЈЕ БЛОК"
 
@@ -2387,6 +2390,10 @@ msgid "Beep!"
 msgstr "Биип!"
 
 #, c-format
+msgid "Executing directly: \"%s\""
+msgstr "Директно се извршава: „%s”"
+
+#, c-format
 msgid "Calling shell to execute: \"%s\""
 msgstr "Позива се командно окружење да изврши: „%s”"
 
@@ -2600,7 +2607,7 @@ msgid ""
 "Cannot execute shell sh\n"
 msgstr ""
 "\n"
-"Командно окружење sh не може да се изврши\n"
+"Не може да се изврши командно окружење sh\n"
 
 msgid ""
 "\n"
@@ -2614,7 +2621,7 @@ msgid ""
 "Cannot create pipes\n"
 msgstr ""
 "\n"
-"Токови података не могу да се креирају\n"
+"Не могу да се креирају токови података\n"
 
 msgid ""
 "\n"
@@ -2628,7 +2635,7 @@ msgid ""
 "Cannot execute shell "
 msgstr ""
 "\n"
-"Командно окружење не може да се изврши "
+"Не може да се изврши командно окружење "
 
 msgid ""
 "\n"
@@ -2642,14 +2649,14 @@ msgstr "XSMP је изгубио ICE везу"
 
 #, c-format
 msgid "Could not load gpm library: %s"
-msgstr "Библиотека gpm није могла да се учита: %s"
+msgstr "Није могла да се учита gpm библиотека: %s"
 
 #, c-format
 msgid "dlerror = \"%s\""
 msgstr "dlerror = „%s”"
 
 msgid "Opening the X display failed"
-msgstr "Отварање X приказа није успело"
+msgstr "Није успело отварање X приказа"
 
 msgid "XSMP handling save-yourself request"
 msgstr "XSMP опслужује сачувај-се захтев"
@@ -2669,7 +2676,7 @@ msgid "Failed creating socket directory: %s"
 msgstr "Не може да се креира сокет директоријум: %s"
 
 msgid "At line"
-msgstr "Код линије"
+msgstr "На линији"
 
 #, c-format
 msgid "Vim: Caught %s event\n"
@@ -5465,10 +5472,6 @@ msgstr "E456: PostScript resource фајл „%s.ps” не може да се �
 msgid "E457: Can't read PostScript resource file \"%s\""
 msgstr "E457: PostScript resource фајл „%s” не може да се чита"
 
-msgid "E458: Cannot allocate colormap entry, some colors may be incorrect"
-msgstr ""
-"E458: colormap ставка не може да се алоцира, неке боје су можда неисправне"
-
 msgid "E459: Cannot go back to previous directory"
 msgstr "E459: Не може да се оде назад на претходни директоријум"
 
@@ -6122,6 +6125,9 @@ msgstr "E647: Неисправни идентификатор бафера у se
 
 msgid "E648: Invalid buffer identifier in close"
 msgstr "E648: Неисправни идентификатор бафера у close"
+
+msgid "E649: Invalid identifier name in defineAnnoType"
+msgstr "E649: Неисправно име идентификатора у defineAnnoType"
 
 msgid "E650: Invalid buffer identifier in defineAnnoType"
 msgstr "E650: Неисправни идентификатор бафера у defineAnnoType"
@@ -7046,10 +7052,11 @@ msgstr "E910: Посао се користи као Број"
 msgid "E911: Using a Job as a Float"
 msgstr "E911: Посао се користи као Покретни"
 
-msgid "E912: Cannot use ch_evalexpr()/ch_sendexpr() with a raw or nl channel"
+msgid ""
+"E912: Cannot use ch_evalexpr()/ch_sendexpr() with a raw, nl or blob channel"
 msgstr ""
-"E912: Функција ch_evalexpr()/ch_sendexpr() не може да се користи са raw или "
-"nl каналом"
+"E912: Функција ch_evalexpr()/ch_sendexpr() не може да се користи са raw, nl "
+"или blob каналом"
 
 msgid "E913: Using a Channel as a Number"
 msgstr "E913: Канал се користи као Број"
@@ -8411,10 +8418,8 @@ msgstr "E1291: Неважећи аргумент: %ld"
 msgid "E1292: Command-line window is already open"
 msgstr "E1292: Прозор командне линије је већ отворен"
 
-msgid "E1293: Cannot use a negative id after adding a textprop with text"
-msgstr ""
-"E1293: Након додавања текст особине са текстом не може да се употреби "
-"негативан id"
+msgid "E1293: Cannot use a negative id for a text property"
+msgstr "E1293: За текст особину може да се употреби негативан id"
 
 msgid "E1294: Can only use text_align when column is zero"
 msgstr "E1294: Када је колона нула, може да се користи само text_align"
@@ -8558,13 +8563,6 @@ msgstr "E1335: У променљиву „%s” у класи „%s” не мо
 #, c-format
 msgid "E1337: Class variable \"%s\" not found in class \"%s\""
 msgstr "E1337: Променљива класе „%s” није пронађена у класи „%s”"
-
-msgid ""
-"E1339: Cannot add a textprop with text after using a textprop with a "
-"negative id"
-msgstr ""
-"E1339: Текст особина са текстом не може да се дода након употребе текст "
-"особине са негативним id"
 
 #, c-format
 msgid "E1340: Argument already declared in the class: %s"
@@ -9100,7 +9098,7 @@ msgstr "E1545: Стек Quickfix листе није доступан"
 msgid "E1546: Cannot switch to a closing buffer"
 msgstr "E1546: Не може да се пређе на бафер који се затвара"
 
-msgid "E1547: This version of Vim does support :redrawtabpanel"
+msgid "E1547: This version of Vim does not support :redrawtabpanel"
 msgstr "E1547: Ова верзија Vim едитора не подржава :redrawtabpanel"
 
 msgid "E1548: Wayland connection is unavailable"
@@ -9193,26 +9191,23 @@ msgstr ""
 "E1571: Мора да се наведе барем једна функција повратног позива за "
 "redraw_listener_add"
 
+msgid "E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified"
+msgstr "E1572: 'listchars' поље „leadtab” захтева да се наведе „tab”"
+
+msgid "E1573: Cannot listen on port"
+msgstr "E1573: Не може да се слуша на порту"
+
+msgid "E1574: gethostbyname(): cannot resolve hostname in channel_listen()"
+msgstr "E1574: gethostbyname(): не може да се разреши име хоста у channel_listen()"
+
+msgid "E1575: Cannot create pipes"
+msgstr "E1575: Не могу да се креирају токови података"
+
+msgid "E1576: Tag file entry must not be a URL"
+msgstr "E1576: Ставка у фајлу ознака не сме да буде URL"
+
 msgid "--No lines in buffer--"
 msgstr "--У баферу нема линија--"
-
-msgid "int"
-msgstr "целобројни"
-
-msgid "long int"
-msgstr "дуги целобројни"
-
-msgid "long long int"
-msgstr "дуги дуги целобројни"
-
-msgid "unsigned int"
-msgstr "неозначени целобројни"
-
-msgid "unsigned long int"
-msgstr "неозначени дуги целобројни"
-
-msgid "unsigned long long int"
-msgstr "неозначени дуги дуги целобројни"
 
 msgid "pointer"
 msgstr "показивач"
@@ -9220,14 +9215,8 @@ msgstr "показивач"
 msgid "percent"
 msgstr "проценат"
 
-msgid "char"
-msgstr "карактер"
-
 msgid "string"
 msgstr "стринг"
-
-msgid "float"
-msgstr "покретни"
 
 msgid "search hit TOP, continuing at BOTTOM"
 msgstr "претрага је достигла ВРХ, наставља се од ДНА"
@@ -9774,6 +9763,9 @@ msgstr "скроловање по екранској линији"
 msgid "number of screen lines to show around the cursor"
 msgstr "број екранских линија које се приказују око курсора"
 
+msgid "vertically center cursor even at end of file"
+msgstr "центрирај курсор по вертикали чак и на крају фајла"
+
 msgid "long lines wrap"
 msgstr "дуге линије се обавијају"
 
@@ -9828,6 +9820,12 @@ msgstr "број линија који скролују CTRL-F и CTRL-B"
 
 msgid "don't redraw while executing macros"
 msgstr "екран се не исцртава током извршавања макроа"
+
+msgid "configure method of receiving terminal size changes"
+msgstr "конфигурисање методе пријема промена величине терминала"
+
+msgid "enable terminal sync mode"
+msgstr "укључивање режима синхронизације терминала"
 
 msgid "timeout for 'hlsearch' and :match highlighting in msec"
 msgstr "тајмаут за 'hlsearch' и :match истицање у милисекундама"
@@ -9890,6 +9888,9 @@ msgstr "истичу се сва подударања последње кори�
 msgid "highlight group to use for the window"
 msgstr "група истицања која се користи за прозор"
 
+msgid "highlight group mappings for the window"
+msgstr "мапирања група истицања за прозор"
+
 msgid "use GUI colors for the terminal"
 msgstr "за терминал се користе ГКИ боје"
 
@@ -9934,6 +9935,9 @@ msgstr "0, 1 или 2; када се користи статусна линиј�
 
 msgid "alternate format to be used for a status line"
 msgstr "алтернативни формат који ће се користити за статусну линију"
+
+msgid "optional settings for the status line"
+msgstr "необавезна подешавања за статусну линију"
 
 msgid "make all windows the same size when adding/removing windows"
 msgstr ""
@@ -10339,11 +10343,6 @@ msgstr ""
 msgid "Wayland seat to use"
 msgstr "Wayland седиште које се користи"
 
-msgid ""
-"Enable wayland focus stealing functionality in order to access the clipboard"
-msgstr ""
-"Укључује wayland функционалност крађе фокуса да би се приступило клипборду"
-
 msgid "\"startsel\" and/or \"stopsel\"; what special keys can do"
 msgstr "„startsel” и/или „stopsel”; шта могу да ураде специјални тастери"
 
@@ -10448,6 +10447,9 @@ msgstr "максимална ширина искачућег менија"
 
 msgid "popup border style"
 msgstr "стил оквира искачућег прозора"
+
+msgid "additional options for the popup menu"
+msgstr "додатне опције за искачући мени"
 
 msgid "user defined function for Insert mode completion"
 msgstr "кориснички дефинисана функција за довршавање у режиму Уметање"
@@ -10663,6 +10665,9 @@ msgstr ""
 
 msgid "allow setting expression options from a modeline"
 msgstr "омогућавање постављања опција израза из режимске линије"
+
+msgid "only allow safe options to be set from a modeline"
+msgstr "из режимске линије могу да се поставе само безбедне опције"
 
 msgid "number of lines to check for modelines"
 msgstr "број линија које се проверавају на постојање режимске линије"

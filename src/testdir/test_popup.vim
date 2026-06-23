@@ -723,6 +723,9 @@ func Test_popup_and_preview_autocommand()
     au!
     au BufAdd * nested tab sball
   augroup END
+  " Let pythoncomplete follow the buffer's 'import os' (off by default
+  " since v9.2.0561) so 'os.' can be completed.
+  let g:pythoncomplete_allow_import = 1
   set omnifunc=pythoncomplete#Complete
   call setline(1, 'import os')
   " make the line long
@@ -745,6 +748,7 @@ func Test_popup_and_preview_autocommand()
   augroup END
   augroup! MyBufAdd
   bw!
+  unlet g:pythoncomplete_allow_import
 endfunc
 
 func s:run_popup_and_previewwindow_dump(lines, dumpfile)
@@ -2418,6 +2422,219 @@ func Test_popup_shadow_hiddenchar()
   call term_sendkeys(buf, "\<Esc>")
 
   call StopVimInTerminal(buf)
+endfunc
+
+" Test pumopt opacity with screendump: background text should show through
+func Test_pumopt_opacity_screendump()
+  CheckScreendump
+  let lines =<< trim END
+    set pumopt=opacity:50
+    set completeopt=menu
+    call setline(1, ['hello world', 'hello vim', 'hello opacity', 'help me'])
+    for i in range(5)
+      call append(line('$'), repeat('BACKGROUND', 8))
+    endfor
+    normal gg
+  END
+  call writefile(lines, 'Xpumoptopacity', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacity', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "Gohel\<C-N>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_50', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test pumopt opacity with multibyte background text and multibyte popup
+" items.  Exercises the wide-character alignment in the blend path:
+" - a wide background character whose trailing cell falls inside the pum
+"   fill range must not be re-emitted after screen_char() has already drawn
+"   the full glyph (would clobber the right half);
+" - a wide background character at the right edge of the fill range must
+"   not spill into the adjacent border cell.
+func Test_pumopt_opacity_wide_bg()
+  CheckScreendump
+  let lines =<< trim END
+    set pumopt=opacity:50,border:round
+    set completeopt=menu
+    call setline(1, '')
+    for i in range(20)
+      call append(line('$'), 'ほげほげほげ漢字テストあいうえおカタカナ')
+    endfor
+    normal gg
+    inoremap <F5> <Cmd>call complete(col('.'),
+          \ ['ほげ', 'ふが漢字', 'カタカナ候補'])<CR>
+  END
+  call writefile(lines, 'Xpumoptopacitywide', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacitywide', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "i\<F5>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_wide_bg', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" hl_pum_blend_attr() treated the CTERMCOLOR sentinel as a real near-white
+" color, leaking white bg onto textprop-covered cells under pum opacity.
+" Triggered by a textprop hl that only sets guisp.
+func Test_pumopt_opacity_textprop_undercurl()
+  CheckScreendump
+  let lines =<< trim END
+    set termguicolors
+    set t_Cs= t_Ce=
+    set pumopt=opacity:50
+    set completeopt=menu
+    call setline(1, '')
+    for i in range(8)
+      call append(line('$'), 'aaa bbb ccc ddd eee fff ggg hhh')
+    endfor
+    hi MyError guisp=#ec7279
+    call prop_type_add('mytype', #{highlight: 'MyError', combine: 1})
+    for s:l in range(2, 8)
+      call prop_add(s:l, 5, #{type: 'mytype', length: 20})
+    endfor
+    normal gg
+    inoremap <F5> <Cmd>call complete(col('.'),
+          \ ['popup-item-1', 'popup-item-2', 'popup-item-3'])<CR>
+  END
+  call writefile(lines, 'Xpumoptopacitytextprop', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacitytextprop', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "i\<F5>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_textprop_undercurl', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test pumopt opacity when every other background line is shifted by one
+" narrow cell, so the background's wide-character boundaries do not align
+" with the popup's wide-character grid.  Exercises the blend path when:
+" - pum_bg has the trailing half of a wide character at col == start_col
+"   (its leading half was overwritten by the popup text's clear_next_cell
+"   narrow space), where restoring the trailing alone would emit a stray
+"   NUL; a blended space must be rendered instead.
+" - clearing of ScreenLinesUC[off + 1] when screen_puts_len writes a wide
+"   character on a cell whose trailing previously held a different wide
+"   char's leading codepoint.
+func Test_pumopt_opacity_wide_bg_shifted()
+  CheckScreendump
+  let lines =<< trim END
+    set pumopt=opacity:50,border:round
+    set completeopt=menu
+    call setline(1, '')
+    let base = 'ほげほげほげ漢字テストあいうえおカタカナ'
+    for i in range(20)
+      call append(line('$'), (i % 2 == 0 ? '' : 'a') .. base)
+    endfor
+    normal gg
+    inoremap <F5> <Cmd>call complete(col('.'),
+          \ ['ほげ', 'ふが漢字', 'カタカナ候補'])<CR>
+  END
+  call writefile(lines, 'Xpumoptopacityshifted', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacityshifted', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "i\<F5>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_wide_bg_shifted', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test that opaque popup text uses the popup's own attributes (fg and flags
+" like italic) rather than inheriting them from the syntax-highlighted
+" multibyte background cell underneath.  Without this guard, popup text
+" picks up the fg/italic of whatever buffer text happened to sit under
+" each cell.
+func Test_pumopt_opacity_text_attrs()
+  CheckScreendump
+  let lines =<< trim END
+    set pumopt=opacity:50
+    set completeopt=menu
+    hi clear
+    hi Pmenu    guifg=#ffffff guibg=#004488 ctermfg=white ctermbg=darkblue
+    hi PmenuSel guifg=#000000 guibg=#ffcc00 ctermfg=black ctermbg=yellow
+    hi Special  guifg=#ff66cc cterm=italic gui=italic
+    call setline(1, '')
+    for i in range(20)
+      call append(line('$'), 'ほげほげほげ漢字テストあいうえおカタカナ')
+    endfor
+    call matchadd('Special', '漢字\|テスト')
+    normal gg
+    inoremap <F5> <Cmd>call complete(col('.'),
+          \ ['ほげ', 'ふが漢字', 'カタカナ候補'])<CR>
+  END
+  call writefile(lines, 'Xpumoptopacityattrs', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacityattrs', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "i\<F5>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_text_attrs', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test pumopt opacity:100 (fully opaque, same as default)
+func Test_pumopt_opacity_100()
+  CheckScreendump
+  let lines =<< trim END
+    set pumopt=opacity:100
+    set completeopt=menu
+    call setline(1, ['hello world', 'hello vim', 'hello opacity', 'help me'])
+    for i in range(5)
+      call append(line('$'), repeat('BACKGROUND', 8))
+    endfor
+    normal gg
+  END
+  call writefile(lines, 'Xpumoptopacity100', 'D')
+  let buf = RunVimInTerminal('-S Xpumoptopacity100', {})
+  call TermWait(buf)
+  call term_sendkeys(buf, "Gohel\<C-N>")
+  call TermWait(buf, 100)
+  call VerifyScreenDump(buf, 'Test_pumopt_opacity_100', {})
+  call term_sendkeys(buf, "\<C-E>\<Esc>u")
+  call TermWait(buf)
+  call StopVimInTerminal(buf)
+endfunc
+
+" When an opacity popup above another one is closed, moving the lower popup
+" into the old area must blend against the restored background, not the stale
+" contents of the closed popup.
+func Test_popup_opacity_move_after_close()
+  CheckScreendump
+  let lines =<< trim END
+    call setline(1, repeat(['abcdefghijklmnopqrstuvwxyz'], 8))
+    let g:popup_a = popup_create('A', #{
+          \ line: 3, col: 5, padding: [0, 4, 0, 0], border: [],
+          \ opacity: 50, zindex: 10
+          \ })
+    let g:popup_b = popup_create('BBBB', #{
+          \ line: 3, col: 12, border: [], opacity: 50, zindex: 20
+          \ })
+    func MovePopupA(timer) abort
+      call popup_close(g:popup_b)
+      call popup_move(g:popup_a, #{col: 12})
+    endfunc
+    call timer_start(100, 'MovePopupA')
+  END
+
+  call writefile(lines, 'Xpopupopacitymove', 'D')
+  let buf = RunVimInTerminal('-S Xpopupopacitymove', #{rows: 8, cols: 25})
+  call TermWait(buf, 150)
+  call VerifyScreenDump(buf, 'Test_popup_opacity_move_after_close', {})
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_popup_sandbox()
+  call assert_fails('sandbox call popup_create("hello", {})', 'E48:')
+  call assert_fails('sandbox call popup_setoptions(1, {})', 'E48:')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

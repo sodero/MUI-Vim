@@ -1,4 +1,4 @@
-" Test Vim9 classes
+" Tests for Vim9 script classes
 
 import './util/vim9.vim' as v9
 
@@ -42,13 +42,22 @@ def Test_class_basic()
   END
   v9.CheckSourceFailure(lines, 'E475: Invalid argument: classy Something', 2)
 
-  # The complete "endclass" should be specified.
+  # Test for "endclass" cannot be shortened.  Test_shortened_invalid_vim9() in
+  # test_vim9_script.vim has complete coverage (:endc to :endclas)
   lines =<< trim END
     vim9script
     class Something
     endcl
   END
   v9.CheckSourceFailure(lines, 'E1065: Command cannot be shortened: endcl', 3)
+
+  # "endclass" cannot be shortened (variant incl. colon-whitespace)
+  lines =<< trim END
+    vim9script
+    class Something
+    :   endcla
+  END
+  v9.CheckSourceFailure(lines, 'E1065: Command cannot be shortened: endcla', 3)
 
   # Additional words after "endclass"
   lines =<< trim END
@@ -1353,13 +1362,14 @@ def Test_instance_variable_access()
     echo Foo.new()
           .Add(1).Add(2).x
     echo Foo.new()
-          .Add(1) 
+          .Add(1)
           .Add(2)
           .x
   END
   v9.CheckSourceSuccess(lines)
 
-  # Test for "public" cannot be abbreviated
+  # Test for "public" cannot be shortened.  Test_shortened_invalid_vim9() in
+  # test_vim9_script.vim has complete coverage (:pub to :publi)
   lines =<< trim END
     vim9script
     class Something
@@ -1452,7 +1462,8 @@ enddef
 
 " Test for class variable access
 def Test_class_variable_access()
-  # Test for "static" cannot be abbreviated
+  # Test for "static" cannot be shortened.  Test_shortened_invalid_vim9() in
+  # test_vim9_script.vim has complete coverage (:stat and :stati)
   var lines =<< trim END
     vim9script
     class Something
@@ -2943,7 +2954,8 @@ def Test_abstract_class()
   END
   v9.CheckSourceFailure(lines, 'E1316: Class can only be defined in Vim9 script', 1)
 
-  # Test for "abstract" cannot be abbreviated
+  # Test for "abstract" cannot be shortened.  Test_shortened_invalid_vim9() in
+  # test_vim9_script.vim has complete coverage (:abs to :abstrac)
   lines =<< trim END
     vim9script
     abs class A
@@ -5143,7 +5155,7 @@ def Test_dup_member_variable()
       var _val = 20
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: _val', 4)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: val and _val', 4)
 
   # Duplicate public and protected member variable
   lines =<< trim END
@@ -5153,7 +5165,7 @@ def Test_dup_member_variable()
       public var val = 10
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: val', 4)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: val and _val', 4)
 
   # Duplicate class member variable
   lines =<< trim END
@@ -5163,7 +5175,7 @@ def Test_dup_member_variable()
       static var _s: string = "def"
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: _s', 4)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: s and _s', 4)
 
   # Duplicate public and protected class member variable
   lines =<< trim END
@@ -5173,7 +5185,7 @@ def Test_dup_member_variable()
       static var _s: string = "def"
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: _s', 4)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: s and _s', 4)
 
   # Duplicate class and object member variable
   lines =<< trim END
@@ -5230,7 +5242,7 @@ def Test_dup_member_variable()
       var _val = 20
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: _val', 9)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: val and _val', 9)
 
   # Duplicate object member variable in a derived class
   lines =<< trim END
@@ -5244,7 +5256,7 @@ def Test_dup_member_variable()
       var val = 20
     endclass
   END
-  v9.CheckSourceFailure(lines, 'E1369: Duplicate variable: val', 9)
+  v9.CheckSourceFailure(lines, 'E1406: Public and protected member have the same name: val and _val', 9)
 
   # Two member variables with a common prefix
   lines =<< trim END
@@ -5571,15 +5583,6 @@ def Test_abstract_method()
     endinterface
   END
   v9.CheckSourceFailure(lines, 'E1404: Abstract cannot be used in an interface', 3)
-
-  # Abbreviate the "abstract" keyword
-  lines =<< trim END
-    vim9script
-    class A
-      abs def Foo()
-    endclass
-  END
-  v9.CheckSourceFailure(lines, 'E1065: Command cannot be shortened: abs def Foo()', 3)
 
   # Use "abstract" with a member variable
   lines =<< trim END
@@ -11868,5 +11871,20 @@ func Test_class_member_lambda()
   END
   call v9.CheckSourceSuccess(lines)
 endfunc
+
+" Test for colon and whitespace before class, endclass, static, and abstract
+def Test_colon_whitespace()
+  var lines =<< trim END
+    :   vim9script
+    :   class C
+       # TODO: Fix :public - gives E1065
+       # :      public var p = true
+       :        static var s = true
+    :   endclass
+    :   abstract class A
+    :   endclass
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

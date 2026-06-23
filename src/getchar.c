@@ -714,6 +714,11 @@ stuffRedoReadbuff(char_u *s)
     void
 stuffReadbuffLen(char_u *s, long len)
 {
+#ifdef FEAT_EVAL
+    if (add_last_insert == 1) // Only add if this is the first call, for
+			      // recursive calls, ignore.
+	ga_concat_len(&last_insert_ga, s, (size_t)len);
+#endif
     add_buff(&readbuf1, s, len);
 }
 
@@ -2013,7 +2018,7 @@ vgetc(void)
 		    continue;
 		}
 #endif
-#if defined(FEAT_GUI) && defined(FEAT_GUI_GTK) && defined(FEAT_MENU)
+#if defined(FEAT_GUI) && defined(FEAT_GUI_GTK) && !defined(USE_GTK4) && defined(FEAT_MENU)
 		// GTK: <F10> normally selects the menu, but it's passed until
 		// here to allow mapping it.  Intercept and invoke the GTK
 		// behavior if it's not mapped.
@@ -2205,7 +2210,7 @@ vgetc(void)
 
 #ifdef FEAT_EVAL
 /*
- * Handle the InsertCharPre autocommand.
+ * Handle the KeyInputPre autocommand.
  * "c" is the character that was typed.
  * Return new input character.
  */
@@ -2645,6 +2650,9 @@ parse_queued_messages(void)
 	// Process the queued netbeans messages.
 	netbeans_parse_messages();
 # endif
+# ifdef FEAT_SOCKETSERVER
+	socketserver_parse_messages();
+# endif
 # ifdef FEAT_JOB_CHANNEL
 	// Write any buffer lines still to be written.
 	channel_write_any_lines();
@@ -2710,6 +2718,7 @@ typedef enum {
 /*
  * Check if the bytes at the start of the typeahead buffer are a character used
  * in Insert mode completion.  This includes the form with a CTRL modifier.
+ * During completion started by complete() keys are mapped as usual.
  */
     static int
 at_ins_compl_key(void)
@@ -2720,10 +2729,14 @@ at_ins_compl_key(void)
     if (typebuf.tb_len > 3
 	    && (c == K_SPECIAL || c == CSI)  // CSI is used by the GUI
 	    && p[1] == KS_MODIFIER
-	    && (p[2] & MOD_MASK_CTRL))
+	    && (p[2] & MOD_MASK_CTRL)
+	    // CTRL-SHIFT-N/P scroll the info popup, so they must not be folded
+	    // to the CTRL-N/CTRL-P completion keys here.
+	    && !(p[2] & MOD_MASK_SHIFT))
 	c = p[3] & 0x1f;
-    return (ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
-		|| (compl_status_local() && (c == Ctrl_N || c == Ctrl_P));
+    return !ctrl_x_mode_eval()
+	    && ((ctrl_x_mode_not_default() && vim_is_ctrl_x_key(c))
+		|| (compl_status_local() && (c == Ctrl_N || c == Ctrl_P)));
 }
 
 /*
@@ -2861,7 +2874,8 @@ handle_mapping(
      * - in insert or cmdline mode and 'paste' option set
      * - waiting for "hit return to continue" and CR or SPACE typed
      * - waiting for a char with --more--
-     * - in Ctrl-X mode, and we get a valid char for that mode
+     * - in Ctrl-X mode (not started by complete()), and we get a valid char
+     *   for that mode
      * - currently receiving OSC sequence
      */
     tb_c1 = typebuf.tb_buf[typebuf.tb_off];
@@ -4283,6 +4297,13 @@ getcmdkeycmd(
 	    // to a single Esc here.
 	    if (c1 == K_ESC)
 		c1 = ESC;
+
+#ifdef FEAT_GUI
+	    // Translate K_CSI to CSI.  The special key is only used to
+	    // avoid it being recognized as the start of a special key.
+	    if (c1 == K_CSI)
+		c1 = CSI;
+#endif
 	}
 
 	if (got_int)

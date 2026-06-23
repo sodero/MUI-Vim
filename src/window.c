@@ -682,9 +682,21 @@ wingotofile:
 			if (do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL,
 						   ECMD_HIDE, NULL) == FAIL)
 			{
+			    /*
+			     * Note: if FEAT_EVAL is defined and do_ecmd() is aborted resulting
+			     * in got_int be true, win_close() unconditionally fails. In such
+			     * case, the window split for do_ecmd() is left unclosed, i.e. the
+			     * current window is just duplicated. To avoid this, save and load
+			     * got_int value before and after closing the window.
+			     */
+			    sig_atomic_t    old_got_int = got_int;
+			    got_int = FALSE;
+
 			    // Failed to open the file, close the window
 			    // opened for it.
 			    win_close(curwin, FALSE);
+			    got_int = got_int || old_got_int;
+
 			    goto_tabpage_win(oldtab, oldwin);
 			}
 			else
@@ -724,7 +736,7 @@ wingotofile:
 			Prenum1, ACTION_SPLIT, (linenr_T)1, (linenr_T)MAXLNUM,
 			FALSE, FALSE);
 		vim_free(ptr);
-		curwin->w_set_curswant = TRUE;
+		curwin->w_set_curswant = true;
 		break;
 #endif
 
@@ -4784,6 +4796,9 @@ free_tabpage(tabpage_T *tp)
 
     if (tp == lastused_tabpage)
 	lastused_tabpage = NULL;
+#ifdef FEAT_TABPANEL
+    tabpanel_forget_tabpage(tp);
+#endif
 
     vim_free(tp->tp_localdir);
     vim_free(tp->tp_prevdir);
@@ -5777,7 +5792,7 @@ win_enter_ext(win_T *wp, int flags)
     if (curwin_invalid == 0)
     {
 	prevwin = curwin;	// remember for CTRL-W p
-	curwin->w_redr_status = TRUE;
+	curwin->w_redr_status = true;
     }
     curwin = wp;
     curbuf = wp->w_buffer;
@@ -5818,16 +5833,21 @@ win_enter_ext(win_T *wp, int flags)
     }
 
     maketitle();
-    curwin->w_redr_status = TRUE;
+    curwin->w_redr_status = true;
 #ifdef FEAT_TERMINAL
     if (bt_terminal(curwin->w_buffer))
 	// terminal is likely in another mode
 	redraw_mode = TRUE;
 #endif
     redraw_tabline = TRUE;
+    redraw_vseps = TRUE;
 #if defined(FEAT_TABPANEL)
     redraw_tabpanel = TRUE;
 #endif
+    // Need to schedule a redraw so that the vertical separator highlight is
+    // updated for the new current window.  The status line redraw of curwin
+    // is already requested via "curwin->w_redr_status".
+    redraw_later(UPD_VALID);
     if (restart_edit)
 	redraw_later(UPD_VALID);	// causes status line redraw
 
@@ -5966,6 +5986,7 @@ win_alloc(win_T *after, int hidden)
 
     // use global option value for global-local options
     new_wp->w_allbuf_opt.wo_so = new_wp->w_p_so = -1;
+    new_wp->w_allbuf_opt.wo_sop = new_wp->w_p_sop = -1;
     new_wp->w_allbuf_opt.wo_siso = new_wp->w_p_siso = -1;
 
     // We won't calculate w_fraction until resizing the window
@@ -6044,6 +6065,14 @@ win_free(
 
     remove_highlight_overrides(wp->w_hl);
     vim_free(wp->w_hl);
+
+    // Free statusline click regions.
+    if (wp->w_stl_click != NULL)
+    {
+	for (i = 0; i < wp->w_stl_click_count; i++)
+	    vim_free(wp->w_stl_click[i].funcname);
+	vim_free(wp->w_stl_click);
+    }
 
     clear_winopt(&wp->w_onebuf_opt);
     clear_winopt(&wp->w_allbuf_opt);
@@ -6182,6 +6211,16 @@ win_free_popup(win_T *win)
     // the timer may have been cleared, making the pointer invalid
     if (timer_valid(win->w_popup_timer))
 	stop_timer(win->w_popup_timer);
+# endif
+# ifdef FEAT_IMAGE
+    vim_free(win->w_popup_image_data);
+#  ifdef FEAT_IMAGE_SIXEL
+    vim_free(win->w_popup_image_seq);
+#  endif
+#  if defined(FEAT_IMAGE_GDI) || defined(FEAT_IMAGE_CAIRO) \
+    || defined(FEAT_IMAGE_GDK)
+    gui_mch_free_popup_image(win);
+#  endif
 # endif
     vim_free(win->w_frame);
     win_free(win, NULL);
@@ -6496,7 +6535,7 @@ frame_comp_pos(frame_T *topfrp, int *row, int *col)
 	    wp->w_winrow = *row;
 	    wp->w_wincol = *col;
 	    redraw_win_later(wp, UPD_NOT_VALID);
-	    wp->w_redr_status = TRUE;
+	    wp->w_redr_status = true;
 	}
 	// WinBar will not show if the window height is zero
 	h = VISIBLE_HEIGHT(wp) + wp->w_status_height;
@@ -7240,7 +7279,7 @@ win_fix_scroll(int resize)
 	{
 	    // Cursor position in this window may now be invalid.  It is kept
 	    // potentially invalid until the window is made the current window.
-	    wp->w_do_win_fix_cursor = TRUE;
+	    wp->w_do_win_fix_cursor = true;
 
 	    // If window has moved update botline to keep the same screenlines.
 	    if (*p_spk == 's' && wp->w_winrow != wp->w_prev_winrow
@@ -7298,7 +7337,7 @@ win_fix_cursor(int normal)
 	    || wp->w_buffer->b_ml.ml_line_count < wp->w_height)
 	return;
 
-    wp->w_do_win_fix_cursor = FALSE;
+    wp->w_do_win_fix_cursor = false;
     // Determine valid cursor range.
     long so = MIN(wp->w_height / 2, get_scrolloff_value());
     linenr_T lnum = wp->w_cursor.lnum;
@@ -7368,7 +7407,7 @@ win_new_height(win_T *wp, int height)
     }
 
     wp->w_height = height;
-    wp->w_redr_status = TRUE;
+    wp->w_redr_status = true;
     win_comp_scroll(wp);
 
     // There is no point in adjusting the scroll position when exiting.  Some
@@ -7514,7 +7553,7 @@ win_new_width(win_T *wp, int width)
 	curs_columns(TRUE);	// validate w_wrow
 
     redraw_win_later(wp, UPD_NOT_VALID);
-    wp->w_redr_status = TRUE;
+    wp->w_redr_status = true;
 }
 
     void
@@ -7574,6 +7613,7 @@ command_height(void)
 
     // Recompute window positions.
     win_comp_pos();
+    win_fix_scroll(true);
     cmdline_row = Rows - p_ch;
     redraw_cmdline = TRUE;
 

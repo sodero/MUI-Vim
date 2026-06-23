@@ -952,7 +952,7 @@ func Test_command_modifier_confirm()
   call term_sendkeys(buf, ":call Getout()\n")
   call WaitForAssert({-> assert_match('(Y)es, \[N\]o: ', term_getline(buf, 8))}, 1000)
   call term_sendkeys(buf, "y")
-  call WaitForAssert({-> assert_match('(Y)es, \[N\]o: ', term_getline(buf, 8))}, 1000)
+  call WaitForAssert({-> assert_match('Press ENTER or type command to continue', term_getline(buf, 8))}, 1000)
   call term_sendkeys(buf, "\<CR>")
   call TermWait(buf)
   call StopVimInTerminal(buf)
@@ -2094,6 +2094,24 @@ def Test_lambda_crash()
   v9.CheckScriptFailureList(lines, ["E1356:", "E1405:"])
 enddef
 
+def Test_skipped_lambda_after_else()
+  var lines =<< trim END
+    vim9script
+    def g:Warn(msg: string)
+      if has('patch-9.0.0321')
+        echo msg
+      else
+        timer_start(100, (_) => {
+          echohl WarningMsg | echom msg | echohl None
+        }, {repeat: 0})
+      endif
+    enddef
+    defcompile
+  END
+  v9.CheckScriptSuccess(lines)
+  delfunc! g:Warn
+enddef
+
 def s:check_previewpopup(expected_title: string)
   var id = popup_findpreview()
   assert_notequal(id, 0)
@@ -2103,8 +2121,8 @@ def s:check_previewpopup(expected_title: string)
   set previewpopup&
 enddef
 
-" Test for the 'previewpopup' option
 def Test_previewpopup()
+  # Test for the 'previewpopup' option
   CheckFeature quickfix
   set previewpopup=height:10,width:60
   pedit Xppfile
@@ -2127,5 +2145,56 @@ def Test_syntax_enable_clear()
   syntax clear
 enddef
 
+" Test for using legacy expression evaluation in a vim9script map
+def Test_map_legacy_expr()
+  var lines =<< trim END
+    legacy inoremap <expr> <F2> 'hello' . 'world'
+    new
+    feedkeys("a\<F2>", 'xt')
+    assert_equal(['helloworld'], getline(1, '$'))
+    bw!
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+" :call on a funcref stored in a dict member used to fail with E1017 in Vim9
+" script because get_lval() treated the subscript as a re-declaration.
+def Test_call_dict_funcref()
+  var lines =<< trim END
+      vim9script
+      var d: dict<any> = {}
+      var marker = ''
+      def F()
+        marker = 'called'
+      enddef
+      d.key = F
+      d['k2'] = F
+      call d.key()
+      assert_equal('called', marker)
+      marker = ''
+      call d['k2']()
+      assert_equal('called', marker)
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
+
+" :delfunction on a funcref stored in a dict member used to fail with E1017 in
+" Vim9 script for the same reason as :call.
+def Test_delfunction_dict_funcref()
+  var lines =<< trim END
+      vim9script
+      func g:LegacyFunc()
+      endfunc
+      var d: dict<any> = {}
+      d.key = g:LegacyFunc
+      d['k2'] = g:LegacyFunc
+      delfunction d.key
+      assert_false(has_key(d, 'key'))
+      delfunction d['k2']
+      assert_false(has_key(d, 'k2'))
+      delfunction g:LegacyFunc
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

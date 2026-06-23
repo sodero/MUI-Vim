@@ -946,7 +946,7 @@ compile_load(
 		case 'g': if (vim_strchr(name, AUTOLOAD_CHAR) == NULL)
 			  {
 			      if (is_expr && ASCII_ISUPPER(*name)
-				       && (find_func(name, FALSE) != NULL
+				       && (find_func(name, TRUE) != NULL
 					   || gfatab.gfat_args.ga_len > 0))
 				  res = generate_funcref(cctx, name, &gfatab,
 								TRUE);
@@ -1742,6 +1742,29 @@ compile_tuple(
 }
 
 /*
+ * Restore "*arg" from a temporary cmdline copy.
+ */
+    static void
+restore_cmdline_arg(evalarg_T *evalarg, char_u **arg, cctx_T *cctx)
+{
+    garray_T    *gap;
+    char_u	*line;
+    size_t	off;
+
+    if (!evalarg->eval_using_cmdline || cctx == NULL)
+	return;
+
+    gap = &evalarg->eval_tofree_ga;
+    if (gap->ga_len == 0)
+	return;
+
+    off = *arg - ((char_u **)gap->ga_data)[gap->ga_len - 1];
+    line = ((char_u **)cctx->ctx_ufunc->uf_lines.ga_data)[cctx->ctx_lnum];
+    *arg = line + off;
+    evalarg->eval_using_cmdline = FALSE;
+}
+
+/*
  * Parse a lambda: "(arg, arg) => expr"
  * "*arg" points to the '('.
  * Returns OK/FAIL when a lambda is recognized, NOTDONE if it's not a lambda.
@@ -1803,18 +1826,7 @@ compile_lambda(char_u **arg, cctx_T *cctx)
 	    compile_def_function(ufunc, FALSE, compile_type, cctx);
     }
 
-    // The last entry in evalarg.eval_tofree_ga is a copy of the last line and
-    // "*arg" may point into it.  Point into the original line to avoid a
-    // dangling pointer.
-    if (evalarg.eval_using_cmdline)
-    {
-	garray_T    *gap = &evalarg.eval_tofree_ga;
-	size_t	    off = *arg - ((char_u **)gap->ga_data)[gap->ga_len - 1];
-
-	*arg = ((char_u **)cctx->ctx_ufunc->uf_lines.ga_data)[cctx->ctx_lnum]
-									 + off;
-	evalarg.eval_using_cmdline = FALSE;
-    }
+    restore_cmdline_arg(&evalarg, arg, cctx);
 
     clear_evalarg(&evalarg, NULL);
 
@@ -2348,6 +2360,7 @@ skip_expr_cctx(char_u **arg, cctx_T *cctx)
     init_evalarg(&evalarg);
     evalarg.eval_cctx = cctx;
     skip_expr(arg, &evalarg);
+    restore_cmdline_arg(&evalarg, arg, cctx);
     clear_evalarg(&evalarg, NULL);
 }
 
@@ -2567,6 +2580,13 @@ compile_subscript(
 	    if (generate_ppconst(cctx, ppconst) == FAIL)
 		return FAIL;
 	    ppconst->pp_is_const = FALSE;
+
+	    type = get_type_on_stack(cctx, 0);
+	    if (type->tt_type == VAR_VOID)
+	    {
+		emsg(_(e_cannot_use_void_value));
+		return FAIL;
+	    }
 
 	    // Apply the '!', '-' and '+' first:
 	    //   -1.0->func() works like (-1.0)->func()
@@ -2840,9 +2860,8 @@ compile_subscript(
 		    return FAIL;
 		}
 		p = *arg;
-		if (eval_isdictc(*p))
-		    while (eval_isnamec(*p))
-			MB_PTR_ADV(p);
+		while (eval_isdictc(*p))
+		    MB_PTR_ADV(p);
 		if (p == *arg)
 		{
 		    semsg(_(e_syntax_error_at_str), *arg);
@@ -3355,7 +3374,7 @@ compile_expr6(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 		char_u *s2 = tv2->vval.v_string;
 		size_t len1 = STRLEN(s1);
 
-		tv1->vval.v_string = alloc((int)(len1 + STRLEN(s2) + 1));
+		tv1->vval.v_string = alloc(len1 + STRLEN(s2) + 1);
 		if (tv1->vval.v_string == NULL)
 		{
 		    clear_ppconst(ppconst);

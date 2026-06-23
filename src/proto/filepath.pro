@@ -36,7 +36,7 @@ char_u *do_browse(int flags, char_u *title, char_u *dflt, char_u *ext, char_u *i
 void f_browse(typval_T *argvars, typval_T *rettv);
 void f_browsedir(typval_T *argvars, typval_T *rettv);
 void f_filecopy(typval_T *argvars, typval_T *rettv);
-void home_replace(buf_T *buf, char_u *src, char_u *dst, int dstlen, int one);
+size_t home_replace(buf_T *buf, char_u *src, char_u *dst, int dstlen, int one);
 char_u *home_replace_save(buf_T *buf, char_u *src);
 int fullpathcmp(char_u *s1, char_u *s2, int checkname, int expandenv);
 char_u *gettail(char_u *fname);
@@ -48,7 +48,7 @@ int vim_ispathsep_nocolon(int c);
 int dir_of_file_exists(char_u *fname);
 int vim_fnamecmp(char_u *x, char_u *y);
 int vim_fnamencmp(char_u *x, char_u *y, size_t len);
-char_u *concat_fnames(char_u *fname1, char_u *fname2, int sep);
+char_u *concat_fnames(char_u *fname1, size_t fname1len, char_u *fname2, size_t fname2len, int sep, string_T *ret);
 void add_pathsep(char_u *p);
 char_u *FullName_save(char_u *fname, int force);
 int vim_fexists(char_u *fname);

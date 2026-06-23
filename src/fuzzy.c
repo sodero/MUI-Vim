@@ -31,7 +31,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
+#define USING_FLOAT_STUFF
 #include "vim.h"
 
 #if defined(FEAT_EVAL) || defined(FEAT_PROTO)
@@ -85,6 +85,7 @@ fuzzy_match(
     int		complete = FALSE;
     int		score = 0;
     int		numMatches = 0;
+    int		pat_chars = 0;
     score_t	fzy_score;
 
     *outScore = 0;
@@ -118,15 +119,26 @@ fuzzy_match(
 		complete = TRUE;
 	    *p = NUL;
 	}
+	// match_positions() always writes pat_chars entries,
+	// so bail if they won't fit.
+	pat_chars = MB_CHARLEN(pat);
+	if (pat_chars > maxMatches)
+	    pat_chars = maxMatches;
+	if (numMatches > maxMatches - pat_chars)
+	{
+	    numMatches = 0;
+	    *outScore = FUZZY_SCORE_NONE;
+	    break;
+	}
 
 	score = FUZZY_SCORE_NONE;
 	if (has_match(pat, str))
 	{
 	    fzy_score = match_positions(pat, str, matches + numMatches);
-	    score = (fzy_score == SCORE_MIN) ? INT_MIN + 1
-		: (fzy_score == SCORE_MAX) ? INT_MAX
-		: (fzy_score < 0) ? (int)ceil(fzy_score * SCORE_SCALE - 0.5)
-		: (int)floor(fzy_score * SCORE_SCALE + 0.5);
+	    if (fzy_score != SCORE_MIN)
+		score = (fzy_score == SCORE_MAX) ? INT_MAX
+		    : (fzy_score < 0) ? (int)ceil(fzy_score * SCORE_SCALE - 0.5)
+		    : (int)floor(fzy_score * SCORE_SCALE + 0.5);
 	}
 
 	if (score == FUZZY_SCORE_NONE)
@@ -143,7 +155,7 @@ fuzzy_match(
 	else
 	    *outScore += score;
 
-	numMatches += MB_CHARLEN(pat);
+	numMatches += pat_chars;
 
 	if (complete || numMatches >= maxMatches)
 	    break;
@@ -690,7 +702,12 @@ fuzzy_match_str_with_pos(char_u *str UNUSED, char_u *pat UNUSED)
     {
 	if (!VIM_ISWHITE(PTR2CHAR(p)))
 	{
-	    ga_grow(match_positions, 1);
+	    if (ga_grow(match_positions, 1) == FAIL)
+	    {
+		ga_clear(match_positions);
+		vim_free(match_positions);
+		return NULL;
+	    }
 	    ((int_u *)match_positions->ga_data)[match_positions->ga_len] =
 								    matches[j];
 	    match_positions->ga_len++;
@@ -848,11 +865,15 @@ search_for_fuzzy_match(
 		}
 		else
 		{
-		    if (fuzzy_match_str(*ptr, pattern) != FUZZY_SCORE_NONE)
+		    char_u *line = *ptr;
+		    char_u *p = skipwhite(line);
+		    if (fuzzy_match_str(p, pattern) != FUZZY_SCORE_NONE)
 		    {
 			found_new_match = TRUE;
 			*pos = current_pos;
-			*len = (int)ml_get_buf_len(buf, current_pos.lnum);
+			*ptr = p;
+			*len = (int)ml_get_buf_len(buf, current_pos.lnum) -
+								(int)(p - line);
 			break;
 		    }
 		}
@@ -1116,8 +1137,6 @@ match_positions(char_u *needle, char_u *haystack, int_u *positions)
     if (m > MATCH_MAX_LEN || n > m)
     {
 	// Unreasonably large candidate: return no score
-	// If it is a valid match it will still be returned, it will
-	// just be ranked below any reasonably sized candidates
 	return SCORE_MIN;
     }
     else if (n == m)
@@ -1125,12 +1144,26 @@ match_positions(char_u *needle, char_u *haystack, int_u *positions)
 	// Since this method can only be called with a haystack which
 	// matches needle. If the lengths of the strings are equal the
 	// strings themselves must also be equal (ignoring case).
-	if (positions)
+	// After truncation to MATCH_MAX_LEN n == m can also happen for
+	// unequal strings, so check before taking the shortcut.
+	bool equal = true;
+	for (int i = 0; i < n; i++)
 	{
-	    for (int i = 0; i < n; i++)
-		positions[i] = i;
+	    if (match.lower_needle[i] != match.lower_haystack[i])
+	    {
+		equal = false;
+		break;
+	    }
 	}
-	return SCORE_MAX;
+	if (equal)
+	{
+	    if (positions)
+	    {
+		for (int i = 0; i < n; i++)
+		    positions[i] = i;
+	    }
+	    return SCORE_MAX;
+	}
     }
 
     // ensure n * MATCH_MAX_LEN * 2 won't overflow

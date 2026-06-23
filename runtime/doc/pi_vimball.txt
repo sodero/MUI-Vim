@@ -1,4 +1,4 @@
-*pi_vimball.txt*	For Vim version 9.2.  Last change: 2026 Feb 14
+*pi_vimball.txt*	For Vim version 9.2.  Last change: 2026 Apr 16
 
 			       ----------------
 			       Vimball Archiver
@@ -93,21 +93,6 @@ MAKING A VIMBALL						*:MkVimball*
 	make.
 
 
-MAKING DIRECTORIES VIA VIMBALLS				*g:vimball_mkdir*
-
-	First, the |mkdir()| command is tried (not all systems support it).
-
-	If it doesn't exist, then if g:vimball_mkdir doesn't exist, it is set
-	as follows: >
-	  |g:netrw_localmkdir|, if it exists
-	  "mkdir"             , if it is executable
-	  "makedir"           , if it is executable
-	  Otherwise           , it is undefined.
-<	One may explicitly specify the directory making command using
-	g:vimball_mkdir.  This command is used to make directories that
-	are needed as indicated by the vimball.
-
-
 CONTROLLING THE VIMBALL EXTRACTION DIRECTORY		*g:vimball_home*
 
 	You may override the use of the 'runtimepath' by specifying a
@@ -181,6 +166,11 @@ WINDOWS							*vimball-windows*
 ==============================================================================
 4. Vimball History					*vimball-history* {{{1
 
+	unreleased:
+	     Feb 28, 2025 * add support for bzip3 (#16755)
+	     Apr 05, 2026 * Detect path traversal attacks
+	     Apr 09, 2026 * Detect more path traversal attacks
+	     Apr 16, 2026 * Block Windows drive letter paths
 	37 : Jul 18, 2014 * (by request of T. Miedema) added augroup around
 			    the autocmds in vimballPlugin.vim
 	     Jul 06, 2015 * there are two uses of tabc; changed to tabc!

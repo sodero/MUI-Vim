@@ -1,4 +1,4 @@
-*cmdline.txt*	For Vim version 9.2.  Last change: 2026 Mar 17
+*cmdline.txt*	For Vim version 9.2.  Last change: 2026 May 20
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -56,7 +56,7 @@ history tables:
 These are completely separate.  Each history can only be accessed when
 entering the same type of line.
 Use the 'history' option to set the number of lines that are remembered
-(default: 50).
+(default: 200).
 Notes:
 - When you enter a command-line that is exactly the same as an older one, the
   old one is removed (to avoid repeated commands moving older commands out of
@@ -466,14 +466,15 @@ CTRL-L		A match is done on the pattern in front of the cursor.  If
 	                                            *c_CTRL-G* */_CTRL-G*
 CTRL-G		When 'incsearch' is set, entering a search pattern for "/" or
 		"?" and the current match is displayed then CTRL-G will move
-		to the next match (does not take |search-offset| into account)
+		to the next match.  The |search-offset| is applied when <CR>
+		is pressed, but does not affect the match highlighting.
 		Use CTRL-T to move to the previous match.  Hint: on a regular
 		keyboard G is below T.
 	                                            *c_CTRL-T* */_CTRL-T*
 CTRL-T		When 'incsearch' is set, entering a search pattern for "/" or
 		"?" and the current match is displayed then CTRL-T will move
-		to the previous match (does not take |search-offset| into
-		account).
+		to the previous match.  The |search-offset| is applied when
+		<CR> is pressed, but does not affect the match highlighting.
 		Use CTRL-G to move to the next match.  Hint: on a regular
 		keyboard T is above G.
 

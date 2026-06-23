@@ -489,7 +489,8 @@ prt_header(
 	printer_page_num = pagenum;
 
 	build_stl_str_hl(curwin, tbuf, (size_t)(width + IOSIZE), p_header,
-			   (char_u *)"printheader", 0, ' ', width, NULL, NULL);
+			 (char_u *)"printheader", 0, ' ', width, NULL, NULL,
+			 NULL);
 
 	// Reset line numbers
 	curwin->w_cursor.lnum = tmp_lnum;
@@ -558,6 +559,16 @@ ex_hardcopy(exarg_T *eap)
 
     CLEAR_FIELD(settings);
     settings.has_color = TRUE;
+
+#ifdef FEAT_GUI_GTK_PRINT
+    // Use the native GTK print dialog only for interactive printing;
+    // ":hardcopy >file" must fall through to the PostScript writer.
+    if (gui.in_use && *eap->arg != '>')
+    {
+	gui_gtk4_hardcopy(eap);
+	return;
+    }
+#endif
 
 #ifdef FEAT_POSTSCRIPT
     if (*eap->arg == '>')
@@ -1394,7 +1405,7 @@ static int prt_use_courier;
 static int prt_in_ascii;
 static int prt_half_width;
 static char *prt_ascii_encoding;
-static char_u prt_hexchar[] = "0123456789abcdef";
+static const char_u prt_hexchar[] = "0123456789abcdef";
 
     static void
 prt_write_file_raw_len(char_u *buffer, int bytes)

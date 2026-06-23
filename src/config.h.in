@@ -12,9 +12,6 @@
 /* Define unless no Wayland support found */
 #undef HAVE_WAYLAND
 
-/* Define if you want focus stealing support with Wayland clipboard  */
-#undef FEAT_WAYLAND_CLIPBOARD_FS
-
 /* Define when terminfo support found */
 #undef TERMINFO
 
@@ -498,6 +495,12 @@
 
 /* Define if GTK+ GUI is to be linked against GTK+ 3 */
 #undef USE_GTK3
+
+/* Define if GTK GUI is to be linked against GTK 4 */
+#undef USE_GTK4
+
+/* Define if GTK4 GUI should use hardware accelerated backend */
+#undef USE_GTK4_SNAPSHOT
 
 /* Define if we have isinf() */
 #undef HAVE_ISINF

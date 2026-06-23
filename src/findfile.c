@@ -1789,12 +1789,9 @@ find_file_in_path_option(
     static int		did_findfile_init = FALSE;
     char_u		*file_name = NULL;
     int			rel_to_curdir;
-#ifdef AMIGA
-    struct Process	*proc = (struct Process *)FindTask(0L);
-    APTR		save_winptr = proc->pr_WindowPtr;
-
-    // Avoid a requester here for a volume that doesn't exist.
-    proc->pr_WindowPtr = (APTR)-1L;
+#ifdef FEAT_VOLUME_REQUESTER
+    // Avoid requester for a volume that doesn't exist.
+    void *req_handle = mch_disable_volume_requester();
 #endif
     static size_t	file_to_findlen = 0;
 
@@ -1808,7 +1805,7 @@ find_file_in_path_option(
 	// copy file name into NameBuff, expanding environment variables
 	save_char = ptr[len];
 	ptr[len] = NUL;
-	file_to_findlen = expand_env_esc(ptr, NameBuff, MAXPATHL, FALSE, TRUE, NULL);
+	file_to_findlen = expand_env_esc(ptr, NameBuff, MAXPATHL, NULL, TRUE, NULL);
 	ptr[len] = save_char;
 
 	vim_free(*file_to_find);
@@ -1999,8 +1996,8 @@ find_file_in_path_option(
     }
 
 theend:
-#ifdef AMIGA
-    proc->pr_WindowPtr = save_winptr;
+#ifdef FEAT_VOLUME_REQUESTER
+    mch_enable_volume_requester(req_handle);
 #endif
     return file_name;
 }
@@ -2411,6 +2408,10 @@ expand_path_option(
     while (*path_option != NUL)
     {
 	buflen = copy_option_part(&path_option, buf, MAXPATHL, " ,");
+
+	// do not expand backticks, could have been set via a modeline
+	if (vim_strchr(buf, '`') != NULL)
+	    continue;
 
 	if (buf[0] == '.' && (buf[1] == NUL || vim_ispathsep(buf[1])))
 	{

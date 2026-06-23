@@ -1693,4 +1693,50 @@ func Test_tag_excmd_with_number_vim9script()
   bwipe!
 endfunc
 
+" Test that backtick expressions in tag filenames are not expanded.
+" This prevents command injection via malicious tags files.
+func Test_tag_backtick_filename_not_expanded()
+  let pwned_file = 'Xtags_pwnd'
+  call assert_false(filereadable(pwned_file))
+
+  let tagline = "main\t`touch " .. pwned_file .. "`\t/^int main/;\"\tf"
+  call writefile([tagline], 'Xbt_tags', 'D')
+  call writefile(['int main(int argc, char **argv) {', '}'], 'Xbt_main.c', 'D')
+
+  set tags=Xbt_tags
+  sp Xbt_main.c
+
+  " The :tag command should fail to find the file, but must NOT execute
+  " the backtick shell command.
+  call assert_fails('tag main', 'E429:')
+  call assert_false(filereadable(pwned_file))
+
+  set tags&
+  bwipe!
+endfunc
+
+func Test_tagjump_refuse_url()
+  call writefile([
+        \ "XTagURL\thttp://127.0.0.1:1/$XTAG_SECRET/file.c\t/^int main"
+        \ ], 'Xtags', 'D')
+  let save_tagsecure = &tagsecure
+  let save_tags = &tags
+  set tags=Xtags
+
+  " E1576: Tag file entry must not be a URL
+  set tagsecure
+  call assert_fails('tag XTagURL', 'E1576:')
+  set tsc
+  call assert_fails('tag XTagURL', 'E1576:')
+
+  " E429: File does not exist
+  set notagsecure
+  call assert_fails('tag XTagURL', 'E429:')
+  set notsc
+  call assert_fails('tag XTagURL', 'E429:')
+
+  let &tagsecure = save_tagsecure
+  let &tags = save_tags
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

@@ -14,11 +14,15 @@ func TearDown()
 endfunc
 
 func s:get_statusline()
+  redraw!
   if has('gui_running')
-    redraw!
     sleep 1m
   endif
-  return ScreenLines(&lines - 1, &columns)[0]
+  " Read the screen directly after redraw! instead of going through
+  " ScreenLines(), whose own redraw! may process events and change the window
+  " layout between here and the screenstring() calls.
+  let row = &lines - 1
+  return join(map(range(1, &columns), 'screenstring(row, v:val)'), '')
 endfunc
 
 func StatuslineWithCaughtError()
@@ -116,10 +120,30 @@ func Test_statusline()
   call assert_match('^    Xstatusline\s*$', s:get_statusline())
   set statusline=%.6(%f%)
   call assert_match('^<sline\s*$', s:get_statusline())
+  set statusline=%.5(1234567%),%2.5(1234567%),%5.5(1234567%),%50.5(1234567%)
+  call assert_match('^<4567,<4567,<4567,<4567\s*$', s:get_statusline())
   set statusline=%14f
   call assert_match('^   Xstatusline\s*$', s:get_statusline())
   set statusline=%.4L
   call assert_match('^10>3\s*$', s:get_statusline())
+  for filler in ['-', '∙']
+    exec 'set fillchars+=stl:'..filler
+    set statusline=%-5(x%),%-5.(x%),%-5.5(x%),%-5.10(x%);
+    call assert_match(substitute('^x____,x____,x____,x____;_*$', '_', filler, 'g'), s:get_statusline())
+    set statusline=%5(x%),%5.(x%),%5.5(x%),%5.10(x%);
+    call assert_match(substitute('^____x,____x,____x,____x;_*$', '_', filler, 'g'), s:get_statusline())
+    set statusline=%.5(12🙂345%),%4.5(12🙂345%),%5.5(12🙂345%),%50.5(12🙂345%);
+    call assert_match(substitute('^<345,<345,<345_,<345_;_*$', '_', filler, 'g'), s:get_statusline())
+  endfor
+  if has('linux')
+    " This assumes MAXPATHL is 4096 bytes.
+    set stl=%{%repeat('x',4096-6)%}%10(X%)
+    set fillchars+=stl:-
+    call assert_match('^<x\+----X$', s:get_statusline())
+    set fillchars+=stl:∙
+    call assert_match('^<x\+∙X$', s:get_statusline())
+  endif
+  set fillchars&
 
   " %h: Help buffer flag, text is "[help]".
   " %H: Help buffer flag, text is ",HLP".
@@ -281,6 +305,16 @@ func Test_statusline()
   s/^/"/
   call assert_match('^vimLineComment\s*$', s:get_statusline())
   syntax off
+
+  " %0{: result of expression is inserted verbatim
+  set statusline=%{'\ x'}
+  call assert_match('^x\s*$', s:get_statusline())
+  set statusline=%0{'\ x'}
+  call assert_match('^ x\s*$', s:get_statusline())
+  set statusline=%{'000'}
+  call assert_match('^0\s*$', s:get_statusline())
+  set statusline=%0{'000'}
+  call assert_match('^000\s*$', s:get_statusline())
 
   "%{%expr%}: evaluates expressions present in result of expr
   func! Inner_eval()
@@ -719,6 +753,299 @@ func Test_statusline_singlebyte_negative()
   redrawstatus
   bw!
   let [&columns, &ls, &stl, &enc] = [_columns, _ls, _stl, _enc]
+endfunc
+
+func g:StlClickTestFunc(info)
+  let g:stl_click_info = a:info
+  return 0
+endfunc
+
+func g:StlClickReturn1(info)
+  let g:stl_click_info = a:info
+  return 1
+endfunc
+
+func Test_statusline_click_handler()
+  let save_mouse = &mouse
+  let save_stl = &statusline
+  let save_ls = &laststatus
+  set mouse=a
+  set laststatus=2
+
+  " Basic click handler
+  set statusline=%[StlClickTestFunc][Click]%[]\ %f
+  redraw!
+
+  " Click on the [Click] region
+  let stl_row = win_screenpos(0)[0] + winheight(0)
+  call test_setmouse(stl_row, 2)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal('l', g:stl_click_info.button)
+  call assert_equal(1, g:stl_click_info.nclicks)
+  call assert_equal(0, g:stl_click_info.minwid)
+  call assert_equal(win_getid(), g:stl_click_info.winid)
+  call assert_equal('statusline', g:stl_click_info.area)
+  unlet! g:stl_click_info
+
+  " Click outside click region (on the filename part)
+  call test_setmouse(stl_row, 20)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_false(exists('g:stl_click_info'))
+
+  " Test with minwid
+  set statusline=%42[StlClickTestFunc][Click]%[]\ %f
+  redraw!
+  call test_setmouse(stl_row, 2)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(42, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  " Test middle click
+  call test_setmouse(stl_row, 2)
+  call feedkeys("\<MiddleMouse>", 'xt')
+  call feedkeys("\<MiddleRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal('m', g:stl_click_info.button)
+  unlet! g:stl_click_info
+  let &mouse = save_mouse
+  let &statusline = save_stl
+  let &laststatus = save_ls
+endfunc
+
+func Test_statusline_click_multiple_regions()
+  let save_mouse = &mouse
+  let save_stl = &statusline
+  let save_ls = &laststatus
+  set mouse=a
+  set laststatus=2
+
+  " Two adjacent click regions with different minwid
+  set statusline=%1[StlClickTestFunc][AAA]%[]%2[StlClickTestFunc][BBB]%[]
+  redraw!
+
+  let stl_row = win_screenpos(0)[0] + winheight(0)
+
+  " Click on [AAA] region (col 2)
+  call test_setmouse(stl_row, 2)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(1, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  " Click on [BBB] region (col 7)
+  call test_setmouse(stl_row, 7)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(2, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  let &mouse = save_mouse
+  let &statusline = save_stl
+  let &laststatus = save_ls
+endfunc
+
+" Click on a region in any row of a multi-line statusline (issue #20116).
+func Test_statusline_click_multiline()
+  let save_mouse = &mouse
+  let save_stl = &statusline
+  let save_ls = &laststatus
+  let save_stlo = &statuslineopt
+  set mouse=a
+  set laststatus=2
+
+  " First row contains the click region, second row is filled with fillchar.
+  set statusline=%[StlClickTestFunc][Click]%[]%@\ \ \ \
+  set statuslineopt=maxheight:2,fixedheight
+  redraw!
+
+  let stl_row = win_screenpos(0)[0] + winheight(0)
+
+  " Click on [Click] in the first row of the multi-line statusline.
+  call test_setmouse(stl_row, 2)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(0, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  " A click region on the second row should also be recognized.
+  set statusline=row1%@%2[StlClickTestFunc][Click2]%[]
+  redraw!
+  call test_setmouse(stl_row + 1, 2)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(2, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  let &mouse = save_mouse
+  let &statusline = save_stl
+  let &laststatus = save_ls
+  let &statuslineopt = save_stlo
+endfunc
+
+func Test_statusline_click_region_extends_to_end()
+  let save_mouse = &mouse
+  let save_stl = &statusline
+  let save_ls = &laststatus
+  set mouse=a
+  set laststatus=2
+
+  " Click region without %[] extends to end of statusline
+  set statusline=xxx%[StlClickTestFunc]Clickable
+  redraw!
+
+  let stl_row = win_screenpos(0)[0] + winheight(0)
+
+  " Click near the end of the statusline
+  call test_setmouse(stl_row, 15)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  unlet! g:stl_click_info
+
+  " Click on "xxx" (before the click region)
+  call test_setmouse(stl_row, 1)
+  call feedkeys("\<LeftMouse>", 'xt')
+  call feedkeys("\<LeftRelease>", 'xt')
+  call assert_false(exists('g:stl_click_info'))
+
+  let &mouse = save_mouse
+  let &statusline = save_stl
+  let &laststatus = save_ls
+endfunc
+
+func Test_statusline_click_option_validation()
+  " Valid formats should not produce errors
+  let save_stl = &statusline
+  set statusline=%[Func]text%[]
+  set statusline=%3[Func]text%[]
+  set statusline=%[Func]text
+  set statusline=%[Func_Name]text%[]
+  " %@ alone is still valid (line break)
+  set statusline=%@
+  let &statusline = save_stl
+endfunc
+
+func Test_statusline_click_linebreak_still_works()
+  " Ensure %@ without FuncName still works as line break
+  let save_stl = &statusline
+  let save_ls = &laststatus
+  set laststatus=2
+
+  " This should not error - %@ is line break
+  set statusline=line1%@line2
+  redraw!
+
+  let &statusline = save_stl
+  let &laststatus = save_ls
+endfunc
+
+func Test_tabline_click_handler()
+  let save_mouse = &mouse
+  let save_tal = &tabline
+  let save_stal = &showtabline
+  if has('gui')
+    let save_go = &guioptions
+    set guioptions-=e
+  endif
+  set mouse=a
+  set showtabline=2
+
+  " Two adjacent click regions in 'tabline' with different minwid.
+  set tabline=%1[StlClickTestFunc][AAA]%[]%2[StlClickTestFunc][BBB]%[]
+  redraw!
+
+  " Click on [AAA] region (tabline is row 1).
+  call test_setmouse(1, 2)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal('l', g:stl_click_info.button)
+  call assert_equal(1, g:stl_click_info.nclicks)
+  call assert_equal(1, g:stl_click_info.minwid)
+  " winid is 0 for tabline clicks (no associated window).
+  call assert_equal(0, g:stl_click_info.winid)
+  call assert_equal('tabline', g:stl_click_info.area)
+  unlet! g:stl_click_info
+
+  " Click on [BBB] region.
+  call test_setmouse(1, 7)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal(2, g:stl_click_info.minwid)
+  unlet! g:stl_click_info
+
+  " Middle click on [AAA].
+  call test_setmouse(1, 2)
+  call feedkeys("\<MiddleMouse>\<MiddleRelease>", 'xt')
+  call assert_true(exists('g:stl_click_info'))
+  call assert_equal('m', g:stl_click_info.button)
+  unlet! g:stl_click_info
+
+  " Click outside any %[...] region: no callback, no error.
+  set tabline=xxx%1[StlClickTestFunc][YYY]%[]
+  redraw!
+  call test_setmouse(1, 1)
+  call feedkeys("\<LeftMouse>\<LeftRelease>", 'xt')
+  call assert_false(exists('g:stl_click_info'))
+
+  let &mouse = save_mouse
+  let &tabline = save_tal
+  let &showtabline = save_stal
+  if has('gui')
+    let &guioptions = save_go
+  endif
+endfunc
+
+func Test_statusline_empty()
+  set laststatus=2 statusline=%!'%{}%'
+  try
+  redraw!
+  catch
+  endtry
+  set laststatus&
+  set statusline&
+endfunc
+
+func Test_statusline_vsep_borrow_hl()
+  CheckScreendump
+
+  " borrow_stl_vsep_hl(): vsep cells adjacent to a status line should
+  " borrow the highlight of the neighbouring window's status line edge so
+  " that custom highlights flow into the separator column.
+  "  - vsep next to curwin: curwin's edge hl is borrowed.
+  "  - vsep between two non-current windows: the left window's right-edge
+  "    hl is borrowed when the status fillchar is a space.
+  let lines =<< trim END
+    hi User1 ctermfg=Red ctermbg=Yellow
+    hi User2 ctermfg=Blue ctermbg=Green
+    set laststatus=2
+    set statusline=%1*L%=%2*R
+    vsplit
+    vsplit
+    vsplit
+    " curwin is now the leftmost window; move to the second one so the
+    " layout becomes: NC | cur | NC | NC.
+    2wincmd w
+  END
+  call writefile(lines, 'XTest_statusline_vsep_borrow_hl', 'D')
+
+  let buf = RunVimInTerminal('-S XTest_statusline_vsep_borrow_hl',
+        \ {'rows': 6, 'cols': 78})
+  call term_sendkeys(buf, "\<C-L>")
+  call VerifyScreenDump(buf, 'Test_statusline_vsep_borrow_hl_01', {})
+
+  " Move curwin to the third window: NC | NC | cur | NC.
+  " Now the leftmost vsep is between two non-current windows.
+  call term_sendkeys(buf, "\<C-w>l\<C-L>")
+  call VerifyScreenDump(buf, 'Test_statusline_vsep_borrow_hl_02', {})
+
+  call StopVimInTerminal(buf)
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

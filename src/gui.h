@@ -15,7 +15,17 @@
 # ifdef VMS
 #  include "gui_gtk_vms.h"
 # endif
-# include <X11/Intrinsic.h>
+# ifdef USE_GTK4
+// Types used in proto files but not available without X11 headers
+typedef void *Widget;
+typedef void *XtAppContext;
+typedef void  Display;
+typedef unsigned long Window;
+typedef unsigned long Atom;
+typedef GdkEvent GdkEventKey;	// GTK4: GdkEventKey merged into GdkEvent
+# else
+#  include <X11/Intrinsic.h>
+# endif
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wstrict-prototypes"
 # include <gtk/gtk.h>
@@ -235,23 +245,23 @@ typedef long	    guicolor_T;	// handle for a GUI color; for X11 this should
 
 typedef struct Gui
 {
-    int		in_focus;	    // Vim has input focus
-    int		in_use;		    // Is the GUI being used?
-    int		starting;	    // GUI will start in a little while
+    bool	in_focus;	    // Vim has input focus
+    bool	in_use;		    // Is the GUI being used?
+    bool	starting;	    // GUI will start in a little while
     bool	shell_created;	    // Has the shell been created yet?
-    int		dying;		    // Is vim dying? Then output to terminal
-    int		dofork;		    // Use fork() when GUI is starting
+    bool	dying;		    // Is vim dying? Then output to terminal
+    bool	dofork;		    // Use fork() when GUI is starting
 #ifdef GUI_MAY_SPAWN
-    int		dospawn;	    // Use spawn() when GUI is starting
+    bool	dospawn;	    // Use spawn() when GUI is starting
 #endif
     int		dragged_sb;	    // Which scrollbar being dragged, if any?
     win_T	*dragged_wp;	    // Which WIN's sb being dragged, if any?
-    int		pointer_hidden;	    // Is the mouse pointer hidden?
+    bool	pointer_hidden;	    // Is the mouse pointer hidden?
     int		col;		    // Current cursor column in GUI display
     int		row;		    // Current cursor row in GUI display
     int		cursor_col;	    // Physical cursor column in GUI display
     int		cursor_row;	    // Physical cursor row in GUI display
-    char	cursor_is_valid;    // There is a cursor at cursor_row/col
+    bool	cursor_is_valid;    // There is a cursor at cursor_row/col
     int		num_cols;	    // Number of columns
     int		num_rows;	    // Number of rows
     int		scroll_region_top;  // Top (first) line of scroll region
@@ -263,9 +273,9 @@ typedef struct Gui
     int		scrollbar_height;   // Height of horizontal scrollbar
     int		left_sbar_x;	    // Calculated x coord for left scrollbar
     int		right_sbar_x;	    // Calculated x coord for right scrollbar
-    int         force_redraw;       // Force a redraw even e.g. not resized
+    bool	force_redraw;       // Force a redraw even e.g. not resized
 #ifdef FEAT_DIRECTX
-    int		directx_enabled;    // DirectX (DirectWrite) rendering active
+    bool	directx_enabled;    // DirectX (DirectWrite) rendering active
 #endif
 
 #ifdef FEAT_MENU
@@ -273,11 +283,11 @@ typedef struct Gui
     int		menu_height;	    // Height of the menu bar
     int		menu_width;	    // Width of the menu bar
 # endif
-    char	menu_is_active;	    // TRUE if menu is present
+    bool	menu_is_active;	    // true if menu is present
 #endif
 
     scrollbar_T bottom_sbar;	    // Bottom scrollbar
-    int		which_scrollbars[3];// Which scrollbar boxes are active?
+    bool	which_scrollbars[3];// Which scrollbar boxes are active?
     int		prev_wrap;	    // For updating the horizontal scrollbar
     int		char_width;	    // Width of char cell in pixels
     int		char_height;	    // Height of char cell in pixels, includes
@@ -292,7 +302,7 @@ typedef struct Gui
     GuiFont	ital_font;	    // Italic font
     GuiFont	boldital_font;	    // Bold-Italic font
 #else
-    int		font_can_bold;	    // Whether norm_font supports bold weight.
+    bool	font_can_bold;	    // Whether norm_font supports bold weight.
 				    // The styled font variants are not used.
 #endif
 
@@ -345,11 +355,10 @@ typedef struct Gui
     Bool	rsrc_rev_video;	    // Use reverse video?
 
     char_u	*geom;		    // Geometry, eg "80x24"
-    Bool	color_approx;	    // Some color was approximated
 #endif
 
 #ifdef FEAT_GUI_GTK
-# ifndef USE_GTK3
+# if !defined(USE_GTK3) && !defined(USE_GTK4)
     int		visibility;	    // Is shell partially/fully obscured?
 # endif
     GdkCursor	*blank_pointer;	    // Blank pointer
@@ -370,7 +379,7 @@ typedef struct Gui
     GtkWidget	*menubar_h;	    // menubar handle
     GtkWidget	*toolbar_h;	    // toolbar handle
 # endif
-# ifdef USE_GTK3
+# if defined(USE_GTK3) || defined(USE_GTK4)
     GdkRGBA	*fgcolor;	    // GDK-styled foreground color
     GdkRGBA	*bgcolor;	    // GDK-styled background color
     GdkRGBA	*spcolor;	    // GDK-styled special color
@@ -379,8 +388,10 @@ typedef struct Gui
     GdkColor	*bgcolor;	    // GDK-styled background color
     GdkColor	*spcolor;	    // GDK-styled special color
 # endif
-# ifdef USE_GTK3
+# if defined(USE_GTK3) || defined(USE_GTK4)
+#  ifndef USE_GTK4_SNAPSHOT
     cairo_surface_t *surface;       // drawarea surface
+#  endif
 # else
     GdkGC	*text_gc;	    // cached GC for normal text
 # endif
@@ -391,7 +402,9 @@ typedef struct Gui
     GtkWidget	*tabline;	    // tab pages line handle
 # endif
 
+# ifndef USE_GTK4
     GtkAccelGroup *accel_group;
+# endif
     GtkWidget	*filedlg;	    // file selection dialog
     char_u	*browse_fname;	    // file name from filedlg
 
@@ -467,6 +480,13 @@ typedef struct Gui
 #ifdef FEAT_XIM
     char	*rsrc_input_method;
     char	*rsrc_preedit_type_name;
+#endif
+#if defined(FEAT_GUI_GTK) && defined(USE_GTK4)
+    int decor_height;
+
+    // Used for clipboard functionality in GTK4 GUI
+    GdkContentProvider *regular_provider;
+    GdkContentProvider *primary_provider;
 #endif
 } gui_T;
 
@@ -558,7 +578,7 @@ typedef enum
  * For Solaris Studio, that is not the case.  An explicit type cast is needed
  * to suppress warnings on that particular conversion.
  */
-# if defined(__SUNPRO_C) && defined(USE_GTK3)
+# if defined(__SUNPRO_C) && (defined(USE_GTK3) || defined(USE_GTK4))
 #  define FUNC2GENERIC(func) (void *)(func)
 # else
 #  define FUNC2GENERIC(func) G_CALLBACK(func)

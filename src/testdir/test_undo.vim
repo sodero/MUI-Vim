@@ -924,5 +924,84 @@ func Test_restore_cursor_position_after_undo()
   bw!
 endfunc
 
+func Test_undo_line_backspace_after_insert_cmd_cursor_movement()
+  new
+  setlocal backspace=eol undolevels=100
+  call setline(1, ['', '', 'abc', 'def'])
+  call cursor(4, 1)
+
+  let v:errmsg = ''
+  call feedkeys("i\<Cmd>setlocal undolevels=101 | call cursor(3, 1)\<CR>"
+        \ .. "\<BS>\<BS>\<Esc>u", 'xt')
+
+  call assert_equal('', v:errmsg)
+  call assert_equal(['', '', 'abc', 'def'], getline(1, '$'))
+  bwipe!
+endfunc
+
+func Test_undo_line_backspace_after_insert_func_edit()
+  new
+  setlocal backspace=eol undolevels=100
+
+  let v:errmsg = ''
+  call feedkeys("i\<CR>"
+        \ .. "\<Cmd>call setline(2, 'abc')\<CR>"
+        \ .. "\<BS>\<Esc>u", 'xt')
+
+  call assert_equal('', v:errmsg)
+  call assert_equal([''], getline(1, '$'))
+  bwipe!
+endfunc
+
+func Test_undo_line_backspace_after_insert_cmd_edit()
+  new
+  setlocal backspace=eol undolevels=100
+
+  let v:errmsg = ''
+  call feedkeys("i\<CR>"
+        \ .. "\<Cmd>s/.*/abc/\<CR>"
+        \ .. "\<BS>\<Esc>u", 'xt')
+
+  call assert_equal('', v:errmsg)
+  call assert_equal([''], getline(1, '$'))
+  bwipe!
+endfunc
+
+" Corrupted undo file via cyclic cross-references caused
+" double free
+func Test_corrupted_undofile()
+  CheckFeature persistent_undo
+  let _uf = &undofile
+  set undofile
+  new
+  call setline(1, 'hello')
+  let b=eval('0z56696D9F556E446FE50002F3AEFE62965A91903610' ..
+           \ 'F0E23CC8A69D5B87CEA6D28E75489B0D2CA02ED7993C' ..
+           \ '00000001000000000000000000000000000000010000' ..
+           \ '00010000000100000001000000010000000100000000' ..
+           \ '3B9ACA00005FD0000000010000000000000000000000' ..
+           \ '00000000010000000100000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '00000000000000000000000000000000000000000000' ..
+           \ '000000000000000000000000000000000000003B9ACA' ..
+           \ '00003581E7AA')
+  call writefile(b, 'Xundo', 'bD')
+  rundo Xundo
+  bw!
+  let &undofile = _uf
+endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab
