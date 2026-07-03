@@ -36,16 +36,10 @@
 #ifdef __amigaos4__
 # include <dos/anchorpath.h>
 # include <dos/obsolete.h>
-# define	free_fib(x) FreeDosObject(DOS_FIB, x)
-#else
-# define	free_fib(x) vim_free(fib)
 #endif
 
 /*
- * Set stack size on startup.  1 MiB on NG systems (OS4, AROS, MorphOS)
- * which have plenty of RAM.  256 KiB on classic OS 3 -- enough for syntax
- * highlighting and Vim9 execution but conservative for systems with as
- * little as 2 MiB of Fast RAM.
+ * 1M stack across the board
  */
 #if defined(__amigaos4__)
 static const char* __attribute__((used)) stackcookie = "$STACK: 1048576";
@@ -61,21 +55,13 @@ unsigned long __stack = 1048576;
 #undef	FALSE
 #define FALSE (0)
 
-#ifdef __amigaos4__
-# define	dos_packet(a, b, c)   DoPkt(a, b, c, 0, 0, 0, 0)
-#elif !defined(AZTEC_C) && !defined(__AROS__)
-static long dos_packet(struct MsgPort *, long, long);
-#endif
-static void out_num(long n);
 static struct FileInfoBlock *get_fib(char_u *);
 static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
 static BPTR		raw_out = (BPTR)NULL;
 static int		close_win = FALSE;  // set if Vim opened the window
-#if defined(__amigaos3__) || defined(__amigaos4__)
 static struct Window	*wb_window = NULL;
-#endif
 static char_u		*oldwindowtitle = NULL;
 
 static char version[] __attribute__((used)) =
@@ -260,7 +246,7 @@ mch_init(void)
     }
 #endif
 
-    void *req_handle = mch_disable_volume_requester();
+    const void *req_handle = mch_disable_volume_requester();
 
     /*
      * Set input and output channels, unless we have opened our own window
@@ -634,104 +620,107 @@ static void mch_normalize_path(char_u *path)
     }
 }
 
+    static void
+free_fib(struct FileInfoBlock *fib)
+{
+    FreeDosObject(DOS_FIB, fib);
+}
+
+/*
+ * Get the FileInfoBlock for "name"
+ * The returned structure has to be free()d.
+ * Returns NULL on error.
+ */
+    static struct FileInfoBlock *
+get_fib(char_u *name)
+{
+    if (name == NULL)
+    {
+        emsg(_(e_null_argument));
+	return NULL;
+    }
+
+    struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, 0);
+
+    if (fib == NULL)
+    {
+        emsg(_(e_out_of_memory));
+	return NULL;
+    }
+
+    BPTR lock = Lock(name, ACCESS_READ);
+
+    if (lock != (BPTR) NULL)
+    {
+	if (Examine(lock, fib))
+	{
+	    UnLock(lock);
+	    return fib;
+	}
+
+	UnLock(lock);
+    }
+
+    FreeDosObject(DOS_FIB, fib);
+    return NULL;
+}
+
 /*
  * fname_case(): Set the case of the file name, if it already exists.
  *		 This will cause the file name to remain exactly the same
  *		 if the file system ignores, but preserves case.
  */
-//ARGSUSED
     void
 fname_case(
     char_u	*name,
-    int		len UNUSED)		// buffer size, ignored here
+    int		size)
 {
-    struct FileInfoBlock    *fib;
-    size_t		    flen;
+    BPTR lock = Lock(name, ACCESS_READ);
 
-    fib = get_fib(name);
-    if (fib == NULL)
+    if (lock == (BPTR) NULL)
 	return;
 
-    flen = STRLEN(name);
-    // TODO: Check if this fix applies to AmigaOS < 4 too.
-#ifdef __amigaos4__
-    if (fib->fib_DirEntryType == ST_ROOT)
-	strcat(fib->fib_FileName, ":");
-#endif
-    if (flen == strlen(fib->fib_FileName))	// safety check
-	mch_memmove(name, fib->fib_FileName, flen);
-    free_fib(fib);
-}
+    char_u buf[MAXPATHL];
 
-/*
- * Get the FileInfoBlock for file "fname"
- * The returned structure has to be free()d.
- * Returns NULL on error.
- */
-    static struct FileInfoBlock *
-get_fib(char_u *fname)
-{
-    BPTR		    flock;
-    struct FileInfoBlock    *fib;
-
-    if (fname == NULL)	    // safety check
-	return NULL;
-
-    mch_normalize_path(fname);
-
-#ifdef __amigaos4__
-    fib = AllocDosObject(DOS_FIB,0);
-#else
-    fib = ALLOC_ONE(struct FileInfoBlock);
-#endif
-    if (fib == NULL)
-	return NULL;
-
-    void *req_handle = mch_disable_volume_requester();
-
-    flock = Lock(fname, ACCESS_READ);
-
-    mch_enable_volume_requester(req_handle);
-
-    if (flock == (BPTR) NULL || !Examine(flock, fib))
+    if (NameFromLock(lock, buf, sizeof(buf)))
     {
-	free_fib(fib);  // in case of an error the memory is freed here
-	fib = NULL;
+	if (size > 0)
+	    vim_strncpy(name, buf, size - 1);
+	else if (STRLEN(name) >= STRLEN(buf))
+	    STRCPY(name, buf);
     }
 
-    if (flock)
-	UnLock(flock);
-
-    return fib;
+    UnLock(lock);
 }
+
 
 /*
  * set the title of our window
  * icon name is not set
  */
     void
-mch_settitle(char_u *title, char_u *icon)
+mch_settitle(char_u *title, char_u *icon UNUSED)
 {
-    KPrintF("title:%s (window:%p)\n", title, wb_window);
     if (title == NULL)
 	return;
 
 #ifdef FEAT_GUI
     if (gui.in_use)
     {
-	gui_mch_settitle(title, icon);
+	gui_mch_settitle(title, NULL);
 	return;
     }
 #endif
 
-#if defined(__amigaos3__) || defined(__amigaos4__)
     if (wb_window != NULL)
+    {
 	SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
-#else
+	return;
+    }
+
     Write(raw_out, "\033]2;", 4);
     Write(raw_out, title, STRLEN(title));
     Write(raw_out, "\007", 1);
-#endif
 }
 
 /*
@@ -776,17 +765,14 @@ mch_setmouse(int on UNUSED)
     int
 mch_get_user_name(char_u *s, int len)
 {
-#if !defined(__AROS__) && !defined(__amigaos3__)
     struct passwd *pwd = getpwuid(getuid());
 
-    if (pwd != NULL && pwd->pw_name && len > 0)
+    if (pwd != NULL)
     {
-	vim_strncpy(s, (char_u *)pwd->pw_name, len - 1);
+	vim_strncpy(s, (char_u *) pwd->pw_name, len - 1);
 	return OK;
     }
-#else
-    vim_strncpy(s, (char_u *)"sysop", len - 1);
-#endif
+
     *s = NUL;
     return FAIL;
 }
@@ -797,7 +783,7 @@ mch_get_user_name(char_u *s, int len)
     void
 mch_get_host_name(char_u *s, int len)
 {
-#if !defined(__AROS__) && !defined(__amigaos3__)
+#if !defined(__AROS__)
     gethostname((char *)s, len);
 #else
     vim_strncpy(s, (char_u *)"amiga", len - 1);
@@ -845,7 +831,7 @@ mch_FullName(
     int		retval = FAIL;
     int		i;
 
-    void *req_handle = mch_disable_volume_requester();
+    const void *req_handle = mch_disable_volume_requester();
 
     // Lock the file.  If it exists, we can get the exact name.
     if ((l = Lock(fname, ACCESS_READ)) != (BPTR) 0)
@@ -905,12 +891,21 @@ mch_getperm(char_u *name)
     struct FileInfoBlock    *fib;
     long		    retval = -1;
 
+    KPrintF("permname:%s\n", name);
+
     fib = get_fib(name);
+
+    KPrintF("fib:%p\n", fib);
+
     if (fib == NULL)
 	return -1;
 
     retval = fib->fib_Protection;
+
+    KPrintF("retval:%ld\n", retval);
+
     free_fib(fib);
+
     return retval;
 }
 
@@ -947,6 +942,7 @@ mch_isdir(char_u *name)
     int			    retval = FALSE;
 
     fib = get_fib(name);
+
     if (fib == NULL)
 	return FALSE;
 
@@ -965,10 +961,9 @@ mch_isdir(char_u *name)
     int
 mch_mkdir(char_u *name)
 {
-    BPTR	lock;
+    BPTR lock = CreateDir(name);
 
-    lock = CreateDir(name);
-    if (lock == NULL)
+    if (lock == (BPTR) NULL)
 	return -1;
 
     UnLock(lock);
@@ -1130,57 +1125,36 @@ mch_settmode(tmode_T tmode)
  * Get console size on AROS and MorphOS.
  * Return FAIL for failure, OK otherwise
  */
-    int
-mch_get_shellsize_fallback(void)
+    static void
+get_shellsize_fallback(void)
 {
-#ifdef FEAT_GUI
-    if (gui.in_use || gui.starting)
-    {
-        return FAIL;
-    }
-#endif
-
-    if (!term_console)
-	return FAIL;
-
-    if (raw_in && raw_out)
-    {
-	// Save current console mode.
-	int old_tmode = cur_tmode;
-	char ctrl[] = "\x9b""0 q";
-
-	// Set RAW mode.
-	mch_settmode(TMODE_RAW);
-
-	// Write control sequence to console.
-	if (Write(raw_out, ctrl, sizeof(ctrl)) == sizeof(ctrl))
-	{
-	    char scan[] = "\x9b""1;1;%d;%d r",
-		 answ[sizeof(scan) + 8] = { '\0' };
-
-	    // Read return sequence from input.
-	    if (Read(raw_in, answ, sizeof(answ) - 1) > 0)
-	    {
-		// Parse result and set Vim globals.
-		if (sscanf(answ, scan, &Rows, &Columns) == 2)
-		{
-		    // Restore console mode.
-		    mch_settmode(old_tmode);
-		    return OK;
-		}
-	    }
-	}
-
-	// Restore console mode.
-	mch_settmode(old_tmode);
-    }
-
-    // I/O error. Default size fallback.
     term_console = FALSE;
-    Columns = 80;
-    Rows = 24;
 
-    return FAIL;
+    // Save current console mode.
+    int old_tmode = cur_tmode;
+
+    // Set RAW mode.
+    mch_settmode(TMODE_RAW);
+
+    // Size request
+    char ctrl[] = "\x9b""0 q";
+
+    if (Write(raw_out, ctrl, sizeof(ctrl) - 1) == sizeof(ctrl) - 1)
+    {
+	char format[] = "\x9b""1;1;%d;%d r";
+	char reply[sizeof(format) + 2 * sizeof(VIM_TOSTR(INT_MAX))] = { 0 };
+
+	// Read return sequence from input.
+	if (Read(raw_in, reply, sizeof(reply) - 1) > 0)
+	{
+	    // Parse result and set Vim globals.
+	    if (sscanf(reply, format, &Rows, &Columns) == 2)
+		term_console = TRUE;
+	}
+    }
+
+    // Restore console mode.
+    mch_settmode(old_tmode);
 }
 
     static struct InfoData *
@@ -1303,12 +1277,13 @@ mch_get_shellsize(void)
 
 	if (con)
 	{
-	    term_console = TRUE;
-
 	    // Get window size
 	    Rows = con->cu_YMax + 1;
 	    Columns = con->cu_XMax + 1;
+	    term_console = TRUE;
 	}
+	else
+	    get_shellsize_fallback();
     }
 
     free_window_infodata(id);
@@ -1369,59 +1344,15 @@ mch_new_shellsize(void)
 }
 
 /*
- * out_num - output a (big) number fast
- */
-    static void
-out_num(long n)
-{
-    OUT_STR_NF(tltoa((unsigned long)n));
-}
-
-#if !defined(AZTEC_C) && !defined(__AROS__) && !defined(__amigaos4__)
-/*
- * Sendpacket.c
- *
- * An invaluable addition to your Amiga.lib file. This code sends a packet to
- * the given message port. This makes working around DOS lots easier.
- *
- * Note, I didn't write this, those wonderful folks at CBM did. I do suggest
- * however that you may wish to add it to Amiga.Lib, to do so, compile it and
- * say 'oml lib:amiga.lib -r sendpacket.o'
- */
-
-//#include <proto/exec.h>
-//#include <proto/dos.h>
-# include <exec/memory.h>
-
-/*
- * Function - dos_packet written by Phil Lindsay, Carolyn Scheppner, and Andy
- * Finkel. This function will send a packet of the given type to the Message
- * Port supplied.
- */
-
-    static long
-dos_packet(
-    struct MsgPort *pid,    // process identifier ... (handlers message port)
-    long	    action, // packet type ... (what you want handler to do)
-    long	    arg)    // single argument
-{
-    return DoPkt(pid, action, arg, 0L, 0L, 0L, 0L);	// use 2.0 function
-}
-#endif // !defined(AZTEC_C) && !defined(__AROS__)
-
-/*
  * Call shell.
  * Return error number for failure, 0 otherwise
  */
     int
-mch_call_shell(
-    char_u	*cmd,
-    int		options)	// SHELL_*, see vim.h
+mch_call_shell(char_u *cmd, int	options)
 {
-    BPTR	mydir;
-    int		x;
-    int		tmode = cur_tmode;
-    int		retval = 0;
+    BPTR mydir;
+    int	tmode = cur_tmode;
+    int	retval = 0;
 
     if (close_win)
     {
@@ -1432,15 +1363,24 @@ mch_call_shell(
 
     if (term_console)
 	win_resize_off();	    // window resize events de-activated
+				    //
     out_flush();
 
     if (options & SHELL_COOKED)
 	settmode(TMODE_COOK);	    // set to normal mode
-				    //
+
     mydir = Lock((UBYTE *)"", (long)ACCESS_READ);   // remember current dir
 
     if ((mydir = CurrentDir(mydir)) != 0) // make sure we stay in the same directory
 	UnLock(mydir);
+
+    if (cmd == NULL)
+	retval = SystemTags((UBYTE *)p_sh, TAG_DONE);
+    else
+	retval = SystemTags((UBYTE *)cmd, TAG_DONE);
+
+    if (retval != -1)
+	retval = 0;
 
     if (tmode == TMODE_RAW)
     {
@@ -1501,7 +1441,7 @@ mch_expandpath(
     int			start_len;
     int			matches;
 #ifdef __amigaos4__
-    struct TagItem	AnchorTags[] = {
+    struct TagItem AnchorTags[] = {
 	{ADO_Strlen, ANCHOR_BUF_SIZE},
 	{ADO_Flags, APF_DODOT|APF_DOWILD|APF_MultiAssigns},
 	{TAG_DONE, 0L}
