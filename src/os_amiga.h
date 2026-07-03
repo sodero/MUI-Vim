@@ -188,9 +188,3 @@
 #define mch_chdir(X) chdir((const char *) (X))
 #define mch_rmdir(X) rmdir((const char *) (X))
 #define vim_mkdir(X, Y) mkdir((const char *) (X), Y)
-#ifdef __MORPHOS__
-# define mch_setenv(X, Y, Z) SetVar((X), (Y), -1, GVF_GLOBAL_ONLY|LV_VAR)
-#else
-# define mch_setenv(X, Y, Z) setenv((const char *) (X), (const char *) (Y), Z)
-#endif
-#define mch_getenv(X) (char_u *) getenv((const char *)(X))

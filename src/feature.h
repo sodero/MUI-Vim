@@ -265,7 +265,8 @@
 	&& defined(FEAT_EVAL) \
 	&& ((defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H) \
 		&& (!defined(MACOS_X) || defined(HAVE_DISPATCH_DISPATCH_H))) \
-	    || defined(MSWIN))
+	    || defined(MSWIN)) \
+	&& !defined(AMIGA)
 # define FEAT_RELTIME
 #endif
 

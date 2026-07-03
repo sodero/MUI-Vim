@@ -3248,15 +3248,6 @@ nv_clear(cmdarg_T *cap)
     if (checkclearop(cap->oap))
 	return;
 
-#if defined(__AROS__) || defined(__MORPHOS__)
-    /*
-     * AROS and MorphOS don't seem to have an easy way to detect
-     * window resizing, so we cheat and make the user detect it manually
-     * with CTRL-L instead
-     */
-    ui_get_shellsize();
-#endif
-
 #ifdef FEAT_SYN_HL
     // Clear all syntax states to force resyncing.
     syn_stack_free_all(curwin->w_s);

@@ -6764,8 +6764,29 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
+	{"amigaos3",
+#ifdef __amigaos3__
+		1
+#else
+		0
+#endif
+		},
+	{"amigaos4",
+#ifdef __amigaos4__
+		1
+#else
+		0
+#endif
+		},
 	{"android",
 #ifdef __ANDROID__
+		1
+#else
+		0
+#endif
+		},
+	{"aros",
+#ifdef __AROS__
 		1
 #else
 		0
@@ -6801,6 +6822,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		},
 	{"linux",
 #ifdef __linux__
+		1
+#else
+		0
+#endif
+		},
+	{"morphos",
+#ifdef __MORPHOS__
 		1
 #else
 		0

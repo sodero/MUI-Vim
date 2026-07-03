@@ -19,10 +19,9 @@
 #undef TRUE		/* Will be redefined by exec/types.h */
 #undef FALSE
 
-#ifndef LATTICE
-# include <exec/exec.h>
-# include <intuition/intuition.h>
-#endif
+#include <exec/exec.h>
+#include <intuition/intuition.h>
+#include <devices/conunit.h>
 
 #ifdef __amigaos4__
 # define KPrintF DebugPrintF
@@ -74,30 +73,36 @@ static int sortcmp(const void *a, const void *b);
 static BPTR		raw_in = (BPTR)NULL;
 static BPTR		raw_out = (BPTR)NULL;
 static int		close_win = FALSE;  // set if Vim opened the window
-
-/* Use autoopen for AmigaOS4, AROS and MorphOS */
-#if !defined(__amigaos4__) && !defined(__amigaos3__) && !defined(__AROS__) && !defined(__MORPHOS__)
-struct IntuitionBase	*IntuitionBase = NULL;
+#if defined(__amigaos3__) || defined(__amigaos4__)
+static struct Window	*wb_window = NULL;
 #endif
-
-static struct Window	*wb_window;
 static char_u		*oldwindowtitle = NULL;
 
-int			size_set = FALSE;   // set to TRUE if window size was set
-
-#ifdef __GNUC__
 static char version[] __attribute__((used)) =
     "\0$VER: Vim "
     VIM_VERSION_MAJOR_STR "."
     VIM_VERSION_MINOR_STR
-# ifdef PATCHLEVEL
+#ifdef PATCHLEVEL
     "." PATCHLEVEL
-# endif
-# ifdef BUILDDATE
-    " (" BUILDDATE ")"
-# endif
-    ;
 #endif
+#ifdef BUILDDATE
+    " (" BUILDDATE ")"
+#endif
+    ;
+
+#ifdef __amigaos4__
+# define KPrintF DebugPrintF
+#endif
+#ifdef __AROS__
+# ifndef KPrintF
+#  define KPrintF kprintf
+# endif
+#endif
+#define kmsg(E) KPrintF((CONST_STRPTR) "%s (%s:%d)\n", E, __func__, __LINE__);
+#define HERE \
+do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
+
+
 
     void
 win_resize_on(void)
@@ -161,13 +166,29 @@ mch_inchar(
 		buf[2] = (int)KE_CURSORHOLD;
 		return 3;
 	    }
+
 	    before_blocking();
+
+#if defined(__AROS__) || defined(__MORPHOS__)
+	    int rows = Rows;
+	    int cols = Columns;
+
+	    mch_get_shellsize();
+
+	    if(rows != Rows || cols != Columns)
+	    {
+		buf[0] = Ctrl_L; // use newsize or whatever instead
+		return 1;
+	    }
+#endif /* __AROS__ || __MORPHOS__ */
+	    return 0;
 	}
     }
 
     for (;;)	    // repeat until we got a character
     {
 	len = Read(raw_in, (char *)buf, (long)maxlen / input_conv.vc_factor);
+
 	if (len > 0)
 	{
 	    // Convert from 'termencoding' to 'encoding'.
@@ -207,12 +228,6 @@ mch_avail_mem(int special)
     void
 mch_delay(long msec, int flags)
 {
-    // Delay() is declared in <proto/dos.h> for GCC; the local prototype is
-    // only needed for the LATTICE/SAS toolchains.
-#ifdef LATTICE
-    void	    Delay(long);
-#endif
-
     if (msec <= 0)
 	return;
 
@@ -247,9 +262,6 @@ mch_init(void)
 
     void *req_handle = mch_disable_volume_requester();
 
-    Columns = 80;
-    Rows = 24;
-
     /*
      * Set input and output channels, unless we have opened our own window
      */
@@ -269,8 +281,6 @@ mch_init(void)
     }
 
     out_flush();
-
-    wb_window = NULL;
 
     mch_enable_volume_requester(req_handle);
 }
@@ -702,6 +712,10 @@ get_fib(char_u *fname)
     void
 mch_settitle(char_u *title, char_u *icon)
 {
+    KPrintF("title:%s (window:%p)\n", title, wb_window);
+    if (title == NULL)
+	return;
+
 #ifdef FEAT_GUI
     if (gui.in_use)
     {
@@ -709,9 +723,14 @@ mch_settitle(char_u *title, char_u *icon)
 	return;
     }
 #endif
-#if 0
-    if (wb_window != NULL && title != NULL)
+
+#if defined(__amigaos3__) || defined(__amigaos4__)
+    if (wb_window != NULL)
 	SetWindowTitles(wb_window, (UBYTE *)title, (UBYTE *)-1L);
+#else
+    Write(raw_out, "\033]2;", 4);
+    Write(raw_out, title, STRLEN(title));
+    Write(raw_out, "\007", 1);
 #endif
 }
 
@@ -732,13 +751,11 @@ mch_restore_title(int which)
     int
 mch_can_restore_title(void)
 {
-#ifdef FEAT_GUI
-    if (gui.in_use)
-    {
-	return TRUE;
-    }
+#if defined(__amigaos3__) || defined(__amigaos4__)
+    return (wb_window != NULL);
+#else
+    return TRUE;
 #endif
-    return wb_window != NULL;
 }
 
     int
@@ -759,6 +776,7 @@ mch_setmouse(int on UNUSED)
     int
 mch_get_user_name(char_u *s, int len)
 {
+#if !defined(__AROS__) && !defined(__amigaos3__)
     struct passwd *pwd = getpwuid(getuid());
 
     if (pwd != NULL && pwd->pw_name && len > 0)
@@ -766,7 +784,9 @@ mch_get_user_name(char_u *s, int len)
 	vim_strncpy(s, (char_u *)pwd->pw_name, len - 1);
 	return OK;
     }
-
+#else
+    vim_strncpy(s, (char_u *)"sysop", len - 1);
+#endif
     *s = NUL;
     return FAIL;
 }
@@ -777,7 +797,7 @@ mch_get_user_name(char_u *s, int len)
     void
 mch_get_host_name(char_u *s, int len)
 {
-#ifndef __AROS__
+#if !defined(__AROS__) && !defined(__amigaos3__)
     gethostname((char *)s, len);
 #else
     vim_strncpy(s, (char_u *)"amiga", len - 1);
@@ -1011,7 +1031,7 @@ mch_can_exe(char_u *name, char_u **path UNUSED, int use_path)
 
 	// For each entry, recur to check for executable.
 	for (struct PathNode *tail = head; !exe && tail;
-			       tail = (struct PathNode *) BADDR(tail->pn_Next))
+	     tail = (struct PathNode *) BADDR(tail->pn_Next))
 	{
 	    SetCurrentDir(tail->pn_Lock);
 	    exe = mch_can_exe(name, path, 0);
@@ -1065,15 +1085,12 @@ mch_exit(int r)
 	settmode(TMODE_COOK);
 	stoptermcap();
     }
+
     out_char('\n');
-    if (raw_out)
+
+    if (raw_out && term_console)
     {
-	if (term_console)
-	{
-	    win_resize_off();	    // window resize events de-activated
-	    if (size_set)
-		OUT_STR("\233t\233u");	// reset window size (CSI t CSI u)
-	}
+	win_resize_off();	    // window resize events de-activated
 	out_flush();
     }
 
@@ -1091,16 +1108,6 @@ mch_exit(int r)
 }
 
 /*
- * This is a routine for setting a given stream to raw or cooked mode on the
- * Amiga . This is useful when you are using Lattice C to produce programs
- * that want to read single characters with the "getch()" or "fgetc" call.
- *
- * Written : 18-Jun-87 By Chuck McManis.
- */
-
-#define MP(xx)	((struct MsgPort *)((struct FileHandle *) (BADDR(xx)))->fh_Type)
-
-/*
  * Function mch_settmode() - Convert the specified file pointer to 'raw' or
  * 'cooked' mode. This only works on TTY's.
  *
@@ -1115,36 +1122,16 @@ mch_exit(int r)
     void
 mch_settmode(tmode_T tmode)
 {
-#if defined(__AROS__) || defined(__amigaos4__) || defined(__amigaos3__) || defined(__MORPHOS__)
     if (!SetMode(raw_in, tmode == TMODE_RAW ? 1 : 0))
-#else
-    if (dos_packet(MP(raw_in), (long)ACTION_SCREEN_MODE,
-					  tmode == TMODE_RAW ? -1L : 0L) == 0)
-#endif
-	mch_errmsg(_("cannot change console mode ?!\n"));
+	mch_errmsg(_("Cannot change console mode\n"));
 }
 
 /*
- * Code for this routine came from the following :
- *
- * ConPackets.c -  C. Scheppner, A. Finkel, P. Lindsay	CBM
- *   DOS packet example
- *   Requires 1.2
- *
- * Found on Fish Disk 56.
- *
- * Heavely modified by mool.
- */
-
-#include <devices/conunit.h>
-
-/*
- * Get console size in a system friendly way on AROS and MorphOS.
+ * Get console size on AROS and MorphOS.
  * Return FAIL for failure, OK otherwise
  */
-#if defined(__AROS__) || defined(__amigaos3__) || defined(__MORPHOS__)
     int
-mch_get_shellsize(void)
+mch_get_shellsize_fallback(void)
 {
 #ifdef FEAT_GUI
     if (gui.in_use || gui.starting)
@@ -1195,9 +1182,84 @@ mch_get_shellsize(void)
 
     return FAIL;
 }
+
+    static struct InfoData *
+get_infodata(void)
+{
+#ifdef __amigaos4__
+    return AllocDosObject(DOS_INFODATA, 0);
 #else
+    return ALLOC_ONE(struct InfoData);
+#endif
+}
+
+    static void
+free_infodata(struct InfoData *id)
+{
+#ifdef __amigaos4__
+    FreeDosObject(DOS_INFODATA, id);
+#else
+    vim_free(id);
+#endif
+}
+
+    static struct Window *
+get_window(struct InfoData *id)
+{
+    if (!id)
+	return NULL;
+
+    return (struct Window *) id->id_VolumeNode;
+}
+
+    static struct InfoData *
+get_window_infodata(BPTR handle)
+{
+    if (!handle)
+	return NULL;
+
+    struct MsgPort *port = (struct MsgPort *)
+	((struct FileHandle *) (BADDR(handle)))->fh_Type;
+
+    if (!port)
+	return NULL;
+
+    struct InfoData *id = get_infodata();
+
+    if (!id)
+	return NULL;
+
+    if (!DoPkt(port, ACTION_DISK_INFO, MKBADDR(id), 0L, 0L, 0L, 0L))
+    {
+	free_infodata(id);
+	return NULL;
+    }
+
+    return id;
+}
+
+    static void
+free_window_infodata(struct InfoData *id)
+{
+    free_infodata(id);
+}
+
+    static struct ConUnit *
+get_console(struct InfoData *id)
+{
+    if (!id)
+	return NULL;
+
+    struct IOStdReq *req = (struct IOStdReq *) id->id_InUse;
+
+    if (!req)
+	return NULL;
+
+    return (struct ConUnit *) req->io_Unit;
+}
+
 /*
- * Try to get the real window size,
+ * Get console size on AmigaOS
  * return FAIL for failure, OK otherwise
  */
     int
@@ -1210,71 +1272,62 @@ mch_get_shellsize(void)
     }
 #endif
 
+    KPrintF("term_console:%d\n", term_console);
+
     if (!term_console)
     {
         return FAIL;
     }
 
-    struct ConUnit  *conUnit;
-# ifndef __amigaos4__
-    char	    id_a[sizeof(struct InfoData) + 3];
-# endif
-    struct InfoData *id=0;
+    term_console = FALSE;
 
-    // insure longword alignment
-# ifdef __amigaos4__
-    if (!(id = AllocDosObject(DOS_INFODATA, 0)))
-	goto out;
-# else
-    id = (struct InfoData *)(((long)id_a + 3L) & ~3L);
-# endif
+    struct InfoData *id = get_window_infodata(raw_out);
 
-    /*
-     * Should make console aware of real window size, not the one we set.
-     * Unfortunately, under DOS 2.0x this redraws the window and it
-     * is rarely needed, so we skip it now, unless we changed the size.
-     */
-    if (size_set)
-	OUT_STR("\233t\233u");	// CSI t CSI u
-    out_flush();
+    KPrintF("id:%p\n", id);
 
-    if (dos_packet(MP(raw_out), (long)ACTION_DISK_INFO, ((ULONG) id) >> 2) == 0
-	    || (wb_window = (struct Window *)id->id_VolumeNode) == NULL)
-    {
-	// it's not an amiga window, maybe aux device
-	// terminal type should be set
-	term_console = FALSE;
-	goto out;
-    }
-    if (oldwindowtitle == NULL)
-	oldwindowtitle = (char_u *)wb_window->Title;
-    if (id->id_InUse == (BPTR)NULL)
-    {
-	mch_errmsg(_("mch_get_shellsize: not a console??\n"));
+    if (!id)
 	return FAIL;
-    }
-    conUnit = (struct ConUnit *) ((struct IOStdReq *) id->id_InUse)->io_Unit;
 
-    // get window size
-    Rows = conUnit->cu_YMax + 1;
-    Columns = conUnit->cu_XMax + 1;
-    if (Rows < 0 || Rows > 200)	    // cannot be an amiga window
+    wb_window = get_window(id);
+
+    KPrintF("wb_window:%p\n", wb_window);
+
+    if (wb_window)
     {
-	Columns = 80;
+	if (!oldwindowtitle)
+	    oldwindowtitle = (char_u *) wb_window->Title;
+
+	struct ConUnit *con = get_console(id);
+
+	KPrintF("con:%p\n", con);
+
+	if (con)
+	{
+	    term_console = TRUE;
+
+	    // Get window size
+	    Rows = con->cu_YMax + 1;
+	    Columns = con->cu_XMax + 1;
+	}
+    }
+
+    free_window_infodata(id);
+
+    KPrintF("term_console:%d\n", term_console);
+
+    if (!term_console)
+    {
+	// Not a window, maybe aux device terminal type should be set
 	Rows = 24;
-	term_console = FALSE;
+	Columns = 80;
 	return FAIL;
     }
+
+    KPrintF("rows:%d\n", Rows);
+    KPrintF("cols:%d\n", Columns);
 
     return OK;
-out:
-# ifdef __amigaos4__
-    FreeDosObject(DOS_INFODATA, id); // Safe to pass NULL
-# endif
-
-    return FAIL;
 }
-#endif
 
 /*
  * Try to set the real window size to Rows and Columns.
@@ -1285,14 +1338,23 @@ mch_set_shellsize(void)
     if (!term_console)
 	return;
 
-    size_set = TRUE;
-    out_char(CSI);
-    out_num((long)Rows);
-    out_char('t');
-    out_char(CSI);
-    out_num((long)Columns);
-    out_char('u');
-    out_flush();
+    struct InfoData *id = get_window_infodata(raw_out);
+
+    if (!id)
+	return;
+
+    struct Window *win = get_window(id);
+    struct ConUnit *con = get_console(id);
+
+    if (win && con)
+    {
+	int dx = (Columns - con->cu_XMax - 1) * con->cu_XRSize;
+	int dy = (Rows - con->cu_YMax - 1) * con->cu_YRSize;
+
+	SizeWindow(win, dx, dy);
+    }
+
+    free_window_infodata(id);
 }
 
 /*
@@ -1301,7 +1363,9 @@ mch_set_shellsize(void)
     void
 mch_new_shellsize(void)
 {
-    // Nothing to do.
+    // Reset console
+    out_str((char_u *)"\033c");
+    out_flush();
 }
 
 /*
@@ -1357,11 +1421,6 @@ mch_call_shell(
     BPTR	mydir;
     int		x;
     int		tmode = cur_tmode;
-#ifdef AZTEC_C
-    int		use_execute;
-    char_u	*shellcmd = NULL;
-    char_u	*shellarg;
-#endif
     int		retval = 0;
 
     if (close_win)
@@ -1410,28 +1469,6 @@ mch_breakcheck(int force UNUSED)
 	got_int = TRUE;
 }
 
-// this routine causes manx to use this Chk_Abort() rather than its own
-// otherwise it resets our ^C when doing any I/O (even when Enable_Abort
-// is zero).  Since we want to check for our own ^C's
-
-#ifdef _DCC
-# define Chk_Abort chkabort
-#endif
-
-#ifdef LATTICE
-void __regargs __chkabort(void);
-
-void __regargs __chkabort(void)
-{}
-
-#else
-    long
-Chk_Abort(void)
-{
-    return(0L);
-}
-#endif
-
 /*
  * mch_expandpath() - this code does wild-card pattern matching using the arp
  *		      routines.
@@ -1446,7 +1483,7 @@ Chk_Abort(void)
  */
 
 #ifdef __amigaos4__
-# define	ANCHOR_BUF_SIZE	1024
+# define ANCHOR_BUF_SIZE 1024
 #else
 # define ANCHOR_BUF_SIZE (512)
 # define ANCHOR_SIZE (sizeof(struct AnchorPath) + ANCHOR_BUF_SIZE)
@@ -1623,6 +1660,63 @@ mch_is_console(char_u *name)
 }
 
 /*
+ * With AmigaDOS 2.0 support for reading local environment variables
+ *
+ * Two buffers are allocated:
+ * - A big one to do the expansion into.  It is freed before returning.
+ * - A small one to hold the return value.  It is kept until the next call.
+ */
+    char_u *
+mch_getenv(char_u *var)
+{
+    int		    len;
+    UBYTE	    *buf;		// buffer to expand in
+    char_u	    *retval;		// return value
+    static char_u   *alloced = NULL;	// allocated memory
+
+    VIM_CLEAR(alloced);
+    retval = NULL;
+
+    buf = alloc(IOSIZE);
+    if (buf == NULL)
+	return NULL;
+
+    len = GetVar((UBYTE *)var, buf, (long)(IOSIZE - 1), (long)0);
+    if (len >= 0)
+    {
+	retval = vim_strsave((char_u *)buf);
+	alloced = retval;
+    }
+
+    vim_free(buf);
+
+    // if $VIM is not defined, use "vim:" instead
+    if (retval == NULL && STRCMP(var, "VIM") == 0)
+	retval = (char_u *)"vim:";
+
+    return retval;
+}
+
+/*
+ * Amiga version of setenv() with AmigaDOS 2.0 support.
+ */
+// ARGSUSED
+    int
+mch_setenv(char *var, char *value, int x UNUSED)
+{
+#ifdef FEAT_ARP
+    if (!dos2)
+	return setenv(var, value);
+#endif
+
+    if (SetVar((UBYTE *)var, (UBYTE *)value, (LONG)-1, (ULONG)GVF_LOCAL_ONLY))
+	return 0;   // success
+    return -1;	    // failure
+}
+
+
+
+/*
  * Fill the buffer 'buf' with 'len' random bytes.
  * Returns FAIL if RANDOM: is not available or something went wrong.
  */
@@ -1645,27 +1739,6 @@ mch_get_random(char_u *buf, int len)
 
     Close(fh);
     return status;
-}
-
-static sig_atomic_t timeout_flag;
-
-/*
- * TODO
- */
-    volatile sig_atomic_t *
-start_timeout(long msec)
-{
-    timeout_flag = 0;
-    return &timeout_flag;
-}
-
-/*
- * TODO
- */
-    void
-stop_timeout(void)
-{
-    timeout_flag = 0;
 }
 
 /*

@@ -42,6 +42,8 @@ void mch_breakcheck(int force);
 int mch_expandpath(garray_T *gap, char_u *pat, int flags);
 int mch_has_exp_wildcard(char_u *p);
 int mch_has_wildcard(char_u *p);
+char_u *mch_getenv(char_u *var);
+int mch_setenv(char *var, char *value, int x);
 void mch_setmouse(int on);
 int mch_is_console(char_u *name);
 int mch_get_random(char_u *buf, int len);

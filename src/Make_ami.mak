@@ -67,8 +67,13 @@ LDFLAGS = -lauto
 CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__
 else
 ifeq ($(TARGET),m68k-amigaos)
-CFLAGS += -mcrt=clib2 -std=gnu99
-LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
+#CFLAGS += -mcrt=clib2 -std=gnu99
+#LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
+
+CFLAGS += -noixemul
+LDFLAGS = -ldebug -lm -noixemul -lsocket
+
+
 else
 ifeq ($(TARGET),ppc-morphos)
 CFLAGS += -noixemul
