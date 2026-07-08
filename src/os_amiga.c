@@ -16,17 +16,9 @@
 #include "vim.h"
 #include "version.h"
 
-#undef TRUE		/* Will be redefined by exec/types.h */
-#undef FALSE
-
 #include <exec/exec.h>
 #include <intuition/intuition.h>
 #include <devices/conunit.h>
-
-#ifdef __amigaos4__
-# define KPrintF DebugPrintF
-#endif
-
 #include <workbench/startup.h>
 #include <dos/dostags.h>	    // for 2.0 functions
 #include <dos/dosasl.h>
@@ -46,14 +38,6 @@ static const char* __attribute__((used)) stackcookie = "$STACK: 1048576";
 #else
 unsigned long __stack = 1048576;
 #endif
-
-/*
- * At this point TRUE and FALSE are defined as 1L and 0L, but we want 1 and 0.
- */
-#undef	TRUE
-#define TRUE (1)
-#undef	FALSE
-#define FALSE (0)
 
 static struct FileInfoBlock *get_fib(char_u *);
 static int sortcmp(const void *a, const void *b);
@@ -365,25 +349,77 @@ int get_cmd_argsA(int argc, char ***argvp)
  */
 #define BUF2SIZE 320	    // length of buffer for argument with complete path
 
+struct Pipe
+{
+    BPTR handle;
+    char name[NUMBUFLEN];
+};
+
+    static void
+free_pipe(struct Pipe *pipe)
+{
+    if (pipe == NULL)
+	return;
+
+    if (pipe->handle != (BPTR) NULL)
+	Close(pipe->handle);
+
+    vim_free(pipe);
+}
+
+    static struct Pipe *
+get_pipe(int mode)
+{
+    struct Pipe *pipe = ALLOC_ONE(struct Pipe);
+
+    if (!pipe)
+    {
+	emsg(_(e_out_of_memory));
+	return NULL;
+    }
+
+    static unsigned long id;
+
+    vim_snprintf(pipe->name, NUMBUFLEN, "PIPE:Vim_%ld_%lu", mch_get_pid(), id++);
+
+    KPrintF("pipe:%s\n", pipe->name);
+
+    pipe->handle = Open(pipe->name, mode);
+
+    if (pipe->handle != (BPTR) NULL)
+	return pipe;
+
+    semsg(_(e_cannot_open_str), pipe->name);
+
+    vim_free(pipe);
+
+    return NULL;
+}
+
+    static int
+read_pipe(struct Pipe *pipe, void *buf, int len)
+{
+    return Read(pipe->handle, buf, len);
+}
+
+    static int
+write_pipe(struct Pipe *pipe, void *buf, int len)
+{
+    return Write(pipe->handle, buf, len);
+}
+
     int
 mch_check_win(int argc, char **argv)
 {
     int		    i;
-    BPTR	    nilfh, fh;
+    BPTR	    fh;
     char_u	    buf1[24];
     char_u	    buf2[BUF2SIZE];
-    static char_u   *(constrings[3]) = {(char_u *)"con:0/0/662/210/",
-					(char_u *)"con:0/0/640/200/",
-					(char_u *)"con:0/0/320/200/"};
-    static char_u   *winerr = (char_u *)N_("VIM: Can't open window!\n");
     struct WBArg    *argp;
     int		    ac;
     char	    *av;
     char_u	    *device = NULL;
     int		    exitval = 4;
-#if !defined(__amigaos4__) && !defined(__amigaos3__) && !defined(__AROS__) && !defined(__MORPHOS__)
-    struct Library  *DosBase;
-#endif
     int		    usewin = FALSE;
 
 #ifdef FEAT_GUI
@@ -395,26 +431,11 @@ mch_check_win(int argc, char **argv)
     }
 #endif
 
-/*
- * check if we are running under DOS 2.0x or higher
- */
-#if !defined(__amigaos4__) && !defined(__amigaos3__) && !defined(__AROS__) && !defined(__MORPHOS__)
-    DosBase = OpenLibrary(DOS_LIBRARY, 37L);
-    if (DosBase != NULL)
-    {
-	CloseLibrary(DosBase);
-    }
-    else	    // without arp functions we NEED 2.0
-    {
-	mch_errmsg(_("Need Amigados version 2.04 or later\n"));
-	exit(3);
-    }
-#endif	/* __amigaos4__ __AROS__ __MORPHOS__ */
-
     /*
-     * scan argv[] for the "-f" and "-d" arguments
+     * Scan argv[] for the "-f" and "-d" arguments
      */
     for (i = 1; i < argc; ++i)
+    {
 	if (argv[i][0] == '-')
 	{
 	    switch (argv[i][1])
@@ -426,60 +447,24 @@ mch_check_win(int argc, char **argv)
 	    case 'd':
 		if (i < argc - 1
 #ifdef FEAT_DIFF
-			// require using "-dev", "-d" means diff mode
+			// Require using "-dev", "-d" means diff mode
 			&& argv[i][2] == 'e' && argv[i][3] == 'v'
 #endif
 		   )
-		    device = (char_u *)argv[i + 1];
+		    device = argv[i + 1];
 		break;
 	    }
 	}
-
-/*
- * If we were not started from workbench, do not have a "-d" or "-dev"
- * argument and we have been started with an interactive window, use that
- * window.
- */
-    if (argc != 0
-	    && device == NULL
-	    && (IsInteractive(Input()) || IsInteractive(Output())))
-	return OK;
-
-/*
- * When given the "-f" argument, we open our own window. We can't use the
- * newcli trick below, because the calling program (mail, rn, etc.) would not
- * know when we are finished.
- */
-    if (usewin)
-    {
-	/*
-	 * Try to open a window. First try the specified device.
-	 * Then try a 24 line 80 column window.
-	 * If that fails, try two smaller ones.
-	 */
-	for (i = -1; i < 3; ++i)
-	{
-	    if (i >= 0)
-		device = constrings[i];
-	    if (device != NULL && (raw_in = Open((UBYTE *)device,
-					   (long)MODE_NEWFILE)) != (BPTR)NULL)
-		break;
-	}
-	if (raw_in == (BPTR)NULL)	// all three failed
-	{
-	    mch_errmsg(_(winerr));
-	    goto exit;
-	}
-	raw_out = raw_in;
-	close_win = TRUE;
-	return OK;
     }
 
-    if ((nilfh = Open((UBYTE *)"NIL:", (long)MODE_NEWFILE)) == (BPTR)NULL)
-    {
-	mch_errmsg(_("Cannot open NIL:\n"));
-	goto exit;
-    }
+    /*
+     * If we were not started from workbench, do not have a "-d" or "-dev"
+     * argument and we have been started with an interactive window, use that
+     * window.
+     */
+    if (argc != 0 && device == NULL && (IsInteractive(Input()) ||
+	IsInteractive(Output())))
+	return OK;
 
     /*
      * Make a unique name for the temp file (which we will not delete!).
@@ -495,11 +480,10 @@ mch_check_win(int argc, char **argv)
 #endif
     if ((fh = Open((UBYTE *)buf1, (long)MODE_NEWFILE)) == (BPTR)NULL)
     {
-	mch_errmsg(_("Cannot create "));
-	mch_errmsg((char *)buf1);
-	mch_errmsg("\n");
+	semsg(_(e_cannot_open_str), buf1);
 	goto exit;
     }
+
     /*
      * Write the command into the file, put quotes around the arguments that
      * have a space in them.
@@ -508,6 +492,7 @@ mch_check_win(int argc, char **argv)
 	ac = ((struct WBStartup *)argv)->sm_NumArgs;
     else
 	ac = argc;
+
     for (i = 0; i < ac; ++i)
     {
 	if (argc == 0)
@@ -524,7 +509,7 @@ mch_check_win(int argc, char **argv)
 	else
 	    av = argv[i];
 
-	// skip '-d' or "-dev" option
+	// Skip '-d' or "-dev" option
 	if (av[0] == '-' && av[1] == 'd'
 #ifdef FEAT_DIFF
 		&& av[2] == 'e' && av[3] == 'v'
@@ -534,44 +519,63 @@ mch_check_win(int argc, char **argv)
 	    ++i;
 	    continue;
 	}
+
 	if (vim_strchr((char_u *)av, ' '))
-	    Write(fh, "\"", 1L);
-	Write(fh, av, (long)strlen(av));
+	    FPuts(fh, "\"");
+
+	FPuts(fh, av);
+
 	if (vim_strchr((char_u *)av, ' '))
-	    Write(fh, "\"", 1L);
-	Write(fh, " ", 1L);
+	    FPuts(fh, "\"");
+
+	FPuts(fh, " ");
     }
-    Write(fh, "\nendcli\n", 8L);
+
+    struct Pipe *pipe = NULL;
+
+    if (usewin)
+    {
+	pipe = get_pipe(MODE_OLDFILE);
+
+	FPuts(fh, "\necho $RC > ");
+	FPuts(fh, pipe->name);
+	FPuts(fh, " NOLINE");
+    }
+
+    FPuts(fh, "\nendcli\n");
+
+HERE;
     Close(fh);
 
-/*
- * Try to open a new cli in a window. If "-d" or "-dev" argument was given try
- * to open the specified device. Then try a 24 line 80 column window.  If that
- * fails, try two smaller ones.
- */
-    for (i = -1; i < 3; ++i)
-    {
-	if (i >= 0)
-	    device = constrings[i];
-	else if (device == NULL)
-	    continue;
-	sprintf((char *)buf2, "newcli <nil: >nil: %s from %s", (char *)device, (char *)buf1);
+    if (device == NULL)
+	device = "CON:////Vim/CLOSE";
 
-	if (!SystemTags((UBYTE *)buf2, SYS_UserShell, TRUE, TAG_DONE))
-	    break;
-    }
-    if (i == 3)	    // all three failed
+    sprintf((char *)buf2, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", (char *) device, (char *)buf1);
+
+HERE;
+    if (SystemTags((UBYTE *)buf2, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {
-	DeleteFile((UBYTE *)buf1);
-	mch_errmsg(_(winerr));
-	goto exit;
+HERE;
+	exitval = RETURN_OK;
+
+	if (pipe)
+	{
+HERE;
+	    char rc;
+
+	    if (read_pipe(pipe, &rc, 1) != 1 || rc != '0')
+	    {
+HERE;
+		exitval = RETURN_ERROR;
+	    }
+	}
     }
-    exitval = 0;    // The Execute succeeded: exit this program
+
+HERE;
+    free_pipe(pipe);
 
 exit:
-    if (nilfh)
-	Close(nilfh);
-
+    HERE;
     exit(exitval);
     // NOTREACHED
     return FAIL;
@@ -634,12 +638,6 @@ free_fib(struct FileInfoBlock *fib)
     static struct FileInfoBlock *
 get_fib(char_u *name)
 {
-    if (name == NULL)
-    {
-        emsg(_(e_null_argument));
-	return NULL;
-    }
-
     struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, 0);
 
     if (fib == NULL)
@@ -891,18 +889,18 @@ mch_getperm(char_u *name)
     struct FileInfoBlock    *fib;
     long		    retval = -1;
 
-    KPrintF("permname:%s\n", name);
+//    KPrintF("permname:%s\n", name);
 
     fib = get_fib(name);
 
-    KPrintF("fib:%p\n", fib);
+ //   KPrintF("fib:%p\n", fib);
 
     if (fib == NULL)
 	return -1;
 
     retval = fib->fib_Protection;
 
-    KPrintF("retval:%ld\n", retval);
+  //  KPrintF("retval:%ld\n", retval);
 
     free_fib(fib);
 
@@ -1246,7 +1244,7 @@ mch_get_shellsize(void)
     }
 #endif
 
-    KPrintF("term_console:%d\n", term_console);
+    //KPrintF("term_console:%d\n", term_console);
 
     if (!term_console)
     {
@@ -1257,14 +1255,14 @@ mch_get_shellsize(void)
 
     struct InfoData *id = get_window_infodata(raw_out);
 
-    KPrintF("id:%p\n", id);
+    //KPrintF("id:%p\n", id);
 
     if (!id)
 	return FAIL;
 
     wb_window = get_window(id);
 
-    KPrintF("wb_window:%p\n", wb_window);
+    //KPrintF("wb_window:%p\n", wb_window);
 
     if (wb_window)
     {
@@ -1273,7 +1271,7 @@ mch_get_shellsize(void)
 
 	struct ConUnit *con = get_console(id);
 
-	KPrintF("con:%p\n", con);
+	//KPrintF("con:%p\n", con);
 
 	if (con)
 	{
@@ -1288,7 +1286,7 @@ mch_get_shellsize(void)
 
     free_window_infodata(id);
 
-    KPrintF("term_console:%d\n", term_console);
+    //KPrintF("term_console:%d\n", term_console);
 
     if (!term_console)
     {
@@ -1298,8 +1296,8 @@ mch_get_shellsize(void)
 	return FAIL;
     }
 
-    KPrintF("rows:%d\n", Rows);
-    KPrintF("cols:%d\n", Columns);
+    //KPrintF("rows:%d\n", Rows);
+    //KPrintF("cols:%d\n", Columns);
 
     return OK;
 }
@@ -1447,6 +1445,8 @@ mch_expandpath(
 	{TAG_DONE, 0L}
     };
 #endif
+
+//KPrintF("pattern:%s\n", pat);
 
     mch_normalize_path(pat);
 
