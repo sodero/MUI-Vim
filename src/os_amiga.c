@@ -44,7 +44,6 @@ static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
 static BPTR		raw_out = (BPTR)NULL;
-static int		close_win = FALSE;  // set if Vim opened the window
 static struct Window	*wb_window = NULL;
 static char_u		*oldwindowtitle = NULL;
 
@@ -185,9 +184,9 @@ mch_char_avail(void)
 mch_avail_mem(int special)
 {
 #if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
-    return (long_u)AvailMem(MEMF_ANY) >> 10;
+    return AvailMem(MEMF_ANY) >> 10;
 #else
-    return (long_u)(AvailMem(special ? (long)MEMF_CHIP : (long)MEMF_ANY)) >> 10;
+    return AvailMem(special ? MEMF_CHIP : MEMF_ANY) >> 10;
 #endif
 }
 
@@ -402,22 +401,10 @@ read_pipe(struct Pipe *pipe, void *buf, int len)
     return Read(pipe->handle, buf, len);
 }
 
-    static int
-write_pipe(struct Pipe *pipe, void *buf, int len)
-{
-    return Write(pipe->handle, buf, len);
-}
-
     int
 mch_check_win(int argc, char **argv)
 {
-    int		    i;
-    BPTR	    fh;
-    char_u	    buf1[24];
-    char_u	    buf2[BUF2SIZE];
-    struct WBArg    *argp;
     int		    ac;
-    char	    *av;
     char_u	    *device = NULL;
     int		    exitval = 4;
     int		    usewin = FALSE;
@@ -434,7 +421,7 @@ mch_check_win(int argc, char **argv)
     /*
      * Scan argv[] for the "-f" and "-d" arguments
      */
-    for (i = 1; i < argc; ++i)
+    for (int i = 1; i < argc; ++i)
     {
 	if (argv[i][0] == '-')
 	{
@@ -473,59 +460,63 @@ mch_check_win(int argc, char **argv)
      * we use a pointer to the current task instead. This should be a
      * shared structure and thus globally unique.
      */
-#if !defined(__amigaos4__) && !defined(__amigaos3__) && !defined(__AROS__) && !defined(__MORPHOS__)
-    sprintf((char *)buf1, "t:nc%p", FindTask(0));
-#else
-    sprintf((char *)buf1, "t:nc%ld", (long)buf1);
+#if 0
 #endif
-    if ((fh = Open((UBYTE *)buf1, (long)MODE_NEWFILE)) == (BPTR)NULL)
-    {
-	semsg(_(e_cannot_open_str), buf1);
-	goto exit;
-    }
+
+    char_u *buf1 = vim_tempname('c', FALSE);
+
+    if (buf1 == NULL)
+	exit(RETURN_FAIL);
+
+    BPTR fh = Open(buf1, MODE_NEWFILE);
+
+    if (fh == (BPTR) NULL)
+	exit(RETURN_ERROR);
 
     /*
      * Write the command into the file, put quotes around the arguments that
      * have a space in them.
      */
-    if (argc == 0)	// run from workbench
+    if (argc == 0) // run from workbench
 	ac = ((struct WBStartup *)argv)->sm_NumArgs;
     else
 	ac = argc;
 
-    for (i = 0; i < ac; ++i)
+    for (int i = 0; i < ac; ++i)
     {
+	const char *arg;
+
 	if (argc == 0)
 	{
-	    *buf2 = NUL;
-	    argp = &(((struct WBStartup *)argv)->sm_ArgList[i]);
+	    *IObuff = '\0';
+	    struct WBArg *wb_arg = &(((struct WBStartup *) argv)->sm_ArgList[i]);
 
-	    if (argp->wa_Lock)
-		(void) NameFromLock(argp->wa_Lock, buf2, (long)(BUF2SIZE - 1));
+	    if (wb_arg->wa_Lock)
+		NameFromLock(wb_arg->wa_Lock, IObuff, IOSIZE);
 
-	    AddPart((UBYTE *)buf2, (UBYTE *)argp->wa_Name, (long)(BUF2SIZE - 1));
-	    av = (char *)buf2;
+	    AddPart(IObuff, wb_arg->wa_Name, IOSIZE);
+	    arg = IObuff;
 	}
 	else
-	    av = argv[i];
+	    arg = argv[i];
 
 	// Skip '-d' or "-dev" option
-	if (av[0] == '-' && av[1] == 'd'
 #ifdef FEAT_DIFF
-		&& av[2] == 'e' && av[3] == 'v'
+	if (arg[0] == '-' && arg[1] == 'd' && arg[2] == 'e' && arg[3] == 'v')
+#else
+	if (arg[0] == '-' && arg[1] == 'd')
 #endif
-		)
 	{
 	    ++i;
 	    continue;
 	}
 
-	if (vim_strchr((char_u *)av, ' '))
+	if (vim_strchr((char_u *)arg, ' '))
 	    FPuts(fh, "\"");
 
-	FPuts(fh, av);
+	FPuts(fh, arg);
 
-	if (vim_strchr((char_u *)av, ' '))
+	if (vim_strchr((char_u *)arg, ' '))
 	    FPuts(fh, "\"");
 
 	FPuts(fh, " ");
@@ -544,37 +535,32 @@ mch_check_win(int argc, char **argv)
 
     FPuts(fh, "\nendcli\n");
 
-HERE;
     Close(fh);
 
     if (device == NULL)
 	device = "CON:////Vim/CLOSE";
 
-    sprintf((char *)buf2, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", (char *) device, (char *)buf1);
+    vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", (char *) device, (char *) buf1);
 
-HERE;
-    if (SystemTags((UBYTE *)buf2, SYS_UserShell, TRUE, TAG_DONE) == 0)
+    vim_free(buf1);
+
+    if (SystemTags(IObuff, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {
-HERE;
 	exitval = RETURN_OK;
 
 	if (pipe)
 	{
-HERE;
 	    char rc;
 
 	    if (read_pipe(pipe, &rc, 1) != 1 || rc != '0')
 	    {
-HERE;
 		exitval = RETURN_ERROR;
 	    }
 	}
     }
 
-HERE;
     free_pipe(pipe);
 
-exit:
     HERE;
     exit(exitval);
     // NOTREACHED
@@ -1091,9 +1077,6 @@ mch_exit(int r)
 
     ml_close_all(TRUE);		    // remove all memfiles
 
-    if (close_win)
-	Close(raw_in);
-
     if (r)
 	printf(_("Vim exiting with %d\n"), r); // somehow this makes :cq work!?
 					       //
@@ -1351,13 +1334,6 @@ mch_call_shell(char_u *cmd, int	options)
     BPTR mydir;
     int	tmode = cur_tmode;
     int	retval = 0;
-
-    if (close_win)
-    {
-	// if Vim opened a window: Executing a shell may cause crashes
-	emsg(_(e_cannot_execute_shell_with_f_option));
-	return -1;
-    }
 
     if (term_console)
 	win_resize_off();	    // window resize events de-activated
@@ -1664,7 +1640,7 @@ mch_setenv(char *var, char *value, int x UNUSED)
 mch_get_random(char_u *buf, int len)
 {
     // Don't show requester if RANDOM: doesn't exist
-    void *req_handle = mch_disable_volume_requester();
+    const void *req_handle = mch_disable_volume_requester();
 
     BPTR fh = Open("RANDOM:", MODE_OLDFILE);
 
