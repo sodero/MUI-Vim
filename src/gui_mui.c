@@ -1307,6 +1307,7 @@ MUIDSP int VimConHandleRaw(struct MUIP_HandleEvent *msg)
 
     ie.ie_Code = msg->imsg->Code;
     ie.ie_Qualifier = msg->imsg->Qualifier;
+    ie.ie_position.ie_addr = *((APTR *) msg->imsg->IAddress);
 
     // Are we dealing with a vanilla key?
     WORD w = MapRawKey(&ie, (STRPTR) b, 4, 0);
