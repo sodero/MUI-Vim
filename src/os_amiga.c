@@ -6,7 +6,7 @@
  * Do ":help credits" in Vim to see a list of people who contributed.
  * See README.txt for an overview of the Vim source code.
  */
-
+#include "debug.h"
 /*
  * os_amiga.c
  *
@@ -354,8 +354,11 @@ struct Pipe
     char name[NUMBUFLEN];
 };
 
+/*
+ * Close and free "pipe".
+ */
     static void
-free_pipe(struct Pipe *pipe)
+pipe_free(struct Pipe *pipe)
 {
     if (pipe == NULL)
 	return;
@@ -366,8 +369,12 @@ free_pipe(struct Pipe *pipe)
     vim_free(pipe);
 }
 
+/*
+ * Create and open a new pipe with "mode" (MODE_NEWFILE or MODE_OLDFILE).
+ * Return open pipe or NULL on error.
+ */
     static struct Pipe *
-get_pipe(int mode)
+pipe_new(int mode)
 {
     struct Pipe *pipe = ALLOC_ONE(struct Pipe);
 
@@ -379,9 +386,7 @@ get_pipe(int mode)
 
     static unsigned long id;
 
-    vim_snprintf(pipe->name, NUMBUFLEN, "PIPE:Vim_%ld_%lu", mch_get_pid(), id++);
-
-    KPrintF("pipe:%s\n", pipe->name);
+    vim_snprintf(pipe->name, NUMBUFLEN, "PIPE:VIM%ld%lu", mch_get_pid(), id++);
 
     pipe->handle = Open(pipe->name, mode);
 
@@ -395,10 +400,101 @@ get_pipe(int mode)
     return NULL;
 }
 
+/*
+ * Read "len" bytes from "pipe" into "buf".
+ * Return number of bytes read, -1 on error.
+ */
     static int
-read_pipe(struct Pipe *pipe, void *buf, int len)
+pipe_read(struct Pipe *pipe, char *buf, int len)
 {
     return Read(pipe->handle, buf, len);
+}
+
+/*
+ * Read a single byte from "pipe".
+ * Return the byte read, -1 on EOF or error.
+ */
+    static int
+pipe_getc(struct Pipe *pipe)
+{
+    unsigned char byte;
+
+    if (pipe_read(pipe, &byte, 1) != 1)
+	return -1;
+
+    return byte;
+}
+
+/*
+ * Read a NUL terminated string from "pipe" into "buf", up to "len" bytes.
+ * Return number of bytes read, -1 on error or buffer full.
+ */
+    static int
+pipe_gets(struct Pipe *pipe, char *buf, int len)
+{
+    int size = 0;
+
+    while (size < len)
+    {
+	int byte = pipe_getc(pipe);
+
+	if (byte == -1)
+	    return -1;
+
+	buf[size++] = (char) byte;
+
+	if (byte == 0)
+	    break;
+    }
+
+    if (size == len)
+	return -1;
+
+    return size;
+}
+
+/*
+ * Write "len" bytes from "buf" to "pipe".
+ * Return number of bytes written, -1 on error.
+ */
+    static int
+pipe_write(struct Pipe *pipe, const void *buf, int len)
+{
+    return Write(pipe->handle, buf, len);
+}
+
+/*
+ * Write a single byte "c" to "pipe".
+ * Return "c" on success, -1 on error.
+ */
+    static int
+pipe_putc(struct Pipe *pipe, int c)
+{
+    char byte = (char) c;
+
+    if (pipe_write(pipe, &byte, 1) != 1)
+	return -1;
+
+    return c;
+}
+
+/*
+ * Write the string "buf" to "pipe".
+ * Return number of bytes written, -1 on error.
+ */
+    static int
+pipe_puts(struct Pipe *pipe, const char *buf)
+{
+    return pipe_write(pipe, buf, strlen(buf));
+}
+
+/*
+ * Return the file name of "pipe".
+ */
+    static const char *
+pipe_name(struct Pipe *pipe)
+{
+    return pipe->name;
 }
 
     int
@@ -406,7 +502,6 @@ mch_check_win(int argc, char **argv)
 {
     int		    ac;
     char_u	    *device = NULL;
-    int		    exitval = 4;
     int		    usewin = FALSE;
 
 #ifdef FEAT_GUI
@@ -417,6 +512,8 @@ mch_check_win(int argc, char **argv)
         return FAIL;
     }
 #endif
+
+    __dbg(argc);
 
     /*
      * Scan argv[] for the "-f" and "-d" arguments
@@ -454,23 +551,11 @@ mch_check_win(int argc, char **argv)
 	return OK;
 
     /*
-     * Make a unique name for the temp file (which we will not delete!).
-     * Use a pointer on the stack (nobody else will be using it).
-     * Under AmigaOS4, this assumption might change in the future, so
-     * we use a pointer to the current task instead. This should be a
-     * shared structure and thus globally unique.
+     * Trampoline shell script pipe
      */
-#if 0
-#endif
+    struct Pipe *pipe_out = pipe_new(MODE_NEWFILE);
 
-    char_u *buf1 = vim_tempname('c', FALSE);
-
-    if (buf1 == NULL)
-	exit(RETURN_FAIL);
-
-    BPTR fh = Open(buf1, MODE_NEWFILE);
-
-    if (fh == (BPTR) NULL)
+    if (pipe_out == NULL)
 	exit(RETURN_ERROR);
 
     /*
@@ -481,6 +566,8 @@ mch_check_win(int argc, char **argv)
 	ac = ((struct WBStartup *)argv)->sm_NumArgs;
     else
 	ac = argc;
+
+    __dbg(ac);
 
     for (int i = 0; i < ac; ++i)
     {
@@ -500,7 +587,9 @@ mch_check_win(int argc, char **argv)
 	else
 	    arg = argv[i];
 
-	// Skip '-d' or "-dev" option
+	__dbg(arg);
+
+	// Skip '-d' or "-dev" optn
 #ifdef FEAT_DIFF
 	if (arg[0] == '-' && arg[1] == 'd' && arg[2] == 'e' && arg[3] == 'v')
 #else
@@ -508,61 +597,66 @@ mch_check_win(int argc, char **argv)
 #endif
 	{
 	    ++i;
+	    __dbg(i);
 	    continue;
 	}
 
-	if (vim_strchr((char_u *)arg, ' '))
-	    FPuts(fh, "\"");
-
-	FPuts(fh, arg);
+	__dbg(i);
 
 	if (vim_strchr((char_u *)arg, ' '))
-	    FPuts(fh, "\"");
+	    pipe_putc(pipe_out, '"');
 
-	FPuts(fh, " ");
+	pipe_puts(pipe_out, arg);
+
+	if (vim_strchr((char_u *)arg, ' '))
+	    pipe_putc(pipe_out, '"');
+
+	pipe_putc(pipe_out, ' ');
     }
 
-    struct Pipe *pipe = NULL;
+    struct Pipe *pipe_in = NULL;
+
+    __dbg(usewin);
 
     if (usewin)
     {
-	pipe = get_pipe(MODE_OLDFILE);
+	pipe_in = pipe_new(MODE_OLDFILE);
 
-	FPuts(fh, "\necho $RC > ");
-	FPuts(fh, pipe->name);
-	FPuts(fh, " NOLINE");
+	pipe_puts(pipe_out, "\necho $RC > ");
+	pipe_puts(pipe_out, pipe_name(pipe_in));
+	pipe_puts(pipe_out, " NOLINE");
     }
 
-    FPuts(fh, "\nendcli\n");
-
-    Close(fh);
+    pipe_puts(pipe_out, "\nendcli\n");
 
     if (device == NULL)
 	device = "CON:////Vim/CLOSE";
 
-    vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", (char *) device, (char *) buf1);
+    vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", device, pipe_out->name);
 
-    vim_free(buf1);
+    pipe_free(pipe_out);
+
+    __dbg(IObuff);
 
     if (SystemTags(IObuff, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {
-	exitval = RETURN_OK;
+	char rc;
 
-	if (pipe)
+	__dbg("a");
+
+	if (!pipe_in || pipe_getc(pipe_in) == '0')
 	{
-	    char rc;
-
-	    if (read_pipe(pipe, &rc, 1) != 1 || rc != '0')
-	    {
-		exitval = RETURN_ERROR;
-	    }
+	__dbg("a");
+	    pipe_free(pipe_in);
+	    exit(RETURN_OK);
 	}
+	__dbg("a");
     }
 
-    free_pipe(pipe);
+	__dbg("a");
+    pipe_free(pipe_in);
+    exit(RETURN_ERROR);
 
-    HERE;
-    exit(exitval);
     // NOTREACHED
     return FAIL;
 }
@@ -1620,21 +1714,14 @@ mch_getenv(char_u *var)
     int
 mch_setenv(char *var, char *value, int x UNUSED)
 {
-#ifdef FEAT_ARP
-    if (!dos2)
-	return setenv(var, value);
-#endif
-
     if (SetVar((UBYTE *)var, (UBYTE *)value, (LONG)-1, (ULONG)GVF_LOCAL_ONLY))
 	return 0;   // success
     return -1;	    // failure
 }
 
-
-
 /*
- * Fill the buffer 'buf' with 'len' random bytes.
- * Returns FAIL if RANDOM: is not available or something went wrong.
+ * Fill the buffer "buf" with "len" random bytes.
+ * Return OK on success or FAIL if RANDOM: is unavailable.
  */
     int
 mch_get_random(char_u *buf, int len)
