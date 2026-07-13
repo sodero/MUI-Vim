@@ -39,7 +39,7 @@ static const char* __attribute__((used)) stackcookie = "$STACK: 1048576";
 unsigned long __stack = 1048576;
 #endif
 
-static struct FileInfoBlock *get_fib(char_u *);
+static struct FileInfoBlock *new_fib(char_u *);
 static int sortcmp(const void *a, const void *b);
 
 static BPTR		raw_in = (BPTR)NULL;
@@ -145,10 +145,7 @@ mch_inchar(
 	    mch_get_shellsize();
 
 	    if(rows != Rows || cols != Columns)
-	    {
-		buf[0] = Ctrl_L; // use newsize or whatever instead
-		return 1;
-	    }
+		shell_resized();
 #endif /* __AROS__ || __MORPHOS__ */
 	    return 0;
 	}
@@ -271,7 +268,7 @@ static BOOL is_wb_args(char **argv)
  */
 static void free_cmd_args(void)
 {
-    if (!cmd_args)
+    if (cmd_args == NULL)
     {
 	return;
     }
@@ -301,7 +298,7 @@ int get_cmd_argsA(int argc, char ***argvp)
 
     free_cmd_args();
     cmd_args = calloc(wb->sm_NumArgs + 1, sizeof(char *));
-    if (!cmd_args)
+    if (cmd_args == NULL)
     {
 	return 0;
     }
@@ -346,7 +343,6 @@ int get_cmd_argsA(int argc, char ***argvp)
  * For the -f option (foreground mode) we open our own window and disable :sh.
  * Otherwise the calling program would never know when editing is finished.
  */
-#define BUF2SIZE 320	    // length of buffer for argument with complete path
 
 struct Pipe
 {
@@ -355,30 +351,15 @@ struct Pipe
 };
 
 /*
- * Close and free "pipe".
- */
-    static void
-pipe_free(struct Pipe *pipe)
-{
-    if (pipe == NULL)
-	return;
-
-    if (pipe->handle != (BPTR) NULL)
-	Close(pipe->handle);
-
-    vim_free(pipe);
-}
-
-/*
  * Create and open a new pipe with "mode" (MODE_NEWFILE or MODE_OLDFILE).
  * Return open pipe or NULL on error.
  */
     static struct Pipe *
-pipe_new(int mode)
+new_pipe(int mode)
 {
     struct Pipe *pipe = ALLOC_ONE(struct Pipe);
 
-    if (!pipe)
+    if (pipe == NULL)
     {
 	emsg(_(e_out_of_memory));
 	return NULL;
@@ -386,7 +367,7 @@ pipe_new(int mode)
 
     static unsigned long id;
 
-    vim_snprintf(pipe->name, NUMBUFLEN, "PIPE:VIM%ld%lu", mch_get_pid(), id++);
+    vim_snprintf(pipe->name, NUMBUFLEN, "PIPE:VIM%ld_%lu", mch_get_pid(), id++);
 
     pipe->handle = Open(pipe->name, mode);
 
@@ -401,11 +382,26 @@ pipe_new(int mode)
 }
 
 /*
+ * Close and free "pipe".
+ */
+    static void
+free_pipe(struct Pipe *pipe)
+{
+    if (pipe == NULL)
+	return;
+
+    if (pipe->handle != (BPTR) NULL)
+	Close(pipe->handle);
+
+    vim_free(pipe);
+}
+
+/*
  * Read "len" bytes from "pipe" into "buf".
  * Return number of bytes read, -1 on error.
  */
     static int
-pipe_read(struct Pipe *pipe, char *buf, int len)
+read_pipe(struct Pipe *pipe, char *buf, int len)
 {
     return Read(pipe->handle, buf, len);
 }
@@ -415,42 +411,14 @@ pipe_read(struct Pipe *pipe, char *buf, int len)
  * Return the byte read, -1 on EOF or error.
  */
     static int
-pipe_getc(struct Pipe *pipe)
+getc_pipe(struct Pipe *pipe)
 {
     unsigned char byte;
 
-    if (pipe_read(pipe, &byte, 1) != 1)
+    if (read_pipe(pipe, &byte, 1) != 1)
 	return -1;
 
     return byte;
-}
-
-/*
- * Read a NUL terminated string from "pipe" into "buf", up to "len" bytes.
- * Return number of bytes read, -1 on error or buffer full.
- */
-    static int
-pipe_gets(struct Pipe *pipe, char *buf, int len)
-{
-    int size = 0;
-
-    while (size < len)
-    {
-	int byte = pipe_getc(pipe);
-
-	if (byte == -1)
-	    return -1;
-
-	buf[size++] = (char) byte;
-
-	if (byte == 0)
-	    break;
-    }
-
-    if (size == len)
-	return -1;
-
-    return size;
 }
 
 /*
@@ -458,7 +426,7 @@ pipe_gets(struct Pipe *pipe, char *buf, int len)
  * Return number of bytes written, -1 on error.
  */
     static int
-pipe_write(struct Pipe *pipe, const void *buf, int len)
+write_pipe(struct Pipe *pipe, const void *buf, int len)
 {
     return Write(pipe->handle, buf, len);
 }
@@ -468,14 +436,35 @@ pipe_write(struct Pipe *pipe, const void *buf, int len)
  * Return "c" on success, -1 on error.
  */
     static int
-pipe_putc(struct Pipe *pipe, int c)
+putc_pipe(struct Pipe *pipe, int c)
 {
     char byte = (char) c;
 
-    if (pipe_write(pipe, &byte, 1) != 1)
+    if (write_pipe(pipe, &byte, 1) != 1)
 	return -1;
 
     return c;
+}
+
+/*
+ * Write a formatted string to "pipe".
+ * Return number of bytes written, -1 on error.
+ */
+    static int
+putf_pipe(struct Pipe *pipe, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+
+    int len = vim_vsnprintf((char *) IObuff, IOSIZE, (char *) fmt, ap);
+
+    va_end(ap);
+
+    if (len >= IOSIZE)
+	return -1;
+
+    return write_pipe(pipe, IObuff, len);
 }
 
 /*
@@ -483,27 +472,14 @@ pipe_putc(struct Pipe *pipe, int c)
  * Return number of bytes written, -1 on error.
  */
     static int
-pipe_puts(struct Pipe *pipe, const char *buf)
+puts_pipe(struct Pipe *pipe, const char *buf)
 {
-    return pipe_write(pipe, buf, strlen(buf));
-}
-
-/*
- * Return the file name of "pipe".
- */
-    static const char *
-pipe_name(struct Pipe *pipe)
-{
-    return pipe->name;
+    return write_pipe(pipe, buf, strlen(buf));
 }
 
     int
 mch_check_win(int argc, char **argv)
 {
-    int		    ac;
-    char_u	    *device = NULL;
-    int		    usewin = FALSE;
-
 #ifdef FEAT_GUI
     // Enable GUI mode if started from WB.
     if (is_wb_args(argv))
@@ -513,63 +489,48 @@ mch_check_win(int argc, char **argv)
     }
 #endif
 
-    __dbg(argc);
+    int	block = FALSE;
+    char *device = NULL;
 
     /*
-     * Scan argv[] for the "-f" and "-d" arguments
+     * Scan argv[] for the "-f" and "-dev" arguments
      */
     for (int i = 1; i < argc; ++i)
     {
-	if (argv[i][0] == '-')
-	{
-	    switch (argv[i][1])
-	    {
-	    case 'f':
-		usewin = TRUE;
-		break;
-
-	    case 'd':
-		if (i < argc - 1
-#ifdef FEAT_DIFF
-			// Require using "-dev", "-d" means diff mode
-			&& argv[i][2] == 'e' && argv[i][3] == 'v'
-#endif
-		   )
-		    device = argv[i + 1];
-		break;
-	    }
-	}
+	if (strcmp(argv[i], "-f") == 0)
+	    block = TRUE;
+	else if (strcmp(argv[i], "-dev") == 0 && i < argc - 1)
+	    device = argv[++i];
     }
 
     /*
-     * If we were not started from workbench, do not have a "-d" or "-dev"
-     * argument and we have been started with an interactive window, use that
-     * window.
+     * If we were not started from workbench, do not have a "-dev" argument and
+     * we have been started with an interactive window, use that window.
      */
     if (argc != 0 && device == NULL && (IsInteractive(Input()) ||
 	IsInteractive(Output())))
 	return OK;
 
     /*
-     * Trampoline shell script pipe
+     * Trampoline shell script pipes
      */
-    struct Pipe *pipe_out = pipe_new(MODE_NEWFILE);
+    struct Pipe *pipe_in = new_pipe(MODE_OLDFILE);
+    struct Pipe *pipe_out = new_pipe(MODE_NEWFILE);
 
-    if (pipe_out == NULL)
+    if (pipe_in == NULL || pipe_out == NULL)
+    {
+	free_pipe(pipe_in);
+	free_pipe(pipe_out);
+
 	exit(RETURN_ERROR);
+    }
 
     /*
-     * Write the command into the file, put quotes around the arguments that
-     * have a space in them.
+     * Write command to output pipe with quotes around arguments with whitespace
      */
-    if (argc == 0) // run from workbench
-	ac = ((struct WBStartup *)argv)->sm_NumArgs;
-    else
-	ac = argc;
+    int narg = argc ? argc : ((struct WBStartup *) argv)->sm_NumArgs;
 
-    __dbg(ac);
-
-    for (int i = 0; i < ac; ++i)
+    for (int i = 0; i < narg; ++i)
     {
 	const char *arg;
 
@@ -587,74 +548,42 @@ mch_check_win(int argc, char **argv)
 	else
 	    arg = argv[i];
 
-	__dbg(arg);
-
-	// Skip '-d' or "-dev" optn
-#ifdef FEAT_DIFF
-	if (arg[0] == '-' && arg[1] == 'd' && arg[2] == 'e' && arg[3] == 'v')
-#else
-	if (arg[0] == '-' && arg[1] == 'd')
-#endif
+	// Skip "-dev" option
+	if (strcmp(arg, "-dev") == 0)
 	{
 	    ++i;
-	    __dbg(i);
 	    continue;
 	}
 
-	__dbg(i);
-
-	if (vim_strchr((char_u *)arg, ' '))
-	    pipe_putc(pipe_out, '"');
-
-	pipe_puts(pipe_out, arg);
-
-	if (vim_strchr((char_u *)arg, ' '))
-	    pipe_putc(pipe_out, '"');
-
-	pipe_putc(pipe_out, ' ');
+	putf_pipe(pipe_out, strchr(arg, ' ') ? "\"%s\" " : "%s ", arg);
     }
 
-    struct Pipe *pipe_in = NULL;
+    __dbg(block);
 
-    __dbg(usewin);
+    if (block)
+	putf_pipe(pipe_out, "\necho $RC > %s NOLINE", pipe_in->name);
 
-    if (usewin)
-    {
-	pipe_in = pipe_new(MODE_OLDFILE);
-
-	pipe_puts(pipe_out, "\necho $RC > ");
-	pipe_puts(pipe_out, pipe_name(pipe_in));
-	pipe_puts(pipe_out, " NOLINE");
-    }
-
-    pipe_puts(pipe_out, "\nendcli\n");
+    puts_pipe(pipe_out, "\nendcli\n");
 
     if (device == NULL)
 	device = "CON:////Vim/CLOSE";
 
     vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", device, pipe_out->name);
 
-    pipe_free(pipe_out);
+    free_pipe(pipe_out);
 
     __dbg(IObuff);
 
     if (SystemTags(IObuff, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {
-	char rc;
-
-	__dbg("a");
-
-	if (!pipe_in || pipe_getc(pipe_in) == '0')
+	if (!block || getc_pipe(pipe_in) == '0')
 	{
-	__dbg("a");
-	    pipe_free(pipe_in);
+	    free_pipe(pipe_in);
 	    exit(RETURN_OK);
 	}
-	__dbg("a");
     }
 
-	__dbg("a");
-    pipe_free(pipe_in);
+    free_pipe(pipe_in);
     exit(RETURN_ERROR);
 
     // NOTREACHED
@@ -676,7 +605,7 @@ mch_input_isatty(void)
  */
 static void mch_normalize_path(char_u *path)
 {
-    if (!path)
+    if (path == NULL)
         return;
 
     for (size_t i = 0; path[i];)
@@ -716,7 +645,7 @@ free_fib(struct FileInfoBlock *fib)
  * Returns NULL on error.
  */
     static struct FileInfoBlock *
-get_fib(char_u *name)
+new_fib(char_u *name)
 {
     struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, 0);
 
@@ -971,7 +900,7 @@ mch_getperm(char_u *name)
 
 //    KPrintF("permname:%s\n", name);
 
-    fib = get_fib(name);
+    fib = new_fib(name);
 
  //   KPrintF("fib:%p\n", fib);
 
@@ -1019,7 +948,7 @@ mch_isdir(char_u *name)
     struct FileInfoBlock    *fib;
     int			    retval = FALSE;
 
-    fib = get_fib(name);
+    fib = new_fib(name);
 
     if (fib == NULL)
 	return FALSE;
@@ -1233,7 +1162,7 @@ get_shellsize_fallback(void)
 }
 
     static struct InfoData *
-get_infodata(void)
+new_infodata(void)
 {
 #ifdef __amigaos4__
     return AllocDosObject(DOS_INFODATA, 0);
@@ -1255,27 +1184,27 @@ free_infodata(struct InfoData *id)
     static struct Window *
 get_window(struct InfoData *id)
 {
-    if (!id)
+    if (id == NULL)
 	return NULL;
 
     return (struct Window *) id->id_VolumeNode;
 }
 
     static struct InfoData *
-get_window_infodata(BPTR handle)
+new_window_infodata(BPTR handle)
 {
-    if (!handle)
+    if (handle == (BPTR) NULL)
 	return NULL;
 
     struct MsgPort *port = (struct MsgPort *)
 	((struct FileHandle *) (BADDR(handle)))->fh_Type;
 
-    if (!port)
+    if (port == NULL)
 	return NULL;
 
-    struct InfoData *id = get_infodata();
+    struct InfoData *id = new_infodata();
 
-    if (!id)
+    if (id == NULL)
 	return NULL;
 
     if (!DoPkt(port, ACTION_DISK_INFO, MKBADDR(id), 0L, 0L, 0L, 0L))
@@ -1296,12 +1225,12 @@ free_window_infodata(struct InfoData *id)
     static struct ConUnit *
 get_console(struct InfoData *id)
 {
-    if (!id)
+    if (id == NULL)
 	return NULL;
 
     struct IOStdReq *req = (struct IOStdReq *) id->id_InUse;
 
-    if (!req)
+    if (req == NULL)
 	return NULL;
 
     return (struct ConUnit *) req->io_Unit;
@@ -1321,38 +1250,27 @@ mch_get_shellsize(void)
     }
 #endif
 
-    //KPrintF("term_console:%d\n", term_console);
-
     if (!term_console)
-    {
         return FAIL;
-    }
 
     term_console = FALSE;
 
-    struct InfoData *id = get_window_infodata(raw_out);
+    struct InfoData *id = new_window_infodata(raw_out);
 
-    //KPrintF("id:%p\n", id);
-
-    if (!id)
+    if (id == NULL)
 	return FAIL;
 
     wb_window = get_window(id);
 
-    //KPrintF("wb_window:%p\n", wb_window);
-
-    if (wb_window)
+    if (wb_window != NULL)
     {
-	if (!oldwindowtitle)
+	if (oldwindowtitle == NULL)
 	    oldwindowtitle = (char_u *) wb_window->Title;
 
 	struct ConUnit *con = get_console(id);
 
-	//KPrintF("con:%p\n", con);
-
-	if (con)
+	if (con != NULL)
 	{
-	    // Get window size
 	    Rows = con->cu_YMax + 1;
 	    Columns = con->cu_XMax + 1;
 	    term_console = TRUE;
@@ -1363,8 +1281,6 @@ mch_get_shellsize(void)
 
     free_window_infodata(id);
 
-    //KPrintF("term_console:%d\n", term_console);
-
     if (!term_console)
     {
 	// Not a window, maybe aux device terminal type should be set
@@ -1372,9 +1288,6 @@ mch_get_shellsize(void)
 	Columns = 80;
 	return FAIL;
     }
-
-    //KPrintF("rows:%d\n", Rows);
-    //KPrintF("cols:%d\n", Columns);
 
     return OK;
 }
@@ -1388,9 +1301,9 @@ mch_set_shellsize(void)
     if (!term_console)
 	return;
 
-    struct InfoData *id = get_window_infodata(raw_out);
+    struct InfoData *id = new_window_infodata(raw_out);
 
-    if (!id)
+    if (id == NULL)
 	return;
 
     struct Window *win = get_window(id);
@@ -1419,49 +1332,66 @@ mch_new_shellsize(void)
 }
 
 /*
+ * Start shell and get output from pipe.
+ * Return error number for failure, 0 otherwise
+ */
+    static int
+mch_call_shell_pipe(char_u *cmd, int options)
+{
+    if (options & (SHELL_SILENT | SHELL_FILTER))
+    {
+	return SystemTags((UBYTE *)cmd, TAG_DONE);
+    }
+
+    int	retval = 0;
+    struct Pipe *out = new_pipe(MODE_OLDFILE);
+
+    if (out != NULL)
+    {
+	vim_snprintf(IObuff, IOSIZE, "%s >%s", (char *)cmd, out->name);
+
+	screenclear();
+
+	retval = SystemTags((UBYTE *)IObuff, TAG_DONE);
+
+	for (int n = read_pipe(out, (char *) IObuff, IOSIZE - 1); n > 0;
+	     n = read_pipe(out, (char *) IObuff, IOSIZE - 1))
+	{
+	    IObuff[n] = NUL;
+	    msg_puts(IObuff);
+	}
+
+	out_flush();
+	free_pipe(out);
+    }
+
+    return retval;
+}
+
+/*
  * Call shell.
  * Return error number for failure, 0 otherwise
  */
     int
 mch_call_shell(char_u *cmd, int	options)
 {
-    BPTR mydir;
-    int	tmode = cur_tmode;
-    int	retval = 0;
+    int	retval;
 
-    if (term_console)
-	win_resize_off();	    // window resize events de-activated
-				    //
-    out_flush();
+    BPTR mydir = Lock((UBYTE *)"", (long)ACCESS_READ);
 
-    if (options & SHELL_COOKED)
-	settmode(TMODE_COOK);	    // set to normal mode
-
-    mydir = Lock((UBYTE *)"", (long)ACCESS_READ);   // remember current dir
-
-    if ((mydir = CurrentDir(mydir)) != 0) // make sure we stay in the same directory
+    if ((mydir = CurrentDir(mydir)) != 0)
 	UnLock(mydir);
 
     if (cmd == NULL)
-	retval = SystemTags((UBYTE *)p_sh, TAG_DONE);
-    else
-	retval = SystemTags((UBYTE *)cmd, TAG_DONE);
+	return SystemTags("newcli", TAG_DONE);
+
+    retval = mch_call_shell_pipe(cmd, options);
 
     if (retval != -1)
 	retval = 0;
 
-    if (tmode == TMODE_RAW)
-    {
-	// The shell may have messed with the mode, always set it.
-	cur_tmode = TMODE_UNKNOWN;
-	settmode(TMODE_RAW);		// set to raw mode
-    }
-
     resettitle();
 
-    if (term_console)
-	win_resize_on();		// window resize events activated
-					//
     return retval;
 }
 
@@ -1515,8 +1445,6 @@ mch_expandpath(
 	{TAG_DONE, 0L}
     };
 #endif
-
-//KPrintF("pattern:%s\n", pat);
 
     mch_normalize_path(pat);
 
@@ -1735,7 +1663,7 @@ mch_get_random(char_u *buf, int len)
 
     int status;
 
-    if (!fh || Read(fh, buf, len) != len)
+    if (fh == (BPTR) NULL || Read(fh, buf, len) != len)
 	status = FAIL;
     else
 	status = OK;
