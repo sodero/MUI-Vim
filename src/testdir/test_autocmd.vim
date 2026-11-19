@@ -6125,4 +6125,46 @@ func Test_TextPutPost_term_norm()
   bwipe!
 endfunc
 
+" Simple file patterns like "*.c" are matched with a string compare.  Check
+" that this gives the same result as the regexp used for patterns with "[]".
+func Test_autocmd_simple_patterns()
+  let pairs = [['*.mk', '*.m[k]'], ['Xmake*', 'Xmak[e]*'], ['Xmk', 'X[m]k'],
+        \ ['*/Xd/Xf', '*/Xd/X[f]']]
+  augroup testsimplepat
+    au!
+    for i in range(len(pairs))
+      exe printf('au BufRead %s call add(g:fast, %d)', pairs[i][0], i)
+      exe printf('au BufRead %s call add(g:slow, %d)', pairs[i][1], i)
+    endfor
+    au BufRead * call add(g:any, 1)
+  augroup END
+
+  let save_fic = &fileignorecase
+  set nofileignorecase
+  let g:fast = []
+  let g:slow = []
+  let g:any = []
+  doautocmd BufRead x.mk
+  call assert_equal([0], g:fast)
+  call assert_equal([1], g:any)
+
+  let names = ['x.mk', 'x.MK', 'x.mkk', '.mk', 'mk', 'Xmake', 'Xmakefile',
+        \ 'xmakefile', 'Xmak', 'Xmk', 'xMK', 'dir/Xmk', 'Xd/Xf', 'Xd/XF',
+        \ 'Xdd/Xf', "x.m\u212a", "x\u00e9.mk", "X\u00e9.MK"]
+  for fic in [0, 1]
+    let &fileignorecase = fic
+    for name in names
+      let g:fast = []
+      let g:slow = []
+      exe 'doautocmd BufRead ' .. fnameescape(name)
+      call assert_equal(g:slow, g:fast, name .. ' fic=' .. fic)
+    endfor
+  endfor
+
+  let &fileignorecase = save_fic
+  au! testsimplepat
+  augroup! testsimplepat
+  unlet g:fast g:slow g:any
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab
