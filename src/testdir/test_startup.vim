@@ -1508,4 +1508,29 @@ func Test_cq_zero_exmode()
   call delete('Xcq_log.txt')
 endfunc
 
+" defaults.vim must not load the syntax files again when the vimrc already
+" switched on syntax highlighting.
+func Test_defaults_syntax_on_once()
+  let before =<< trim [CODE]
+    set nocompatible
+    let g:synload_count = 0
+    au SourcePre *synload.vim let g:synload_count += 1
+    syntax on
+  [CODE]
+  let after =<< trim [CODE]
+    call writefile([&t_Co, exists('g:syntax_on'), g:synload_count],
+          \ 'Xdefsyntax')
+    qall!
+  [CODE]
+  if RunVim(before, after, '-u DEFAULTS')
+    let [t_co, syntax_on, n] = readfile('Xdefsyntax')
+    call delete('Xdefsyntax')
+    if t_co <= 2
+      throw 'Skipped: defaults.vim does not use syntax without colors'
+    endif
+    call assert_equal('1', syntax_on)
+    call assert_equal('1', n)
+  endif
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab
