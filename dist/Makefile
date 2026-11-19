@@ -64,6 +64,15 @@ tmp:
 #------------------------------------------------------------------------------------------
 $(DEST)/$(DEST).info: | $(DEST)
 	cp -r $(TOP)/runtime $(DEST)
+	# The syntax and indent tests are not needed at runtime.
+	rm -Rf $(DEST)/runtime/syntax/testdir $(DEST)/runtime/indent/testdir
+ifeq ($(TARGET),m68k-amigaos)
+	# FFS on AmigaOS 3 limits file names to 30 characters, longer names make
+	# the installer fail.  What remains are MS-Windows locale aliases for the
+	# menu translations and one keymap.
+	find $(DEST)/runtime -type f -name '???????????????????????????????*' \
+		-print -exec rm -f {} +
+endif
 	cp $(EXT)/$(TARGET)/* $(DEST)
 	cat "Install" | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DEST)/Install
 	cat $(DEST).guide | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DEST)/$(DEST).guide
