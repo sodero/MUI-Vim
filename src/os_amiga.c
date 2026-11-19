@@ -6,7 +6,6 @@
  * Do ":help credits" in Vim to see a list of people who contributed.
  * See README.txt for an overview of the Vim source code.
  */
-#include "debug.h"
 /*
  * os_amiga.c
  *
@@ -558,8 +557,6 @@ mch_check_win(int argc, char **argv)
 	putf_pipe(pipe_out, strchr(arg, ' ') ? "\"%s\" " : "%s ", arg);
     }
 
-    __dbg(block);
-
     if (block)
 	putf_pipe(pipe_out, "\necho $RC > %s NOLINE", pipe_in->name);
 
@@ -571,8 +568,6 @@ mch_check_win(int argc, char **argv)
     vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", device, pipe_out->name);
 
     free_pipe(pipe_out);
-
-    __dbg(IObuff);
 
     if (SystemTags(IObuff, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {

@@ -41,14 +41,9 @@ ifeq ($(ENDIAN),be)
 CONFIG += -DWORDS_BIGENDIAN
 endif
 
-ifeq ($(TARGET),m68k-amigaos)
-ifeq ($(BUILD),mui)
-override BUILD := huge
-endif
-endif
-
+# Latin-1 (\366 is o-umlaut), the default 'encoding' on Amiga.
 CUSTOM := \
-	-DMODIFIED_BY=\"'Ola S�der et al.'\"
+	-DMODIFIED_BY=\"'Ola S\366der et al.'\"
 
 CFLAGS := \
 	-c -O3 \
@@ -70,7 +65,9 @@ ifeq ($(TARGET),m68k-amigaos)
 #LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
 
 CFLAGS += -noixemul
-LDFLAGS = -ldebug -lm -noixemul -lsocket
+# libnix only honours __stack (see os_amiga.c) when its stack swap module is
+# linked, and nothing pulls it in unless it is referenced explicitly.
+LDFLAGS = -ldebug -lm -noixemul -lsocket -Wl,-u,___stkinit
 
 
 else

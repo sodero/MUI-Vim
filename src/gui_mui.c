@@ -28,7 +28,57 @@
 #include <proto/muimaster.h>
 #include <proto/icon.h>
 #include <proto/iffparse.h>
-#include <devices/rawkeycodes.h>
+#ifdef __amigaos3__
+// The AmigaOS 3 NDK has no devices/rawkeycodes.h; these are the standard
+// PC keyboard / NewMouse raw key codes used by all MUI platforms.
+# include <libraries/keymap.h>
+# ifndef RAWKEY_INSERT
+#  define RAWKEY_INSERT     0x47
+# endif
+# ifndef RAWKEY_PAGEUP
+#  define RAWKEY_PAGEUP     0x48
+# endif
+# ifndef RAWKEY_PAGEDOWN
+#  define RAWKEY_PAGEDOWN   0x49
+# endif
+# ifndef RAWKEY_F11
+#  define RAWKEY_F11        0x4B
+# endif
+# define RAWKEY_UP          0x4C
+# define RAWKEY_DOWN        0x4D
+# define RAWKEY_RIGHT       0x4E
+# define RAWKEY_LEFT        0x4F
+# ifndef RAWKEY_F1
+#  define RAWKEY_F1         0x50
+#  define RAWKEY_F2         0x51
+#  define RAWKEY_F3         0x52
+#  define RAWKEY_F4         0x53
+#  define RAWKEY_F5         0x54
+#  define RAWKEY_F6         0x55
+#  define RAWKEY_F7         0x56
+#  define RAWKEY_F8         0x57
+#  define RAWKEY_F9         0x58
+#  define RAWKEY_F10        0x59
+# endif
+# ifndef RAWKEY_HELP
+#  define RAWKEY_HELP       0x5F
+# endif
+# ifndef RAWKEY_F12
+#  define RAWKEY_F12        0x6F
+# endif
+# ifndef RAWKEY_HOME
+#  define RAWKEY_HOME       0x70
+# endif
+# ifndef RAWKEY_END
+#  define RAWKEY_END        0x71
+# endif
+# define RAWKEY_NM_WHEEL_UP     0x7A
+# define RAWKEY_NM_WHEEL_DOWN   0x7B
+# define RAWKEY_NM_WHEEL_LEFT   0x7C
+# define RAWKEY_NM_WHEEL_RIGHT  0x7D
+#else
+# include <devices/rawkeycodes.h>
+#endif
 #include <clib/alib_protos.h>
 #include <clib/debug_protos.h>
 #include <libraries/gadtools.h>
@@ -87,7 +137,13 @@ do { static int c; KPrintF("%s[%ld]:%ld\n",__func__,__LINE__,++c); } while(0)
   struct C ## Data
 #else
 # define DISPATCH_HEAD
-# define DISPATCH_ARGS Class *cls, Object *obj, Msg msg
+# ifdef __amigaos3__
+// BOOPSI calls dispatchers with arguments in registers on 68k.
+#  define DISPATCH_ARGS Class *cls __asm("a0"), Object *obj __asm("a2"), \
+  Msg msg __asm("a1")
+# else
+#  define DISPATCH_ARGS Class *cls, Object *obj, Msg msg
+# endif
 # define DISPATCH_GATE(C) C ## Dispatch
 # define CLASS_DEF(C) \
   struct MUI_CustomClass * C ## Class; \
@@ -132,6 +188,15 @@ MUIDSP IPTR C ## F(Object *me UNUSED, struct C ## Data *my UNUSED)
 static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
 
 //------------------------------------------------------------------------------
+// AmigaOS 3 has no RGB rastport pens and cannot rely on cybergraphics.library
+// (native AGA), so render using pens obtained from the screen colormap.
+//------------------------------------------------------------------------------
+#ifdef __amigaos3__
+# define MUIVIM_FEAT_PENS
+# define MUIVIM_PENS_MAX 128
+#endif
+
+//------------------------------------------------------------------------------
 // VimCon - MUI custom class handling everything that the console normally
 //          takes care of when running Vim in text mode.
 //------------------------------------------------------------------------------
@@ -147,6 +212,11 @@ CLASS_DEF(VimCon)
 #ifdef MUIVIM_FEAT_TIMEOUT
     struct MUI_InputHandlerNode timeout;
 #endif
+#ifdef MUIVIM_FEAT_PENS
+    struct ColorMap *cm;
+    int pens;
+    struct { ULONG rgb; LONG pen; } pen[MUIVIM_PENS_MAX];
+#endif
 };
 #define MUIV_VimCon_State_Idle       (1 << 0)
 #define MUIV_VimCon_State_Yield      (1 << 1)
@@ -156,6 +226,126 @@ CLASS_DEF(VimCon)
 #define MUIV_VimCon_State_Reset      (1 << 3)
 #define MUIV_VimCon_State_Unknown    (0)
 //------------------------------------------------------------------------------
+
+#ifdef MUIVIM_FEAT_PENS
+//------------------------------------------------------------------------------
+// VimConPen - Get screen pen for RGB color
+// Input:      RGB - 0x00RRGGBB
+// Return:     Pen number
+//------------------------------------------------------------------------------
+static LONG VimConPen(struct VimConData *my, ULONG rgb)
+{
+    for(int i = 0; i < my->pens; i++)
+    {
+        if(my->pen[i].rgb == rgb)
+        {
+            return my->pen[i].pen;
+        }
+    }
+
+    if(unlikely(!my->cm))
+    {
+        return 1;
+    }
+
+    ULONG r = ((rgb >> 16) & 0xff) * 0x01010101,
+          g = ((rgb >> 8) & 0xff) * 0x01010101,
+          b = (rgb & 0xff) * 0x01010101;
+
+    // Out of cache slots, use the closest pen without allocating.
+    if(unlikely(my->pens == MUIVIM_PENS_MAX))
+    {
+        return FindColor(my->cm, r, g, b, -1);
+    }
+
+    LONG pen = ObtainBestPen(my->cm, r, g, b, OBP_Precision, PRECISION_IMAGE,
+        TAG_DONE);
+
+    if(unlikely(pen < 0))
+    {
+        return FindColor(my->cm, r, g, b, -1);
+    }
+
+    my->pen[my->pens].rgb = rgb;
+    my->pen[my->pens].pen = pen;
+    my->pens++;
+    return pen;
+}
+
+//------------------------------------------------------------------------------
+// VimConReleasePens - Release all pens obtained by VimConPen
+//------------------------------------------------------------------------------
+static void VimConReleasePens(struct VimConData *my)
+{
+    if(my->cm)
+    {
+        for(int i = 0; i < my->pens; i++)
+        {
+            ReleasePen(my->cm, my->pen[i].pen);
+        }
+    }
+
+    my->pens = 0;
+    my->cm = NULL;
+}
+
+//------------------------------------------------------------------------------
+// VimConFill - Fill rectangle in off screen buffer with RGB color
+//------------------------------------------------------------------------------
+static void VimConFill(struct VimConData *my, int x, int y, int w, int h,
+    ULONG rgb)
+{
+    if(unlikely(w < 1 || h < 1))
+    {
+        return;
+    }
+
+    // Preserve text pen and mode, Vim sets them before drawing text.
+    ULONG apen = GetAPen(&my->rp), drmd = GetDrMd(&my->rp);
+    SetDrMd(&my->rp, JAM2);
+    SetAPen(&my->rp, VimConPen(my, rgb));
+    RectFill(&my->rp, x, y, x + w - 1, y + h - 1);
+    SetAPen(&my->rp, apen);
+    SetDrMd(&my->rp, drmd);
+}
+
+//------------------------------------------------------------------------------
+// VimConInvert - Invert rectangle in off screen buffer
+//------------------------------------------------------------------------------
+static void VimConInvert(struct VimConData *my, int x, int y, int w, int h)
+{
+    if(unlikely(w < 1 || h < 1))
+    {
+        return;
+    }
+
+    ULONG drmd = GetDrMd(&my->rp);
+    SetDrMd(&my->rp, COMPLEMENT);
+    RectFill(&my->rp, x, y, x + w - 1, y + h - 1);
+    SetDrMd(&my->rp, drmd);
+}
+
+//------------------------------------------------------------------------------
+// VimConMove - Move rectangle within off screen buffer
+//------------------------------------------------------------------------------
+static void VimConMove(struct VimConData *my, int xs, int ys, int xd, int yd,
+    int w, int h)
+{
+    if(unlikely(w < 1 || h < 1))
+    {
+        return;
+    }
+
+    BltBitMap(my->bm, xs, ys, my->bm, xd, yd, w, h, 0xc0, 0xff, NULL);
+}
+#else
+# define VimConFill(M, X, Y, W, H, C) \
+    FillPixelArray(&(M)->rp, X, Y, W, H, C)
+# define VimConInvert(M, X, Y, W, H) \
+    InvertPixelArray(&(M)->rp, X, Y, W, H)
+# define VimConMove(M, XS, YS, XD, YD, W, H) \
+    MovePixelArray(XS, YS, &(M)->rp, XD, YD, W, H)
+#endif
 
 //------------------------------------------------------------------------------
 // VimConAppMessage - AppMessage notification handler
@@ -340,7 +530,7 @@ METHOD0(VimCon, Clear)
         return FALSE;
     }
 
-    FillPixelArray(&my->rp, 0, 0, my->width, my->height, gui.back_pixel);
+    VimConFill(my, 0, 0, my->width, my->height, gui.back_pixel);
     MUI_Redraw(me, MADF_DRAWOBJECT);
     return TRUE;
 }
@@ -672,10 +862,10 @@ METHOD(VimCon, DrawHollowCursor, Row, Col, Color)
         return FALSE;
     }
 
-    FillPixelArray(&my->rp, x1, y1, my->xdelta, 1, msg->Color);
-    FillPixelArray(&my->rp, x1, y1, 1, my->ydelta, msg->Color);
-    FillPixelArray(&my->rp, x1, y2, my->xdelta, 1, msg->Color);
-    FillPixelArray(&my->rp, x2, y1, 1, my->ydelta, msg->Color);
+    VimConFill(my, x1, y1, my->xdelta, 1, msg->Color);
+    VimConFill(my, x1, y1, 1, my->ydelta, msg->Color);
+    VimConFill(my, x1, y2, my->xdelta, 1, msg->Color);
+    VimConFill(my, x2, y1, 1, my->ydelta, msg->Color);
     VimConDirty(my, x1, y1, x2, y2);
     return TRUE;
 }
@@ -700,7 +890,7 @@ METHOD(VimCon, DrawPartCursor, Row, Col, Width, Height, Color)
         return FALSE;
     }
 
-    FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
+    VimConFill(my, x, y, xs, ys, msg->Color);
     VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
@@ -723,7 +913,7 @@ METHOD(VimCon, InvertRect, Row, Col, Rows, Cols)
         return FALSE;
     }
 
-    InvertPixelArray(&my->rp, x, y, xs, ys);
+    VimConInvert(my, x, y, xs, ys);
     VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
@@ -758,7 +948,7 @@ METHOD(VimCon, FillBlock, Row1, Col1, Row2, Col2, Color)
         ys = my->height - y;
     }
 
-    FillPixelArray(&my->rp, x, y, xs, ys, msg->Color);
+    VimConFill(my, x, y, xs, ys, msg->Color);
     VimConDirty(my, x, y, x + xs, y + ys);
     return TRUE;
 }
@@ -808,8 +998,8 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
     }
 
     // Blit and fill the abandoned area with color
-    MovePixelArray(xsrcdst, ysrc, &my->rp, xsrcdst, ydst , xsize, ysize);
-    FillPixelArray(&my->rp, xsrcdst, yctop, xsize, ycsiz, msg->Color);
+    VimConMove(my, xsrcdst, ysrc, xsrcdst, ydst, xsize, ysize);
+    VimConFill(my, xsrcdst, yctop, xsize, ycsiz, msg->Color);
     return TRUE;
 }
 
@@ -842,6 +1032,10 @@ METHOD(VimCon, DeleteLines, Row, Lines, RegLeft, RegRight, RegBottom, Color)
 //------------------------------------------------------------------------------
 METHOD(VimCon, SetFgColor, Color)
 {
+#ifdef MUIVIM_FEAT_PENS
+    SetAPen(&my->rp, VimConPen(my, msg->Color));
+    return TRUE;
+#else
     static struct TagItem tags[] =
     {
         { .ti_Tag = RPTAG_FgColor, .ti_Data = 0},
@@ -857,6 +1051,7 @@ METHOD(VimCon, SetFgColor, Color)
     tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -866,6 +1061,10 @@ METHOD(VimCon, SetFgColor, Color)
 //------------------------------------------------------------------------------
 METHOD(VimCon, SetBgColor, Color)
 {
+#ifdef MUIVIM_FEAT_PENS
+    SetBPen(&my->rp, VimConPen(my, msg->Color));
+    return TRUE;
+#else
     static struct TagItem tags[] =
     {
         { .ti_Tag = RPTAG_BgColor, .ti_Data = 0},
@@ -881,6 +1080,7 @@ METHOD(VimCon, SetBgColor, Color)
     tags[0].ti_Data = msg->Color|ALPHA_MASK;
     SetRPAttrsA(&my->rp, tags);
     return TRUE;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -978,6 +1178,10 @@ MUIDSP IPTR VimConNew(Class *cls, Object *obj, struct opSet *msg)
     my->blink = my->space = my->width =
     my->height = my->left = my->right =
     my->top = my->bottom = 0;
+#ifdef MUIVIM_FEAT_PENS
+    my->cm = NULL;
+    my->pens = 0;
+#endif
 #ifdef MUIVIM_FEAT_TIMEOUT
     my->timeout.ihn_Object = obj;
     my->timeout.ihn_Millis = 0;
@@ -1081,6 +1285,10 @@ MUIDSP IPTR VimConSetup(Class *cls, Object *obj, struct MUI_RenderInfo *msg)
 
     struct VimConData *my = INST_DATA(cls,obj);
 
+#ifdef MUIVIM_FEAT_PENS
+    my->cm = _screen(obj)->ViewPort.ColorMap;
+#endif
+
     if(unlikely(!VimConSetupBitmap(cls, obj)))
     {
         return FALSE;
@@ -1147,6 +1355,10 @@ MUIDSP IPTR VimConCleanup(Class *cls, Object *obj, Msg msg)
         FreeBitMap(my->bm);
         my->bm = NULL;
     }
+
+#ifdef MUIVIM_FEAT_PENS
+    VimConReleasePens(my);
+#endif
 
     // Let the superclass do its part
     return (IPTR) DoSuperMethodA(cls, obj, (Msg) msg);
@@ -1529,14 +1741,14 @@ MUIDSP IPTR VimConDraw(Class *cls, Object *obj, struct MUIP_Draw *msg)
         if(likely(my->width < _mwidth(obj)))
         {
             // We're wider. Clear new bitmap area before showing it.
-            FillPixelArray(&my->rp, my->width, 0,  _mwidth(obj) - my->width,
+            VimConFill(my, my->width, 0,  _mwidth(obj) - my->width,
                 _mheight(obj), gui.back_pixel);
         }
 
         if(likely(my->height < _mheight(obj)))
         {
             // We're taller. Clear new bitmap area before showing it.
-            FillPixelArray(&my->rp, 0, my->height, _mwidth(obj), _mheight(obj) -
+            VimConFill(my, 0, my->height, _mwidth(obj), _mheight(obj) -
                 my->height, gui.back_pixel);
         }
 
@@ -1653,7 +1865,7 @@ MUIDSP IPTR VimConShow(Class *cls, Object *obj, Msg msg)
 //------------------------------------------------------------------------------
 METHOD0(VimCon, Beep)
 {
-    InvertPixelArray(&my->rp, 0, 0, my->width, my->height);
+    VimConInvert(my, 0, 0, my->width, my->height);
     MUI_Redraw(me, MADF_DRAWOBJECT);
 
     // Postpone terminal reset.
@@ -3235,6 +3447,19 @@ static int gui_os4_init(void)
 }
 #endif
 
+#ifdef __amigaos3__
+static int gui_os3_init(void)
+{
+    if(unlikely(!(MUIMasterBase = OpenLibrary("muimaster.library", 19))))
+    {
+        VimMessage("Error", "Failed to open muimaster.library.", "OK");
+        return FAIL;
+    }
+
+    return OK;
+}
+#endif
+
 //------------------------------------------------------------------------------
 // gui_mch_init - Initialise the GUI
 //------------------------------------------------------------------------------
@@ -3247,6 +3472,16 @@ int gui_mch_init(void)
         getout(1);
     }
 #endif
+#ifdef __amigaos3__
+    if(unlikely(gui_os3_init() != OK))
+    {
+        getout(1);
+    }
+#endif
+    // Default colors, used when no color scheme sets 'Normal'.
+    gui.norm_pixel = gui.def_norm_pixel = 0x000000;
+    gui.back_pixel = gui.def_back_pixel = 0xffffff;
+
     static const CONST_STRPTR classes[] = {"TheBar.mcc", NULL};
     VimToolbarClass = VimConClass = VimMenuClass = NULL;
 
@@ -3509,6 +3744,13 @@ void gui_mch_exit(int rc UNUSED)
     {
         DropInterface((struct Interface *) ICyberGfx);
         CloseLibrary((struct Library *) CyberGfxBase);
+    }
+#endif
+#ifdef __amigaos3__
+    if(likely(MUIMasterBase))
+    {
+        CloseLibrary(MUIMasterBase);
+        MUIMasterBase = NULL;
     }
 #endif
 }
