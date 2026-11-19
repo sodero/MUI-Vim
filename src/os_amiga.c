@@ -767,8 +767,12 @@ mch_setmouse(int on UNUSED)
     int
 mch_get_user_name(char_u *s, int len)
 {
+    // getpwuid() may read etc:passwd (libnix); don't let a missing etc:
+    // assign bring up an "insert volume" requester.
+    const void	*req = mch_disable_volume_requester();
     struct passwd *pwd = getpwuid(getuid());
 
+    mch_enable_volume_requester(req);
     if (pwd != NULL)
     {
 	vim_strncpy(s, (char_u *) pwd->pw_name, len - 1);

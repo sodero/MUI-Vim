@@ -141,7 +141,7 @@
 
 #ifdef FEAT_VIMINFO
 # ifndef VIMINFO_FILE
-#  define VIMINFO_FILE	"VIM:.viminfo"
+#  define VIMINFO_FILE	"S:.viminfo"
 # endif
 #endif
 

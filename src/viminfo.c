@@ -3118,6 +3118,9 @@ write_viminfo(char_u *file, int forceit)
 #ifdef MSWIN
     int		hidden = FALSE;
 #endif
+#ifdef AMIGA
+    const void	*req_handle;
+#endif
 
     if (no_viminfo())
 	return;
@@ -3126,6 +3129,11 @@ write_viminfo(char_u *file, int forceit)
     if (fname == NULL)
 	return;
 
+#ifdef AMIGA
+    // When the volume is write protected or not mounted, give an error
+    // message instead of blocking with a requester, especially when exiting.
+    req_handle = mch_disable_volume_requester();
+#endif
     fp_in = mch_fopen((char *)fname, READBIN);
     if (fp_in == NULL)
     {
@@ -3368,6 +3376,9 @@ write_viminfo(char_u *file, int forceit)
     }
 
 end:
+#ifdef AMIGA
+    mch_enable_volume_requester(req_handle);
+#endif
     vim_free(fname);
     vim_free(tempname);
 }
