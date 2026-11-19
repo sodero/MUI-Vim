@@ -2382,8 +2382,13 @@ get_one_sourceline(source_cookie_T *sp)
 #endif
     int			have_read = FALSE;
 
-    // use a growarray to store the sourced line
+    // Use a growarray to store the sourced line.  Allocate the first part
+    // here, ga_grow() would also clear it, which is slow when it is done for
+    // every line.
     ga_init2(&ga, 1, 250);
+    ga.ga_data = alloc(250);
+    if (ga.ga_data != NULL)
+	ga.ga_maxlen = 250;
 
     // Loop until there is a finished line (or end-of-file).
     ++sp->sourcing_lnum;
