@@ -4058,6 +4058,7 @@ typedef struct
     int		has_count;  // :123verbose  :3tab
 } cmdmod_info_T;
 
+// Must be sorted on the first character, see modifier_len().
 static cmdmod_info_T cmdmod_info_tab[] = {
     {"aboveleft", 3, FALSE},
     {"belowright", 3, FALSE},
@@ -4101,6 +4102,15 @@ modifier_len(char_u *cmd)
 	p = skipwhite(skipdigits(cmd + 1));
     for (i = 0; i < (int)ARRAY_LENGTH(cmdmod_info_tab); ++i)
     {
+	// This is called for every line of a sourced script, it should be
+	// fast.  The table is sorted and "minlen" is at least two, skip the
+	// entries with another first character.
+	if ((char_u)cmdmod_info_tab[i].name[0] != *p)
+	{
+	    if ((char_u)cmdmod_info_tab[i].name[0] > *p)
+		break;
+	    continue;
+	}
 	for (j = 0; p[j] != NUL; ++j)
 	    if (p[j] != cmdmod_info_tab[i].name[j])
 		break;
@@ -5145,6 +5155,15 @@ expand_filename(
 	    repl = expand_env_save(repl);
 	    vim_free(l);
 	}
+
+#ifdef AMIGA
+	// When a script is in the root of a volume or assign, such as "VIM:",
+	// "<sfile>:p:h" results in "VIM:".  Appending "/file" would refer to
+	// the parent of "VIM:", thus drop the slash.
+	if (repl != NULL && *repl != NUL && repl[STRLEN(repl) - 1] == ':'
+							    && p[srclen] == '/')
+	    ++srclen;
+#endif
 
 	// Need to escape white space et al. with a backslash.
 	// Don't do this for:
