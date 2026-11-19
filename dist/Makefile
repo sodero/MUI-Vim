@@ -72,6 +72,10 @@ ifeq ($(TARGET),m68k-amigaos)
 	# menu translations and one keymap.
 	find $(DEST)/runtime -type f -name '???????????????????????????????*' \
 		-print -exec rm -f {} +
+	# Remapping the true colour toolbar strips to the pens of a palette based
+	# screen takes more than ten seconds on a 68020, use palette versions
+	# instead (made with mkpalette.py).
+	cp palette/*.png $(DEST)/runtime/icons
 endif
 	cp $(EXT)/$(TARGET)/* $(DEST)
 	cat "Install" | $(SED) -e "s/__VER__/$(VER).$(REV)/" > $(DEST)/Install
