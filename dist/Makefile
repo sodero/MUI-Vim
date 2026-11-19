@@ -4,8 +4,11 @@
 
 LHA?=lha
 SED?=$(shell which gsed || which sed)
+ifeq ($(origin CC),default)
+CC:=m68k-amigaos-gcc
+endif
 TARGET:=$(shell $(CC) -dumpmachine | cut -d '-' -f1,2)
-ifeq ($(shell $(LHA) | head -1 | grep 'LHa for UNIX' | wc -l),1)
+ifeq ($(shell $(LHA) 2>&1 | head -1 | grep -c 'LHa for UNIX'),1)
 LHAFLAGS?=ao5
 else
 LHAFLAGS?=-r a

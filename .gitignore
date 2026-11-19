@@ -12,6 +12,9 @@ src/po/big5corr
 src/po/sjiscorr
 src/types.vim
 src/tmp_make
+# Amiga: version and patch number, made by Make_ami.mak
+src/.pat
+src/.ver
 
 # We do need src/auto/configure.
 src/auto/config.cache
