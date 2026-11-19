@@ -2,11 +2,17 @@
 " You can also use this as a start for your own set of menus.
 "
 " Maintainer:	The Vim Project <https://github.com/vim/vim>
-" Last Change:	2026 Jan 19
+" Last Change:	2026 Nov 18
 " Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 " Note that ":an" (short for ":anoremenu") is often used to make a menu work
 " in all modes and avoid side effects from mappings defined by the user.
+
+" The GUI sources this file after filetype.vim did.  Skipping over all the
+" lines below would still take time, finish right away.
+if exists("did_install_default_menus") && exists("did_install_syntax_menu")
+  finish
+endif
 
 " Make sure the '<' and 'C' flags are not included in 'cpoptions', otherwise
 " <CR> would not be recognized.  See ":help 'cpoptions'".
