@@ -38,9 +38,17 @@ endif
 #------------------------------------------------------------------------------------------
 # Populate temp
 #------------------------------------------------------------------------------------------
+# The CPU requirement is only stated for AmigaOS 3, elsewhere the paragraph
+# is removed.
+ifeq ($(TARGET),m68k-amigaos)
+README_CPU = s/__CPU__/This version requires a 68020 CPU or better./
+else
+README_CPU = /__CPU__/{N;d;}
+endif
+
 tmp/$(DEST)-$(TARGET).readme: | tmp
 	cat aminet/README.bin | $(SED) -e "s/__VER__/$(VER).$(REV)/" | \
-	$(SED) -e "s/__ARC__/$(TARGET)/" > $@
+	$(SED) -e "s/__ARC__/$(TARGET)/" | $(SED) -e "$(README_CPU)" > $@
 
 tmp/$(DEST)-$(TARGET).lha: $(DEST)-$(TARGET).lha | tmp
 	mv $< $@
