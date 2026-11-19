@@ -76,3 +76,31 @@ jobs:
           dist/tmp/*
         retention-days: 30
         overwrite: true
+
+  # AmigaOS 3 uses the m68k-amigaos-gcc toolchain image, which includes the NDK,
+  # the MUI and TheBar headers and LHa.  The package has no Installer binary,
+  # the Install script is run by the Installer that comes with AmigaOS 3.
+  build-m68k:
+    name: AmigaOS 3 - mui
+    runs-on: ubuntu-latest
+    container: stefanreinauer/amiga-gcc:gcc-v16.2
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Mark git directory as safe
+      run: git config --global --add safe.directory '*'
+
+    - name: Compile MUI and console builds and create archive
+      run: make -f Make_ami.mak -j"$(nproc)" dist
+
+    - name: Save artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: MUI-Vim-${{ github.sha }}-m68k-amigaos
+        path: |
+          dist/tmp/*
+        retention-days: 30
+        overwrite: true
+        if-no-files-found: error
