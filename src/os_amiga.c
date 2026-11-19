@@ -1805,3 +1805,173 @@ fgets(char *s, int size, FILE *stream)
     return s;
 }
 #endif
+
+#if defined(__libnix__) && defined(__amigaos3__) && !defined(NO_SB_ALLOC)
+/*
+ * Memory allocator replacing the one of libnix.
+ *
+ * libnix gets memory in 16 Kbyte puddles and free() searches through the list
+ * of all puddles to find the one a block belongs to, malloc() tries one puddle
+ * after the other.  With a few Mbyte in use that is slow on 68k, and Vim
+ * allocates and frees lots of small blocks.
+ *
+ * Here, small blocks are taken from 32 Kbyte chunks and are kept on a free
+ * list for their size when freed, both malloc() and free() take constant time.
+ * Small blocks are not returned to the system before exiting.  Big blocks are
+ * allocated with AllocMem().  All memory is freed when exiting.
+ */
+# include <stabs.h>
+
+# define SB_GRAIN	8		// granularity of small block sizes
+# define SB_MAX		512		// maximum size of a small block
+# define SB_CLASSES	(SB_MAX / SB_GRAIN)
+# define SB_CHUNK	(32 * 1024)	// memory is taken in chunks this big
+# define SB_BIG		0xffffffffUL	// size class of a big block
+
+/*
+ * Header of a chunk of small blocks and of a big block.  The size class
+ * ("cls") is right before the memory returned to the caller, for small blocks
+ * the header is only this.
+ */
+typedef struct
+{
+    struct MinNode	node;
+    ULONG		size;	    // size of a big block as requested
+    ULONG		cls;	    // SB_BIG
+} sb_head_T;
+
+static struct MinList sb_list = {
+    (struct MinNode *)&sb_list.mlh_Tail, NULL,
+    (struct MinNode *)&sb_list.mlh_Head
+};
+static void	*sb_free_list[SB_CLASSES];
+static char	*sb_next = NULL;    // unused part of the newest chunk
+static char	*sb_end = NULL;
+
+/*
+ * The allocator itself.  calloc() must not call malloc(): the compiler may
+ * turn malloc() followed by clearing the memory into a call to calloc().
+ */
+    static void *
+sb_alloc(size_t size)
+{
+    if (size <= SB_MAX - sizeof(ULONG))
+    {
+	ULONG	cls = size == 0 ? 0 : (size - 1 + sizeof(ULONG)) / SB_GRAIN;
+	ULONG	len = (cls + 1) * SB_GRAIN;
+	char	*p = sb_free_list[cls];
+
+	if (p != NULL)
+	{
+	    sb_free_list[cls] = *(void **)p;
+	    return p;
+	}
+	if (sb_end - sb_next < (long)len)
+	{
+	    sb_head_T *c = AllocMem(SB_CHUNK, MEMF_ANY);
+
+	    if (c == NULL)
+		return NULL;
+	    c->size = SB_CHUNK;
+	    c->cls = 0;
+	    AddTail((struct List *)&sb_list, (struct Node *)c);
+	    sb_next = (char *)(c + 1);
+	    sb_end = (char *)c + SB_CHUNK;
+	}
+	p = sb_next;
+	sb_next += len;
+	*(ULONG *)p = cls;
+	return p + sizeof(ULONG);
+    }
+    else
+    {
+	sb_head_T *h = AllocMem(size + sizeof(sb_head_T), MEMF_ANY);
+
+	if (h == NULL)
+	    return NULL;
+	h->size = size;
+	h->cls = SB_BIG;
+	AddTail((struct List *)&sb_list, (struct Node *)h);
+	return h + 1;
+    }
+}
+
+    __stdargs void *
+malloc(size_t size)
+{
+    return sb_alloc(size);
+}
+
+    __stdargs void
+free(void *ptr)
+{
+    ULONG cls;
+
+    if (ptr == NULL)
+	return;
+    cls = ((ULONG *)ptr)[-1];
+    if (cls == SB_BIG)
+    {
+	sb_head_T *h = (sb_head_T *)ptr - 1;
+
+	Remove((struct Node *)h);
+	FreeMem(h, h->size + sizeof(sb_head_T));
+    }
+    else
+    {
+	*(void **)ptr = sb_free_list[cls];
+	sb_free_list[cls] = ptr;
+    }
+}
+
+    __stdargs void *
+realloc(void *ptr, size_t size)
+{
+    size_t  old;
+    void    *p;
+    ULONG   cls;
+
+    if (ptr == NULL)
+	return malloc(size);
+    cls = ((ULONG *)ptr)[-1];
+    old = cls == SB_BIG ? ((sb_head_T *)ptr - 1)->size
+				      : (cls + 1) * SB_GRAIN - sizeof(ULONG);
+    if (size <= old && (cls != SB_BIG || size > old / 2))
+	return ptr;
+    p = malloc(size);
+    if (p != NULL)
+    {
+	mch_memmove(p, ptr, size < old ? size : old);
+	free(ptr);
+    }
+    return p;
+}
+
+    __stdargs void *
+calloc(size_t nmemb, size_t size)
+{
+    void *p;
+
+    if (size != 0 && nmemb > (size_t)-1 / size)
+	return NULL;
+    p = sb_alloc(nmemb * size);
+    if (p != NULL)
+	vim_memset(p, 0, nmemb * size);
+    return p;
+}
+
+// Not static, ADD2EXIT() refers to it by name.
+void sb_exit(void);
+    void __attribute__((used))
+sb_exit(void)
+{
+    struct MinNode *n;
+
+    while ((n = (struct MinNode *)RemHead((struct List *)&sb_list)) != NULL)
+	FreeMem(n, ((sb_head_T *)n)->cls == SB_BIG
+		 ? ((sb_head_T *)n)->size + sizeof(sb_head_T) : SB_CHUNK);
+}
+
+// Run late, after everything that may still free memory, like libnix does.
+ADD2EXIT(sb_exit, -50);
+#endif
