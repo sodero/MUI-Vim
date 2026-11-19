@@ -4755,6 +4755,9 @@ struct VimMenu
     PtWidget_t	*id;
     PtWidget_t	*submenu_id;
 # endif
+# ifdef FEAT_GUI_MUI
+    void	*mui_obj;	    // MUI Menu or Menuitem object
+# endif
 };
 #else
 // For generating prototypes when FEAT_MENU isn't defined.

@@ -186,6 +186,7 @@ MUIDSP IPTR C ## F(Object *me UNUSED, struct C ## Data *my UNUSED)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 static Object *App, *Con, *Mnu, *Tlb, *Lsg, *Bsg, *Rsg;
+static void gui_mui_menu_change(int begin);
 
 //------------------------------------------------------------------------------
 // AmigaOS 3 has no RGB rastport pens and cannot rely on cybergraphics.library
@@ -2348,6 +2349,7 @@ DISPATCH_END
 CLASS_DEF(VimMenu)
 {
     int state;
+    Object *last;   // The AlwaysLast menu
 };
 
 //------------------------------------------------------------------------------
@@ -2387,8 +2389,7 @@ METHOD(VimMenu, Grey, ID, Grey)
         return TRUE;
     }
 
-    // Vim menu pointers are used as MUI user data / ID:s
-    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
+    Object *m = (Object *) menu->mui_obj;
 
     if(unlikely(!m))
     {
@@ -2423,29 +2424,33 @@ METHOD(VimMenu, RemoveMenu, ID)
         return FALSE;
     }
 
-    // Vim menu pointers are used as MUI user data / ID:s
-    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ID);
+    vimmenu_T *menu = (vimmenu_T *) msg->ID;
+    Object *m = (Object *) menu->mui_obj;
 
     if(unlikely(!m))
     {
         return FALSE;
     }
 
-    // Free menu item.
-    DoMethod(me, MUIM_Family_Remove, m);
+    // Free menu item.  Vim removes the children of a menu before the menu.
+    Object *p = NULL;
+    GetAttr(MUIA_Parent, m, (IPTR *) &p);
+    DoMethod(p ? p : me, MUIM_Family_Remove, m);
     MUI_DisposeObject(m);
+    menu->mui_obj = NULL;
     return TRUE;
 }
 
 //------------------------------------------------------------------------------
 // VimMenuAddSpacer - Add menu spacer
 // Input:             ParentID - ID of parent menu
+//                    ID - ID of spacer to add
 // Return:            The created spacer on success, NULL otherwise
 //------------------------------------------------------------------------------
-METHOD(VimMenu, AddSpacer, ParentID)
+METHOD(VimMenu, AddSpacer, ParentID, ID)
 {
     // All spacers have parents (they can't be top level menus)
-    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
+    Object *m = (Object *) ((vimmenu_T *) msg->ParentID)->mui_obj;
 
     if(unlikely(!m))
     {
@@ -2465,6 +2470,7 @@ METHOD(VimMenu, AddSpacer, ParentID)
 
     // Add spacer to parent menu
     DoMethod(m, MUIM_Family_AddTail, i);
+    ((vimmenu_T *) msg->ID)->mui_obj = i;
     return (IPTR) i;
 }
 
@@ -2478,8 +2484,8 @@ METHOD(VimMenu, AddSpacer, ParentID)
 METHOD(VimMenu, AddMenu, ParentID, ID, Label)
 {
     // Sub menus have their own parents. Top level menus belong to us.
-    Object *m = msg->ParentID ? (Object *) DoMethod(me, MUIM_FindUData,
-        msg->ParentID) : me;
+    Object *m = msg->ParentID ?
+        (Object *) ((vimmenu_T *) msg->ParentID)->mui_obj : me;
 
     if(unlikely(!m))
     {
@@ -2500,15 +2506,22 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
 
     // Add menu to menu strip.
     DoMethod(m, MUIM_Family_AddTail, i);
+    ((vimmenu_T *) msg->ID)->mui_obj = i;
 
     // Make sure that the AlwaysLast menu really is last.
-    Object *l = (Object *) DoMethod(me, MUIM_FindUData,
-        (IPTR) MUIV_VimMenu_AddMenu_AlwaysLast);
-
-    if(likely(l))
+    if(m == me)
     {
-        DoMethod(me, MUIM_Family_Remove, l);
-        DoMethod(me, MUIM_Family_AddTail, l);
+        if(unlikely(!my->last))
+        {
+            my->last = (Object *) DoMethod(me, MUIM_FindUData,
+                (IPTR) MUIV_VimMenu_AddMenu_AlwaysLast);
+        }
+
+        if(likely(my->last))
+        {
+            DoMethod(me, MUIM_Family_Remove, my->last);
+            DoMethod(me, MUIM_Family_AddTail, my->last);
+        }
     }
 
     return (IPTR) i;
@@ -2524,7 +2537,7 @@ METHOD(VimMenu, AddMenu, ParentID, ID, Label)
 METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
 {
     // Menu items must have a parent menu
-    Object *m = (Object *) DoMethod(me, MUIM_FindUData, msg->ParentID);
+    Object *m = (Object *) ((vimmenu_T *) msg->ParentID)->mui_obj;
 
     if(unlikely(!m))
     {
@@ -2545,6 +2558,7 @@ METHOD(VimMenu, AddMenuItem, ParentID, ID, Label)
 
     // Add item to menu and set callback
     DoMethod(m, MUIM_Family_AddTail, i);
+    ((vimmenu_T *) msg->ID)->mui_obj = i;
     DoMethod(i, MUIM_Notify, (IPTR) MUIA_Menuitem_Trigger,
         (IPTR) MUIV_EveryTime, (IPTR) Con, (IPTR) 2,
         (IPTR) M_ID(VimCon, Callback), (IPTR) msg->ID);
@@ -3252,6 +3266,9 @@ int gui_mch_wait_for_chars(int wtime UNUSED)
     // Assume that we're idling.
     int state = MUIV_VimCon_State_Idle;
 
+    // Commit pending menu changes before handing control over to MUI.
+    gui_mui_menu_change(FALSE);
+
     // Wait until something happens.
     for(; state == MUIV_VimCon_State_Idle ;
         state = DoMethod(Con, M_ID(VimCon, GetState)))
@@ -3791,6 +3808,30 @@ void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 }
 
 //------------------------------------------------------------------------------
+// gui_mui_menu_change - Batch menu strip changes.  Without this, MUI may
+//                       rebuild the whole Intuition menu strip for every
+//                       single item added, which takes minutes on 68k when
+//                       sourcing menu.vim.  The batch is closed when Vim
+//                       starts waiting for input.  MUI versions without
+//                       support for this (< V20) ignore the methods.
+//------------------------------------------------------------------------------
+static int menu_changing = FALSE;
+
+static void gui_mui_menu_change(int begin)
+{
+    if(begin && !menu_changing)
+    {
+        (void) DoMethod(Mnu, MUIM_Menustrip_InitChange);
+        menu_changing = TRUE;
+    }
+    else if(!begin && menu_changing)
+    {
+        menu_changing = FALSE;
+        (void) DoMethod(Mnu, MUIM_Menustrip_ExitChange);
+    }
+}
+
+//------------------------------------------------------------------------------
 // gui_mch_add_menu
 //------------------------------------------------------------------------------
 void gui_mch_add_menu(vimmenu_T *menu, int index UNUSED)
@@ -3800,6 +3841,7 @@ void gui_mch_add_menu(vimmenu_T *menu, int index UNUSED)
         return;
     }
 
+    gui_mui_menu_change(TRUE);
     (void) DoMethod(Mnu, M_ID(VimMenu, AddMenu), (IPTR) menu->parent,
         (IPTR) menu, (IPTR) menu->dname);
 }
@@ -3834,10 +3876,13 @@ void gui_mch_add_menu_item(vimmenu_T *menu, int index UNUSED)
         return;
     }
 
+    gui_mui_menu_change(TRUE);
+
     // A menu spacer?
     if(unlikely(menu_is_separator(menu->name)))
     {
-        (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), (IPTR) menu->parent);
+        (void) DoMethod(Mnu, M_ID(VimMenu, AddSpacer), (IPTR) menu->parent,
+            (IPTR) menu);
         return;
     }
 
@@ -3859,6 +3904,7 @@ void gui_mch_show_toolbar(int showit)
 //------------------------------------------------------------------------------
 void gui_mch_destroy_menu(vimmenu_T *menu)
 {
+    gui_mui_menu_change(TRUE);
     (void) DoMethod(Mnu, M_ID(VimMenu, RemoveMenu), (IPTR) menu);
 }
 
@@ -3867,6 +3913,7 @@ void gui_mch_destroy_menu(vimmenu_T *menu)
 //------------------------------------------------------------------------------
 void gui_mch_menu_grey(vimmenu_T *menu, int grey)
 {
+    gui_mui_menu_change(TRUE);
     (void) DoMethod(Mnu, M_ID(VimMenu, Grey), (IPTR) menu, (IPTR) grey);
 }
 
