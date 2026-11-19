@@ -1062,12 +1062,38 @@ func Test_colornames_default_list()
   call ClearDict(v:colornames)
 endfunc
 
+" The colors used by the default syntax highlighting are built in, using them
+" must not load the default color list, that is slow.
+func Test_colornames_syncolor_builtin()
+  CheckAnyOf Feature:gui_running Feature:termguicolors
+
+  call ClearDict(v:colornames)
+  let save_tgc = &termguicolors
+  set termguicolors
+  let lines = readfile($VIMRUNTIME .. '/syntax/syncolor.vim')
+  let names = []
+  for line in lines
+    for name in matchlist(line, 'gui\%(fg\|bg\|sp\)=\(\a\+\)')[1 : 1]
+      if name !~? '^\%(NONE\|fg\|bg\)$'
+        call add(names, name)
+      endif
+    endfor
+  endfor
+  call assert_notequal([], names)
+  for name in names
+    exe 'highlight XSynColor guifg=' .. name
+    call assert_equal(0, len(v:colornames), name)
+  endfor
+  highlight clear XSynColor
+  let &termguicolors = save_tgc
+endfunc
+
 func Test_colornames_overwrite_default()
   CheckAnyOf Feature:gui_running Feature:termguicolors
 
   " Ensure entries in v:colornames can be overwritten.
-  " Load default color scheme to trigger default color list loading.
-  colorscheme default
+  " Use a color that is not built in to trigger default color list loading.
+  highlight Normal guifg='rebecca purple'
   let old_rebecca_purple = v:colornames['rebecca purple']
   highlight Normal guifg='rebecca purple' guibg='rebecca purple'
   let v:colornames['rebecca purple'] = '#550099'
