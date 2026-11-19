@@ -175,15 +175,14 @@ mch_char_avail(void)
 
 /*
  * Return amount of memory still available in Kbyte.
+ * Vim's allocations can be satisfied from any memory type, thus don't check
+ * for Chip memory, it may run low with big screens while plenty of Fast
+ * memory is available.
  */
     long_u
-mch_avail_mem(int special)
+mch_avail_mem(int special UNUSED)
 {
-#if defined(__amigaos4__) || defined(__AROS__) || defined(__MORPHOS__)
     return AvailMem(MEMF_ANY) >> 10;
-#else
-    return AvailMem(special ? MEMF_CHIP : MEMF_ANY) >> 10;
-#endif
 }
 
 /*
