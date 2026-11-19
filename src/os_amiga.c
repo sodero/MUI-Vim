@@ -1751,3 +1751,57 @@ mch_get_cmd_output_direct(
 
     return buf;
 }
+
+#if defined(__libnix__) && defined(__amigaos3__)
+/*
+ * libnix implements fgets() by calling getc() for every single character,
+ * which is slow on 68k.  Every line of a sourced script is read with fgets(),
+ * thus replace it with a version that copies directly from the stdio buffer.
+ * Like the libnix version, a "size" of zero or less means no limit, gets()
+ * depends on that.
+ */
+    __stdargs char *
+fgets(char *s, int size, FILE *stream)
+{
+    char	*p = s;
+    long	left = size > 0 ? size - 1 : LONG_MAX;
+
+    while (left > 0)
+    {
+	unsigned char	*nl;
+	long		n;
+
+	if (stream->_r <= 0)
+	{
+	    // Buffer empty, refill it.  This returns the first character.
+	    int c = __srget(stream);
+
+	    if (c == EOF)
+	    {
+		if (p == s)
+		    return NULL;
+		break;
+	    }
+	    *p++ = c;
+	    --left;
+	    if (c == '\n')
+		break;
+	    continue;
+	}
+
+	n = stream->_r < left ? stream->_r : left;
+	nl = memchr(stream->_p, '\n', n);
+	if (nl != NULL)
+	    n = nl - stream->_p + 1;
+	mch_memmove(p, stream->_p, n);
+	stream->_p += n;
+	stream->_r -= n;
+	p += n;
+	left -= n;
+	if (nl != NULL)
+	    break;
+    }
+    *p = NUL;
+    return s;
+}
+#endif
