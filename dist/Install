@@ -2,7 +2,6 @@
 ; $VER: MUI-Vim __VER__
 
 (set @app-name "Vim")
-(set @default-dest (getassign "VIM"))
 (set #root "")
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
@@ -16,14 +15,25 @@
 )
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; If this is a fresh install, default destination is T:, VIM:// otherwise.
+; When upgrading, the default destination is where VIM: is, VIM:// that is.
+; Not when VIM: is the runtime directory next to this script though, that
+; happens when Vim was started from the unpacked archive.  For a fresh
+; install the default is Work:, or SYS: when there is no Work:.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(set @default-dest (p_chomp (expandpath @default-dest)))
-(set @default-dest ("%s///" @default-dest))
-
-(if (= (exists @default-dest) 2)
-    (set @default-dest (expandpath @default-dest))
-    (set @default-dest "T:")
+(if (= (exists "Work:" (noreq)) 2)
+    (set @default-dest "Work:")
+    (set @default-dest "SYS:")
+)
+(set #vim-assign (getassign "VIM"))
+(if (<> #vim-assign "")
+    (
+        (set #vim-assign (p_chomp (expandpath #vim-assign)))
+        (if (<> #vim-assign (p_chomp (expandpath "runtime")))
+            (if (= (exists ("%s///" #vim-assign) (noreq)) 2)
+                (set @default-dest (expandpath ("%s///" #vim-assign)))
+            )
+        )
+    )
 )
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
@@ -100,16 +110,23 @@
 (complete 20)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-; Copy drawer icon in archive.
+; Create the drawer, use the drawer icon in the archive for it.  That icon
+; is named after the archive drawer, rename it to match the new drawer.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(makedir @default-dest (infos))
-(if (= (exists ("%s.info" (p_chomp (pathonly @icon)))) 1)
-    (copyfiles
-        (source ("%s.info" (p_chomp (pathonly @icon))))
-        (dest #dest-root)
-        (prompt #copy_str_p)
-        (help @copyfiles-help)
+(set #drawer-icon ("%s.info" (p_chomp (pathonly @icon))))
+(if (= (exists #drawer-icon) 1)
+    (
+        (makedir @default-dest)
+        (copyfiles
+            (source #drawer-icon)
+            (dest #dest-root)
+            (newname ("%s.info" @app-name))
+            (prompt #copy_str_p)
+            (help @copyfiles-help)
+        )
     )
+    ; else
+    (makedir @default-dest (infos))
 )
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
@@ -257,17 +274,30 @@
 ; Create Vim assign / add Vim to path in user-startup
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 (set #assign-dir (tackon @default-dest "runtime"))
-(startup @app-name
-    (prompt #assign_str_p)
-    (help #assign_str_h)
-    (command ("Assign %s: \"%s\"\nPath ADD >NIL: \"%s\"" @app-name #assign-dir @default-dest))
-    (confirm)
+; "startup" only asks in expert mode, ask average users here.  Novice users
+; get the change without being asked.
+(set #do-startup 1)
+(if (= @user-level 1)
+    (set #do-startup
+        (askbool
+            (prompt #assign_str_p)
+            (help #assign_str_h)
+            (default 1)
+        )
+    )
+)
+(if #do-startup
+    (startup @app-name
+        (prompt #assign_str_p)
+        (help #assign_str_h)
+        (command ("Assign %s: \"%s\"\nPath ADD >NIL: \"%s\"" @app-name #assign-dir @default-dest))
+    )
 )
 (complete 90)
 
 ;---------------------------------------------------------------------------------------------------------------------------------------------
 ; Run assign to be able to run Vim without a reboot. Add Vim to path (using an assign) as well.
 ;---------------------------------------------------------------------------------------------------------------------------------------------
-(run (cat "assign VIM: " #assign-dir))
-(run (cat "assign ADD C: " @default-dest))
+(run ("assign VIM: \"%s\"" #assign-dir))
+(run ("assign ADD C: \"%s\"" @default-dest))
 (complete 100)

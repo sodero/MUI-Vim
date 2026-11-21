@@ -65,14 +65,27 @@ typedef struct AutoPat
 					// be the first entry.
     char_u	    *pat;		// pattern as typed (NULL when pattern
 					// has been removed)
-    regprog_T	    *reg_prog;		// compiled regprog for pattern
+    regprog_T	    *reg_prog;		// compiled regprog for pattern, NULL
+					// until it is used
+    char_u	    *reg_pat;		// regexp to compile for reg_prog, NULL
+					// when compiled or failed
     AutoCmd	    *cmds;		// list of commands to do
     int		    group;		// group ID
     int		    patlen;		// strlen() of pat
     int		    buflocal_nr;	// !=0 for buffer-local AutoPat
     char	    allow_dirs;		// Pattern may match whole path
     char	    last;		// last pattern for apply_autocmds()
+    char	    fast_kind;		// AU_FAST_ values
+    int		    fast_off;		// "pat" offset of the literal text
+    int		    fast_len;		// length of the literal text
 } AutoPat;
+
+// Kinds of patterns that are matched without a regexp, see au_set_fast().
+#define AU_FAST_NONE	0   // use the regexp
+#define AU_FAST_ANY	1   // "*": matches everything
+#define AU_FAST_SUFFIX	2   // "*text"
+#define AU_FAST_PREFIX	3   // "text*"
+#define AU_FAST_EXACT	4   // "text"
 
 //
 // special cases:
@@ -360,6 +373,140 @@ theend:
 }
 
 /*
+ * Return a pointer to the compiled regprog of "ap", compile it when it is
+ * used for the first time.  When compiling fails the regprog remains NULL and
+ * it is not tried again.
+ */
+    static regprog_T **
+au_pat_prog(AutoPat *ap)
+{
+    if (ap->reg_prog == NULL && ap->reg_pat != NULL)
+    {
+	ap->reg_prog = vim_regcomp(ap->reg_pat, RE_MAGIC);
+	VIM_CLEAR(ap->reg_pat);
+    }
+    return &ap->reg_prog;
+}
+
+/*
+ * Most file patterns, such as "*.c" or "Makefile", are literal text with a
+ * '*' at the start or the end.  Matching them with a regexp is slow,
+ * especially on old hardware, use a string compare instead.
+ * Set the AU_FAST_ fields of "ap" and return TRUE when its pattern is like
+ * that.
+ */
+    static int
+au_set_fast(AutoPat *ap)
+{
+    char_u	*pat = ap->pat;
+    int		len = ap->patlen;
+    int		start = 0;
+    int		i;
+
+    ap->fast_kind = AU_FAST_NONE;
+    while (start < len && pat[start] == '*')
+	++start;
+    if (start == len)
+    {
+	ap->fast_kind = AU_FAST_ANY;
+	ap->allow_dirs = FALSE;
+	return TRUE;
+    }
+    while (len > start && pat[len - 1] == '*')
+	--len;
+    if (start > 0 && len < ap->patlen)
+	return FALSE;	    // "*text*"
+
+    // Only characters that are literal in the regexp made by
+    // file_pat_to_reg_pat().
+    ap->allow_dirs = FALSE;
+    for (i = start; i < len; ++i)
+    {
+	if (pat[i] == '/')
+	{
+#ifdef BACKSLASH_IN_FILENAME
+	    return FALSE;   // also matches a backslash
+#else
+	    ap->allow_dirs = TRUE;
+#endif
+	}
+	else if (!ASCII_ISALNUM(pat[i]) && vim_strchr((char_u *)"._-+#",
+							     pat[i]) == NULL)
+	    return FALSE;
+    }
+    ap->fast_kind = start > 0 ? AU_FAST_SUFFIX
+			: len < ap->patlen ? AU_FAST_PREFIX : AU_FAST_EXACT;
+    ap->fast_off = start;
+    ap->fast_len = len - start;
+    return TRUE;
+}
+
+/*
+ * Return TRUE if "name" matches the literal text of fast pattern "ap", or -1
+ * when this can't be decided with a byte compare.
+ */
+    static int
+au_fast_match_name(AutoPat *ap, char_u *name)
+{
+    char_u	*lit = ap->pat + ap->fast_off;
+    size_t	len = STRLEN(name);
+    char_u	*s;
+
+    // When ignoring case a multibyte character may match an ASCII one,
+    // e.g. the Kelvin sign and 'k'.
+    if (p_fic && has_mbyte)
+	for (s = name; *s != NUL; ++s)
+	    if (*s >= 0x80)
+		return -1;
+    if (len < (size_t)ap->fast_len
+	    || (ap->fast_kind == AU_FAST_EXACT && len != (size_t)ap->fast_len))
+	return FALSE;
+    s = ap->fast_kind == AU_FAST_SUFFIX ? name + len - ap->fast_len : name;
+    if (p_fic)
+	return STRNICMP(s, lit, ap->fast_len) == 0;
+    return STRNCMP(s, lit, ap->fast_len) == 0;
+}
+
+/*
+ * Return TRUE if the file name matches the pattern of "ap", like
+ * match_file_pat() does.
+ */
+    static int
+au_match_pat(
+    AutoPat	*ap,
+    char_u	*fname,
+    char_u	*sfname,
+    char_u	*tail)
+{
+    int		r;
+
+    if (ap->fast_kind == AU_FAST_ANY)
+	return TRUE;
+    if (ap->fast_kind != AU_FAST_NONE && enc_dbcs == 0)
+    {
+	if (ap->allow_dirs)
+	{
+	    r = au_fast_match_name(ap, fname);
+	    if (r == FALSE && sfname != NULL)
+		r = au_fast_match_name(ap, sfname);
+	}
+	else
+	    r = au_fast_match_name(ap, tail);
+	if (r != -1)
+	    return r;
+    }
+    if (ap->fast_kind != AU_FAST_NONE)
+    {
+	// Can't use the fast match, use a regexp from now on.
+	ap->fast_kind = AU_FAST_NONE;
+	ap->reg_pat = file_pat_to_reg_pat(ap->pat, ap->pat + ap->patlen,
+							&ap->allow_dirs, TRUE);
+    }
+    return match_file_pat(NULL, au_pat_prog(ap), fname, sfname, tail,
+							       ap->allow_dirs);
+}
+
+/*
  * Mark an autocommand pattern for deletion.
  */
     static void
@@ -452,6 +599,7 @@ au_cleanup(void)
 		}
 		*prev_ap = ap->next;
 		vim_regfree(ap->reg_prog);
+		vim_free(ap->reg_pat);
 		vim_free(ap);
 	    }
 	    else
@@ -1371,22 +1519,45 @@ do_autocmd_event(
 		    use_tabpage(save_curtab);
 		}
 
+		ap->reg_prog = NULL;
+		ap->reg_pat = NULL;
+		ap->fast_kind = AU_FAST_NONE;
+		ap->allow_dirs = FALSE;
 		if (is_buflocal)
-		{
 		    ap->buflocal_nr = buflocal_nr;
-		    ap->reg_prog = NULL;
-		}
+		else if (au_set_fast(ap))
+		    ap->buflocal_nr = 0;
 		else
 		{
-		    char_u	*reg_pat;
+		    char_u	*p;
+		    int		compile_now = FALSE;
 
+		    // Compiling all patterns here makes sourcing filetype.vim
+		    // slow, most of them are never used.  Without a backslash
+		    // or '[' the pattern can't be an invalid regexp, then
+		    // compile it when it is used, see au_pat_prog().
+		    // Otherwise compile it now to give an error message.
+		    for (p = pat; p < endpat; ++p)
+			if (*p == '\\' || *p == '[')
+			{
+			    compile_now = TRUE;
+			    break;
+			}
 		    ap->buflocal_nr = 0;
-		    reg_pat = file_pat_to_reg_pat(pat, endpat,
+		    ap->reg_pat = file_pat_to_reg_pat(pat, endpat,
 							 &ap->allow_dirs, TRUE);
-		    if (reg_pat != NULL)
-			ap->reg_prog = vim_regcomp(reg_pat, RE_MAGIC);
-		    vim_free(reg_pat);
-		    if (reg_pat == NULL || ap->reg_prog == NULL)
+		    if (ap->reg_pat != NULL && compile_now)
+		    {
+			ap->reg_prog = vim_regcomp(ap->reg_pat, RE_MAGIC);
+			VIM_CLEAR(ap->reg_pat);
+			if (ap->reg_prog == NULL)
+			{
+			    vim_free(ap->pat);
+			    vim_free(ap);
+			    return FAIL;
+			}
+		    }
+		    else if (ap->reg_pat == NULL)
 		    {
 			vim_free(ap->pat);
 			vim_free(ap);
@@ -2655,8 +2826,7 @@ auto_next_pat(
 	{
 	    // execution-condition
 	    if (ap->buflocal_nr == 0
-		    ? (match_file_pat(NULL, &ap->reg_prog, apc->fname,
-				      apc->sfname, apc->tail, ap->allow_dirs))
+		    ? au_match_pat(ap, apc->fname, apc->sfname, apc->tail)
 		    : ap->buflocal_nr == apc->arg_bufnr)
 	    {
 		string_T    *event_name;
@@ -2807,8 +2977,7 @@ has_autocmd(event_T event, char_u *sfname, buf_T *buf)
     FOR_ALL_AUTOCMD_PATTERNS(event, ap)
 	if (ap->pat != NULL && ap->cmds != NULL
 	      && (ap->buflocal_nr == 0
-		? match_file_pat(NULL, &ap->reg_prog,
-					  fname, sfname, tail, ap->allow_dirs)
+		? au_match_pat(ap, fname, sfname, tail)
 		: buf != NULL && ap->buflocal_nr == buf->b_fnum
 	   ))
 	{

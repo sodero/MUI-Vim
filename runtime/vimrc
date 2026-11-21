@@ -25,7 +25,6 @@ set nowrap
 set noeb
 set ruler
 set autoindent
-set viminfo+=nVIM:viminfo
 set regexpengine=1
 set lazyredraw
 set ttyfast
@@ -43,4 +42,8 @@ let g:loaded_netrwPlugin = 1
 " Make syntax highlightning sloppy to save time.
 syntax sync minlines=128
 set synmaxcol=160
+
+" Load filetype detection before syntax highlighting, otherwise ':syntax on'
+" runs the detection on the empty startup buffer, which takes seconds on 68k.
+filetype on
 syntax on

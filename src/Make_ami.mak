@@ -24,6 +24,7 @@ CONFIG := \
 	-DHAVE_FCNTL_H \
 	-DHAVE_STRICMP \
 	-DHAVE_STRNICMP \
+	-DHAVE_STRPBRK \
 	-DHAVE_STRFTIME \
 	-DHAVE_SETENV \
 	-DHAVE_MEMSET \
@@ -41,14 +42,9 @@ ifeq ($(ENDIAN),be)
 CONFIG += -DWORDS_BIGENDIAN
 endif
 
-ifeq ($(TARGET),m68k-amigaos)
-ifeq ($(BUILD),mui)
-override BUILD := huge
-endif
-endif
-
+# Latin-1 (\366 is o-umlaut), the default 'encoding' on Amiga.
 CUSTOM := \
-	-DMODIFIED_BY=\"'Ola S�der et al.'\"
+	-DMODIFIED_BY=\"'Ola S\366der et al.'\"
 
 CFLAGS := \
 	-c -O3 \
@@ -69,8 +65,12 @@ ifeq ($(TARGET),m68k-amigaos)
 #CFLAGS += -mcrt=clib2 -std=gnu99
 #LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
 
-CFLAGS += -noixemul
-LDFLAGS = -ldebug -lm -noixemul -lsocket
+# Vim is too slow on a plain 68000 to be useful, require a 68020 or better.
+# This also links the libm020 versions of libnix and libm.
+CFLAGS += -noixemul -m68020-60
+# libnix only honours __stack (see os_amiga.c) when its stack swap module is
+# linked, and nothing pulls it in unless it is referenced explicitly.
+LDFLAGS = -m68020-60 -ldebug -lm -noixemul -lsocket -Wl,-u,___stkinit
 
 
 else

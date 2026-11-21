@@ -1,7 +1,7 @@
 " The default vimrc file.
 "
 " Maintainer:	The Vim Project <https://github.com/vim/vim>
-" Last Change:	2025 Nov 28
+" Last Change:	2026 Nov 18
 " Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 "
 " This is loaded if no vimrc file was found.
@@ -132,8 +132,11 @@ endif
 " Switch syntax highlighting on when the terminal has colors or when using the
 " GUI (which always has colors).
 if &t_Co > 2 || has("gui_running")
-  " Revert with ":syntax off".
-  syntax on
+  " Revert with ":syntax off".  Not when already done, e.g. by the system
+  " vimrc, that would load all the syntax files again.
+  if !exists("g:syntax_on")
+    syntax on
+  endif
 
   " I like highlighting strings inside C comments.
   " Revert with ":unlet g:c_comment_strings".

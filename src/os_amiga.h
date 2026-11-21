@@ -70,6 +70,9 @@
 #endif
 
 #include <time.h>	// for strftime() and others
+#ifdef HAVE_SYS_TIME_H
+# include <sys/time.h>	// for gettimeofday()
+#endif
 
 /*
  * This won't be needed if you have a version of Lattice 4.01 without broken
@@ -138,7 +141,7 @@
 
 #ifdef FEAT_VIMINFO
 # ifndef VIMINFO_FILE
-#  define VIMINFO_FILE	"VIM:.viminfo"
+#  define VIMINFO_FILE	"S:.viminfo"
 # endif
 #endif
 

@@ -2,6 +2,10 @@
 # General settings
 #------------------------------------------------------------------------------------------
 SRC:=src
+# The default is AmigaOS 3, use "make CC=ppc-amigaos-gcc" etc. for the others.
+ifeq ($(origin CC),default)
+CC:=m68k-amigaos-gcc
+endif
 VER=$(shell cat $(SRC)/.ver)
 PAT=$(shell cat $(SRC)/.pat)
 BLD:=$(shell date +%Y-%m-%d || echo 1985-07-23)
@@ -11,11 +15,11 @@ BLD:=$(shell date +%Y-%m-%d || echo 1985-07-23)
 #------------------------------------------------------------------------------------------
 .PHONY: vim
 vim: $(SRC)/.ver $(SRC)/.pat
-	$(MAKE) -C $(SRC) -f Make_ami.mak clean
-	$(MAKE) -C $(SRC) -f Make_ami.mak PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=mui
+	$(MAKE) -C $(SRC) -f Make_ami.mak CC=$(CC) clean
+	$(MAKE) -C $(SRC) -f Make_ami.mak CC=$(CC) PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=mui
 	mv $(SRC)/vim $@
-	$(MAKE) -C $(SRC) -f Make_ami.mak clean
-	$(MAKE) -C $(SRC) -f Make_ami.mak PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=huge
+	$(MAKE) -C $(SRC) -f Make_ami.mak CC=$(CC) clean
+	$(MAKE) -C $(SRC) -f Make_ami.mak CC=$(CC) PATCHLEVEL=$(PAT) BUILDDATE=$(BLD) BUILD=huge
 	mv $(SRC)/vim $(SRC)/vi
 	mv $@ $(SRC)/vim
 
@@ -24,13 +28,14 @@ vim: $(SRC)/.ver $(SRC)/.pat
 #------------------------------------------------------------------------------------------
 .PHONY: dist
 dist: vim
-	$(MAKE) -C $@ VER=$(VER) REV=$(PAT)
+	$(MAKE) -C $@ CC=$(CC) VER=$(VER) REV=$(PAT)
 
 #------------------------------------------------------------------------------------------
 # Determine version
 #------------------------------------------------------------------------------------------
-$(SRC)/.ver: Makefile
-	@echo $(VDOT) > $@
+$(SRC)/.ver: $(SRC)/version.h
+	awk '/^#define VIM_VERSION_MAJOR[ \t]/ { maj = $$3 } \
+	     /^#define VIM_VERSION_MINOR[ \t]/ { print maj "." $$3; exit }' $< > $@
 
 #------------------------------------------------------------------------------------------
 # Determine patch number

@@ -2655,6 +2655,8 @@ gui_get_color_cmn(char_u *name)
     guicolor_T  color;
     // Only non X11 colors (not present in rgb.txt) and colors in
     // color_name_tab[], useful when $VIMRUNTIME is not found,.
+    // Also the colors used by syntax/syncolor.vim, to avoid loading
+    // colors/lists/default.vim on startup, that is slow.
     // must be sorted by the 'value' field because it is used by bsearch()!
     static keyvalue_T rgb_tab[] = {
 	KEYVALUE_ENTRY(RGB(0x00, 0x00, 0x00), "black"),
@@ -2669,6 +2671,7 @@ gui_get_color_cmn(char_u *name)
 	KEYVALUE_ENTRY(RGB(0x8B, 0x00, 0x8B), "darkmagenta"),
 	KEYVALUE_ENTRY(RGB(0x8B, 0x00, 0x00), "darkred"),
 	KEYVALUE_ENTRY(RGB(0x8B, 0x8B, 0x00), "darkyellow"),	 // No X11
+	KEYVALUE_ENTRY(RGB(0x1E, 0x90, 0xFF), "dodgerblue"),
 	KEYVALUE_ENTRY(RGB(0xBE, 0xBE, 0xBE), "gray"),
 	KEYVALUE_ENTRY(RGB(0x00, 0xFF, 0x00), "green"),
 	KEYVALUE_ENTRY(RGB(0xBE, 0xBE, 0xBE), "grey"),
@@ -2683,9 +2686,12 @@ gui_get_color_cmn(char_u *name)
 	KEYVALUE_ENTRY(RGB(0xFF, 0x8B, 0xFF), "lightmagenta"),     // No XX
 	KEYVALUE_ENTRY(RGB(0xFF, 0x8B, 0x8B), "lightred"),	 // No XX
 	KEYVALUE_ENTRY(RGB(0xFF, 0xFF, 0xE0), "lightyellow"),
+	KEYVALUE_ENTRY(RGB(0x32, 0xCD, 0x32), "limegreen"),
 	KEYVALUE_ENTRY(RGB(0xFF, 0x00, 0xFF), "magenta"),
+	KEYVALUE_ENTRY(RGB(0xFF, 0xA5, 0x00), "orange"),
 	KEYVALUE_ENTRY(RGB(0xFF, 0x00, 0x00), "red"),
 	KEYVALUE_ENTRY(RGB(0x2E, 0x8B, 0x57), "seagreen"),
+	KEYVALUE_ENTRY(RGB(0x6A, 0x5A, 0xCD), "slateblue"),
 	KEYVALUE_ENTRY(RGB(0xFF, 0xFF, 0xFF), "white"),
 	KEYVALUE_ENTRY(RGB(0xFF, 0xFF, 0x00), "yellow")
     };

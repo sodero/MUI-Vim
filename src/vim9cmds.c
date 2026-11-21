@@ -386,7 +386,12 @@ compile_fill_jump_to_end(endlabel_T **el, int jump_where, cctx_T *cctx)
 	isn_T	    *isn;
 
 	isn = ((isn_T *)instr->ga_data) + cur->el_end_label;
-	isn->isn_arg.jump.jump_where = jump_where;
+	// The jump target of ISN_WHILE is not at the same offset as in jump_T
+	// where 'int' is only 2-byte aligned (e.g. m68k).
+	if (isn->isn_type == ISN_WHILE)
+	    isn->isn_arg.whileloop.while_end = jump_where;
+	else
+	    isn->isn_arg.jump.jump_where = jump_where;
 	*el = cur->el_next;
 	vim_free(cur);
     }
