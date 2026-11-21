@@ -13,6 +13,7 @@ jobs:
     environment: aminet
 
     strategy:
+      fail-fast: false
       matrix:
         platform:
           - name: AmigaOS4
