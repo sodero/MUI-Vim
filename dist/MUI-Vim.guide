@@ -45,6 +45,9 @@ the Vim console.
 @{B}kas1e@{UB}:
 AmigaOS4 port, numerous improvements, fixes and ideas.
 
+@{B}Stefan Reinauer@{UB}:
+AmigaOS3 support and performance improvements
+
 @{B}Martin Merz@{UB}:
 Icons and toolbar graphics.
 
@@ -57,6 +60,7 @@ Hollywood syntax highlighting.
 @TOC "Main"
 @{B}2026-NOT-YET@{UB}
 - Update to VIM __VER__
+- Full AmigaOS3 support (Stefan Reinauer)
 - AmigaDOS syntax highlighting updated
 - AmigaGuide syntax highlighting updated
 - GUI: Dead key fix (MUI)
