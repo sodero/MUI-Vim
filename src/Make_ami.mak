@@ -1,7 +1,9 @@
 #
 # Makefile for AROS, AmigaOS 3.x, AmigaOS 4 and MorphOS.
 #
+ifeq ($(origin CC),default)
 CC := m68k-amigaos-gcc
+endif
 BIN ?= vim
 LD = $(CC)
 SHELL = sh
@@ -62,20 +64,15 @@ LDFLAGS = -lauto
 CFLAGS += -DHAVE_FSYNC -D__USE_INLINE__
 else
 ifeq ($(TARGET),m68k-amigaos)
-#CFLAGS += -mcrt=clib2 -std=gnu99
-#LDFLAGS = -mcrt=clib2 -lmui -ldebug -lnet -lm
-
 # Vim is too slow on a plain 68000 to be useful, require a 68020 or better.
 # This also links the libm020 versions of libnix and libm.
 CFLAGS += -noixemul -m68020-60
 # libnix only honours __stack (see os_amiga.c) when its stack swap module is
 # linked, and nothing pulls it in unless it is referenced explicitly.
 LDFLAGS = -m68020-60 -ldebug -lm -noixemul -lsocket -Wl,-u,___stkinit
-
-
 else
 ifeq ($(TARGET),ppc-morphos)
-CFLAGS += -noixemul
+CFLAGS += -noixemul -DUSE_TMPNAM
 LDFLAGS = -ldebug -lm -noixemul
 else
 ifeq ($(TARGET),i386-aros)

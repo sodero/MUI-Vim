@@ -3813,12 +3813,17 @@ void gui_mch_get_screen_dimensions(int *screen_w, int *screen_h)
 //                       single item added, which takes minutes on 68k when
 //                       sourcing menu.vim.  The batch is closed when Vim
 //                       starts waiting for input.  MUI versions without
-//                       support for this (< V20) ignore the methods.
+//                       support for this (< V20) ignore the methods.  The
+//                       AROS (Zune) headers lack them, nothing is batched
+//                       there.
 //------------------------------------------------------------------------------
+#ifdef MUIM_Menustrip_InitChange
 static int menu_changing = FALSE;
+#endif
 
 static void gui_mui_menu_change(int begin)
 {
+#ifdef MUIM_Menustrip_InitChange
     if(begin && !menu_changing)
     {
         (void) DoMethod(Mnu, MUIM_Menustrip_InitChange);
@@ -3829,6 +3834,9 @@ static void gui_mui_menu_change(int begin)
         menu_changing = FALSE;
         (void) DoMethod(Mnu, MUIM_Menustrip_ExitChange);
     }
+#else
+    (void) begin;
+#endif
 }
 
 //------------------------------------------------------------------------------

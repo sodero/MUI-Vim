@@ -46,7 +46,7 @@ jobs:
           -v ${{ github.workspace }}/src:${{ matrix.platform.mount }} \
           -w ${{ matrix.platform.mount }} \
           -e BUILD=${{ matrix.build-type }} \
-          ${{ matrix.platform.image }} make -f Make_ami.mak
+          ${{ matrix.platform.image }} make -f Make_ami.mak CC=cc
 
     - name: Compile InstallerLG
       if: matrix.build-type == 'mui'
@@ -56,7 +56,7 @@ jobs:
           -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
           -w ${{ matrix.platform.mount }} \
           ${{ matrix.platform.image }} make -C InstallerLG/build
-          cp InstallerLG/build/Installer dist/extras/${{ matrix.platform.os }}
+          cp InstallerLG/build/Installer dist/extras/${{ matrix.platform.short }}
           find dist
 
     - name: Compile MUI build and create archive
@@ -66,7 +66,7 @@ jobs:
           -v ${{ github.workspace }}:${{ matrix.platform.mount }} \
           -w ${{ matrix.platform.mount }} \
           -e BUILD=${{ matrix.build-type }} \
-          ${{ matrix.platform.image }} make dist
+          ${{ matrix.platform.image }} make dist CC=cc
 
     - name: Save artifact
       if: matrix.build-type == 'mui'
