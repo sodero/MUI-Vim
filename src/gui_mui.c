@@ -2669,18 +2669,9 @@ METHOD(VimScrollbar, Show, Show)
 
     if(msg->Show)
     {
-        // Show scrollbar.
+        // Show scrollbar and group.
         set(me, MUIA_ShowMe, TRUE);
-
-        // Show group unless it's already shown.
-        IPTR shown;
-        get(my->grp, MUIA_ShowMe, &shown);
-
-        if(!shown)
-        {
-            set(my->grp, MUIA_ShowMe, TRUE);
-        }
-
+        set(my->grp, MUIA_ShowMe, TRUE);
         return TRUE;
     }
 

@@ -61,6 +61,7 @@ Hollywood syntax highlighting.
 @{B}2026-NOT-YET@{UB}
 - Update to VIM __VER__
 - Full AmigaOS3 support (Stefan Reinauer)
+- MUI 3.8 scrollbar fix
 - AmigaDOS syntax highlighting updated
 - AmigaGuide syntax highlighting updated
 - GUI: Dead key fix (MUI)
