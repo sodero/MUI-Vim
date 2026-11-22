@@ -1376,20 +1376,27 @@ mch_call_shell_pipe(char_u *cmd, int options)
 
     if (out != NULL)
     {
-	vim_snprintf(IObuff, IOSIZE, "%s >%s", (char *)cmd, out->name);
+	BPTR fh = Open(out->name, MODE_NEWFILE);
 
-	screenclear();
-
-	retval = SystemTags((UBYTE *)IObuff, TAG_DONE);
-
-	for (int n = read_pipe(out, (char *) IObuff, IOSIZE - 1); n > 0;
-	     n = read_pipe(out, (char *) IObuff, IOSIZE - 1))
+	if (fh != (BPTR) NULL)
 	{
-	    IObuff[n] = NUL;
-	    msg_puts(IObuff);
-	}
+	    screenclear();
 
-	out_flush();
+	    retval = SystemTags((UBYTE *)cmd, SYS_Output, fh, TAG_DONE);
+	    Close(fh);
+
+	    for (int n = read_pipe(out, (char *) IObuff, IOSIZE - 1); n > 0;
+		 n = read_pipe(out, (char *) IObuff, IOSIZE - 1))
+	    {
+		IObuff[n] = NUL;
+		msg_puts(IObuff);
+	    }
+
+	    out_flush();
+	}
+	else
+	    semsg(_(e_cannot_open_str), out->name);
+
 	free_pipe(out);
     }
 

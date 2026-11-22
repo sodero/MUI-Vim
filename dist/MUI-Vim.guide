@@ -58,6 +58,7 @@ Hollywood syntax highlighting.
 - GUI: Dead key fix (MUI)
 - CLI: Shell command support in foreground mode
 - CLI: AROS/MorphOS workaround for missing window size reports
+- Shell error handling improved
 
 @{B}2026-03-22@{UB}
 - Update to VIM 9.2.219
