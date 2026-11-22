@@ -259,6 +259,34 @@ static BOOL is_wb_args(char **argv)
 {
     return argv == cmd_args;
 }
+
+/*
+ * Check if the GUI will be started. This runs before parse_command_name() and
+ * command_line_scan(), so do what they do: "gvim", "rgvim", "evim" and "egvim"
+ * start the GUI, so does "-g" unless "-v" comes after it.
+ */
+static BOOL is_gui_args(int argc, char **argv)
+{
+    char_u *name = gettail((char_u *) argv[0]);
+    BOOL gui = FALSE;
+
+    if (TOLOWER_ASC(name[0]) == 'r')
+	++name;
+
+    if (TOLOWER_ASC(name[0]) == 'g' || (TOLOWER_ASC(name[0]) == 'e' &&
+	(TOLOWER_ASC(name[1]) == 'v' || TOLOWER_ASC(name[1]) == 'g')))
+	gui = TRUE;
+
+    for (int i = 1; i < argc && strcmp(argv[i], "--") != 0; ++i)
+    {
+	if (strcmp(argv[i], "-g") == 0)
+	    gui = TRUE;
+	else if (strcmp(argv[i], "-v") == 0)
+	    gui = FALSE;
+    }
+
+    return gui;
+}
 #endif
 
 /*
@@ -509,22 +537,30 @@ mch_check_win(int argc, char **argv)
 	IsInteractive(Output())))
 	return OK;
 
+#ifdef FEAT_GUI
+    // The GUI doesn't need a window
+    if (argc != 0 && is_gui_args(argc, argv))
+	return FAIL;
+#endif
+
+    if (device == NULL)
+	device = "CON:////Vim/CLOSE";
+
+    // Title can contain whitespace.
+    char_u *window = vim_strsave_escaped_ext((char_u *) device,
+	    (char_u *) "*\"", '*', FALSE);
+
     /*
      * Trampoline shell script pipes
      */
     struct Pipe *pipe_in = new_pipe(MODE_OLDFILE);
     struct Pipe *pipe_out = new_pipe(MODE_NEWFILE);
 
-    if (pipe_in == NULL || pipe_out == NULL)
-    {
-	free_pipe(pipe_in);
-	free_pipe(pipe_out);
-
-	exit(RETURN_ERROR);
-    }
+    if (window == NULL || pipe_in == NULL || pipe_out == NULL)
+	goto fail;
 
     /*
-     * Write command to output pipe with quotes around arguments with whitespace
+     * Write command to output pipe.
      */
     int narg = argc ? argc : ((struct WBStartup *) argv)->sm_NumArgs;
 
@@ -553,7 +589,14 @@ mch_check_win(int argc, char **argv)
 	    continue;
 	}
 
-	putf_pipe(pipe_out, strchr(arg, ' ') ? "\"%s\" " : "%s ", arg);
+	char_u *escaped = vim_strsave_escaped_ext((char_u *) arg,
+		(char_u *) "*\"", '*', FALSE);
+
+	if (escaped == NULL)
+	    goto fail;
+
+	putf_pipe(pipe_out, "\"%s\" ", escaped);
+	vim_free(escaped);
     }
 
     if (block)
@@ -561,12 +604,11 @@ mch_check_win(int argc, char **argv)
 
     puts_pipe(pipe_out, "\nendcli\n");
 
-    if (device == NULL)
-	device = "CON:////Vim/CLOSE";
+    vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=\"%s\" FROM=%s", window, pipe_out->name);
 
-    vim_snprintf(IObuff, IOSIZE, "newcli <NIL: >NIL: WINDOW=%s FROM=%s", device, pipe_out->name);
-
+    VIM_CLEAR(window);
     free_pipe(pipe_out);
+    pipe_out = NULL;
 
     if (SystemTags(IObuff, SYS_UserShell, TRUE, TAG_DONE) == 0)
     {
@@ -577,6 +619,9 @@ mch_check_win(int argc, char **argv)
 	}
     }
 
+fail:
+    vim_free(window);
+    free_pipe(pipe_out);
     free_pipe(pipe_in);
     exit(RETURN_ERROR);
 
