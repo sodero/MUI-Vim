@@ -98,6 +98,12 @@ extern int _stricoll(char *a, char *b);
 # include "gc.pro"
 # include "gui_xim.pro"
 # include "hardcopy.pro"
+# ifdef FEAT_PRINT_PANGO
+#  include "hardcopy_pango.pro"
+# endif
+# ifdef FEAT_POSTSCRIPT
+#  include "hardcopy_postscript.pro"
+# endif
 # include "hashtab.pro"
 # include "help.pro"
 # include "highlight.pro"
@@ -211,14 +217,14 @@ void mbyte_im_set_active(int active_arg);
 #  include "popupwin.pro"
 #  include "textprop.pro"
 # endif
-# ifdef FEAT_IMAGE_SIXEL
-#  include "sixel.pro"
-# endif
-# ifdef FEAT_IMAGE_KITTY
-#  include "kitty.pro"
-# endif
-# ifdef FEAT_IMAGE_CAIRO
-#  include "cairo.pro"
+# ifdef FEAT_IMAGE
+#  include "image.pro"
+#  ifdef FEAT_IMAGE_KITTY
+#   include "image_kitty.pro"
+#  endif
+#  ifdef FEAT_IMAGE_SIXEL
+#   include "image_sixel.pro"
+#  endif
 # endif
 # include "testing.pro"
 # include "textobject.pro"

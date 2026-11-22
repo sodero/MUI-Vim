@@ -1,4 +1,4 @@
-*options.txt*	For Vim version 9.2.  Last change: 2026 Jun 09
+*options.txt*	For Vim version 9.2.  Last change: 2026 Nov 21
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -673,13 +673,20 @@ version 3.0).  Using "ex:" at the start of the line will be ignored (this
 could be short for "example:").
 
 If the modeline is disabled within a modeline, subsequent modelines will be
-ignored.  This is to allow turning off modeline on a per-file basis.  This is
+ignored.  This is to allow turning off modeline on a per-file basis, which is
 useful when a line looks like a modeline but isn't.  For example, it would be
 good to start a YAML file containing strings like "vim:" with
     # vim: nomodeline ~
 so as to avoid modeline misdetection.  Following options on the same line
 after modeline deactivation, if any, are still evaluated (but you would
 normally not have any).
+
+							*modeline-strict*
+The 'modelinestrict' option restricts which options can be set via a
+modeline to a fixed whitelist.  This is enabled by default, for security
+reasons: it avoids unexpected or harmful side effects when opening files
+from unknown or untrustworthy locations.  When 'verbose' is non-zero a message
+is given for each option that is ignored.
 
 							*modeline-local*
 The options are set like with ":setlocal": The new value only applies to the
@@ -1087,6 +1094,14 @@ A jump table for the options with a short description can be found at |Q_op|.
 	screen is redrawn.  This may have side effects, make |t_RB| empty in
 	your .vimrc if you suspect this problem.  The response to |t_RB| can
 	be found in |v:termrbgresp|.
+							*background-flash*
+	By default Vim does not wait for this response during startup.  If you
+	see a light-background flash in a dark terminal, set 'termbackgroundwait'
+	in your vimrc to wait briefly before the first screen clear.  For
+	example: >
+		set termbackgroundwait=100
+<	This may delay startup by up to 100 ms.  If the response arrives later,
+	the colors are adjusted then, so a flash may still occur.
 
 	When starting the GUI, the default value for 'background' will be
 	"light".  When the value is not set in the .gvimrc, and Vim detects
@@ -2302,8 +2317,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    See also |preinserted()|.
 
 	   menu	    Use a popup menu to show the possible completions.  The
-		    menu is only shown when there is more than one match and
-		    sufficient colors are available.  |ins-completion-menu|
+		    menu is only shown when there is more than one match.
+		    |ins-completion-menu|
 
 	   menuone  Use the popup menu also when there is only one match.
 		    Useful when there is additional information about the
@@ -2328,6 +2343,11 @@ A jump table for the options with a short description can be found at |Q_op|.
 	   nosort   Disable sorting of completion candidates based on fuzzy
 		    scores when "fuzzy" is enabled.  Candidates will appear
 		    in their original order.
+
+	   pathopt  Additionally consult the 'path' option during filename
+		    completion.  Depending on the patterns in 'path', setting
+		    this option may result in performance degradation due to
+		    path expansions |i_CTRL-X_CTRL-F|
 
 	   popup    Show extra information about the currently selected
 		    completion in a popup window.  Only works in combination
@@ -3007,7 +3027,14 @@ A jump table for the options with a short description can be found at |Q_op|.
 			local to window
 			{not available when compiled without the |+syntax|
 			feature}
-	Highlight the text line of the cursor with CursorLine |hl-CursorLine|.
+	Highlighting used for the line the cursor is on:
+
+	CursorLine		the text line |hl-CursorLine|
+	CursorLineFold		the fold column |hl-CursorLineFold|
+	CursorLineSign		the sign column |hl-CursorLineSign|
+	CursorLineNr		the line number, when 'cursorlineopt' contains
+				"number" |hl-CursorLineNr|
+
 	Useful to easily spot the cursor.  Will make screen redrawing slower.
 	When Visual mode is active the highlighting isn't used to make it
 	easier to see the selected text.
@@ -3583,6 +3610,10 @@ A jump table for the options with a short description can be found at |Q_op|.
 	To ignore all but some events, a "-" prefix can be used: >
 	    :set ei=all,-WinLeave
 <
+	Events that are triggered by comparing the current state against a
+	stored one, such as |CursorMoved| and |TextChanged|, are not triggered
+	afterwards for what happened while they were ignored.
+
 						*'eventignorewin'* *'eiw'*
 'eventignorewin' 'eiw'	string	(default "")
 			window-local
@@ -3986,7 +4017,6 @@ A jump table for the options with a short description can be found at |Q_op|.
 	The function should return a List, which is handled similarly to the
 	return value of a |:command-completion-customlist| function.
 
-	The function is called only once per |:find| command invocation.
 	The function can process all the directories specified in 'path'.
 
 	If a match is found, the function should return a |List| containing
@@ -4494,7 +4524,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 						*'guiheadroom'* *'ghr'*
 'guiheadroom' 'ghr'	number	(default 50)
 			global
-			{only for GTK and X11 GUI}
+			{only for GTK and X11 GUI, except GTK4 GUI}
 	The number of pixels subtracted from the screen height when fitting
 	the GUI window on the screen.  Set this before the GUI is started,
 	e.g., in your |gvimrc| file.  When zero, the whole screen height will
@@ -4948,6 +4978,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 	restored if possible |X11|.  See |X11-icon| for changing the icon on
 	X11.
 	For MS-Windows the icon can be changed, see |windows-icon|.
+	NOTE: GNU screen is not consistent in handling icon-title and title
+	escape sequences between versions.   See 'title'.
 
 						*'iconstring'*
 'iconstring'		string	(default "")
@@ -5028,6 +5060,27 @@ A jump table for the options with a short description can be found at |Q_op|.
 <	"S-space" means shift+space.  This is the activation key for kinput2 +
 	canna (Japanese), and ami (Korean).
 
+	Note that when using the GTK4 GUI, this option is not supported. The
+	only valid value for this option will be an empty string.
+
+						*'imageprotocol'* *'ipc'*
+'imageprotocol' 'ipc'	string (default: see below)
+			global				*E1585* *E1586*
+			{only available when compiled with the |+image| feature}
+	Same as the 'keyprotocol' option, but chooses which |image| backend to
+	use, see |image-backends|.  The supported image protocol names are:
+		none	No protocol is supported (images will not render)
+		sixel	The sixel protocol
+		kitty	Kitty graphics protocol
+
+	This option is first queried on startup, and then after when the
+	'term' option changes.  If the option is updated, and the image
+	backend changes, then any loaded images will automatically switch
+	backends.  This includes when switching to the GUI using ":gui".
+
+	The default value is: >
+		kitty:kitty,foot:sixel,ghostty:kitty,wezterm:kitty,xterm:sixel
+<
 				*'imcmdline'* *'imc'* *'noimcmdline'* *'noimc'*
 'imcmdline' 'imc'	boolean (default off)
 			global
@@ -5392,9 +5445,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	expand "$HOME/.viminfo".  Maybe you should change 'iskeyword' instead.
 
 						*'iskeyword'* *'isk'*
-'iskeyword' 'isk'	string (Vim default for Win32:
-					    "@,48-57,_,128-167,224-235"
-				   otherwise:  "@,48-57,_,192-255"
+'iskeyword' 'isk'	string (Vim default: "@,48-57,_,192-255"
 				Vi default: "@,48-57,_")
 			local to buffer
 	Keywords are used in searching and recognizing with many commands:
@@ -5678,6 +5729,12 @@ A jump table for the options with a short description can be found at |Q_op|.
 		0: never
 		1: only if there are at least two windows
 		2: always
+
+	Here "last window" means the last window in a column, i.e. the bottom-
+	most one, just above the command line.  A window with another window
+	below it always has a status line, since it also visually separates
+	those.
+
 	The screen looks nicer with a status line if you have several
 	windows, but it takes another screen line. |status-line|
 
@@ -6215,6 +6272,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	The following options are allowed:
 		'autoindent'
 		'cindent'
+		'colorcolumn'
 		'commentstring'
 		'expandtab'
 		'filetype'
@@ -6458,7 +6516,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  x	<number>	any X11 pointer number (see X11/cursorfont.h)
 
 	The "avail" column contains a 'w' if the shape is available for Win32,
-	x for X11 (including GTK+ 2), g for GTK+ 3.
+	x for X11 (including GTK+ 2), g for GTK+ 3 and GTK 4.
 	Any modes not specified or shapes not available use the normal mouse
 	pointer.
 
@@ -6892,7 +6950,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 'printexpr' 'pexpr'	string	(default: see below)
 			global
 			{only available when compiled with the |+printer|
-			and |+postscript| features}
+			and |+postscript| or |+pango| features}
 	Expression used to print the PostScript produced with |:hardcopy|.
 	See |pexpr-option|.
 	This option cannot be set from a |modeline| or in the |sandbox|, for
@@ -7333,7 +7391,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    emoji might be rendered beyond the bounding box of drawing
 		    cell.
 
-	Other render types are currently not supported.
+	Other render types are currently not supported.  See also
+	'guiligatures'.
 
 						*'report'*
 'report'		number	(default 2)
@@ -9288,6 +9347,25 @@ A jump table for the options with a short description can be found at |Q_op|.
 		:set term=$TERM
 <	See |termcap|.
 
+					*'termbackgroundwait'* *'tbw'*
+'termbackgroundwait' 'tbw' number (default 0)
+			global
+			{only available when compiled with the |+termresponse|
+			feature}
+	Maximum time in milliseconds to wait for the terminal background color
+	response during interactive startup, before the first screen clear.
+	Zero (the default) defers the query until after startup commands and
+	disables waiting.  A positive value sends the query before the first
+	screen clear.  The value must not be negative.  See |background-flash|
+	for an example.
+
+	Vim only waits when 'background' has not been explicitly set, |t_RB| is
+	not empty, and both input and output are terminals.  Waiting ends early
+	when a response, typed input, or an interrupt is received.  Responses
+	arriving after the timeout are still used to adjust 'background', so
+	this option cannot prevent every flash.  It has no effect in the GUI
+	or after startup.
+
 						*'termbidi'* *'tbidi'*
 						*'notermbidi'* *'notbidi'*
 'termbidi' 'tbidi'	boolean (default off, on for "mlterm")
@@ -9635,6 +9713,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	then the WINDOWID environment variable should be inherited and the
 	title of the window should change back to what it should be after
 	exiting Vim.
+	NOTE: GNU screen is not consistent in handling icon-title and title
+	escape sequences between versions. In particular, screen 5 may swap
+	title and icon-title.
 
 								*'titlelen'*
 'titlelen'		number	(default 85)
@@ -9697,7 +9778,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 		icons		Toolbar buttons are shown with icons.
 		text		Toolbar buttons shown with text.
 		horiz		Icon and text of a toolbar button are
-				horizontally arranged.  {only in GTK+ 2 GUI}
+				horizontally arranged.
+				{only in GTK+ 2 and GTK 4 GUI}
 		tooltips	Tooltips are active for toolbar buttons.
 	Tooltips refer to the popup help text which appears after the mouse
 	cursor is placed over a toolbar button for a brief moment.
@@ -10503,7 +10585,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  exacttext	When this flag is present, search pattern completion
 			(e.g., in |/|, |?|, |:s|, |:g|, |:v|, and |:vim|)
 			shows exact buffer text as menu items, without
-			preserving regex artifacts like position
+			preserving regexp artifacts like position
 			anchors (e.g., |/\<|).  This provides more intuitive
 			menu items that match the actual buffer text.
 			However, searches may be less accurate since the

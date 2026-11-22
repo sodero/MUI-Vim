@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Vim\n"
 "Report-Msgid-Bugs-To: vim-dev@vim.org\n"
-"POT-Creation-Date: 2026-06-13 19:24+0000\n"
+"POT-Creation-Date: 2026-11-21 15:57+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -459,11 +459,6 @@ msgid ""
 "\tLast set from "
 msgstr ""
 
-#.
-#. * Yes this is ugly, I don't particularly like it either.  But doing it
-#. * this way has the compelling advantage that translations need not to
-#. * be touched at all.  See below what 'ok' and 'ync' are used for.
-#.
 msgid "&Ok"
 msgstr ""
 
@@ -897,18 +892,6 @@ msgid ""
 "&Cancel"
 msgstr ""
 
-msgid "OK"
-msgstr ""
-
-msgid "Yes"
-msgstr ""
-
-msgid "No"
-msgstr ""
-
-msgid "Cancel"
-msgstr ""
-
 msgid "Input _Methods"
 msgstr ""
 
@@ -956,6 +939,15 @@ msgstr ""
 msgid "_Close"
 msgstr ""
 
+msgid "Close Tab"
+msgstr ""
+
+msgid "New Tab"
+msgstr ""
+
+msgid "Open Tab..."
+msgstr ""
+
 msgid "Direction:"
 msgstr ""
 
@@ -969,9 +961,6 @@ msgid "Close tab"
 msgstr ""
 
 msgid "New tab"
-msgstr ""
-
-msgid "Open Tab..."
 msgstr ""
 
 msgid "Vim: Main window unexpectedly destroyed\n"
@@ -1063,6 +1052,12 @@ msgid "no specific match"
 msgstr ""
 
 msgid "Vim - Font Selector"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Cancel"
 msgstr ""
 
 msgid "Name:"
@@ -1665,6 +1660,9 @@ msgstr ""
 msgid "--ttyfail\t\tExit if input or output is not a terminal"
 msgstr ""
 
+msgid "--stdio-channel\tUse stdin and stdout as a channel"
+msgstr ""
+
 msgid "-u <vimrc>\t\tUse <vimrc> instead of any .vimrc"
 msgstr ""
 
@@ -1813,6 +1811,11 @@ msgid "+reverse\t\tDon't use reverse video (also: +rv)"
 msgstr ""
 
 msgid "-xrm <resource>\tSet the specified resource"
+msgstr ""
+
+msgid ""
+"\n"
+"Arguments recognised by gvim (GTK4 version):\n"
 msgstr ""
 
 msgid ""
@@ -1970,6 +1973,9 @@ msgid "???ILLEGAL BLOCK NUMBER"
 msgstr ""
 
 msgid "???BLOCK MISSING"
+msgstr ""
+
+msgid "??? BLOCK PAGE COUNT MISMATCH"
 msgstr ""
 
 msgid "??? from here until ???END lines may be messed up"
@@ -2349,6 +2355,10 @@ msgstr ""
 
 #, c-format
 msgid "(+%lld for BOM)"
+msgstr ""
+
+#, c-format
+msgid "'modelinestrict' in effect, ignoring %s"
 msgstr ""
 
 msgid "W17: Arabic requires UTF-8, do ':set encoding=utf-8'"
@@ -3103,6 +3113,16 @@ msgstr ""
 msgid "syncing on C-style comments"
 msgstr ""
 
+msgid ""
+"\n"
+"--- Syntax sync items ---"
+msgstr ""
+
+msgid ""
+"\n"
+"syncing on items"
+msgstr ""
+
 msgid "no syncing"
 msgstr ""
 
@@ -3113,16 +3133,6 @@ msgid "syncing starts "
 msgstr ""
 
 msgid " lines before top line"
-msgstr ""
-
-msgid ""
-"\n"
-"--- Syntax sync items ---"
-msgstr ""
-
-msgid ""
-"\n"
-"syncing on items"
 msgstr ""
 
 msgid ""
@@ -3458,9 +3468,6 @@ msgid ""
 msgstr ""
 
 msgid "without GUI."
-msgstr ""
-
-msgid "with GTK4 GUI (hwaccel)."
 msgstr ""
 
 msgid "with GTK4 GUI."
@@ -4102,6 +4109,10 @@ msgid "E109: Missing ':' after '?'"
 msgstr ""
 
 msgid "E110: Missing ')'"
+msgstr ""
+
+#, c-format
+msgid "E110: Missing ')': %s"
 msgstr ""
 
 msgid "E111: Missing ']'"
@@ -6672,9 +6683,8 @@ msgstr ""
 msgid "E882: Uniq compare function failed"
 msgstr ""
 
-msgid ""
-"E883: Search pattern and expression register may not contain two or more "
-"lines"
+#, c-format
+msgid "E883: Register '%c' cannot contain multiple lines"
 msgstr ""
 
 #, c-format
@@ -7082,6 +7092,10 @@ msgid "E999: scriptversion not supported: %d"
 msgstr ""
 
 #, c-format
+msgid "E1000: Cannot declare an environment variable: %s"
+msgstr ""
+
+#, c-format
 msgid "E1001: Variable not found: %s"
 msgstr ""
 
@@ -7148,10 +7162,6 @@ msgstr ""
 
 #, c-format
 msgid "E1016: Cannot declare a %s variable: %s"
-msgstr ""
-
-#, c-format
-msgid "E1016: Cannot declare an environment variable: %s"
 msgstr ""
 
 #, c-format
@@ -8613,6 +8623,15 @@ msgid "E1437: Can only compare Object with Object"
 msgstr ""
 
 #, c-format
+msgid ""
+"E1438: Number of type variables of method \"%s\" differs from interface "
+"\"%s\""
+msgstr ""
+
+msgid "E1439: Type nested too deep"
+msgstr ""
+
+#, c-format
 msgid "E1500: Cannot mix positional and non-positional arguments: %s"
 msgstr ""
 
@@ -8887,6 +8906,39 @@ msgid "E1578: Too many postponed prefixes and/or compound flags"
 msgstr ""
 
 msgid "E1579: -completeopt=escape cannot be used with -nargs=_"
+msgstr ""
+
+msgid "E1580: Too many text properties on a single line"
+msgstr ""
+
+msgid "E1581: Cannot extend a null blob"
+msgstr ""
+
+msgid "E1582: Not started with --stdio-channel"
+msgstr ""
+
+msgid "E1583: Cannot open stdio channel"
+msgstr ""
+
+msgid "E1584: Image dimensions are invalid"
+msgstr ""
+
+msgid "E1585: No image backend available"
+msgstr ""
+
+msgid "E1586: Failed changing image backends"
+msgstr ""
+
+#, c-format
+msgid "E1587: Image ID %d does not exist"
+msgstr ""
+
+#, c-format
+msgid "E1588: Comparison operators cannot be chained, use parentheses: %s"
+msgstr ""
+
+#, c-format
+msgid "E1589: Socket directory is not safe to use: %s"
 msgstr ""
 
 #. type of cmdline window or 0
@@ -9515,6 +9567,9 @@ msgstr ""
 msgid "\"dark\" or \"light\"; the background color brightness"
 msgstr ""
 
+msgid "time in msec to wait for background detection at startup"
+msgstr ""
+
 msgid "type of file; triggers the FileType event when set"
 msgstr ""
 
@@ -9707,6 +9762,9 @@ msgid "terminal that requires extra redrawing"
 msgstr ""
 
 msgid "what keyboard protocol to use for which terminal"
+msgstr ""
+
+msgid "what image backend to use for which terminal"
 msgstr ""
 
 msgid "recognize keys that start with <Esc> in Insert mode"

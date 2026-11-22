@@ -778,28 +778,21 @@ draw_event(GtkWidget *widget UNUSED,
 				// for GTK+ 3, may induce other draw events.
 
     cairo_set_source_surface(cr, gui.surface, 0, 0);
-
-    {
-	cairo_rectangle_list_t *list = NULL;
-
-	list = cairo_copy_clip_rectangle_list(cr);
-	if (list->status != CAIRO_STATUS_CLIP_NOT_REPRESENTABLE)
-	{
-	    int i;
-
-	    for (i = 0; i < list->num_rectangles; i++)
-	    {
-		const cairo_rectangle_t *rect = &list->rectangles[i];
-		cairo_rectangle(cr, rect->x, rect->y,
-						    rect->width, rect->height);
-		cairo_fill(cr);
-	    }
-	}
-	cairo_rectangle_list_destroy(list);
-    }
+    cairo_paint(cr);
 
     return FALSE;
 }
+
+/*
+ * On Wayland an alpha-less surface avoids needless alpha compositing; on X11
+ * the ARGB (Render) path is the accelerated one, so keep the alpha there.
+ */
+# ifdef GDK_WINDOWING_WAYLAND
+#  define GUI_GTK_SURFACE_CONTENT \
+	(gui.is_wayland ? CAIRO_CONTENT_COLOR : CAIRO_CONTENT_COLOR_ALPHA)
+# else
+#  define GUI_GTK_SURFACE_CONTENT CAIRO_CONTENT_COLOR_ALPHA
+# endif
 
 # if GTK_CHECK_VERSION(3,10,0)
     static gboolean
@@ -814,7 +807,7 @@ scale_factor_event(GtkWidget *widget,
     gtk_window_get_size(GTK_WINDOW(gui.mainwin), &w, &h);
     gui.surface = gdk_window_create_similar_surface(
 	    gtk_widget_get_window(widget),
-	    CAIRO_CONTENT_COLOR,
+	    GUI_GTK_SURFACE_CONTENT,
 	    w, h);
 
     int	    usable_height = h;
@@ -825,6 +818,10 @@ scale_factor_event(GtkWidget *widget,
     gui.force_redraw = 1;
     gui_resize_shell(w, usable_height);
     gui_gtk_form_thaw(GTK_FORM(gui.formwin));
+
+#  if defined(FEAT_IMAGE) && GTK_CHECK_VERSION(3,10,0)
+    gui.scale = gtk_widget_get_scale_factor(widget);
+#  endif
 
     return TRUE;
 }
@@ -985,9 +982,7 @@ gui_mch_stop_blink(int may_call_gui_update_cursor)
     if (blink_state == BLINK_OFF && may_call_gui_update_cursor)
     {
 	gui_update_cursor(TRUE, FALSE);
-#if !GTK_CHECK_VERSION(3,0,0)
-	gui_mch_flush();
-#endif
+	gui_may_flush();
     }
     blink_state = BLINK_NONE;
 }
@@ -1007,9 +1002,7 @@ blink_cb(gpointer data UNUSED)
 	blink_state = BLINK_ON;
 	blink_timer = timeout_add(blink_ontime, blink_cb, NULL);
     }
-#if !GTK_CHECK_VERSION(3,0,0)
-    gui_mch_flush();
-#endif
+    gui_may_flush();
 
     return FALSE;		// don't happen again
 }
@@ -1032,9 +1025,7 @@ gui_mch_start_blink(void)
 	blink_timer = timeout_add(blink_waittime, blink_cb, NULL);
 	blink_state = BLINK_ON;
 	gui_update_cursor(TRUE, FALSE);
-#if !GTK_CHECK_VERSION(3,0,0)
-	gui_mch_flush();
-#endif
+	gui_may_flush();
     }
 }
 
@@ -1069,7 +1060,17 @@ focus_in_event(GtkWidget *widget,
 	       GdkEventFocus *event UNUSED,
 	       gpointer data UNUSED)
 {
-    gui_focus_change(TRUE);
+#ifdef FEAT_GUI_DIALOG
+    if (gui.dialog_focus_pending > 0)
+    {
+	--gui.dialog_focus_pending;
+	++hold_gui_events;
+	gui_focus_change(TRUE);
+	--hold_gui_events;
+    }
+    else
+#endif
+	gui_focus_change(TRUE);
 
     if (blink_state == BLINK_NONE)
 	gui_mch_start_blink();
@@ -1087,6 +1088,11 @@ focus_out_event(GtkWidget *widget UNUSED,
 		GdkEventFocus *event UNUSED,
 		gpointer data UNUSED)
 {
+#ifdef FEAT_GUI_DIALOG
+    if (gui.dialogs_active > 0)
+	++gui.dialog_focus_pending;
+#endif
+
     gui_focus_change(FALSE);
 
     if (blink_state != BLINK_NONE)
@@ -2206,6 +2212,20 @@ button_release_event(GtkWidget *widget UNUSED,
     return TRUE;
 }
 
+/*
+ * Another widget, e.g. a modal dialog, was shadowing us with a GTK grab. The
+ * button release went to that widget, thus forget about the pressed button to
+ * avoid that the next mouse move is taken for a drag.
+ */
+    static void
+grab_notify_event(GtkWidget *widget UNUSED,
+		  gboolean  was_grabbed,
+		  gpointer  data UNUSED)
+{
+    if (!was_grabbed)
+	dragging_button_state = 0;
+}
+
 
 #ifdef FEAT_DND
 /////////////////////////////////////////////////////////////////////////////
@@ -2900,7 +2920,7 @@ drawarea_realize_cb(GtkWidget *widget, gpointer data UNUSED)
 #if GTK_CHECK_VERSION(3,0,0)
     gui.surface = gdk_window_create_similar_surface(
 	    gtk_widget_get_window(widget),
-	    CAIRO_CONTENT_COLOR,
+	    GUI_GTK_SURFACE_CONTENT,
 	    gtk_widget_get_allocated_width(widget),
 	    gtk_widget_get_allocated_height(widget));
 #else
@@ -3035,7 +3055,7 @@ drawarea_configure_event_cb(GtkWidget	      *widget,
 
     gui.surface = gdk_window_create_similar_surface(
 	    gtk_widget_get_window(widget),
-	    CAIRO_CONTENT_COLOR,
+	    GUI_GTK_SURFACE_CONTENT,
 	    event->width, event->height);
 
     gtk_widget_queue_draw(widget);
@@ -4077,6 +4097,7 @@ gui_mch_init(void)
 #if GTK_CHECK_VERSION(3,4,0)
     if (GDK_IS_X11_DISPLAY(gdk_display_get_default()))
     {
+	gui.is_x11 = true;
 	// for X11, if we were using smooth scroll events, we
 	// would get an scroll without deltas on the very first user scroll* and
 	// get both "unsmooth" scroll and smooth scroll events after
@@ -4211,6 +4232,8 @@ gui_mch_init(void)
 		     G_CALLBACK(button_press_event), NULL);
     g_signal_connect(G_OBJECT(gui.drawarea), "button-release-event",
 		     G_CALLBACK(button_release_event), NULL);
+    g_signal_connect(G_OBJECT(gui.drawarea), "grab-notify",
+		     G_CALLBACK(grab_notify_event), NULL);
     g_signal_connect(G_OBJECT(gui.drawarea), "scroll-event",
 		     G_CALLBACK(scroll_event), NULL);
 
@@ -4225,6 +4248,10 @@ gui_mch_init(void)
 	g_signal_connect(gtk_settings, "notify::gtk-xft-dpi",
 			   G_CALLBACK(gtk_settings_xft_dpi_changed_cb), NULL);
     }
+
+#if defined(FEAT_IMAGE) && GTK_CHECK_VERSION(3,10,0)
+    gui.scale = gtk_widget_get_scale_factor(gui.formwin);
+#endif
 
     return OK;
 }
@@ -4414,7 +4441,7 @@ form_configure_event(GtkWidget *widget UNUSED,
 	// too small.  Schedule a corrective resize (now that offsets are
 	// known) so the window actually fits the geometry Vim has just set.
 	if ((mch_csd_height > 0 || mch_csd_width > 0) && gtk_socket_id == 0)
-	    g_idle_add(startup_resize_correction_cb, NULL);
+	    g_idle_add_full(GTK_PRIORITY_RESIZE, startup_resize_correction_cb, NULL, NULL);
     }
     clear_resize_hists();
 #endif
@@ -6210,6 +6237,29 @@ gui_gtk_draw_string(int row, int col, char_u *s, int len, int flags)
     return len_sum;
 }
 
+#if GTK_CHECK_VERSION(3,0,0)
+static cairo_region_t *dirty_region = NULL;
+
+    static void
+queue_draw_area(int x, int y, int width, int height)
+{
+    cairo_rectangle_int_t rect;
+
+    if (width <= 0 || height <= 0 || gui.drawarea == NULL)
+	return;
+
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+
+    if (dirty_region == NULL)
+	dirty_region = cairo_region_create_rectangle(&rect);
+    else
+	cairo_region_union_rectangle(dirty_region, &rect);
+}
+#endif
+
     int
 gui_gtk_draw_string_ext(
 	int	row,
@@ -6462,8 +6512,8 @@ skipitall:
 
 #if GTK_CHECK_VERSION(3,0,0)
     cairo_destroy(cr);
-    gtk_widget_queue_draw_area(gui.drawarea, area.x, area.y,
-	    area.width, area.height);
+    queue_draw_area(FILL_X(col), FILL_Y(row),
+	    column_offset * gui.char_width + 1, gui.char_height);
 #else
     gdk_gc_set_clip_rectangle(gui.text_gc, NULL);
 #endif
@@ -6606,8 +6656,7 @@ gui_mch_invert_rectangle(int r, int c, int nr, int nc)
 
     cairo_destroy(cr);
 
-    gtk_widget_queue_draw_area(gui.drawarea, rect.x, rect.y,
-	    rect.width, rect.height);
+    queue_draw_area(rect.x, rect.y, rect.width, rect.height);
 #else
     GdkGCValues values;
     GdkGC *invert_gc;
@@ -6760,8 +6809,17 @@ gui_mch_update(void)
 {
     int cnt = 0;	// prevent endless loop
     while (g_main_context_pending(NULL) && !vim_is_input_buf_full()
-								&& ++cnt < 100)
+	    && ++cnt < 100)
+    {
+#if GTK_CHECK_VERSION(3,0,0)
+	int prio = 0;
+	g_main_context_prepare(NULL, &prio);
+	// peek internal scheduling of redraw
+	if (prio == GDK_PRIORITY_REDRAW)
+	    gui_may_flush(); // prepares redraw: g_main_context_iteration
+#endif
 	g_main_context_iteration(NULL, TRUE);
+    }
 }
 
     static timeout_cb_type
@@ -6857,7 +6915,13 @@ gui_mch_wait_for_chars(long wtime)
 	 * situations, sort of race condition).
 	 */
 	if (!input_available())
+	{
 	    g_main_context_iteration(NULL, TRUE);
+#ifdef GDK_WINDOWING_WAYLAND
+    if (gui.is_wayland && clip_star.state == SELECT_IN_PROGRESS)
+	gui_may_flush();
+#endif
+	}
 
 	// Got char, return immediately
 	if (input_available())
@@ -6893,11 +6957,18 @@ theend:
     void
 gui_mch_flush(void)
 {
-    if (gui.mainwin != NULL && gtk_widget_get_realized(gui.mainwin))
-#if GTK_CHECK_VERSION(2,4,0)
-	gdk_display_flush(gtk_widget_get_display(gui.mainwin));
+    if (gui.mainwin == NULL || !gtk_widget_get_realized(gui.mainwin))
+	return;
+#if GTK_CHECK_VERSION(3,0,0)
+    if (dirty_region != NULL && gui.drawarea != NULL)
+    {
+	gtk_widget_queue_draw_region(gui.drawarea, dirty_region);
+	cairo_region_destroy(dirty_region);
+	dirty_region = NULL;
+    }
 #else
-	gdk_display_sync(gtk_widget_get_display(gui.mainwin));
+       gdk_display_flush(gtk_widget_get_display(gui.mainwin));
+       return;
 #endif
 }
 
@@ -6950,8 +7021,7 @@ gui_mch_clear_block(int row1arg, int col1arg, int row2arg, int col2arg)
 	cairo_fill(cr);
 	cairo_destroy(cr);
 
-	gtk_widget_queue_draw_area(gui.drawarea,
-		rect.x, rect.y, rect.width, rect.height);
+	queue_draw_area(rect.x, rect.y, rect.width, rect.height);
     }
 #else // !GTK_CHECK_VERSION(3,0,0)
     gdk_gc_set_foreground(gui.text_gc, &color);
@@ -6987,8 +7057,7 @@ gui_gtk_window_clear(GdkWindow *win)
     cairo_fill(cr);
     cairo_destroy(cr);
 
-    gtk_widget_queue_draw_area(gui.drawarea,
-	    rect.x, rect.y, rect.width, rect.height);
+    queue_draw_area(rect.x, rect.y, rect.width, rect.height);
 }
 #else
 # define gui_gtk_window_clear(win)  gdk_window_clear(win)
@@ -7001,53 +7070,6 @@ gui_mch_clear_all(void)
 	gui_gtk_window_clear(gtk_widget_get_window(gui.drawarea));
 }
 
-#ifdef FEAT_IMAGE_CAIRO
-/*
- * Thin GTK wrappers around the shared cairo backend in src/cairo.c.
- * The heavy lifting (surface build / pixel conversion / composite)
- * is generic Cairo code so a future GTK4 port can reuse the same
- * src/cairo.c without copy-pasting.
- */
-    void
-gui_mch_free_popup_image(win_T *wp)
-{
-    cairo_popup_image_free(wp);
-}
-
-    bool
-gui_mch_update_popup_image_pixels(win_T *wp)
-{
-    return cairo_popup_image_update(wp);
-}
-
-    void
-gui_mch_draw_popup_image(
-	win_T	*wp,
-	int	 row,
-	int	 col,
-	int	 src_x,
-	int	 src_y,
-	int	 draw_w,
-	int	 draw_h)
-{
-    int x, y;
-
-    if (wp->w_popup_image_data == NULL
-	    || wp->w_popup_image_w <= 0 || wp->w_popup_image_h <= 0
-	    || draw_w <= 0 || draw_h <= 0
-	    || gui.surface == NULL)
-	return;
-
-    x = FILL_X(col);
-    y = FILL_Y(row);
-    cairo_popup_image_paint(wp, gui.surface, x, y,
-					    src_x, src_y, draw_w, draw_h);
-
-    if (gui.drawarea != NULL)
-	gtk_widget_queue_draw_area(gui.drawarea, x, y, draw_w, draw_h);
-}
-#endif // FEAT_IMAGE_CAIRO
-
 #if !GTK_CHECK_VERSION(3,0,0)
 /*
  * Redraw any text revealed by scrolling up/down.
@@ -7055,34 +7077,27 @@ gui_mch_draw_popup_image(
     static void
 check_copy_area(void)
 {
-    GdkEvent	*event;
-    int		expose_count;
-
+    GdkEvent        *event;
+    int                expose_count;
     if (gui.visibility != GDK_VISIBILITY_PARTIAL)
 	return;
-
     // Avoid redrawing the cursor while scrolling or it'll end up where
-    // we don't want it to be.	I'm not sure if it's correct to call
+    // we don't want it to be.        I'm not sure if it's correct to call
     // gui_dont_update_cursor() at this point but it works as a quick
     // fix for now.
     gui_dont_update_cursor(TRUE);
-
     do
     {
 	// Wait to check whether the scroll worked or not.
 	event = gdk_event_get_graphics_expose(gui.drawarea->window);
-
 	if (event == NULL)
 	    break; // received NoExpose event
-
 	gui_redraw(event->expose.area.x, event->expose.area.y,
-		   event->expose.area.width, event->expose.area.height);
-
+		event->expose.area.width, event->expose.area.height);
 	expose_count = event->expose.count;
 	gdk_event_free(event);
     }
     while (expose_count > 0); // more events follow
-
     gui_can_update_cursor();
 }
 #endif // !GTK_CHECK_VERSION(3,0,0)
@@ -7096,49 +7111,35 @@ gui_gtk_surface_copy_rect(int dest_x, int dest_y,
     cairo_t * const cr = cairo_create(gui.surface);
 
 # ifdef GDK_WINDOWING_WAYLAND
-    /*
-       Following optimizations are temporary until all callers are refactored
-       to wayland deferred redraw; .. then it could be removed.
-    */
     static cairo_surface_t *scroll_scratch = NULL;
-    static int scratch_w = 0;
-    static int scratch_h = 0;
-    int last_row = Rows - 1;
-    int last_row_y = last_row * gui.char_height;
+    static int scratch_w = 0, scratch_h = 0;
+    int last_row = Rows - 1, last_row_y = last_row * gui.char_height;
     bool last_row_overlap = (dest_y + height) > last_row_y;
     if (gui.is_wayland && ( !(State & MODE_CMDLINE) || !last_row_overlap) )
     {
-	/*
-	   scrolling up
-	   */
-	if (dest_y < src_y)
+	if (dest_y < src_y) // scroll up
 	{
 	    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-	    cairo_set_source_surface(cr, gui.surface,
-		    src_x - dest_x,
+	    cairo_set_source_surface(cr, gui.surface, src_x - dest_x,
 		    dest_y - src_y);
 	    cairo_rectangle(cr, dest_x, dest_y, width, height);
 	    cairo_clip(cr);
 	    cairo_paint(cr);
 	}
 	else
-	{
-	    //  reusing surface when scrolling, only realloc if larger
+	{   //  reuse surface when scrolling, only realloc if larger
 	    if (scroll_scratch == NULL || width > scratch_w || height > scratch_h)
 	    {
 		cairo_surface_destroy(scroll_scratch); // safe even if NULL
 		scroll_scratch = cairo_surface_create_similar(gui.surface,
 			cairo_surface_get_content(gui.surface), width, height);
-		scratch_w = width;
-		scratch_h = height;
+		scratch_w = width, scratch_h = height;
 	    }
-
 	    // capture scroll source region
 	    cairo_t *tcr = cairo_create(scroll_scratch);
 	    cairo_set_source_surface(tcr, gui.surface, -src_x, -src_y);
 	    cairo_paint(tcr);
 	    cairo_destroy(tcr);
-
 	    // reuse scroll source region
 	    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 	    cairo_rectangle(cr, dest_x, dest_y, width, height);
@@ -7158,7 +7159,6 @@ gui_gtk_surface_copy_rect(int dest_x, int dest_y,
 	cairo_pop_group_to_source(cr);
 	cairo_paint(cr);
     }
-
     cairo_destroy(cr);
 }
 #endif
@@ -7182,7 +7182,7 @@ gui_mch_delete_lines(int row, int num_lines)
     gui_clear_block(
 	    gui.scroll_region_bot - num_lines + 1, gui.scroll_region_left,
 	    gui.scroll_region_bot,		   gui.scroll_region_right);
-    gtk_widget_queue_draw_area(gui.drawarea,
+    queue_draw_area(
 	    FILL_X(gui.scroll_region_left), FILL_Y(row),
 	    gui.char_width * ncols + 1,	gui.char_height * nrows);
 #else
@@ -7228,7 +7228,7 @@ gui_mch_insert_lines(int row, int num_lines)
     gui_clear_block(
 	    row,		 gui.scroll_region_left,
 	    row + num_lines - 1, gui.scroll_region_right);
-    gtk_widget_queue_draw_area(gui.drawarea,
+    queue_draw_area(
 	    FILL_X(gui.scroll_region_left), FILL_Y(row),
 	    gui.char_width * ncols + 1,	gui.char_height * nrows);
 #else
@@ -7721,7 +7721,7 @@ gui_mch_drawsign(int row, int col, int typenr)
 	cairo_surface_destroy(bg_surf);
 	cairo_destroy(cr);
 
-	gtk_widget_queue_draw_area(gui.drawarea,
+	queue_draw_area(
 		FILL_X(col), FILL_Y(col), width, height);
 
     }
@@ -7795,3 +7795,184 @@ gui_mch_destroy_sign(void *sign)
 }
 
 #endif // FEAT_SIGN_ICONS
+
+#if defined(FEAT_IMAGE) && defined(FEAT_IMAGE_GUI)
+
+typedef struct
+{
+    cairo_surface_t *surf;
+} image_cairo_T;
+
+/*
+ * Convert the popup's RGB / RGBA pixel buffer into the cached cairo surface's
+ * pixel layout.  Cairo's CAIRO_FORMAT_ARGB32 / RGB24 wants native-endian uint32
+ * quartets shaped as 0xAARRGGBB, with ARGB32 pixels premultiplied; we build the
+ * integer per pixel so the resulting bytes come out correct on either
+ * endianness.
+ */
+    static void
+fill_image_surface(image_T *img, cairo_surface_t *surf)
+{
+    uint8_t *src = img->data;
+    uint8_t *dst;
+    int	    w = img->width;
+    int	    h = img->height;
+    int	    stride;
+    int	    x, y;
+
+    cairo_surface_flush(surf);
+    dst = cairo_image_surface_get_data(surf);
+    stride = cairo_image_surface_get_stride(surf);
+
+    if (img->fmt == IMAGE_FORMAT_RGBA)
+    {
+	for (y = 0; y < h; ++y)
+	{
+	    unsigned int *p = (unsigned int *)(dst + y * stride);
+
+	    for (x = 0; x < w; ++x)
+	    {
+		int	idx = (y * w + x) * 4;
+		uint8_t r = src[idx + 0];
+		uint8_t g = src[idx + 1];
+		uint8_t b = src[idx + 2];
+		uint8_t a = src[idx + 3];
+
+		// Premultiply alpha for ARGB32.
+		r = (r * a + 127) / 255;
+		g = (g * a + 127) / 255;
+		b = (b * a + 127) / 255;
+		p[x] = ((int_u)a << 24) | ((int_u)r << 16) | ((int_u)g << 8) | b;
+	    }
+	}
+    }
+    else
+    {
+	for (y = 0; y < h; ++y)
+	{
+	    unsigned int *p = (unsigned int *)(dst + y * stride);
+
+	    for (x = 0; x < w; ++x)
+	    {
+		int	idx = (y * w + x) * 3;
+		uint8_t r = src[idx + 0];
+		uint8_t g = src[idx + 1];
+		uint8_t b = src[idx + 2];
+
+		// RGB24's high byte is unused but conventionally 0xff.
+		p[x] = (0xffu << 24) |
+		    ((int_u)r << 16) | ((int_u)g << 8) | (int_u)b;
+	    }
+	}
+    }
+    cairo_surface_mark_dirty(surf);
+}
+
+    int
+image_gui_init(image_T *img)
+{
+    // We only support GTK3
+# if GTK_CHECK_VERSION(3,0,0)
+    image_cairo_T *ctx = ALLOC_CLEAR_ONE(image_cairo_T);
+
+    if (ctx == NULL)
+	return FAIL;
+
+    ctx->surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+	    img->width, img->height);
+
+    if (cairo_surface_status(ctx->surf) != CAIRO_STATUS_SUCCESS)
+    {
+	cairo_surface_destroy(ctx->surf);
+	goto fail;
+    }
+
+    fill_image_surface(img, ctx->surf);
+    img->backend_data = ctx;
+
+    // Set the device scale of the surface later before every redraw. This iso
+    // that the GUI scale factor is used automatically.
+    return OK;
+fail:
+    vim_free(ctx);
+    return FAIL;
+# else
+    return FAIL;
+# endif
+}
+
+    void
+image_gui_uninit(image_T *img)
+{
+# if GTK_CHECK_VERSION(3,0,0)
+    image_cairo_T *ctx = img->backend_data;
+
+    cairo_surface_destroy(ctx->surf);
+    vim_free(ctx);
+# endif
+}
+
+    int
+image_placement_gui_init(image_placement_T *place UNUSED)
+{
+# if GTK_CHECK_VERSION(3,0,0)
+    return OK;
+# else
+    return FAIL;
+# endif
+}
+
+    void
+image_placement_gui_uninit(image_placement_T *place UNUSED)
+{
+}
+
+    void
+image_placement_gui_draw(image_placement_T *place)
+{
+# if GTK_CHECK_VERSION(3,0,0)
+    image_T		    *img = place->img;
+    image_cairo_T	    *ictx = img->backend_data;
+    pixman_box32_t	    *rects;
+    int			    n_rects;
+    cairo_t		    *cr;
+
+    rects = pixman_region32_rectangles(&place->visible, &n_rects);
+    if (rects == NULL || n_rects == 0)
+	return;
+
+    cairo_surface_set_device_scale(ictx->surf, gui.scale, gui.scale);
+    cr = cairo_create(gui.surface);
+
+    for (int i = 0; i < n_rects; i++)
+    {
+	pixman_box32_t	rect = rects[i];
+	int		row, col;
+	int		posx, posy;
+	int		x, y, w, h;
+
+	// We set the device scale for the surface, so we need logical pixel
+	// dimensions because cairo will handle the converting stuff.
+	image_placement_subrect(place, rect, &row, &col, &x, &y, &w, &h, false);
+	posx = FILL_X(col);
+	posy = FILL_Y(row);
+
+	cairo_save(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+	cairo_set_source_surface(cr, ictx->surf, posx - x, posy - y);
+	cairo_rectangle(cr, posx, posy, w, h);
+	cairo_fill(cr);
+	cairo_restore(cr);
+
+	queue_draw_area(posx, posy, w, h);
+    }
+    cairo_destroy(cr);
+# endif
+}
+
+    void
+image_placement_gui_clear(image_placement_T *place UNUSED)
+{
+}
+
+#endif // FEAT_IMAGE

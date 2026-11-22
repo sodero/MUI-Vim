@@ -181,12 +181,11 @@ valid_yank_reg(
     if (       (regname > 0 && ASCII_ISALNUM(regname))
 	    || (!writing && vim_strchr((char_u *)
 #ifdef FEAT_EVAL
-				    "/.%:="
+				    "/#.%:="
 #else
-				    "/.%:"
+				    "/#.%:"
 #endif
 					, regname) != NULL)
-	    || regname == '#'
 	    || regname == '"'
 	    || regname == '-'
 	    || regname == '_'
@@ -1135,7 +1134,8 @@ yank_do_autocmd(oparg_T *oap, yankreg_T *reg)
     for (n = 0; n < reg->y_size; n++)
 	list_append_string(list, reg->y_array[n].string, (int)reg->y_array[n].length);
     list->lv_lock = VAR_FIXED;
-    (void)dict_add_list(v_event, "regcontents", list);
+    if (dict_add_list(v_event, "regcontents", list) == FAIL)
+	list_unref(list);
 
     // register name or empty string for unnamed operation
     buf[0] = (char_u)oap->regname;
@@ -1230,7 +1230,8 @@ put_do_autocmd(
     }
 
     list->lv_lock = VAR_FIXED;
-    (void)dict_add_list(v_event, "regcontents", list);
+    if (dict_add_list(v_event, "regcontents", list) == FAIL)
+	list_unref(list);
 
     // register name or empty string for unnamed operation
     buf[0] = (char_u)regname;
@@ -1541,8 +1542,9 @@ op_yank(oparg_T *oap, int deleting, int mess)
 	    curbuf->b_op_start.col = 0;
 	    curbuf->b_op_end.col = MAXCOL;
 	}
-	if (yanktype != MLINE && !oap->inclusive)
-	    // Exclude the end position.
+	// Exclude the end position.  For a block "oap->end" is already the
+	// last column.
+	if (yanktype != MLINE && !oap->block_mode && !oap->inclusive)
 	    decl(&curbuf->b_op_end);
     }
 
@@ -2759,7 +2761,7 @@ ex_display(exarg_T *eap)
     }
 
     // display alternate file name
-    if ((arg == NULL || vim_strchr(arg, '%') != NULL) && !got_int)
+    if ((arg == NULL || vim_strchr(arg, '#') != NULL) && !got_int)
     {
 	char_u	    *fname;
 	linenr_T    dummy;
@@ -3093,7 +3095,7 @@ write_reg_contents_lst(
 {
     yankreg_T  *old_y_previous, *old_y_current;
 
-    if (name == '/' || name == '=')
+    if (name == '/' || name == '=' || name == '#')
     {
 	char_u	*s;
 
@@ -3101,7 +3103,7 @@ write_reg_contents_lst(
 	    s = (char_u *)"";
 	else if (strings[1] != NULL)
 	{
-	    emsg(_(e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines));
+	    semsg(_(e_register_char_cannot_contain_multiple_lines), name);
 	    return;
 	}
 	else
@@ -3152,6 +3154,12 @@ write_reg_contents_ex(
 
     if (name == '#')
     {
+	if (len == 0)
+	{
+	  curwin->w_alt_fnum = 0; // clear altfile
+	  return;
+	}
+
 	buf_T	*buf;
 
 	if (VIM_ISDIGIT(*str))
@@ -3293,7 +3301,7 @@ str_to_reg(
 	    pp[lnum].string = vim_strnsave(*ss, pp[lnum].length);
 	    if (type == MBLOCK)
 	    {
-		int charlen = mb_string2cells(*ss, -1);
+		int charlen = vim_strsize(*ss);
 
 		if (charlen > maxlen)
 		    maxlen = charlen;
@@ -3311,7 +3319,12 @@ str_to_reg(
 		if (str[i] == '\n')
 		    break;
 		if (type == MBLOCK)
-		    charlen += mb_ptr2cells_len(str + i, len - i);
+		{
+		    if (str[i] >= 0x80)
+			charlen += mb_ptr2cells_len(str + i, len - i);
+		    else
+			charlen += byte2cells(str[i]);
+		}
 
 		if (str[i] == NUL)
 		    i++; // registers can have NUL chars

@@ -224,6 +224,11 @@ func Test_termwinscroll()
   exe 'set termwinscroll=' . &lines
   let buf = term_start('/bin/sh')
   call TermWait(buf)
+  " Some shells enable a line editor when interactive on a terminal,
+  " which echoes the typed line a second time; "+o" is a no-op on
+  " shells that have none.
+  call feedkeys("set +o emacs\<CR>", 'xt')
+  call TermWait(buf)
   for i in range(1, &lines)
     call feedkeys("echo " . i . "\<CR>", 'xt')
     call WaitForAssert({-> assert_match(string(i), term_getline(buf, term_getcursor(buf)[0] - 1))})
@@ -703,12 +708,11 @@ func Test_term_gettty()
   let gettty = term_gettty(buf)
 
   if has('unix') && executable('tty')
-    " Find tty using the tty shell command.
-    call WaitForAssert({-> assert_notequal('', term_getline(buf, 1))})
-    call term_sendkeys(buf, "tty\r")
-    call WaitForAssert({-> assert_notequal('', term_getline(buf, 3))})
-    let tty = term_getline(buf, 2)
-    call assert_equal(tty, gettty)
+    call WaitForAssert({-> assert_match('[$#%>] *$', term_getline(buf, 1))})
+    call term_sendkeys(buf, "tty > Xtty\r")
+    call WaitForAssert({-> assert_true(getfsize('Xtty') > 0)})
+    call assert_equal(gettty, readfile('Xtty')[0])
+    call delete('Xtty')
   endif
 
   let gettty0 = term_gettty(buf, 0)

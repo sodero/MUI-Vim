@@ -169,6 +169,7 @@ static struct vimvar
     {VV_NAME("termosc",	 VAR_STRING), NULL, VV_RO},
     {VV_NAME("vim_did_init",	 VAR_NUMBER), NULL, VV_RO},
     {VV_NAME("clipproviders",	 VAR_DICT), NULL, VV_RO},
+    {VV_NAME("imagebackend",	 VAR_STRING), NULL, VV_RO}
 };
 
 // shorthand
@@ -273,6 +274,7 @@ evalvars_init(void)
     set_vim_var_nr(VV_ECHOSPACE,    sc_col - 1);
 
     set_vim_var_dict(VV_COLORNAMES, dict_alloc());
+    set_vim_var_dict(VV_CLIPPROVIDERS, dict_alloc());
 
 #ifdef FEAT_PYTHON3
     set_vim_var_nr(VV_PYTHON3_VERSION, python3_version());
@@ -412,7 +414,7 @@ eval_charconvert(
     return OK;
 }
 
-#if defined(FEAT_POSTSCRIPT)
+#if defined(FEAT_POSTSCRIPT) || defined(FEAT_PRINT_PANGO)
     int
 eval_printexpr(char_u *fname, char_u *args)
 {
@@ -1363,7 +1365,11 @@ ex_let_vars(
 
 		    copy_tv(TUPLE_ITEM(tuple, idx), &new_tv);
 		    if (tuple_append_tv(new_tuple, &new_tv) == FAIL)
+		    {
+			clear_tv(&new_tv);
+			tuple_unref(new_tuple);
 			return FAIL;
+		    }
 		    idx++;
 		}
 
@@ -1957,6 +1963,18 @@ ex_let_one(
     if (check_typval_is_value(tv) == FAIL)
 	return NULL;
 
+    // In Vim9 script an environment variable and a register only take a
+    // String.  "@#" also takes a buffer number.
+    if (in_vim9script() && (*arg == '$' || *arg == '@')
+	    && !(*arg == '@' && arg[1] == '#' && tv->v_type == VAR_NUMBER
+					       && (op == NULL || *op == '=')))
+    {
+	where_T	where = WHERE_INIT;
+
+	if (check_typval_type(&t_string, tv, where) == FAIL)
+	    return NULL;
+    }
+
     if (*arg == '$')
     {
 	// ":let $VAR = expr": Set environment variable.
@@ -2146,7 +2164,7 @@ do_unlet_var(
 	listitem_remove(lp->ll_list, lp->ll_li);
     else if (lp->ll_dict != NULL)
 	// unlet a Dictionary item.
-	dictitem_remove(lp->ll_dict, lp->ll_di, "unlet");
+	ret = dictitem_remove(lp->ll_dict, lp->ll_di, "unlet");
     else
     {
 	semsg(_(e_cannot_unlet_imported_item_str), lp->ll_name);
@@ -2767,6 +2785,33 @@ get_vim_var_type(int idx, garray_T *type_list)
     if (vimvars[idx].vv_type != NULL)
 	return vimvars[idx].vv_type;
     return typval2type_vimvar(&vimvars[idx].vv_tv, type_list);
+}
+
+/*
+ * Add what getinfo() reports for the v: variable "name", without the "v:", to
+ * "d".  Returns FAIL when there is no such variable.
+ */
+    int
+vim_var_info(char_u *name, dict_T *d)
+{
+    int		di_flags;
+    int		idx = find_vim_var(name, &di_flags);
+    garray_T	type_list;
+    char	*tofree;
+
+    if (idx < 0)
+	return FAIL;
+    vim_snprintf((char *)IObuff, IOSIZE, "v:%s", vimvars[idx].vv_name);
+    dict_add_string(d, "name", IObuff);
+    dict_add_bool(d, "available", TRUE);
+    ga_init2(&type_list, sizeof(type_T *), 10);
+    char *type = type_name(get_vim_var_type(idx, &type_list), &tofree);
+    dict_add_string(d, "type", (char_u *)type);
+    vim_free(tofree);
+    clear_type_list(&type_list);
+    dict_add_bool(d, "readonly", (vimvars[idx].vv_flags & VV_RO) != 0);
+    dict_add_bool(d, "compat", (vimvars[idx].vv_flags & VV_COMPAT) != 0);
+    return OK;
 }
 
 /*
@@ -3907,6 +3952,35 @@ delete_var(hashtab_T *ht, hashitem_T *hi)
 }
 
 /*
+ * Delete the exported variables of a reloaded Vim9 autoload script.  They live
+ * in the global namespace with the autoload prefix (e.g. "foo#bar") and are
+ * recreated when the script body runs again.
+ */
+    void
+delete_autoload_export_vars(char_u *prefix)
+{
+    if (prefix == NULL)
+	return;
+    size_t  prefixlen = STRLEN(prefix);
+
+    hash_lock(&globvarht);
+    int	todo = (int)globvarht.ht_used;
+
+    for (hashitem_T *hi = globvarht.ht_array; todo > 0; ++hi)
+	if (!HASHITEM_EMPTY(hi))
+	{
+	    dictitem_T	*di = HI2DI(hi);
+
+	    --todo;
+	    // Keep a class or enum: existing objects still refer to it.
+	    if (di->di_tv.v_type != VAR_CLASS
+		    && STRNCMP(di->di_key, prefix, prefixlen) == 0)
+		delete_var(&globvarht, hi);
+	}
+    hash_unlock(&globvarht);
+}
+
+/*
  * List the value of one internal variable.
  */
     static void
@@ -4259,6 +4333,16 @@ set_var_const(
 	}
 
 	// existing variable, need to clear the value
+
+	// In Vim9 script a String v: variable only takes a String.
+	if (ht == &vimvarht && di->di_tv.v_type == VAR_STRING
+							    && in_vim9script())
+	{
+	    where_T	where = WHERE_INIT;
+
+	    if (check_typval_type(&t_string, tv, where) == FAIL)
+		goto failed;
+	}
 
 	// Handle setting internal v: variables separately where needed to
 	// prevent changing the type.

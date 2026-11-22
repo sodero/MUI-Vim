@@ -36,6 +36,65 @@ func Test_source_cmd()
   au! SourcePost
 endfunc
 
+" A SourceCmd pattern with a directory is matched against the full path.
+func Test_source_cmd_full_path()
+  call mkdir('XsourceCmdDir', 'R')
+  call writefile(['let g:sourced_file = 1'], 'XsourceCmdDir/script.vim')
+  au SourceCmd */XsourceCmdDir/*.vim let g:source_cmd_file = expand('<afile>:t')
+
+  source XsourceCmdDir/script.vim
+  call assert_equal('script.vim', g:source_cmd_file)
+  call assert_false(exists('g:sourced_file'))
+
+  au! SourceCmd
+  unlet g:source_cmd_file
+endfunc
+
+" SourceCmd checks must handle both tail-only and full-path patterns, including
+" a non-matching pattern before the matching one.
+func Test_source_cmd_patterns()
+  call mkdir('Xsourcecmd', 'pR')
+  let fname = 'Xsourcecmd/script.vim'
+  call writefile(['let g:sourcecmd_result = "file"'], fname)
+  let fullpat = escape(fnamemodify(fname, ':p'), ' ,')
+  let save_fic = &fileignorecase
+  try
+    for pat in ['script.vim', '*/Xsourcecmd/*.vim', fullpat]
+      for firstpat in ['nomatch.vim', 'Xother/*.vim', '<buffer>']
+        augroup sourcecmd_patterns
+          au!
+          execute 'au SourceCmd ' .. firstpat
+                \ .. ' let g:sourcecmd_result = "wrong"'
+          execute 'au SourceCmd ' .. pat
+                \ .. ' let g:sourcecmd_result = "autocmd"'
+        augroup END
+        let g:sourcecmd_result = ''
+        execute 'source ' .. fname
+        call assert_equal('autocmd', g:sourcecmd_result, firstpat .. ', ' .. pat)
+        if has('win32')
+          let g:sourcecmd_result = ''
+          execute 'source ' .. substitute(fname, '/', '\\', 'g')
+          call assert_equal('autocmd', g:sourcecmd_result, pat)
+        endif
+      endfor
+    endfor
+
+    au! sourcecmd_patterns
+    au sourcecmd_patterns SourceCmd SCRIPT.VIM let g:sourcecmd_result = 'autocmd'
+    set nofileignorecase
+    execute 'source ' .. fname
+    call assert_equal('file', g:sourcecmd_result)
+    set fileignorecase
+    execute 'source ' .. fname
+    call assert_equal('autocmd', g:sourcecmd_result)
+  finally
+    let &fileignorecase = save_fic
+    au! sourcecmd_patterns
+    augroup! sourcecmd_patterns
+    unlet! g:sourcecmd_result
+  endtry
+endfunc
+
 func Test_source_sandbox()
   new
   call writefile(["Ohello\<Esc>"], 'Xsourcehello', 'D')
@@ -666,6 +725,21 @@ func Test_source_buffer_long_line()
   END
   call writefile(lines, 'Xtest.vim', 'D')
   source Xtest.vim
+  bwipe!
+endfunc
+
+" A line of a certain length made the line after it be dropped.  The length
+" follows from the 250 bytes get_one_sourceline() starts with, try up to
+" about twice as much.
+func Test_source_buffer_line_after_long_line()
+  new
+  for len in range(2, 512)
+    call setline(1, ['" ' .. repeat('x', len - 2), 'let g:Xsourced = ' .. len])
+    unlet! g:Xsourced
+    source
+    call assert_equal(len, get(g:, 'Xsourced', 0), 'line length ' .. len)
+  endfor
+  unlet! g:Xsourced
   bwipe!
 endfunc
 

@@ -69,7 +69,7 @@ vim_form_dispose(GObject *obj)
     static void
 vim_form_class_init(VimFormClass *class)
 {
-    GtkWidgetClass *widget_class = GTK_WIDGET_CLASS(class);
+    GtkWidgetClass  *widget_class = GTK_WIDGET_CLASS(class);
     GObjectClass    *obj_class = G_OBJECT_CLASS(class);
 
     widget_class->snapshot = vim_form_snapshot;
@@ -81,9 +81,8 @@ vim_form_class_init(VimFormClass *class)
 }
 
     static void
-vim_form_init(VimForm *self)
+vim_form_init(VimForm *self UNUSED)
 {
-
 }
 
     GtkWidget *
@@ -174,6 +173,8 @@ vim_form_move_resize(
 	gint	    h)
 {
     gtk_widget_set_size_request(widget, w, h);
+    if (!gtk_widget_get_visible(widget))
+	gtk_widget_queue_resize(widget);
     vim_form_move(self, widget, x, y);
 }
 
@@ -209,18 +210,28 @@ vim_form_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
     static gboolean
 vim_form_resize_idle_cb(VimForm *self)
 {
-    int w, h;
-
     self->resize_idle_id = 0;
 
-    // Use drawarea's actual allocation, not formwin's
     if (gui.drawarea == NULL)
 	goto exit;
-    w = gtk_widget_get_width(gui.drawarea);
-    h = gtk_widget_get_height(gui.drawarea);
 
-    if (w > 1 && h > 1)
-	gui_resize_shell(w, h);
+    if (self->last_width > 1 && self->last_height > 1)
+    {
+	int req_w, req_h;
+
+	// The size request that Vim made has been answered.  Keep the size and
+	// drop the request, otherwise the window could not be made smaller.
+	gtk_widget_get_size_request(GTK_WIDGET(self), &req_w, &req_h);
+	if (req_w != -1 || req_h != -1)
+	{
+	    gtk_window_set_default_size(GTK_WINDOW(gui.mainwin),
+		    gtk_widget_get_width(gui.mainwin),
+		    gtk_widget_get_height(gui.mainwin));
+	    gtk_widget_set_size_request(GTK_WIDGET(self), -1, -1);
+	}
+
+	gui_resize_shell(self->last_width, self->last_height);
+    }
 
 exit:
     g_object_unref(self);
@@ -232,7 +243,7 @@ vim_form_size_allocate(
 	GtkWidget *widget,
 	int width,
 	int height,
-	int baseline)
+	int baseline UNUSED)
 {
     VimForm *self = VIM_FORM(widget);
 
@@ -262,14 +273,27 @@ vim_form_measure(
 	int		*natural_baseline)
 {
     if (orientation == GTK_ORIENTATION_VERTICAL)
+    {
 	// Set minimum height of form widget to 4 rows.
-	*minimum = *natural = gui.char_height * 4;
+	if (minimum != NULL)
+	    *minimum  = gui.char_height * 4;
+	if (natural != NULL)
+	    *natural = gui.char_height * 4;
+    }
     else
-	// Set minimum width of form widget to 10 columns.
-	*minimum = *natural = gui.char_width * 10;
+    {
+	// Set minimum width of form widget to 20 columns. Any less and the draw
+	// area seems to glitch out...
+	if (minimum != NULL)
+	    *minimum  = gui.char_width * 20;
+	if (natural != NULL)
+	    *natural = gui.char_width * 20;
+    }
 
-    *minimum_baseline = -1;
-    *natural_baseline = -1;
+    if (minimum_baseline != NULL)
+	*minimum_baseline = -1;
+    if (natural_baseline != NULL)
+	*natural_baseline = -1;
 }
 
 

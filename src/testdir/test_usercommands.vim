@@ -927,6 +927,60 @@ func Test_usercmd_custom()
   delfunc T2
 endfunc
 
+" Test for a backslash line continuation in a :command replacement
+func Test_usercmd_line_continuation()
+  let lines =<< trim END
+      vim9script
+      def Bar(label: string, value: any): void
+        g:result = [label, value]
+      enddef
+      command! Foo call Bar('x', {
+            \ 'key': 'value',
+            \ })
+      Foo
+      assert_equal(['x', {'key': 'value'}], g:result)
+  END
+  call v9.CheckScriptSuccess(lines)
+  unlet g:result
+  delcommand Foo
+endfunc
+
+" Test for a {} block in a command nested in :command or :autocmd
+func Test_usercmd_nested_block()
+  command DefineIt command DoNested {
+        g:didnested = 'yes'
+      }
+  DefineIt
+  DoNested
+  call assert_equal('yes', g:didnested)
+  unlet g:didnested
+  delcommand DoNested
+  delcommand DefineIt
+
+  " a command defined by an autocmd
+  autocmd CursorHold * command DoFromAu {
+        g:didfromau = 'yes'
+      }
+  doautocmd CursorHold
+  DoFromAu
+  call assert_equal('yes', g:didfromau)
+  unlet g:didfromau
+  delcommand DoFromAu
+  au! CursorHold
+
+  " a trailing "{" that is an argument of the command is not a block
+  let lines =<< trim END
+      vim9script
+      command NoBlock normal! {
+      g:after_command = 'reached'
+  END
+  call writefile(lines, 'XcmdTrailingCurly', 'D')
+  source XcmdTrailingCurly
+  call assert_equal('reached', g:after_command)
+  unlet g:after_command
+  delcommand NoBlock
+endfunc
+
 func Test_usercmd_with_block()
   command DoSomething {
         g:didit = 'yes'  # comment
@@ -1220,6 +1274,43 @@ func Test_command_list_0()
   bwipe!
   delcommand ShortCommand
   delcommand VeryMuchLongerCommand
+endfunc
+
+" Test for a block of ":command" or ":autocmd" in a block that is not
+" executed: the lines up to the "}" are skipped, not parsed as commands.
+func Test_command_block_skipped()
+  let lines =<< trim END
+    vim9script
+    def Something(s: string)
+      echo s
+    enddef
+    if 0
+      command! -bar -nargs=? Xfoo {
+        Something(<q-args>)
+      }
+    endif
+    if 0
+      autocmd BufRead *.xyz {
+        Something(<q-args>)
+      }
+    endif
+    while 0
+      command! Xbar {
+        Something('x')
+      }
+    endwhile
+    g:skipped = 'all three'
+  END
+  call writefile(lines, 'Xcmdblock.vim', 'D')
+
+  let g:skipped = ''
+  source Xcmdblock.vim
+  call assert_equal('all three', g:skipped)
+  call assert_equal(0, exists(':Xfoo'))
+  call assert_equal(0, exists(':Xbar'))
+  call assert_notmatch('xyz', execute('autocmd BufRead'))
+
+  unlet g:skipped
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -1107,7 +1107,7 @@ term_write_session(FILE *fd, win_T *wp, hashtab_T *terminal_bufs)
 	if (!HASHITEM_EMPTY(entry))
 	{
 	    // we've already opened this terminal buffer
-	    if (fprintf(fd, "execute 'buffer ' . term_buf_%d", bufnr) < 0)
+	    if (fprintf(fd, "execute 'buffer ' .. term_buf_%d", bufnr) < 0)
 		return FAIL;
 	    return put_eol(fd);
 	}
@@ -1116,15 +1116,28 @@ term_write_session(FILE *fd, win_T *wp, hashtab_T *terminal_bufs)
     // Create the terminal and run the command.  This is not without
     // risk, but let's assume the user only creates a session when this
     // will be OK.
-    if (fprintf(fd, "terminal ++curwin ++cols=%d ++rows=%d ",
-		term->tl_cols, term->tl_rows) < 0)
+    if (fprintf(fd, "exe ':terminal ++curwin"
+		" ++cols=' .. ((&columns * %d + %ld) / %ld)"
+		" .. ' ++rows=' .. ((&lines * %d + %ld) / %ld) ",
+		term->tl_cols, Columns / 2, Columns,
+		term->tl_rows, Rows / 2, Rows) < 0)
 	return FAIL;
 # ifdef MSWIN
-    if (fprintf(fd, "++type=%s ", term->tl_job->jv_tty_type) < 0)
+    if (fprintf(fd, ".. ' ++type=%s' ", term->tl_job->jv_tty_type) < 0)
 	return FAIL;
 # endif
-    if (term->tl_command != NULL && fputs((char *)term->tl_command, fd) < 0)
-	return FAIL;
+    if (term->tl_command != NULL)
+    {
+	char_u *quoted_command = string_quote(term->tl_command, FALSE);
+	if (quoted_command == NULL)
+	    return FAIL;
+
+	int ret = fputs(".. ' ' .. ", fd) < 0
+		    || fputs((char *)quoted_command, fd) < 0;
+	vim_free(quoted_command);
+	if (ret)
+	    return FAIL;
+    }
     if (put_eol(fd) != OK)
 	return FAIL;
 
@@ -1863,11 +1876,14 @@ term_convert_key(term_T *term, int c, int modmask, char *buf)
     if (modmask & (MOD_MASK_ALT | MOD_MASK_META))
 	mod |= VTERM_MOD_ALT;
 
-    // Ctrl-Shift-i may have the key "I" instead of "i", but for the kitty
-    // keyboard protocol should use "i".  Applies to all ascii letters.
-    if (ASCII_ISUPPER(c)
-	    && vterm_is_kitty_keyboard(vterm)
-	    && mod == (VTERM_MOD_CTRL | VTERM_MOD_SHIFT))
+    // A key with Ctrl may have the key "I" instead of "i", since that is used
+    // for mappings.  The kitty keyboard protocol should use "i", also with
+    // Shift.  With modifyOtherKeys xterm uses "i" for Ctrl-i and "I" for
+    // Ctrl-Shift-i.  Applies to all ascii letters.
+    if (ASCII_ISUPPER(c) && (mod & VTERM_MOD_CTRL)
+	    && (vterm_is_kitty_keyboard(vterm)
+		|| (vterm_is_modify_other_keys(vterm)
+						&& !(mod & VTERM_MOD_SHIFT))))
 	c = TOLOWER_ASC(c);
 
     /*
@@ -2502,19 +2518,21 @@ term_enter_job_mode(void)
 }
 
 /*
- * When "modify_other_keys" is set then vgetc() should not reduce a key with
- * modifiers into a basic key.  However, we may only find out after calling
- * vgetc().  Therefore vgetorpeek() will call check_no_reduce_keys() to update
- * "no_reduce_keys" before using it.
+ * When "modify_other_keys" or the kitty keyboard protocol is set then vgetc()
+ * should not merge the Ctrl or Alt modifier into a basic key.  However, we may
+ * only find out after calling vgetc().  Therefore vgetorpeek() will call
+ * check_no_simplify_keys() to update "no_simplify_keys" before using it.
+ * Note that "no_reduce_keys" is not used, the key is still adjusted for
+ * mappings, e.g. CTRL-e becomes CTRL-E, term_convert_key() undoes that.
  */
 typedef enum {
-    NRKS_NONE,	    // initial value
-    NRKS_CHECK,	    // modify_other_keys was off before calling vgetc()
-    NRKS_SET,	    // no_reduce_keys was incremented in term_vgetc() or
-		    // check_no_reduce_keys(), must be decremented.
-} reduce_key_state_T;
+    NSKS_NONE,	    // initial value
+    NSKS_CHECK,	    // the key protocol was off before calling vgetc()
+    NSKS_SET,	    // no_simplify_keys was incremented in term_vgetc() or
+		    // check_no_simplify_keys(), must be decremented.
+} simplify_key_state_T;
 
-static reduce_key_state_T  no_reduce_key_state = NRKS_NONE;
+static simplify_key_state_T  no_simplify_key_state = NSKS_NONE;
 
 /*
  * Return TRUE if the term is using modifyOtherKeys level 2 or the kitty
@@ -2530,10 +2548,10 @@ vterm_using_key_protocol(void)
 }
 
     void
-check_no_reduce_keys(void)
+check_no_simplify_keys(void)
 {
-    if (no_reduce_key_state != NRKS_CHECK
-	    || no_reduce_keys >= 1
+    if (no_simplify_key_state != NSKS_CHECK
+	    || no_simplify_keys >= 1
 	    || curbuf->b_term == NULL
 	    || curbuf->b_term->tl_vterm == NULL)
 	return;
@@ -2542,8 +2560,8 @@ check_no_reduce_keys(void)
     {
 	// "modify_other_keys" or kitty keyboard protocol was enabled while
 	// waiting.
-	no_reduce_key_state = NRKS_SET;
-	++no_reduce_keys;
+	no_simplify_key_state = NSKS_SET;
+	++no_simplify_keys;
     }
 }
 
@@ -2566,21 +2584,21 @@ term_vgetc(void)
 
     if (vterm_using_key_protocol())
     {
-	++no_reduce_keys;
-	no_reduce_key_state = NRKS_SET;
+	++no_simplify_keys;
+	no_simplify_key_state = NSKS_SET;
     }
     else
     {
-	no_reduce_key_state = NRKS_CHECK;
+	no_simplify_key_state = NSKS_CHECK;
     }
 
     c = vgetc();
     got_int = FALSE;
     State = save_State;
 
-    if (no_reduce_key_state == NRKS_SET)
-	--no_reduce_keys;
-    no_reduce_key_state = NRKS_NONE;
+    if (no_simplify_key_state == NSKS_SET)
+	--no_simplify_keys;
+    no_simplify_key_state = NSKS_NONE;
 
     return c;
 }
@@ -5035,7 +5053,8 @@ parse_osc(int command, VTermStringFragment frag, void *user)
 
 /*
  * Called by libvterm when it cannot recognize a CSI sequence.
- * We recognize the window position report.
+ * We recognize the window position report. Also handle CSI 14 t and CSI 16 t
+ * (get terminal size in pixels, get cell size in pixels).
  */
     static int
 parse_csi(
@@ -5049,44 +5068,53 @@ parse_csi(
     term_T	*term = (term_T *)user;
     char	buf[100];
     int		len;
-    int		x = 0;
-    int		y = 0;
-    win_T	*wp;
 
-    // We recognize only CSI 13 t
-    if (command != 't' || argcount != 1 || args[0] != 13)
+    if (command != 't' || argcount != 1)
 	return 0; // not handled
 
-    // When getting the window position is not possible or it fails it results
-    // in zero/zero.
+    if (args[0] == 14)
+	len = vim_snprintf(buf, 100, "\x1b[4;%d;%dt",
+		cell_height * term->tl_rows, cell_width * term->tl_cols);
+    else if (args[0] == 16)
+	len = vim_snprintf(buf, 100, "\x1b[6;%d;%dt", cell_height, cell_width);
+    else if (args[0] == 13)
+    {
+	int	x = 0;
+	int	y = 0;
+	win_T	*wp;
+	// When getting the window position is not possible or it fails it
+	// results in zero/zero.
 #if defined(FEAT_GUI) \
 	|| (defined(HAVE_TGETENT) && defined(FEAT_TERMRESPONSE)) \
 	|| defined(MSWIN)
-    (void)ui_get_winpos(&x, &y, (varnumber_T)100);
+	(void)ui_get_winpos(&x, &y, (varnumber_T)100);
 #endif
 
-    FOR_ALL_WINDOWS(wp)
-	if (wp->w_buffer == term->tl_buffer)
-	    break;
-    if (wp != NULL)
-    {
+	FOR_ALL_WINDOWS(wp)
+	    if (wp->w_buffer == term->tl_buffer)
+		break;
+	if (wp != NULL)
+	{
 #ifdef FEAT_GUI
-	if (gui.in_use)
-	{
-	    x += wp->w_wincol * gui.char_width;
-	    y += W_WINROW(wp) * gui.char_height;
-	}
-	else
+	    if (gui.in_use)
+	    {
+		x += wp->w_wincol * gui.char_width;
+		y += W_WINROW(wp) * gui.char_height;
+	    }
+	    else
 #endif
-	{
-	    // We roughly estimate the position of the terminal window inside
-	    // the Vim window by assuming a 10 x 7 character cell.
-	    x += wp->w_wincol * 7;
-	    y += W_WINROW(wp) * 10;
+	    {
+		// We roughly estimate the position of the terminal window
+		// inside the Vim window by assuming a 10 x 7 character cell.
+		x += wp->w_wincol * 7;
+		y += W_WINROW(wp) * 10;
+	    }
 	}
-    }
 
-    len = vim_snprintf(buf, 100, "\x1b[3;%d;%dt", x, y);
+	len = vim_snprintf(buf, 100, "\x1b[3;%d;%dt", x, y);
+    }
+    else
+	return 0;
     channel_send(term->tl_job->jv_channel, get_tty_part(term),
 						     (char_u *)buf, len, NULL);
     return 1;
@@ -5267,6 +5295,16 @@ term_update_colors_all(void)
 		&term->tl_default_color.fg,
 		&term->tl_default_color.bg);
     }
+}
+
+    void
+term_update_cell_size(void)
+{
+    term_T *term;
+
+    FOR_ALL_TERMS(term)
+	if (term_job_running_not_none(term))
+	    term_report_winsize(term, term->tl_rows, term->tl_cols);
 }
 
 /*
@@ -6419,7 +6457,8 @@ f_term_getcursor(typval_T *argvars, typval_T *rettv)
 	    ? !term->tl_cursor_blink : term->tl_cursor_blink);
     dict_add_number(d, "shape", term->tl_cursor_shape);
     dict_add_string(d, "color", cursor_color_get(term->tl_cursor_color));
-    list_append_dict(l, d);
+    if (list_append_dict(l, d) == FAIL)
+	dict_unref(d);
 }
 
 /*
@@ -6830,7 +6869,11 @@ f_term_scrape(typval_T *argvars, typval_T *rettv)
 	dcell = dict_alloc();
 	if (dcell == NULL)
 	    break;
-	list_append_dict(l, dcell);
+	if (list_append_dict(l, dcell) == FAIL)
+	{
+	    dict_unref(dcell);
+	    break;
+	}
 
 	dict_add_string_len(dcell, "chars", mbs, (int)mbslen);
 

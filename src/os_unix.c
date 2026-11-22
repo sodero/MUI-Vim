@@ -26,12 +26,6 @@
 
 #include "os_unixx.h"	    // unix includes for os_unix.c only
 
-#ifdef HAVE_SHM_OPEN
-# include <sys/mman.h>
-# include <sys/stat.h>
-# include <fcntl.h>
-#endif
-
 #ifdef USE_XSMP
 # include <X11/SM/SMlib.h>
 #endif
@@ -2830,7 +2824,7 @@ mch_FullName(
 						   && STRCMP(fname, ".") != 0)
 	{
 	    STRCPY(buf + buflen, PATHSEPSTR);
-	    buflen += STRLEN_LITERAL(PATHSEPSTR);
+	    buflen += sizeof(PATHSEP);
 	}
 #endif
     }
@@ -2856,9 +2850,9 @@ mch_FullName(
 mch_isFullName(char_u *fname)
 {
 #ifdef VMS
-    return ( fname[0] == '/'	       || fname[0] == '.'	    ||
-	     strchr((char *)fname,':') || strchr((char *)fname,'"') ||
-	    (strchr((char *)fname,'[') && strchr((char *)fname,']'))||
+    return ( fname[0] == '/'	       || fname[0] == '.'	     ||
+	     strchr((char *)fname,':') || strchr((char *)fname,'"')  ||
+	    (strchr((char *)fname,'[') && strchr((char *)fname,']')) ||
 	    (strchr((char *)fname,'<') && strchr((char *)fname,'>'))   );
 #else
     return (*fname == '/' || *fname == '~');
@@ -3669,7 +3663,6 @@ mch_exit(int r)
     if (!gui.in_use)
 #endif
     {
-	settmode(TMODE_COOK);
 	if (!is_not_a_term())
 	{
 	    // restore xterm title and icon name
@@ -3681,14 +3674,16 @@ mch_exit(int r)
 	 * When t_ti is not empty but it doesn't cause swapping terminal
 	 * pages, need to output a newline when msg_didout is set.  But when
 	 * t_ti does swap pages it should not go to the shell page.  Do this
-	 * before stoptermcap().
+	 * before stoptermcap().  out_char() adds CR before NL even in raw
+	 * mode.
 	 */
 	if (swapping_screen() && !newline_on_exit)
 	    exit_scroll();
 
-	// Stop termcap: May need to check for T_CRV response, which
-	// requires RAW mode.
+	// Handle pending terminal responses before restoring cooked mode,
+	// otherwise they may be echoed as typed text.
 	stoptermcap();
+	settmode(TMODE_COOK);
 
 	/*
 	 * A newline is only required after a message in the alternate screen.
@@ -4406,119 +4401,24 @@ mch_get_shellsize(void)
     return OK;
 }
 
+# if defined(FEAT_EVAL) || defined(FEAT_IMAGE)
 /*
- * Synchronously ask the terminal for its window pixel dimensions via the
- * xterm CSI 14 t query and parse the CSI 4 ; H ; W t response.  Returns OK
- * and fills *win_w and *win_h on success.  Returns FAIL on any error
- * (non-tty, no response within ~200ms, malformed reply).
- *
- * Any bytes that arrive before / after the response (e.g. the user typed
- * something while we were probing) are forwarded to the regular input
- * buffer via add_to_input_buf() so keystrokes are not swallowed.
- */
-    static int
-query_terminal_pixel_size(int *win_w, int *win_h)
-{
-    struct termios old_t, new_t;
-    int		fd_in = read_cmd_fd;
-    int		fd_out = 1;
-    char	buf[64];
-    int		n = 0;
-    char	*p, *semi, *end, *rest;
-    char	*resp_end;
-    long	hpx, wpx;
-    ssize_t	r;
-    int		ret = FAIL;
-
-    if (!isatty(fd_in) || !isatty(fd_out))
-	return FAIL;
-    if (tcgetattr(fd_in, &old_t) != 0)
-	return FAIL;
-    new_t = old_t;
-    new_t.c_lflag &= ~(ICANON | ECHO);
-    new_t.c_cc[VMIN] = 0;
-    new_t.c_cc[VTIME] = 2;	    // 200ms grace per read()
-    if (tcsetattr(fd_in, TCSANOW, &new_t) != 0)
-	return FAIL;
-
-    if (write(fd_out, "\033[14t", 5) != 5)
-    {
-	tcsetattr(fd_in, TCSANOW, &old_t);
-	return FAIL;
-    }
-
-    while (n < (int)sizeof(buf) - 1)
-    {
-	char c;
-
-	r = read(fd_in, &c, 1);
-	if (r != 1)
-	    break;
-	buf[n++] = c;
-	if (c == 't')
-	    break;
-    }
-    buf[n] = 0;
-    tcsetattr(fd_in, TCSANOW, &old_t);
-
-    // expected: ESC [ 4 ; H ; W t
-    p = (char *)vim_strchr((char_u *)buf, '\033');
-    if (p != NULL && p[1] == '[' && p[2] == '4' && p[3] == ';')
-    {
-	char *q = p + 4;
-
-	semi = (char *)vim_strchr((char_u *)q, ';');
-	end = semi != NULL ? (char *)vim_strchr((char_u *)semi, 't') : NULL;
-	if (end != NULL)
-	{
-	    hpx = strtol(q, &rest, 10);
-	    if (rest == semi && hpx > 0 && hpx <= INT_MAX)
-	    {
-		wpx = strtol(semi + 1, &rest, 10);
-		if (rest == end && wpx > 0 && wpx <= INT_MAX)
-		{
-		    *win_w = (int)wpx;
-		    *win_h = (int)hpx;
-		    ret = OK;
-		}
-	    }
-	}
-    }
-
-    // Push back bytes that were not part of the response, so any keystrokes
-    // typed during the probe do not get lost.  On a failed parse, everything
-    // in buf is treated as foreign input.
-    if (ret == OK)
-    {
-	resp_end = end + 1;	    // one past the matched 't'
-	if (p > buf)
-	    add_to_input_buf((char_u *)buf, (int)(p - buf));
-	if (resp_end < buf + n)
-	    add_to_input_buf((char_u *)resp_end,
-				    (int)((buf + n) - resp_end));
-    }
-    else if (n > 0)
-	add_to_input_buf((char_u *)buf, n);
-
-    return ret;
-}
-
-/*
- * Try to get the current terminal cell size.
- * On failure, returns -1x-1
+ * Try to get the current terminal cell size. May return -1 x -1.
  */
     void
 mch_calc_cell_size(struct cellsize *cs_out)
 {
-   // get current tty size.
-   struct winsize ws;
-   int fd = 1;
-   int retval = -1;
-   retval = ioctl(fd, TIOCGWINSZ, &ws);
+   struct winsize   ws;
+   int		    retval;
+   int		    x_cell_size;
+   int		    y_cell_size;
 
-# ifdef FEAT_EVAL
+   // If fd is not a terminal, then -1 is returned
+   retval = ioctl(read_cmd_fd, TIOCGWINSZ, &ws);
+
+#  ifdef FEAT_EVAL
    ch_log(NULL, "ioctl(TIOCGWINSZ) %s", retval == 0 ? "success" : "failed");
-# endif
+#  endif
 
    if (retval == -1 || ws.ws_col == 0 || ws.ws_row == 0)
    {
@@ -4527,56 +4427,25 @@ mch_calc_cell_size(struct cellsize *cs_out)
 	return;
    }
 
-   // calculate parent tty's pixel per cell.
-   int x_cell_size = ws.ws_xpixel / ws.ws_col;
-   int y_cell_size = ws.ws_ypixel / ws.ws_row;
+   // Calculate parent tty's pixel per cell.
+   x_cell_size = ws.ws_xpixel / ws.ws_col;
+   y_cell_size = ws.ws_ypixel / ws.ws_row;
 
-   // many terminals leave ws_xpixel/ws_ypixel zero; ask via CSI 14 t.
-   // Cache the resulting *cell* size (cell px is invariant under window
-   // resize as long as the font size stays the same -- caching the raw
-   // window pixel size and re-dividing by ws_col/ws_row would produce
-   // garbage after a resize).
-   if (x_cell_size <= 0 || y_cell_size <= 0)
-   {
-	static int csi14_state = -1;	    // -1 unknown, 0 fail, 1 ok
-	static int csi14_cell_x = 0;
-	static int csi14_cell_y = 0;
-
-	if (csi14_state == 1)
-	{
-	    x_cell_size = csi14_cell_x;
-	    y_cell_size = csi14_cell_y;
-	}
-	else if (csi14_state == -1)
-	{
-	    int wpx, hpx;
-
-	    csi14_state = 0;
-	    if (query_terminal_pixel_size(&wpx, &hpx) == OK
-				    && wpx / ws.ws_col > 0
-				    && hpx / ws.ws_row > 0)
-	    {
-		x_cell_size = wpx / ws.ws_col;
-		y_cell_size = hpx / ws.ws_row;
-		csi14_state = 1;
-		csi14_cell_x = x_cell_size;
-		csi14_cell_y = y_cell_size;
-# ifdef FEAT_EVAL
-		ch_log(NULL, "Got cell pixel size via CSI 14 t: %d x %d",
-						    x_cell_size, y_cell_size);
-# endif
-	    }
-	}
-   }
-
-   // calculate current tty's pixel
    cs_out->cs_xpixel = x_cell_size > 0 ? x_cell_size : -1;
    cs_out->cs_ypixel = y_cell_size > 0 ? y_cell_size : -1;
 
-# ifdef FEAT_EVAL
-   ch_log(NULL, "Got cell pixel size with TIOCGWINSZ: %d x %d", x_cell_size, y_cell_size);
-# endif
+   // Some terminals do not handle TIOCGWINSZ, send CSI 14 t (query terminal
+   // size in pixels), and CSI 16 t (less common, gets cell size in pixels
+   // directly).
+   if (x_cell_size <= 0 || y_cell_size <= 0)
+   {
+       // Default to 8x16 pixels for now until we receive a response.
+       OUT_STR("\033[14t");
+       OUT_STR("\033[16t");
+       out_flush();
+   }
 }
+# endif
 
 # if defined(FEAT_TERMINAL)
 /*
@@ -4597,16 +4466,8 @@ mch_report_winsize(int fd, int rows, int cols)
 
     ws.ws_col = cols;
     ws.ws_row = rows;
-    // Pixel sizes are best-effort; the child can query its own terminal
-    // when needed.  Avoid calling mch_calc_cell_size() here -- on
-    // terminals that do not report pixel sizes via TIOCGWINSZ, the
-    // CSI 14 t fallback would synchronously block term_start() for up
-    // to 200ms each time, perturbing timing-sensitive screendump tests
-    // that fork a child Vim.  Setting 0 matches the pre-image-popup
-    // behaviour and is what TIOCSWINSZ does when the kernel cannot
-    // populate the field anyway.
-    ws.ws_xpixel = 0;
-    ws.ws_ypixel = 0;
+    ws.ws_xpixel = cols * cell_width;
+    ws.ws_ypixel = rows * cell_height;
 
     retval = ioctl(tty_fd, TIOCSWINSZ, &ws);
     ch_log(NULL, "ioctl(TIOCSWINSZ) %s", retval == 0 ? "success" : "failed");
@@ -6033,7 +5894,8 @@ mch_get_cmd_output_direct(
 	n = (int)read(fd_out[0], buf, sizeof(buf));
 	if (n <= 0)
 	    break;
-	ga_grow(&ga, n);
+	if (ga_grow(&ga, n) == FAIL)
+	    break;
 	mch_memmove((char *)ga.ga_data + ga.ga_len, buf, n);
 	ga.ga_len += n;
     }
@@ -6798,7 +6660,7 @@ RealWaitForChar(int fd, long msec, int *check_for_gpm UNUSED, int *interrupted)
 # endif
 # ifndef HAVE_SELECT
 			// each channel may use in, out and err
-	struct pollfd   fds[7 + 3 * MAX_OPEN_CHANNELS];
+	struct pollfd   fds[7 + 3 * MAX_OPEN_CHANNELS + 2 * MAX_CLIENT_CHANNELS];
 	int		nfd;
 #  ifdef FEAT_WAYLAND_CLIPBOARD
 	int             wayland_idx = -1;
@@ -7223,7 +7085,7 @@ mch_expand_wildcards(
     static int	did_find_nul = FALSE;
     int		ampersand = FALSE;
 				// vimglob() function to define for Posix shell
-    static string_T sh_vimglob_func = STR_LITERAL_INIT("vimglob() { while [ $# -ge 1 ]; do echo \"$1\"; shift; done }; vimglob >");
+    static string_T sh_vimglob_func = STR_LITERAL_INIT("vimglob() { while [ $# -ge 1 ]; do printf '%s\n' \"$1\"; shift; done }; vimglob >");
 				// vimglob() function with globstar setting enabled, only for bash >= 4.X
     static string_T sh_globstar_opt = STR_LITERAL_INIT("[[ ${BASH_VERSINFO[0]} -ge 4 ]] && shopt -s globstar; ");
 
@@ -9168,44 +9030,3 @@ start_timeout(long msec)
 }
 # endif // PROF_NSEC
 #endif  // FEAT_RELTIME
-
-/*
- * Create an anonymous/temporary file/object and return its file descriptor.
- * Returns -1 on error.
- */
-    int
-mch_create_anon_file(void)
-{
-    int fd = -1;
-#ifdef HAVE_SHM_OPEN
-    const char template[] = "/vimXXXXXX";
-
-    for (int i = 0; i < 100; i++)
-    {
-	mch_get_random((char_u*)template + 4, 6);
-
-	errno = 0;
-	fd = shm_open(template, O_CREAT | O_RDWR | O_EXCL, 0600);
-
-	if (fd >= 0 || errno != EEXIST)
-	    break;
-    }
-    // Remove object name from namespace
-    shm_unlink(template);
-#endif
-    // Last resort
-    if (fd == -1)
-    {
-	char_u	*tempname;
-	// get a name for the temp file
-	if ((tempname = vim_tempname('w', FALSE)) == NULL)
-	{
-	    emsg(_(e_cant_get_temp_file_name));
-	    return -1;
-	}
-	fd = mch_open((char *)tempname, O_CREAT | O_RDWR | O_EXCL, 0600);
-	mch_remove(tempname);
-	vim_free(tempname);
-    }
-    return fd;
-}

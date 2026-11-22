@@ -586,6 +586,10 @@ repeat:
 	    }
 	    *fnamelen = l;
 	}
+
+	// The name was replaced by the short name, "tail" points into the
+	// previous name.
+	tail = gettail(*fnamep);
     }
 #endif // MSWIN
 
@@ -802,8 +806,10 @@ file_is_readable(char_u *fname)
 #ifndef O_NONBLOCK
 # define O_NONBLOCK 0
 #endif
-    if (*fname && !mch_isdir(fname)
-	      && (fd = mch_open((char *)fname, O_RDONLY | O_NONBLOCK, 0)) >= 0)
+    // Opening a file that does not exist is slow.
+    if (*fname == NUL || mch_isdir_or_missing(fname))
+	return FALSE;
+    if ((fd = mch_open((char *)fname, O_RDONLY | O_NONBLOCK, 0)) >= 0)
     {
 	close(fd);
 	return TRUE;
@@ -1226,7 +1232,7 @@ f_getfsize(typval_T *argvars, typval_T *rettv)
     fname = tv_get_string(&argvars[0]);
     if (mch_stat((char *)fname, &st) >= 0)
     {
-	if (mch_isdir(fname))
+	if (S_ISDIR(st.st_mode))
 	    rettv->vval.v_number = 0;
 	else
 	{
@@ -3196,7 +3202,7 @@ vim_fnamencmp(char_u *x, char_u *y, size_t len)
     char_u  *
 concat_fnames(char_u *fname1, size_t fname1len, char_u *fname2, size_t fname2len, int sep, string_T *ret)
 {
-    ret->string = alloc(fname1len + (sep ? STRLEN_LITERAL(PATHSEPSTR) : 0) + fname2len + 1);
+    ret->string = alloc(fname1len + (sep ? sizeof(PATHSEP) : 0) + fname2len + 1);
     if (ret->string == NULL)
 	ret->length = 0;
     else
@@ -3206,7 +3212,7 @@ concat_fnames(char_u *fname1, size_t fname1len, char_u *fname2, size_t fname2len
 	if (sep && *ret->string != NUL && !after_pathsep(ret->string, ret->string + ret->length))
 	{
 	    STRCPY(ret->string + ret->length, PATHSEPSTR);
-	    ret->length += STRLEN_LITERAL(PATHSEPSTR);
+	    ret->length += sizeof(PATHSEP);
 	}
 	STRCPY(ret->string + ret->length, fname2);
 	ret->length += fname2len;
@@ -3574,6 +3580,7 @@ dos_expandpath(
     char_u		*matchname;
     int			ok;
     char_u		*p_alt;
+    int			use_short_name;
 
     // Expanding "**" may take a long time, check for CTRL-C.
     if (stardepth > 0)
@@ -3668,6 +3675,10 @@ dos_expandpath(
     // remember the pattern or file name being looked for
     matchname = vim_strsave(s);
 
+    // Only match against the alternate (8.3) file name when the pattern looks
+    // like a short name, it contains a '~'.
+    use_short_name = vim_strchr(s, '~') != NULL;
+
     len = (size_t)(s - buf);
     // If "**" is by itself, this is the first time we encounter it and more
     // is following then find matches without any directory.
@@ -3697,7 +3708,8 @@ dos_expandpath(
 	// Do not use the alternate filename when the file name ends in '~',
 	// because it picks up backup files: short name for "foo.vim~" is
 	// "foo~1.vim", which matches "*.vim".
-	if (*wfb.cAlternateFileName == NUL || p[STRLEN(p) - 1] == '~')
+	if (!use_short_name || *wfb.cAlternateFileName == NUL
+						  || p[STRLEN(p) - 1] == '~')
 	    p_alt = NULL;
 	else
 	    p_alt = utf16_to_enc(wfb.cAlternateFileName, NULL);
@@ -3745,16 +3757,13 @@ dos_expandpath(
 		}
 		else
 		{
-		    stat_T  sb;
-
 		    // no more wildcards, check if there is a match
 		    // remove backslashes for the remaining components only
 		    if (*path_end != 0)
 			backslash_halve(buf + len + 1);
-		    // add existing file
-		    if ((flags & EW_ALLLINKS) ? mch_lstat((char *)buf, &sb) >= 0
-			    : mch_getperm(buf) >= 0)
-			addfile(gap, buf, flags);
+		    // addfile() checks existence; do not stat the same path twice.
+		    // Even with EW_NOTFOUND, a literal suffix must exist.
+		    addfile(gap, buf, flags & ~EW_NOTFOUND);
 		}
 	    }
 	}
@@ -4069,7 +4078,7 @@ has_special_wildchar(char_u *p)
 	    if (*p == '{' && vim_strchr(p, '}') == NULL)
 		continue;
 	    // A quote and backtick must be followed by another one.
-	    if ((*p == '`' || *p == '\'') && vim_strchr(p, *p) == NULL)
+	    if ((*p == '`' || *p == '\'') && vim_strchr(p + 1, *p) == NULL)
 		continue;
 	    return TRUE;
 	}
@@ -4263,10 +4272,25 @@ addfile(
     int		isdir;
     stat_T	sb;
 
-    // if the file/dir/link doesn't exist, may not add it
-    if (!(flags & EW_NOTFOUND) && ((flags & EW_ALLLINKS)
-			? mch_lstat((char *)f, &sb) < 0 : mch_getperm(f) < 0))
-	return;
+#ifdef MSWIN
+    if (!(flags & (EW_NOTFOUND | EW_ALLLINKS)))
+    {
+	long perm = mch_getperm(f);
+
+	if (perm < 0)
+	    return;
+	// The stat result already tells us whether this is a directory.
+	isdir = (perm & S_IFMT) == S_IFDIR;
+    }
+    else
+#endif
+    {
+	// if the file/dir/link doesn't exist, may not add it
+	if (!(flags & EW_NOTFOUND) && ((flags & EW_ALLLINKS)
+		    ? mch_lstat((char *)f, &sb) < 0 : mch_getperm(f) < 0))
+	    return;
+	isdir = mch_isdir(f);
+    }
 
 #ifdef FNAME_ILLEGAL
     // if the file/dir contains illegal characters, don't add it
@@ -4274,7 +4298,6 @@ addfile(
 	return;
 #endif
 
-    isdir = mch_isdir(f);
     if ((isdir && !(flags & EW_DIR)) || (!isdir && !(flags & EW_FILE)))
 	return;
 

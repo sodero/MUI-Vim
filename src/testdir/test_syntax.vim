@@ -71,6 +71,13 @@ func Test_syn_iskeyword()
   redir END
   call assert_equal("\nsyntax iskeyword @,48-57,_,192-255", @c)
 
+  call assert_fails("syntax iskeyword invalid_value", "E474:")
+  redir @c
+  syn iskeyword
+  redir END
+  " did not change
+  call assert_equal("\nsyntax iskeyword @,48-57,_,192-255", @c)
+
   setlocal isk-=_
   call assert_equal('DLTD_BY', GetSyntaxItem('DLTD'))
   /\<D\k\+\>/:norm! ygn
@@ -99,6 +106,13 @@ func Test_syntax_after_reload()
   call assert_equal('hello', &filetype)
   call assert_true(exists('g:gotit'))
   call delete('Xsomefile')
+endfunc
+
+func Test_syntax_filetype_syntax()
+  set filetype=syntax
+  syntax on
+  syntax off
+  set filetype= syntax=
 endfunc
 
 func Test_syntime()
@@ -419,6 +433,25 @@ func Test_syn_sync()
   call assert_match('SyncHere', execute('syntax sync'))
   syn sync clear
   call assert_notmatch('SyncHere', execute('syntax sync'))
+
+  syn sync minlines=10
+  syntax cluster xmlStuff contains=xmlGroup1,xmlGroup2
+  syntax region xmlComment start=/<!--/ end=/-->/ keepend contains=@Spell
+  syntax sync match xmlSync1 grouphere xmlComment /<!--/
+  syntax sync match xmlSync2 groupthere NONE /-->/
+  syntax cluster xmlAll contains=ALL
+  let out = execute('syntax sync')
+  call assert_match('xmlSync1', out)
+  call assert_match('xmlSync2', out)
+  call assert_match('grouphere xmlComment', out)
+  call assert_match('groupthere NONE', out)
+  call assert_notmatch('xmlStuff', out)
+  call assert_notmatch('xmlAll', out)
+  call assert_notmatch('cluster', out)
+  call assert_notmatch('keepend', out)
+  " should output 4 lines: 1 header + 3 syn sync lines
+  call assert_equal(4, len(split(out, '\n')))
+
   syn clear
 endfunc
 
@@ -478,6 +511,18 @@ func Test_ownsyntax()
   syntax off
   set filetype&
   %bw!
+endfunc
+
+func Test_ownsyntax_edit_hidden()
+  " this used to leak memory, needs ASAN or valgrind to confirm
+  call writefile(['one'], 'Xownsyntax1', 'D')
+  call writefile(['two'], 'Xownsyntax2', 'D')
+  set hidden
+  edit Xownsyntax1
+  ownsyntax c
+  edit Xownsyntax2
+  set hidden&
+  %bwipe!
 endfunc
 
 func Test_ownsyntax_completion()

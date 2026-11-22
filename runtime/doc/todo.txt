@@ -1,4 +1,4 @@
-*todo.txt*	For Vim version 9.2.  Last change: 2026 Jun 12
+*todo.txt*	For Vim version 9.2.  Last change: 2026 Nov 05
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -36,43 +36,13 @@ browser use: https://github.com/vim/vim/issues/1234
 							*known-bugs*
 -------------------- Known bugs and current work -----------------------
 
-Mapping with modifier is not recognized after a partial mapping.  Probably
-because the typeahead was simplified when looking for a matching mapping.
-Need to somehow undo the simplification.  #12002
-
-Windows scroll when using the autocmd window.  #12085
-in restore_snapshot_rec() restore more values from the snapshot, instead of
-calling frame_new_height() and frame_new_width(), especially w_topline and
-w_skipcol.
-
-Check places that source "path/*.vim" to not match other extensions, e.g.
-.vim9, on MS-Windows (short file name match, gets expanded to long file name).
-E.g. for startup files, plugins, packs, etc.
-
 When a help item can't be found, then open 'helpfile'.  Search for the tag in
 that file and gtive E149 only when not found.  Helps for a tiny Vim installed
 without all the help files.
 
-Virtual text problems:
--  Virtual text aligned "above": Wrong indentation when using tabs  (Issue
-   #12232)
--  truncated Virtual text below an empty line causes display error #12493
-
-When 'virtualedit' is "all" and 'cursorcolumn' is set, the wrong column may be
-highlighted. (van-de-bugger, 2018 Jan 23, #2576)
-
-With 'smoothscroll' set and "lastline" in 'display', moving the cursor to a
-wrapping line that makes the display scroll up may scroll much more than
-needed, thus jump-scrolling. (part of issue 12411)
 Errors when running tests with valgrind:
-- test_codestyle.vim:  e.g.:
-    command line..script /home/mool/vim/vim91/src/testdir/runtest.vim[569]..function RunTheTest[52]..Test_test_files line 6: keycode_check.vim: space before tab: Expected 0 but got 7
-    command line..script /home/mool/vim/vim91/src/testdir/runtest.vim[569]..function RunTheTest[52]..Test_test_files line 10: setup.vim: trailing white space: Expected 0 but got 23
 - test_gui.vim:
     Found errors in Test_gui_mouse_event():
-
-When every block in if/elseif ends in "throw" or "return" code following after
-"endif" should give an "unreachable code" error.
 
 Upcoming larger works:
 - Make spell checking work with recent .dic/.aff files, e.g. French.  #4916
@@ -390,8 +360,6 @@ When scheme can't be found by configure there is no clear "not found" message:
     configure:5781: result:
 
 Can "CSI nr X" be used instead of outputting spaces?  Is it faster?  #8002
-
-Typed keys invisible after calling interrupt() from a timer. #10631
 
 With a window height of 6 and 'scrolloff' set to 3, using "j" does not scroll
 evenly. (#10545)  Need to handle this in scroll_cursor_bot().
@@ -1226,7 +1194,7 @@ Regexp problems:
   character, search fails.  E.g. "รรีบ" in "การรีบรักใคร". (agguser, #2312)
 - [:space:] only matches ASCII spaces.  Add [:white:] for all space-like
   characters, esp. including 0xa0.  Use character class zero.
-- Since 7.4.704 the old regex engine fails to match [[:print:]] in 0xf6.
+- Since 7.4.704 the old regexp engine fails to match [[:print:]] in 0xf6.
   (Manuel Ortega, 2016 Apr 24)
   Test fails on Mac.  Avoid using isalpha(), isalnum(), etc?  Depends on
   LC_CTYPE
@@ -1664,8 +1632,8 @@ Patch to support 'u' in interactive substitute. (Christian Brabandt, 2012 Sep
 
 Dialog is too big on Linux too. (David Fishburn, 2013 Sep 2)
 
--   Add regex for 'paragraphs' and 'sections': 'parare' and 'sectre'.  Combine
-    the two into a regex for searching. (Ned Konz)
+-   Add regexp for 'paragraphs' and 'sections': 'parare' and 'sectre'.
+    Combine the two into a regexp for searching. (Ned Konz)
 Patch by Christian Brabandt, 2013 Apr 20, unfinished.
 
 Bug: findfile("any", "file:///tmp;") does not work.
@@ -1998,6 +1966,9 @@ Dominique can't reproduce it.
 
 ":function f(x) keepjumps" creates a function where every command is executed
 like it has ":keepjumps" before it.
+
+Coverity: Check if there are new reported defects:
+https://scan.coverity.com/projects/241
 
 Problem with editing file in binary mode. (Ingo Krabbe, 2009 Oct 8)
 
@@ -4667,7 +4638,6 @@ Insert mode completion/expansion:
 -   Make CTRL-X CTRL-L use the 'complete' option?
 -   Add command in CTRL-X mode to add following words to the completed string
     (e.g. to complete "Pointer->element" with CTRL-X CTRL-P CTRL-W CTRL-W)
--   CTRL-X CTRL-F: Use 'path' to find completions.
 -   CTRL-X CTRL-F: Option to use forward slashes on MS-Windows?
 -   CTRL-X CTRL-F: Don't replace "$VIM" with the actual value. (Kelly)
 -   Allow listing all matches in some way (and picking one from the list).
@@ -6101,7 +6071,7 @@ From Elvis:
 
 From xvi:
 -   CTRL-_ : swap 8th bit of character.
--   Add egrep-like regex type, like xvi (Ned Konz) or Perl (Emmanuel Mogenet)
+-   Add egrep-like regexp type, like xvi (Ned Konz) or Perl (Emmanuel Mogenet)
 
 
 From vile:

@@ -1,6 +1,7 @@
 " Tests for various functions.
 
 source util/screendump.vim
+source util/view_util.vim
 import './util/vim9.vim' as v9
 
 " Must be done first, since the alternate buffer must be unset.
@@ -210,6 +211,55 @@ func Test_strwidth()
   set ambiwidth&
 endfunc
 
+func Test_strtrans()
+  " The default of 'isprint' is platform-dependent: 0x7f and 0x9f are
+  " printable on Win32 and VMS.  Set it so the expectations below hold
+  " everywhere.
+  let save_isprint = &isprint
+  set isprint=@,161-255
+
+  " printable ASCII is unchanged
+  call assert_equal('', strtrans(''))
+  call assert_equal('abc', strtrans('abc'))
+
+  " control characters are displayed as ^X
+  call assert_equal('^I', strtrans("\t"))
+  call assert_equal('a^Mb^[c', strtrans("a\rb\ec"))
+  call assert_equal('^A^_^?', strtrans("\x01\x1f\x7f"))
+
+  " printable multibyte characters are unchanged, including composing
+  " characters and characters above 0xffff
+  call assert_equal('héllo 你好', strtrans('héllo 你好'))
+  let s = 'e' .. nr2char(0x301) .. 'x'
+  call assert_equal(s, strtrans(s))
+  call assert_equal(nr2char(0x1d11e), strtrans(nr2char(0x1d11e)))
+
+  " unprintable multibyte characters are displayed in <xx> hex form
+  call assert_equal('<9f>', strtrans(nr2char(0x9f)))
+  call assert_equal('<200b>', strtrans(nr2char(0x200b)))
+  call assert_equal('<feff>', strtrans(nr2char(0xfeff)))
+
+  " illegal bytes are displayed in <xx> hex form
+  call assert_equal('A<ff>B', strtrans("A\xffB"))
+
+  " a long string mixing all kinds of characters
+  call assert_equal(repeat('a^Bé<9f>', 100),
+        \ strtrans(repeat("a\x02é" .. nr2char(0x9f), 100)))
+
+  " the non-multi-byte code path
+  set encoding=latin1
+  set isprint=@,161-255
+  call assert_equal('a^Mb^[c', strtrans("a\rb\ec"))
+  call assert_equal('^A^_^?', strtrans("\x01\x1f\x7f"))
+  " an unprintable byte above 0x7f uses the meta notation
+  call assert_equal('| ', strtrans("\xa0"))
+  call assert_equal("\xe9", strtrans("\xe9"))
+  call assert_equal("x^B\xe9| y", strtrans("x\x02\xe9\xa0y"))
+  set encoding=utf-8
+
+  let &isprint = save_isprint
+endfunc
+
 func Test_str2nr()
   call assert_equal(0, str2nr(''))
   call assert_equal(1, str2nr('1'))
@@ -330,7 +380,7 @@ func Test_strptime()
 
   " Force DST and check that it's considered.
   " MS-Windows CRT tzset() does not parse POSIX TZ strings with DST rules.
-  if !has('win32')
+  if !has('win32') && !has('sun')
     let $TZ = 'WINTER0SUMMER,J1,J365'
     call assert_equal(1484653763 - 3600, strptime('%Y-%m-%d %T', '2017-01-17 11:49:23'))
   endif
@@ -347,6 +397,12 @@ func Test_strptime()
   else
     unlet $TZ
   endif
+endfunc
+
+func Test_repeat_overflow()
+  call assert_fails("call repeat('abcdef', 715827883)", 'E1510:')
+  call assert_fails("call repeat('ab', 4294967297)", 'E1510:')
+  call assert_fails('call repeat([1, 2, 3, 4, 5, 6], 715827883)', 'E1510:')
 endfunc
 
 func Test_resolve_unix()
@@ -1200,6 +1256,229 @@ func Test_matchstrpos()
   call assert_equal(['ing', 1, 4, 7], matchstrpos(['vim', 'testing', 'execute'], 'ing'))
   call assert_equal(['', -1, -1, -1], matchstrpos(['vim', 'testing', 'execute'], 'img'))
   call assert_equal(['', -1, -1], matchstrpos(test_null_list(), '\a'))
+endfunc
+
+" While match() iterates over a list, stringifying an item can run the
+" string() method of an object, which must not be able to free the item
+" the loop is standing on.
+func Test_match_list_changed_while_matching()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          remove(g:mlist, 0)
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:mlist = [C.new(), C.new(), C.new()]
+  END
+  call writefile(lines, 'Xmatchmutate.vim', 'D')
+  let g:removed = v:false
+  source Xmatchmutate.vim
+  call assert_fails('call match(g:mlist, "xyz")', 'E741:')
+  call assert_equal(3, len(g:mlist))
+  let g:removed = v:false
+  call assert_fails('call matchstr(g:mlist, "xyz")', 'E741:')
+  call assert_equal(3, len(g:mlist))
+  unlet g:mlist g:removed
+endfunc
+
+" Same, but the string() method unlocks the list first.
+func Test_match_list_unlocked_while_matching()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          unlockvar g:mlist
+          remove(g:mlist, 0)
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:mlist = [C.new(), C.new(), C.new()]
+  END
+  call writefile(lines, 'Xmatchunlock.vim', 'D')
+  source Xmatchunlock.vim
+  let g:removed = v:false
+  call assert_fails('call match(g:mlist, "xyz")', 'E742:')
+  call assert_equal(3, len(g:mlist))
+  let g:removed = v:false
+  call assert_fails('call matchstr(g:mlist, "xyz")', 'E742:')
+  call assert_equal(3, len(g:mlist))
+  unlet g:mlist g:removed
+endfunc
+
+" Same for join() and string().
+func Test_join_list_changed_while_stringified()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          remove(g:jlist, 0)
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:jlist = [C.new(), C.new(), C.new()]
+  END
+  call writefile(lines, 'Xjoinmutate.vim', 'D')
+  let g:removed = v:false
+  source Xjoinmutate.vim
+  call assert_fails('call join(g:jlist, ",")', 'E741:')
+  call assert_equal(3, len(g:jlist))
+  let g:removed = v:false
+  call assert_fails('call string(g:jlist)', 'E741:')
+  call assert_equal(3, len(g:jlist))
+  unlet g:jlist g:removed
+endfunc
+
+" Same, but the string() method unlocks the list first.
+func Test_join_list_unlocked_while_stringified()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          unlockvar g:jlist
+          remove(g:jlist, 0)
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:jlist = [C.new(), C.new(), C.new()]
+  END
+  call writefile(lines, 'Xjoinunlock.vim', 'D')
+  source Xjoinunlock.vim
+  let g:removed = v:false
+  call assert_fails('call join(g:jlist, ",")', 'E742:')
+  call assert_equal(3, len(g:jlist))
+  let g:removed = v:false
+  call assert_fails('call string(g:jlist)', 'E742:')
+  call assert_equal(3, len(g:jlist))
+  unlet g:jlist g:removed
+endfunc
+
+" Same for a dict, where the item can also be added and reallocate the
+" hash table.
+func Test_dict_changed_while_stringified()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          for k in keys(g:d)
+            remove(g:d, k)
+          endfor
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:d = {'a': C.new(), 'b': C.new(), 'c': C.new()}
+  END
+  call writefile(lines, 'Xdictmutate.vim', 'D')
+  let g:removed = v:false
+  source Xdictmutate.vim
+  call assert_fails('call string(g:d)', 'E741:')
+  call assert_equal(3, len(g:d))
+  unlet g:d g:removed
+endfunc
+
+" Same, but the string() method unlocks the dict first.
+func Test_dict_unlocked_while_stringified()
+  let lines =<< trim END
+    vim9script
+    class C
+      def string(): string
+        if !g:removed
+          g:removed = true
+          unlockvar g:d
+          for k in keys(g:d)
+            remove(g:d, k)
+          endfor
+        endif
+        return 'nostring'
+      enddef
+    endclass
+    g:d = {'a': C.new(), 'b': C.new(), 'c': C.new()}
+  END
+  call writefile(lines, 'Xdictunlock.vim', 'D')
+  let g:removed = v:false
+  source Xdictunlock.vim
+  call assert_fails('call string(g:d)', 'E742:')
+  call assert_equal(3, len(g:d))
+  call assert_equal(0, islocked('g:d'))
+  unlet g:d g:removed
+endfunc
+
+" The string() method of an object item replaces the Dict, List or Tuple that
+" is being converted to a string, or the variable holding it.  This used
+" freed memory, which is only reliably detected with valgrind or ASan.
+func Test_container_replaced_while_stringified()
+  let lines =<< trim END
+    vim9script
+    class A
+      def string(): string
+        g:d.a = 0
+        return 'A'
+      enddef
+    endclass
+    g:d = {a: {o: A.new()}}
+    for i in range(20)
+      g:d.a['k' .. i] = [i]
+    endfor
+    var s = string(g:d)
+    assert_match("^{'a': {", s)
+    assert_match("'o': A", s)
+    assert_equal({a: 0}, g:d)
+  END
+  call v9.CheckSourceSuccess(lines)
+
+  " ":let" lists the variable while the method replaces it
+  let lines =<< trim END
+    vim9script
+    class A
+      def string(): string
+        g:d = 0
+        return 'A'
+      enddef
+    endclass
+    g:d = {o: A.new()}
+    for i in range(20)
+      g:d['k' .. i] = [i]
+    endfor
+    var listing = execute('legacy let g:')
+    assert_match("'o': A", listing)
+    assert_equal(0, g:d)
+  END
+  call v9.CheckSourceSuccess(lines)
+
+  " a List and a Tuple in a List
+  let lines =<< trim END
+    vim9script
+    class A
+      def string(): string
+        g:l[0] = 0
+        return 'A'
+      enddef
+    endclass
+    g:l = [[A.new()] + range(20)]
+    assert_match('^\[\[A, 0, 1, 2', string(g:l))
+    assert_equal([0], g:l)
+    g:l = [(A.new(), 1, 2, 3)]
+    assert_equal('[(A, 1, 2, 3)]', string(g:l))
+    assert_equal([0], g:l)
+  END
+  call v9.CheckSourceSuccess(lines)
+  unlet g:d g:l
 endfunc
 
 " Test for matchstrlist()
@@ -2178,12 +2457,399 @@ func Test_executable_single_character_dir()
   let $PATH = save_path
 endfunc
 
+func Test_executable_pathext_search()
+  CheckMSWindows
+
+  let save_path = $PATH
+  let save_pathext = $PATHEXT
+  let save_shell = &shell
+  call mkdir('Xexepath', 'R')
+  call mkdir('Xexepath/first')
+  call mkdir('Xexepath/second')
+  let first = fnamemodify('Xexepath/first', ':p')->substitute('\\', '/', 'g')
+        \ ->substitute('/$', '', '')
+  let second = fnamemodify('Xexepath/second', ':p')->substitute('\\', '/', 'g')
+        \ ->substitute('/$', '', '')
+  try
+    let &shell = 'cmd.exe'
+    let $PATH = first .. ';' .. second
+    let $PATHEXT = '.EXE;.CMD;.BAT'
+    call writefile([], first .. '/Xcommand.cmd')
+    call writefile([], second .. '/Xcommand.exe')
+    " The directory order takes precedence over the extension order.
+    call assert_equal(1, executable('Xcommand'))
+    call assert_equal(first .. '/Xcommand.cmd',
+          \ exepath('Xcommand')->substitute('\\', '/', 'g'))
+    call writefile([], first .. '/Xcommand.exe')
+    call assert_equal(first .. '/Xcommand.exe',
+          \ exepath('Xcommand')->substitute('\\', '/', 'g'))
+    let $PATHEXT = '.CMD;.EXE;.BAT'
+    call assert_equal(first .. '/Xcommand.cmd',
+          \ exepath('Xcommand')->substitute('\\', '/', 'g'))
+
+    " A matching prefix is not sufficient: the full candidate must exist.
+    call writefile([], first .. '/Xmissing-other.exe')
+    call assert_equal(0, executable('Xmissing'))
+    call assert_equal('', exepath('Xmissing'))
+    call mkdir(first .. '/Xdirectory.exe')
+    call assert_equal(0, executable('Xdirectory'))
+
+    " Absolute names, empty PATH entries and missing directories still work.
+    call assert_equal(1, executable(first .. '/Xcommand'))
+    let $PATH = first .. '/missing;;' .. first .. ';'
+    let $PATHEXT = ';.EXE;;.CMD;.BAT;'
+    call assert_equal(1, executable('Xcommand'))
+    call assert_equal(1, executable('Xcommand.cmd'))
+    let $PATHEXT = '.CMD'
+    call assert_equal(1, executable('Xcommand'))
+    call assert_equal(0, executable('Xmissing'))
+    " Unusual suffixes still use the original candidate checks.
+    call writefile([], first .. '/Xcustomcommand.foo.bar')
+    let $PATHEXT = '.EXE;.CMD;.BAT;.foo.bar'
+    call assert_equal(1, executable('Xcustomcommand'))
+  finally
+    let $PATH = save_path
+    let $PATHEXT = save_pathext
+    let &shell = save_shell
+  endtry
+endfunc
+
+func Test_executable_pathext_changes()
+  CheckMSWindows
+
+  let save_path = $PATH
+  let save_pathext = $PATHEXT
+  let save_shell = &shell
+  call mkdir('Xexechange', 'R')
+  try
+    let &shell = 'cmd.exe'
+    let $PATH = fnamemodify('Xexechange', ':p')
+    let $PATHEXT = '.EXE;.CMD;.BAT'
+    call assert_equal(0, executable('Xchanging'))
+    call writefile([], 'Xexechange/Xchanging.cmd')
+    call assert_equal(1, executable('Xchanging'))
+    call delete('Xexechange/Xchanging.cmd')
+    call assert_equal(0, executable('Xchanging'))
+    call assert_equal('', exepath('Xchanging'))
+
+    call writefile([], 'Xexechange/Xextensionless')
+    let $PATHEXT = '.;.EXE;.CMD;.BAT'
+    call assert_equal(1, executable('Xextensionless'))
+    " A "." in $PATHEXT skips the prefix search, so device names still work.
+    call assert_equal(1, executable('nul'))
+    let $PATHEXT = '.EXE;.CMD;.BAT'
+    let &shell = 'sh'
+    call assert_equal(1, executable('Xextensionless'))
+  finally
+    let $PATH = save_path
+    let $PATHEXT = save_pathext
+    let &shell = save_shell
+  endtry
+endfunc
+
+func Test_executable_pathext_names()
+  CheckMSWindows
+
+  let save_path = $PATH
+  let save_pathext = $PATHEXT
+  let save_shell = &shell
+  call mkdir('Xexenames', 'R')
+  try
+    let &shell = 'cmd.exe'
+    let $PATH = fnamemodify('Xexenames', ':p')
+    let $PATHEXT = '.EXE;.CMD;.BAT'
+    call writefile([], 'Xexenames/X日本語.cmd')
+    call assert_equal(1, executable('X日本語'))
+    call assert_equal(0, executable('X存在しない'))
+    call mkdir('Xexenames/日本語')
+    call writefile([], 'Xexenames/日本語/Xcommand.cmd')
+    call assert_equal(1, executable('Xexenames/日本語/Xcommand'))
+    call writefile([], 'Xexenames/Xlong-executable-name.cmd')
+    let shortname = fnamemodify('Xexenames/Xlong-executable-name.cmd', ':8:t:r')
+    call assert_equal(1, executable(shortname))
+    " Wildcard characters in the argument must not select another file.
+    call assert_equal(0, executable('Xlong*'))
+    call assert_equal(0, executable('Xlong?'))
+  finally
+    let $PATH = save_path
+    let $PATHEXT = save_pathext
+    let &shell = save_shell
+  endtry
+endfunc
+
 func Test_hostname()
   let hostname_vim = hostname()
   if has('unix')
     let hostname_system = systemlist('uname -n')[0]
     call assert_equal(hostname_vim, hostname_system)
   endif
+endfunc
+
+func Test_getinfo()
+  call assert_equal({'name': 'strlen', 'kind': 'builtin', 'available': v:true,
+        \ 'minargs': 1, 'maxargs': 1, 'method': 1,
+        \ 'args': [{'name': 'string', 'types': ['string', 'number']}],
+        \ 'returns': 'number'},
+        \ getinfo('function', 'strlen'))
+
+  " No arguments, no argument checks and not usable as a method.
+  call assert_equal({'name': 'argidx', 'kind': 'builtin', 'available': v:true,
+        \ 'minargs': 0, 'maxargs': 0, 'method': 0, 'args': [],
+        \ 'returns': 'number'},
+        \ getinfo('function', 'argidx'))
+
+  " An argument that accepts several types, and one that is checked against
+  " another argument.
+  let info = getinfo('function', 'get')
+  call assert_equal([2, 3, 1], [info.minargs, info.maxargs, info.method])
+  call assert_equal(['blob', 'list<any>', 'tuple<any>', 'dict<any>', 'func'],
+        \ info.args[0].types)
+  call assert_equal(['string', 'number'], info.args[1].types)
+  call assert_equal(['any'], info.args[2].types)
+  call assert_equal('any', info.returns)
+  call assert_equal(['any'], getinfo('function', 'extend').args[1].types)
+
+  " The base of a method call is the second argument.
+  call assert_equal(2, getinfo('function', 'append').method)
+
+  " No maximum number of arguments: the last item is for the rest.
+  let info = getinfo('function', 'instanceof')
+  call assert_equal(-1, info.maxargs)
+  call assert_equal([{'name': 'object', 'types': ['object<any>']},
+        \ {'name': 'class', 'types': ['class']}], info.args)
+
+  " The names of the arguments as in the help.  An argument the help does not
+  " name has none, also the ones after the first value of printf().
+  call assert_equal(['lnum', 'col', 'off'],
+        \ getinfo('function', 'cursor').args->map('v:val.name'))
+  call assert_equal(['expr1', 'expr2'],
+        \ getinfo('function', 'and').args->map('v:val.name'))
+  let info = getinfo('function', 'getreg')
+  call assert_equal(['regname', 'list'], [info.args[0].name, info.args[2].name])
+  call assert_false(has_key(info.args[1], 'name'))
+  let info = getinfo('function', 'printf')
+  call assert_equal(['fmt', 'expr1'], [info.args[0].name, info.args[1].name])
+  call assert_false(has_key(info.args[2], 'name'))
+  call assert_false(has_key(info.args[18], 'name'))
+
+  " The type depends on the number of arguments, and no value at all.
+  call assert_equal('any', getinfo('function', 'getline').returns)
+  call assert_equal('void', getinfo('function', 'bufload').returns)
+
+  " The type returned for arguments of the given types, or that number of
+  " arguments.  Missing required arguments are "any".
+  let Types = {types ->
+        \ getinfo('function', 'sort', {'argtypes': types}).returns}
+  call assert_equal('list<number>', Types(['list<number>']))
+  call assert_equal('any', Types([]))
+  let Types = {f, types -> getinfo('function', f, {'argtypes': types}).returns}
+  call assert_equal('list<string>', Types('values', ['dict<string>']))
+  call assert_equal('number', Types('remove', ['list<number>', 'number']))
+  call assert_equal('list<number>',
+        \ Types('remove', ['list<number>', 'number', 'number']))
+  call assert_equal('string', Types('getline', ['number']))
+  call assert_equal('list<string>', Types('getline', ['number', 'string']))
+  call assert_equal('number', Types('get', ['blob']))
+  call assert_equal('number', Types('strlen', ['string']))
+  call assert_equal(getinfo('function', 'strlen'),
+        \ getinfo('function', 'strlen', {'argtypes': ['string']}))
+  call assert_equal(getinfo('function', 'strlen'),
+        \ getinfo('function', 'strlen', {}))
+  call assert_equal({},
+        \ getinfo('function', 'nosuchfunction', {'argtypes': ['x']}))
+  call assert_fails("call Types('strlen', ['string', 'string'])", 'E118:')
+  call assert_fails("call Types('strlen', ['nosuchtype'])", 'E1010:')
+  call assert_fails("call Types('strlen', ['string x'])", 'E1010:')
+  call assert_fails("call getinfo('function', 'strlen', {'argtypes': 'x'})",
+        \ 'E475: Invalid argument: argtypes')
+  call assert_fails("call getinfo('function', 'strlen', {'vim9': 1})",
+        \ 'E475: Invalid argument: vim9')
+  call assert_fails("call getinfo('function', 'strlen', {'other': 1})",
+        \ 'E475: Invalid argument: other')
+  call assert_fails("call getinfo('vimvar', 'v:count', {'argtypes': []})",
+        \ 'E475: Invalid argument: argtypes')
+  call assert_fails("call getinfo('function', 'strlen', 'string')", 'E1206:')
+
+  " An unknown kind, and a name that is not a function.
+  call assert_fails("call getinfo('variable', 'v:count')",
+        \ 'E475: Invalid argument: variable')
+  call assert_fails("call getinfo('', 'strlen')", 'E475: Invalid argument:')
+  call assert_fails("call getinfo('function')", 'E119:')
+  call assert_equal({}, getinfo('function', 'nosuchfunction'))
+  call assert_equal({}, getinfo('function', ''))
+
+  " A user defined function, a script-local one also by its <SNR> name.
+  func s:Legacy(a, b = 2, ...) abort range dict
+  endfunc
+  let info = getinfo('function', 's:Legacy')
+  let sid = str2nr(matchstr(expand('<SID>'), '\d\+'))
+  call assert_equal({'name': printf('<SNR>%d_Legacy', sid), 'kind': 'function',
+        \ 'available': v:true,
+        \ 'args': [{'name': 'a', 'type': 'any'},
+        \ {'name': 'b', 'type': 'any', 'default': '2'}],
+        \ 'varargs': {'name': '', 'type': 'list<any>'}, 'returns': 'any',
+        \ 'abort': v:true, 'range': v:true, 'dict': v:true, 'closure': v:false,
+        \ 'sid': sid, 'lnum': info.lnum}, info)
+  call assert_true(info.lnum > 0)
+  call assert_equal(info,
+        \ getinfo('function', printf('<SNR>%d_Legacy', sid)))
+  def g:Def9(x: number, y: string = 'a', ...rest: list<string>): string
+    return ''
+  enddef
+  let info = getinfo('function', 'g:Def9')
+  call assert_equal(['Def9', 'def', 'string'],
+        \ [info.name, info.kind, info.returns])
+  call assert_equal([{'name': 'x', 'type': 'number'},
+        \ {'name': 'y', 'type': 'string', 'default': "'a'"}], info.args)
+  call assert_equal({'name': 'rest', 'type': 'list<string>'}, info.varargs)
+  call assert_equal([v:false, v:false], [info.abort, info.range])
+  call assert_false(has_key(getinfo('function', 'Test_getinfo'), 'varargs'))
+  call assert_equal('any', getinfo('function', 'Test_getinfo').returns)
+  " A builtin function with the same name is found first.
+  call assert_equal('builtin', getinfo('function', 'strlen').kind)
+  call assert_equal({}, getinfo('function', 'g:Def9 x'))
+  delfunc s:Legacy
+  delfunc g:Def9
+
+  " A builtin function that is not implemented in this Vim.
+  let info = getinfo('function', 'mzeval')
+  call assert_equal('mzeval', info.name)
+  call assert_equal(exists('*mzeval') ? v:true : v:false, info.available)
+
+  " A predefined Vim variable: its declared type and how it can be used.
+  call assert_equal({'name': 'v:count', 'available': v:true, 'type': 'number',
+        \ 'readonly': v:true, 'compat': v:true},
+        \ getinfo('vimvar', 'v:count'))
+  let info = getinfo('vimvar', 'v:lnum')
+  call assert_equal([v:false, v:false], [info.readonly, info.compat])
+  call assert_equal('list<string>', getinfo('vimvar', 'v:errors').type)
+  call assert_equal('bool', getinfo('vimvar', 'v:true').type)
+  call assert_equal('dict<any>', getinfo('vimvar', 'v:event').type)
+  call assert_equal({}, getinfo('vimvar', 'v:nosuchvariable'))
+  call assert_equal({}, getinfo('vimvar', 'v:'))
+  " The "v:" is required.
+  call assert_equal({}, getinfo('vimvar', 'count'))
+
+  " An Ex command, also by an abbreviation, with the attributes of :command.
+  call assert_equal({'name': 'substitute', 'kind': 'builtin',
+        \ 'available': v:true, 'nargs': '*', 'range': '.', 'count': -1,
+        \ 'bang': v:false, 'bar': v:false, 'register': v:false,
+        \ 'addr': 'lines'}, getinfo('command', 's'))
+  let info = getinfo('command', 'write')
+  call assert_equal(['%', '?', v:true, v:true],
+        \ [info.range, info.nargs, info.bang, info.bar])
+  let info = getinfo('command', 'delete')
+  call assert_equal([0, v:true, 'none'],
+        \ [info.count, info.register, getinfo('command', 'echo').addr])
+  let info = getinfo('command', 'echo')
+  call assert_equal(['', -1], [info.range, info.count])
+  let info = getinfo('command', 'bo')
+  call assert_equal(['botright', 'modifier'], [info.name, info.kind])
+  let info = getinfo('command', '2match')
+  call assert_equal(['match', 'other'], [info.name, info.addr])
+  call assert_equal({}, getinfo('command', '3buffer'))
+  " A command that is not implemented in this Vim.
+  call assert_equal(has('printer') ? v:true : v:false,
+        \ getinfo('command', 'hardcopy').available)
+  " The context: an abbreviation is not accepted in Vim9 script and some
+  " commands do not exist there.
+  call assert_equal('while', getinfo('command', 'whi').name)
+  call assert_equal('while', getinfo('command', 'whi', {'vim9': v:false}).name)
+  call assert_equal({}, getinfo('command', 'whi', {'vim9': v:true}))
+  call assert_equal('while',
+        \ getinfo('command', 'while', {'vim9': v:true}).name)
+  call assert_equal('append', getinfo('command', 'append').name)
+  call assert_equal({}, getinfo('command', 'append', {'vim9': v:true}))
+  call assert_equal({}, getinfo('command', 'nosuchcommand'))
+  call assert_equal({}, getinfo('command', 's garbage'))
+  call assert_equal({}, getinfo('command', ''))
+
+  command! -nargs=1 -range=% -bang -bar -register -complete=file MyCmd echo 1
+  let info = getinfo('command', 'MyCmd')
+  let sid = str2nr(matchstr(expand('<SID>'), '\d\+'))
+  call assert_equal({'name': 'MyCmd', 'kind': 'user', 'available': v:true,
+        \ 'nargs': '1', 'range': '%', 'count': -1, 'bang': v:true,
+        \ 'bar': v:true, 'register': v:true, 'addr': 'lines',
+        \ 'buffer': v:false, 'complete': 'file', 'definition': 'echo 1',
+        \ 'sid': sid, 'lnum': info.lnum}, info)
+  call assert_true(info.lnum > 0)
+  command! -buffer -nargs=* -count=5 -addr=buffers MyBufCmd echo 2
+  let info = getinfo('command', 'MyBufCmd')
+  call assert_equal(['*', 5, '.', 'buffers', v:true, ''],
+        \ [info.nargs, info.count, info.range, info.addr, info.buffer,
+        \ info.complete])
+  command! -nargs=+ -complete=custom,MyCompl MyCustom echo 3
+  call assert_equal('custom,MyCompl', getinfo('command', 'MyCustom').complete)
+  " "range" is always a String and "count" always a Number.
+  command! MyRangeNone echo 4
+  command! -range MyRangeLine echo 5
+  command! -range=3 MyRangeCount echo 6
+  command! -count MyCount echo 7
+  call assert_equal([['', -1], ['.', -1], ['3', -1], ['.', 0]],
+        \ ['MyRangeNone', 'MyRangeLine', 'MyRangeCount', 'MyCount']
+        \ ->map({_, c -> [getinfo('command', c).range,
+        \                 getinfo('command', c).count]}))
+  " An ambiguous abbreviation.
+  call assert_equal({}, getinfo('command', 'My'))
+  delcommand MyCmd
+  delcommand MyBufCmd
+  delcommand MyCustom
+  delcommand MyRangeNone
+  delcommand MyRangeLine
+  delcommand MyRangeCount
+  delcommand MyCount
+
+  " An option, also by the short name and one that is hidden.
+  call assert_equal({'name': 'textwidth', 'shortname': 'tw',
+        \ 'available': v:true, 'type': 'number', 'scope': 'buffer',
+        \ 'default': 0}, getinfo('option', 'tw'))
+  let info = getinfo('option', 'number')
+  call assert_equal(['bool', 'window', v:false],
+        \ [info.type, info.scope, info.default])
+  call assert_equal('global-buffer', getinfo('option', 'autoread').scope)
+  call assert_equal('global-window', getinfo('option', 'scrolloff').scope)
+  let info = getinfo('option', 'shortmess')
+  call assert_equal(['string', 'global', &shortmess],
+        \ [info.type, info.scope, info.default])
+  call assert_equal('', getinfo('option', 'debug').shortname)
+  call assert_equal(getinfo('option', 'tw'),
+        \ getinfo('option', 'l:textwidth'))
+  let info = getinfo('option', 'autoprint')
+  call assert_equal(['autoprint', v:false], [info.name, info.available])
+  call assert_equal({}, getinfo('option', 'nonumber'))
+  call assert_equal({}, getinfo('option', 'tw-'))
+  call assert_equal({}, getinfo('option', ''))
+
+  call assert_equal('number', 'strlen'->getinfo('function').returns)
+  let lines =<< trim END
+    assert_equal('string', getinfo('function', 'printf').returns)
+    assert_equal(-1, getinfo('function', 'instanceof').maxargs)
+    assert_equal('list<string>',
+                 getinfo('function', 'sort',
+                         {argtypes: ['list<string>']}).returns)
+    assert_equal('substitute', getinfo('command', 's').name)
+    assert_equal({}, getinfo('command', 'whi'))
+    assert_equal('while', getinfo('command', 'whi', {vim9: false}).name)
+    assert_equal('number', getinfo('option', 'tw').type)
+  END
+  call v9.CheckDefAndScriptSuccess(lines)
+  " A function in Vim9 script is script-local.
+  let lines =<< trim END
+    vim9script
+    def Local(n: number): bool
+      return true
+    enddef
+    var info = getinfo('function', 'Local')
+    assert_equal(['def', 'bool'], [info.kind, info.returns])
+    assert_match('^<SNR>\d\+_Local$', info.name)
+  END
+  call v9.CheckScriptSuccess(lines)
+  call v9.CheckDefAndScriptFailure(['getinfo(1, "strlen")'],
+        \ ['E1013:', 'E1174:'])
+  call v9.CheckDefAndScriptFailure(['getinfo("function", 1)'],
+        \ ['E1013:', 'E1174:'])
+  call v9.CheckDefAndScriptFailure(['getinfo("function", "sort", "x")'],
+        \ ['E1013:', 'E1206:'])
 endfunc
 
 func Test_getpid()
@@ -3647,6 +4313,26 @@ func Test_range()
   call assert_fails('let x=range([])', 'E745:')
   call assert_fails('let x=range(1, [])', 'E745:')
   call assert_fails('let x=range(1, 4, [])', 'E745:')
+
+  " the number of items must fit in an int
+  call assert_equal(2147483647, len(range(2147483647)))
+  call assert_fails('let x=range(2147483648)',
+        \ 'E1510: Value too large: 2147483648')
+  call assert_fails('let x=range(0, 2147483647)',
+        \ 'E1510: Value too large: 2147483648')
+  call assert_fails('let x=range(0, 4294967294, 2)',
+        \ 'E1510: Value too large: 2147483648')
+  call assert_fails('let x=range(0, 9223372036854775807)',
+        \ 'E1510: Value too large: 9223372036854775808')
+
+  " the stride must fit in an int
+  call assert_fails('let x=range(0, 100, 3000000000)',
+        \ 'E1510: Value too large: 3000000000')
+  call assert_fails('let x=range(0, 100, -3000000000)',
+        \ 'E1510: Value too large: -3000000000')
+
+  " slicing a range list with an overflowing length crashed
+  call assert_fails('let x=range(2147483648)[: 4]', 'E1510:')
 endfunc
 
 func Test_garbagecollect_now_fails()
@@ -3702,6 +4388,10 @@ func Test_keytrans()
   call assert_equal('<M-x>', "\<*M-x>"->keytrans())
   call assert_equal('<C-I>', "\<*C-I>"->keytrans())
   call assert_equal('<S-3>', "\<*S-3>"->keytrans())
+  call assert_equal('<Bar>', '|'->keytrans())
+  call assert_equal('<M-Bar>', "\<*M-|>"->keytrans())
+  call assert_equal('<Bslash>', '\'->keytrans())
+  call assert_equal('<M-Bslash>', "\<*M-\>"->keytrans())
   call assert_equal('π', 'π'->keytrans())
   call assert_equal('<M-π>', "\<M-π>"->keytrans())
   call assert_equal('ě', 'ě'->keytrans())
@@ -4035,6 +4725,16 @@ func Test_glob2()
   endif
 endfunc
 
+" shell is not used to expand a single quote
+func Test_glob3()
+  CheckUnix
+  let shell = &shell
+  set shell=DOESNOTEXIST
+  call writefile([], "Xit's_a_file", 'D')
+  call assert_equal(["Xit's_a_file"], glob("Xit's*", 0, 1))
+  let &shell = shell
+endfunc
+
 func Test_glob_symlinks()
   call writefile([], 'Xglob1')
 
@@ -4053,9 +4753,87 @@ func Test_glob_symlinks()
   call assert_equal(['Xglob1', 'XglobBad', 'XglobOk'], sort(glob('Xglob*', 0, 1, 1)))
   call assert_equal(['Xglob1', 'XglobOk'], sort(glob('Xglob*', 0, 1, 0)))
 
+  " Also check literal paths, as used when searching for autoload scripts.
+  call assert_equal(['XglobOk'], glob('XglobOk', 0, 1))
+  call assert_equal([], glob('XglobBad', 0, 1))
+  call assert_equal(['XglobBad'], glob('XglobBad', 0, 1, 1))
+  call assert_equal(getfperm('Xglob1'), getfperm('XglobOk'))
+  call assert_equal(getfsize('Xglob1'), getfsize('XglobOk'))
+
   call delete('Xglob1')
+  call assert_equal([], glob('XglobOk', 0, 1))
+  call assert_equal(['XglobOk'], glob('XglobOk', 0, 1, 1))
   call delete('XglobBad')
   call delete('XglobOk')
+endfunc
+
+func Test_glob_directory_win32()
+  CheckMSWindows
+
+  call mkdir('XglobType/dir', 'pR')
+  call writefile([], 'XglobType/file')
+  let save_shellslash = &shellslash
+  set shellslash
+  try
+    call assert_equal(['XglobType/dir/'], getcompletion('XglobType/', 'dir'))
+    call assert_equal(['XglobType/dir', 'XglobType/file'],
+          \ sort(glob('XglobType/*', 0, 1)))
+    silent !mklink /D XglobType\link dir
+    if v:shell_error
+      throw 'Skipped: cannot create directory symlinks'
+    endif
+    call assert_equal(['XglobType/dir/', 'XglobType/link/'],
+          \ sort(getcompletion('XglobType/', 'dir')))
+    call assert_equal(['XglobType/link'], glob('XglobType/link', 0, 1))
+    call delete('XglobType/dir', 'd')
+    call assert_equal([], glob('XglobType/link', 0, 1))
+    call assert_equal(['XglobType/link'], glob('XglobType/link', 0, 1, 1))
+  finally
+    call delete('XglobType/link')
+    let &shellslash = save_shellslash
+  endtry
+endfunc
+
+func Test_glob_literal_suffix_win32()
+  CheckMSWindows
+
+  call mkdir('XglobSuffix/one', 'pR')
+  call mkdir('XglobSuffix/two')
+  call writefile([], 'XglobSuffix/one/script.vim')
+  let save_shellslash = &shellslash
+  set shellslash
+  try
+    call assert_equal(['XglobSuffix/one/script.vim'],
+          \ glob('XglobSuffix/*/script.vim', 0, 1))
+    call assert_equal(['XglobSuffix/one/script.vim'],
+          \ expand('XglobSuffix/*/script.vim', 0, 1))
+    call assert_equal([], glob('XglobSuffix/*/missing.vim', 0, 1))
+    call assert_equal([], expand('XglobSuffix/*/missing.vim', 0, 1))
+    call assert_equal(['XglobSuffix/one/script.vim'],
+          \ glob('XglobSuffix/**/script.vim', 0, 1))
+  finally
+    let &shellslash = save_shellslash
+  endtry
+endfunc
+
+func Test_glob_junction_win32()
+  CheckMSWindows
+
+  call mkdir('XglobTarget', 'R')
+  call writefile(['autoload'], 'XglobTarget/script.vim')
+  silent !mklink /J XglobJunction XglobTarget
+  if v:shell_error
+    throw 'Skipped: cannot create junctions'
+  endif
+  try
+    call assert_equal(['XglobJunction'], glob('XglobJunction', 0, 1))
+    call assert_equal(getfperm('XglobTarget'), getfperm('XglobJunction'))
+    call assert_equal(getfsize('XglobTarget/script.vim'),
+          \ getfsize('XglobJunction/script.vim'))
+    call assert_equal([], glob('XglobJunction/missing.vim', 0, 1))
+  finally
+    call delete('XglobJunction')
+  endtry
 endfunc
 
 " Test for browse()
@@ -4316,6 +5094,25 @@ func Test_glob_extended_mswin()
   call delete('Xtestglob', 'rf')
 endfunc
 
+" Test for glob() with filenames starting with a -
+func Test_glob_shell_expansion_minus()
+  CheckUnix
+  CheckExecutable bash
+
+  let shell = &shell
+  set shell=bash
+  call mkdir('Xvimglob', 'R')
+  call writefile([], 'Xvimglob/-n')
+  let cwd = getcwd()
+  call chdir('Xvimglob')
+  try
+    call assert_equal(['-n'], glob("{-n,E}", 0, 1))
+  finally
+    let &shell = shell
+    call chdir(cwd)
+  endtry
+endfunc
+
 " Tests for the slice() function.
 func Test_slice()
   let lines =<< trim END
@@ -4466,6 +5263,9 @@ func Test_base64_encoding()
     call assert_equal('light wor', g:Blob2Str("bGlnaHQgd29y"->base64_decode()))
     call assert_equal(0z00, base64_decode("===="))
     call assert_equal(0z, base64_decode(""))
+
+    #" a zero byte in the last group is not padding
+    call assert_equal('AQAC', base64_encode(0z010002))
 
     #" Test for invalid padding
     call assert_equal('Hello', g:Blob2Str(base64_decode("SGVsbG8=")))
@@ -4699,6 +5499,60 @@ func Test_vim9_def_defer_fc_sandbox()
 
   call assert_fails('call g:BadDefer()', 'E48:')
   delfunction g:BadDefer
+endfunc
+
+" Test wincol() counts in screen cells from left side of the window
+func Test_wincol()
+  enew!
+  set ff=unix mouse=a
+
+  let win_width = 30
+  call NewWindow(20, win_width)
+
+  call setline(1, "the quick brown fox jump")
+
+  norm! 0
+  call assert_equal([1, 1], [winline(), wincol()])
+
+  call test_setmouse(1, 10)
+  call feedkeys("\<LeftMouse>\<Ignore>", "xt")
+  call assert_equal([1, 10], [winline(), wincol()])
+
+  if has('rightleft')
+    norm! 0
+    call assert_equal([1, 1], [winline(), wincol()])
+
+    set rightleft
+    " cursor is still at column 1, but in screen cells it is at the distance of window width:
+    call assert_equal([1, win_width], [winline(), wincol()])
+
+    " test_setmouse() works in screen coordinates, which is not affected by 'rightleft':
+    call test_setmouse(1, 10)
+    call feedkeys("\<LeftMouse>\<Ignore>", "xt")
+    call assert_equal([1, 10], [winline(), wincol()])
+    set rightleft&
+  endif
+
+  " With 'rightleft' the cursor is on the leftmost cell of a double-wide
+  " character, so wincol() is one less than where the character starts.
+  call setline(1, "あいうえお")
+
+  norm! 0
+  call assert_equal([1, 1], [winline(), wincol()])
+  norm! l
+  call assert_equal([1, 3], [winline(), wincol()])
+
+  if has('rightleft')
+    set rightleft
+    norm! 0
+    call assert_equal([1, win_width - 1], [winline(), wincol()])
+    norm! l
+    call assert_equal([1, win_width - 3], [winline(), wincol()])
+    set rightleft&
+  endif
+
+  set ff& mouse&
+  bw!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

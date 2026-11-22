@@ -1,4 +1,4 @@
-/* message.c */
+// message.c
 int msg(char *s);
 int verb_msg(char *s);
 int msg_attr(char *s, int attr);
@@ -38,8 +38,8 @@ char_u *msg_outtrans_one(char_u *p, int attr);
 int msg_outtrans_len_attr(char_u *msgstr, int len, int attr);
 void msg_make(char_u *arg);
 int msg_outtrans_special(char_u *strstart, int from, int maxlen);
-char_u *str2special_save(char_u *str, int replace_spaces, int replace_lt);
-char_u *str2special(char_u **sp, int replace_spaces, int replace_lt);
+char_u *str2special_save(char_u *str, int replace_spaces, int replace_others);
+char_u *str2special(char_u **sp, int replace_spaces, int replace_others);
 void str2specialbuf(char_u *sp, char_u *buf, int len);
 void msg_prt_line(char_u *s, int list);
 void msg_puts(char *s);
@@ -79,4 +79,4 @@ int do_dialog(int type, char_u *title, char_u *message, char_u *buttons, int dfl
 int vim_dialog_yesno(int type, char_u *title, char_u *message, int dflt);
 int vim_dialog_yesnocancel(int type, char_u *title, char_u *message, int dflt);
 int vim_dialog_yesnoallcancel(int type, char_u *title, char_u *message, int dflt);
-/* vim: set ft=c : */
+// vim: ft=c

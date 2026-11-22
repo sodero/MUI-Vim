@@ -119,6 +119,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     arch: ['.arch-inventory', '=tagging-method'],
     arduino: ['file.ino', 'file.pde'],
     art: ['file.art'],
+    ascendc: ['file.asc'],
     asciidoc: ['file.asciidoc', 'file.adoc'],
     asm: ['file.s', 'file.S', 'file.a', 'file.A'],
     asn: ['file.asn', 'file.asn1'],
@@ -136,6 +137,8 @@ def s:GetFilenameChecks(): dict<list<string>>
     b: ['file.mch', 'file.ref', 'file.imp'],
     basic: ['file.bas', 'file.bi', 'file.bm'],
     bass: ['file.bass'],
+    bats: ['file.bats'],
+    bazelrc: ['.bazelrc', 'user.bazelrc', 'file.bazelrc', '/tools/bazel.rc', 'any/tools/bazel.rc'],
     bc: ['file.bc'],
     bdf: ['file.bdf'],
     beancount: ['file.beancount', 'file.bean'],
@@ -198,7 +201,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     conf: ['auto.master', 'file.conf', 'texdoc.cnf', '.x11vncrc', '.chktexrc', '.ripgreprc', 'ripgreprc', 'file.ctags'],
     config: ['/etc/hostname.file', 'any/etc/hostname.file', 'configure.in', 'configure.ac', 'file.at', 'aclocal.m4'],
     confini: ['pacman.conf', 'paru.conf', 'mpv.conf', 'any/.aws/config', 'any/.aws/credentials', 'any/.aws/cli/alias', 'file.nmconnection',
-              'any/.gnuradio/grc.conf', 'any/gnuradio/config.conf', 'any/gnuradio/conf.d/modtool.conf'],
+              'any/.gnuradio/grc.conf', 'any/gnuradio/config.conf', 'any/gnuradio/conf.d/modtool.conf', 'any/portage/binrepos.conf/gentoo.conf', 'any/portage/repos.conf/gentoo.conf'],
     context: ['tex/context/any/file.tex', 'file.mkii', 'file.mkiv', 'file.mkvi', 'file.mkxl', 'file.mklx'],
     cook: ['file.cook'],
     corn: ['file.corn'],
@@ -206,7 +209,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     cpp: ['file.cxx', 'file.c++', 'file.hh', 'file.hxx', 'file.hpp', 'file.ipp', 'file.ixx', 'file.moc', 'file.tcc', 'file.inl', 'file.tlh', 'file.cppm', 'file.ccm', 'file.cxxm', 'file.c++m', 'file.mpp'],
     cqlang: ['file.cql'],
     crm: ['file.crm'],
-    crontab: ['crontab', 'crontab.file', '/etc/cron.d/file', 'any/etc/cron.d/file'],
+    crontab: ['crontab', 'crontab.file', '/etc/cron.d/file', 'any/etc/cron.d/file', 'var/spool/cron/crontabs.9999'],
     crystal: ['file.cr'],
     cs: ['file.cs', 'file.csx', 'file.cake'],
     csc: ['file.csc'],
@@ -246,7 +249,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     dircolors: ['.dir_colors', '.dircolors', '/etc/DIR_COLORS', 'any/etc/DIR_COLORS'],
     djot: ['file.dj', 'file.djot'],
     dnsmasq: ['/etc/dnsmasq.conf', '/etc/dnsmasq.d/file', 'any/etc/dnsmasq.conf', 'any/etc/dnsmasq.d/file'],
-    dockerfile: ['Containerfile', 'Dockerfile', 'dockerfile', 'file.Dockerfile', 'file.dockerfile', 'Dockerfile.debian', 'Containerfile.something'],
+    dockerfile: ['Containerfile', 'Dockerfile', 'dockerfile', 'file.Dockerfile', 'file.dockerfile', 'file.Containerfile', 'file.containerfile', 'Dockerfile.debian', 'Containerfile.something'],
     dosbatch: ['file.bat'],
     dosini: ['/etc/yum.conf', '/etc/nfs.conf', '/etc/nfsmount.conf', 'file.ini',
              'npmrc', '.npmrc', 'php.ini', 'php.ini-5', 'php.ini-file', 'php-fpm.conf', 'php-fpm.conf.default', 'www.conf', 'www.conf.default',
@@ -271,6 +274,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     dylanlid: ['file.lid'],
     earthfile: ['Earthfile'],
     ecd: ['file.ecd'],
+    ed: ['file.ed'],
     edif: ['file.edf', 'file.edif', 'file.edo'],
     editorconfig: ['.editorconfig'],
     eelixir: ['file.eex', 'file.leex'],
@@ -337,6 +341,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     gitignore: ['file.git/info/exclude', '.gitignore', '/.config/git/ignore', 'some.git/info/exclude'] + WhenConfigHome('$XDG_CONFIG_HOME/git/ignore') + ['.prettierignore', '.fdignore', '/.config/fd/ignore', '.ignore', '.rgignore', '.dockerignore', '.containerignore', '.npmignore', '.vscodeignore'],
     gitolite: ['gitolite.conf', '/gitolite-admin/conf/file', 'any/gitolite-admin/conf/file'],
     gitrebase: ['git-rebase-todo'],
+    gitrevlist: ['.git-blame-ignore-revs'],
     gitsendemail: ['.gitsendemail.msg.xxxxxx'],
     gkrellmrc: ['gkrellmrc', 'gkrellmrc_x'],
     gleam: ['file.gleam'],
@@ -377,7 +382,9 @@ def s:GetFilenameChecks(): dict<list<string>>
     hercules: ['file.vc', 'file.ev', 'file.sum', 'file.errsum'],
     hex: ['file.hex', 'file.ihex', 'file.ihe', 'file.ihx', 'file.int', 'file.mcs', 'file.h32', 'file.h80', 'file.h86', 'file.a43', 'file.a90'],
     hgcommit: ['hg-editor-file.txt'],
+    hip: ['file.hip'],
     hjson: ['file.hjson'],
+    hlsl: ['file.hlsl'],
     hlsplaylist: ['file.m3u', 'file.m3u8'],
     hog: ['file.hog', 'snort.conf', 'vision.conf'],
     hollywood: ['file.hws'],
@@ -395,6 +402,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     hyprlang: ['hyprlock.conf', 'hyprland.conf', 'hypridle.conf', 'hyprpaper.conf', '/hypr/foo.conf'],
     i3config: ['/home/user/.i3/config', '/home/user/.config/i3/config', '/etc/i3/config', '/etc/xdg/i3/config'],
     ibasic: ['file.iba', 'file.ibi'],
+    icalendar: ['file.ics'],
     icemenu: ['/.icewm/menu', 'any/.icewm/menu'],
     icon: ['file.icn'],
     idris2: ['file.idr'],
@@ -405,6 +413,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     inko: ['file.inko'],
     ipfilter: ['ipf.conf', 'ipf6.conf', 'ipf.rules'],
     ipkg: ['file.ipkg'],
+    ispc: ['file.ispc', 'file.isph'],
     iss: ['file.iss'],
     ist: ['file.ist', 'file.mst'],
     j: ['file.ijs'],
@@ -427,8 +436,9 @@ def s:GetFilenameChecks(): dict<list<string>>
     '.prettierrc', '.firebaserc', '.stylelintrc', '.lintstagedrc', 'file.slnf', 'file.sublime-project', 'file.sublime-settings', 'file.sublime-workspace',
     'file.bd', 'file.bda', 'file.xci', 'flake.lock', 'pack.mcmeta', 'deno.lock', '.swcrc', 'composer.lock', 'symfony.lock'],
     json5: ['file.json5'],
-    jsonc: ['file.jsonc', '.babelrc', '.eslintrc', '.jsfmtrc', '.jshintrc', '.jscsrc', '.vsconfig', '.hintrc', '.swrc', 'jsconfig.json', 'tsconfig.json', 'tsconfig.test.json', 'tsconfig-test.json', '.luaurc', 'bun.lock', expand("$HOME/.config/VSCodium/User/settings.json"), '/home/user/.config/waybar/config' ],
+    jsonc: ['file.jsonc', '.babelrc', '.eslintrc', 'file.hujson', '.jsfmtrc', '.jshintrc', '.jscsrc', '.vsconfig', '.hintrc', '.swrc', 'jsconfig.json', 'osquery.conf', 'tsconfig.json', 'tsconfig.test.json', 'tsconfig-test.json', '.luaurc', 'bun.lock', expand("$HOME/.config/VSCodium/User/settings.json"), '/home/user/.config/waybar/config' ],
     jsonl: ['file.jsonl'],
+    jsonld: ['file.jsonld'],
     jsonnet: ['file.jsonnet', 'file.libsonnet'],
     jsp: ['file.jsp'],
     julia: ['file.jl'],
@@ -503,6 +513,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     manconf: ['/etc/man.conf', 'man.config', 'any/etc/man.conf'],
     maple: ['file.mv', 'file.mpl', 'file.mws'],
     markdown: ['file.markdown', 'file.mdown', 'file.mkd', 'file.mkdn', 'file.mdwn', 'file.md'],
+    marko: ['file.marko'],
     masm: ['file.masm'],
     mason: ['file.mason', 'file.mhtml'],
     master: ['file.mas', 'file.master'],
@@ -550,7 +561,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     mmp: ['file.mmp'],
     modconf: ['/etc/modules.conf', '/etc/modules', '/etc/conf.modules', '/etc/modprobe.file', 'any/etc/conf.modules', 'any/etc/modprobe.file', 'any/etc/modules', 'any/etc/modules.conf'],
     modula3: ['file.m3', 'file.mg', 'file.i3', 'file.ig', 'file.lm3'],
-    mojo: ['file.mojo', 'file.🔥'],
+    mojo: ['file.mojo'],
     monk: ['file.isc', 'file.monk', 'file.ssc', 'file.tsc'],
     moo: ['file.moo'],
     moonscript: ['file.moon'],
@@ -559,7 +570,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     mplayerconf: ['mplayer.conf', '/.mplayer/config', 'any/.mplayer/config'],
     mrxvtrc: ['mrxvtrc', '.mrxvtrc'],
     msidl: ['file.odl', 'file.mof'],
-    msmtp: ['.msmtprc'],
+    msmtp: ['msmtprc', '.msmtprc'],
     msql: ['file.msql'],
     mss: ['file.mss'],
     mupad: ['file.mu'],
@@ -594,6 +605,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     nim: ['file.nim', 'file.nims', 'file.nimble'],
     ninja: ['file.ninja'],
     nix: ['file.nix'],
+    nlp: ['file.nlp'],
     norg: ['file.norg'],
     nq: ['file.nq'],
     nqc: ['file.nqc'],
@@ -630,7 +642,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     pcmk: ['file.pcmk'],
     pdf: ['file.pdf'],
     pem: ['file.pem', 'file.cer', 'file.crt', 'file.csr'],
-    perl: ['file.plx', 'file.al', 'file.psgi', 'gitolite.rc', '.gitolite.rc', 'example.gitolite.rc', '.latexmkrc', 'latexmkrc'],
+    perl: ['file.plx', 'file.psgi', 'gitolite.rc', '.gitolite.rc', 'example.gitolite.rc', '.latexmkrc', 'latexmkrc'],
     pf: ['pf.conf'],
     pfmain: ['main.cf', 'main.cf.proto'],
     php: ['file.php', 'file.php9', 'file.phtml', 'file.ctp', 'file.phpt', 'file.theme'],
@@ -684,6 +696,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     r: ['file.r', '.Rhistory', '.Rprofile', 'Rprofile', 'Rprofile.site'],
     racket: ['file.rkt', 'file.rktd', 'file.rktl'],
     radiance: ['file.rad', 'file.mat'],
+    radvd: ['radvd.conf', '/etc/radvd.conf', 'any/etc/radvd.conf'],
     raku: ['file.pm6', 'file.p6', 'file.t6', 'file.pod6', 'file.raku', 'file.rakumod', 'file.rakudoc', 'file.rakutest'],
     raml: ['file.raml'],
     rapid: ['file.sysx', 'file.Sysx', 'file.SysX', 'file.SYSx', 'file.SYSX', 'file.modx', 'file.Modx', 'file.ModX', 'file.MODx', 'file.MODX'],
@@ -721,7 +734,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     ruby: ['.irbrc', 'irbrc', '.irb_history', 'irb_history', 'file.rb', 'file.rbi', 'file.rbw', 'file.gemspec', 'file.ru', 'Gemfile', 'file.builder',
            'file.rxml', 'file.rjs', 'file.rant', 'file.rake', 'rakefile', 'Rakefile', 'rantfile', 'Rantfile', 'rakefile-file', 'Rakefile-file',
            'Puppetfile', 'Vagrantfile', 'Brewfile'],
-    rust: ['file.rs'],
+    rust: ['file.rs', 'any/.config/evcxr/history.txt'],
     sage: ['file.sage'],
     salt: ['file.sls'],
     samba: ['smb.conf'],
@@ -729,7 +742,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     sass: ['file.sass'],
     sbt: ['file.sbt'],
     scala: ['file.scala', 'file.mill'],
-    scheme: ['file.scm', 'file.ss', 'file.sld', 'file.stsg', 'any/local/share/supertux2/config', '.lips_repl_history', '.guile'],
+    scheme: ['file.scm', 'file.ss', 'file.sld', 'file.stwm', 'file.stl', 'file.stxt', 'file.sprite', 'file.strf', 'file.satc', 'file.stcd', 'file.stf', 'file.stcp', 'file.music', 'file.stsg', 'any/local/share/supertux2/config', 'any/supertux2/levels/world1/info', '.lips_repl_history', '.guile'],
     scilab: ['file.sci', 'file.sce'],
     screen: ['.screenrc', 'screenrc'],
     scss: ['file.scss'],
@@ -744,9 +757,10 @@ def s:GetFilenameChecks(): dict<list<string>>
     sgf: ['file.sgf'],
     sh: ['.bashrc', '.bash_profile', '.bash-profile', '.bash_logout', '.bash-logout', '.bash_aliases', '.bash-aliases', '.bash_history', '.bash-history',
          '/tmp/bash-fc-3Ozjlw', '/tmp/bash-fc.3Ozjlw', 'PKGBUILD', 'file.bash', '/usr/share/doc/bash-completion/filter.sh',
-         '/etc/udev/cdsymlinks.conf', 'any/etc/udev/cdsymlinks.conf', 'file.bats', '.ash_history', 'any/etc/neofetch/config.conf', '.xprofile',
+         '/etc/udev/cdsymlinks.conf', 'any/etc/udev/cdsymlinks.conf', '.ash_history', 'any/etc/neofetch/config.conf', '.xprofile',
          'user-dirs.defaults', 'user-dirs.dirs', 'makepkg.conf', '.makepkg.conf', 'file.mdd', 'file.cygport', '.envrc', '.envrc.file', 'file.envrc', 'devscripts.conf',
-         '.devscripts', 'file.lo', 'file.la', 'file.lai', '/etc/X11/xinit/xinitrc', '/etc/X11/xinit/xserverrc', '~/.xinitrc', '/etc/X11/xinit/xinitrc.d/foobar'],
+         '.devscripts', 'file.lo', 'file.la', 'file.lai', '/etc/X11/xinit/xinitrc', '/etc/X11/xinit/xserverrc', '~/.xinitrc', '/etc/X11/xinit/xinitrc.d/foobar',
+         'any/portage/make.conf', 'any/portage/make.conf/0100_bootstrap_prefix_make.conf'],
     shaderslang: ['file.slang'],
     sieve: ['file.siv', 'file.sieve'],
     sil: ['file.sil'],
@@ -790,8 +804,12 @@ def s:GetFilenameChecks(): dict<list<string>>
     srec: ['file.s19', 'file.s28', 'file.s37', 'file.mot', 'file.srec'],
     srt: ['file.srt'],
     ssa: ['file.ass', 'file.ssa'],
+    sshallowedsigners: ['any/allowed_signers', 'any/.allowed_signers', 'any/file.allowed_signers'],
+    sshauthorizedkeys: ['any/.ssh/authorized_keys'],
     sshconfig: ['ssh_config', '/.ssh/config', '/etc/ssh/ssh_config.d/file.conf', 'any/etc/ssh/ssh_config.d/file.conf', 'any/.ssh/config', 'any/.ssh/file.conf'],
     sshdconfig: ['sshd_config', '/etc/ssh/sshd_config.d/file.conf', 'any/etc/ssh/sshd_config.d/file.conf'],
+    sshpublickey: ['any/.ssh/file.pub', '/etc/ssh/file.pub'],
+    sshknownhosts: ['any/.ssh/known_hosts', '/etc/ssh/ssh_known_hosts'],
     st: ['file.st'],
     starlark: ['file.ipd', 'file.sky', 'file.star', 'file.starlark'],
     stata: ['file.ado', 'file.do', 'file.imata', 'file.mata'],
@@ -885,7 +903,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     taskdata: ['pending.data', 'completed.data', 'undo.data'],
     taskedit: ['file.task'],
     tcl: ['file.tcl', 'file.tm', 'file.tk', 'file.itcl', 'file.itk', 'file.jacl', '.tclshrc', 'tclsh.rc', '.wishrc', '.tclsh-history',
-          '.xsctcmdhistory', '.xsdbcmdhistory', 'vivado.jou', 'vivado.log'],
+          '.xsctcmdhistory', '.xsdbcmdhistory', 'vivado.jou', 'vivado.log', 'file.xdc'],
     teal: ['file.tl'],
     templ: ['file.templ'],
     template: ['file.tmpl'],
@@ -997,7 +1015,7 @@ def s:GetFilenameChecks(): dict<list<string>>
     xslt: ['file.xsl', 'file.xslt'],
     yacc: ['file.yy', 'file.yxx', 'file.y++'],
     yaml: ['file.yaml', 'file.yml', 'file.eyaml', 'file.kyaml', 'file.kyml', 'any/.bundle/config', '.clangd', '.clang-format', '.clang-tidy', 'file.mplstyle', 'matplotlibrc', 'yarn.lock',
-           '/home/user/.kube/config', '/home/user/.kube/kuberc', '.condarc', 'condarc', '.mambarc', 'mambarc', 'pixi.lock', 'buf.lock', 'file.ksy'],
+           '/home/user/.kube/config', '/home/user/.kube/kuberc', '.condarc', 'condarc', '.mambarc', 'mambarc', 'pixi.lock', 'buf.lock', 'file.ksy', 'any/argocd/config', 'file.cff'],
     yang: ['file.yang'],
     yara: ['file.yara', 'file.yar'],
     yuck: ['file.yuck'],
@@ -1094,6 +1112,7 @@ def s:GetScriptChecks(): dict<list<list<string>>>
             ['#!/path/ash'],
             ['#!/path/busybox ash'],
             ['#!/path/busybox sh']],
+    bats:   [['#!/path/bats']],
     csh:    [['#!/path/csh']],
     tcsh:   [['#!/path/tcsh']],
     zsh:    [['#!/path/zsh']],
@@ -1154,6 +1173,7 @@ def s:GetScriptChecks(): dict<list<list<string>>>
     dart:   [['#!/path/dart']],
     bpftrace:  [['#!/path/bpftrace']],
     vim:    [['#!/path/vim']],
+    ed:     [['#!/usr/bin/ed -f']],
   }
 enddef
 
@@ -1172,6 +1192,7 @@ def s:GetScriptEnvChecks(): dict<list<list<string>>>
     python: [['#!/usr/bin/env -S -i VAR=val python -B -u']],
     csh: [['#!/usr/bin/env -S VAR= csh -f']],
     wml: [['#!/usr/bin/env VAR=val --split-string wml']],
+    bats: [['#!/usr/bin/env bats']],
     nix: [['#!/usr/bin/env nix-shell']],
   }
 enddef
@@ -1257,6 +1278,57 @@ endfunc
 " Tests for specific extensions and filetypes.
 " Keep sorted.
 """""""""""""""""""""""""""""""""""""""""""""""""
+
+func Test_al_file()
+  filetype on
+
+  " AL object declaration
+  call writefile(['codeunit 50100 "My Codeunit"', '{', '}'], 'Xfile.al', 'D')
+  split Xfile.al
+  call assert_equal('al', &filetype)
+  bwipe!
+
+  " AL namespace and using declarations before the object
+  call writefile(['namespace Microsoft.Sales;', '', 'using Microsoft.Foundation;'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('al', &filetype)
+  bwipe!
+
+  " Perl AutoLoader chunk
+  call writefile(['# NOTE: Derived from blib/lib/Net/SSLeay.pm.', 'package Net::SSLeay;', 'sub do_https {'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('perl', &filetype)
+  bwipe!
+
+  " AL DotNet alias object, which is a bare keyword on its own line
+  call writefile(['dotnet', '{', '    assembly("mscorlib")', '}'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('al', &filetype)
+  bwipe!
+
+  " Perl code containing AL object kinds as ordinary words
+  call writefile(['sub value {', '  my $table = shift;', '  # report page interface', '}'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('perl', &filetype)
+  bwipe!
+
+  " Perl documentation containing AL object kinds at the start of a line
+  call writefile(['package Foo;', '=pod', 'Table of contents', 'using the -x option', 'table of contents follows'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('perl', &filetype)
+  bwipe!
+
+  " Test dist#ft#FTal()
+
+  let g:filetype_al = 'perl'
+  call writefile(['codeunit 50100 "My Codeunit"'], 'Xfile.al')
+  split Xfile.al
+  call assert_equal('perl', &filetype)
+  bwipe!
+  unlet g:filetype_al
+
+  filetype off
+endfunc
 
 " Since dist#ft#FTm4() looks around for configure.ac
 " the test needs to isolate itself in a fresh temporary project tree,

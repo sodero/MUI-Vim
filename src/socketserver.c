@@ -57,6 +57,7 @@ static char_u	    *server_addr_cwd = NULL; // CWD when server was started, used
 static garray_T	    server_replies;
 
 static channel_T    *client_channels = NULL;
+static int	    client_channel_count = 0;
 
 # define FOR_ALL_CLIENTS(ch) \
     for (ch = client_channels; ch != NULL; ch = ch->ch_ss_next)
@@ -222,19 +223,47 @@ socketserver_cleanup(void)
     ga_clear(&server_replies);
 }
 
+# ifndef MSWIN
+/*
+ * Check that the socket directory "dir" is a real directory owned by the
+ * user.  Otherwise another user could have created it beforehand and control
+ * the sockets inside it.  Remove access for others if needed.
+ * Returns OK or FAIL.
+ */
+    static int
+socketserver_check_dir(char_u *dir, bool quiet)
+{
+    stat_T st;
+
+    if (mch_lstat((char *)dir, &st) == 0
+	    && S_ISDIR(st.st_mode)
+	    && st.st_uid == getuid()
+	    && ((st.st_mode & 077) == 0 || mch_setperm(dir, 0700) == OK))
+	return OK;
+    if (!quiet)
+	semsg(_(e_unsafe_socket_directory_str), dir);
+    return FAIL;
+}
+# endif
+
 /*
  * List available sockets that can be connected to, only in common directories
  * that Vim knows about. Vim instances with custom socket paths will not be
- * detected. Returns a newline separated string on success and NULL on failure.
+ * detected. Returns a list of strings (with reference count not set) on success
+ * and NULL on failure.
  */
-    char_u *
+    list_T *
 socketserver_list(void)
 {
+    list_T *list = list_alloc();
+
+    if (list == NULL)
+	return NULL;
+
 # ifdef MSWIN
     // Only support addresses on Windows
-    return vim_strsave((char_u *)"");
+    return list;
 # else
-    garray_T	    str;
     string_T	    buf;
     string_T	    path;
     DIR		    *dirp;
@@ -255,8 +284,6 @@ socketserver_list(void)
     buf.length = 0;
     path.length = 0;
 
-    ga_init2(&str, 1, 100);
-
     for (size_t i = 0 ; i < ARRAY_LENGTH(known_dirs); i++)
     {
 	const char_u *dir = known_dirs[i];
@@ -275,6 +302,11 @@ socketserver_list(void)
 	dirp = opendir((char *)path.string);
 	if (dirp == NULL)
 	    continue;
+	if (socketserver_check_dir(path.string, true) == FAIL)
+	{
+	    closedir(dirp);
+	    break;
+	}
 
 	// Loop through directory
 	while ((dp = readdir(dirp)) != NULL)
@@ -285,9 +317,8 @@ socketserver_list(void)
 	    buf.length = vim_snprintf_safelen((char *)buf.string, MAXPATHL,
 		    "%s/%s", path.string, dp->d_name);
 
-	    ga_concat_len(&str, (char_u *)dp->d_name,
+	    list_append_string(list, (char_u *)dp->d_name,
 		    buf.length - (path.length + 1));
-	    ga_append(&str, '\n');
 	}
 
 	closedir(dirp);
@@ -298,9 +329,7 @@ socketserver_list(void)
     vim_free(path.string);
     vim_free(buf.string);
 
-    ga_append(&str, NUL);
-
-    return str.ga_data;
+    return list;
 # endif
 }
 
@@ -467,6 +496,8 @@ socketserver_get_path(
 		    (unsigned long int)getuid());
 	    if (vim_mkdir(buf, 0700) == -1 && errno != EEXIST)
 		continue;
+	    if (socketserver_check_dir(buf, quiet) == FAIL)
+		goto unsafe;
 
 	    vim_snprintf((char *)buf, MAXPATHL, "%s/vim-%lu/%s", dir,
 		    (unsigned long int)getuid(), name);
@@ -476,6 +507,8 @@ socketserver_get_path(
 	    vim_snprintf((char *)buf, MAXPATHL, "%s/vim", dir);
 	    if (vim_mkdir(buf, 0700) == -1 && errno != EEXIST)
 		continue;
+	    if (socketserver_check_dir(buf, quiet) == FAIL)
+		goto unsafe;
 
 	    vim_snprintf((char *)buf, MAXPATHL, "%s/vim/%s", dir, name);
 	}
@@ -485,7 +518,9 @@ socketserver_get_path(
 	if (new)
 	{
 	    emsg_silent++;
+	    emsg_off++;
 	    channel = channel_open_unix((char *)buf, NULL);
+	    emsg_off--;
 	    emsg_silent--;
 
 	    if (channel != NULL)
@@ -523,6 +558,12 @@ socketserver_get_path(
 
     vim_free(buf);
     return NULL;
+
+unsafe:
+    if (fatal != NULL)
+	*fatal = true;
+    vim_free(buf);
+    return NULL;
 # endif
 }
 
@@ -538,6 +579,8 @@ socketserver_client_close(channel_T *channel)
 	channel->ch_ss_prev->ch_ss_next = channel->ch_ss_next;
     if (channel->ch_ss_next != NULL)
 	channel->ch_ss_next->ch_ss_prev = channel->ch_ss_prev;
+    if (client_channel_count > 0)
+	--client_channel_count;
 
     ch_log(NULL, "socketserver: client channel closed");
 }
@@ -548,14 +591,37 @@ socketserver_client_close(channel_T *channel)
     static void
 socketserver_accept(channel_T *channel)
 {
+    if (client_channel_count >= MAX_CLIENT_CHANNELS)
+    {
+	// Too many client connections: refuse this one instead of letting the
+	// channel's file descriptor overflow the select()/poll() sets.
+	ch_log(NULL, "socketserver: too many clients, refusing connection");
+	channel_close(channel, FALSE);
+	channel_unref(channel);
+	return;
+    }
+
     channel->ch_socketserver = true;
     channel->ch_ss_close_cb = socketserver_client_close;
 
-    channel->ch_ss_next = client_channels;
-    channel->ch_ss_prev = NULL;
-    if (client_channels != NULL)
-	client_channels->ch_ss_prev = channel;
-    client_channels = channel;
+    // Append the client, so that commands are processed in the order the
+    // clients were accepted, not reversed.
+    channel->ch_ss_next = NULL;
+    if (client_channels == NULL)
+    {
+	channel->ch_ss_prev = NULL;
+	client_channels = channel;
+    }
+    else
+    {
+	channel_T *last = client_channels;
+
+	while (last->ch_ss_next != NULL)
+	    last = last->ch_ss_next;
+	last->ch_ss_next = channel;
+	channel->ch_ss_prev = last;
+    }
+    ++client_channel_count;
 
     // We will read the command from the client later in the input loop.
     ch_log(NULL, "socketserver: accepted new client");
@@ -860,7 +926,11 @@ socketserver_wait(channel_T *channel, int timeout)
 
 	FOR_ALL_CLIENTS(ch)
 	{
-	    if (ch->CH_SOCK_FD != INVALID_FD)
+	    if (ch->CH_SOCK_FD != INVALID_FD
+#  ifdef FD_SETSIZE
+		    && (int)ch->CH_SOCK_FD < FD_SETSIZE
+#  endif
+		    )
 	    {
 		FD_SET(ch->CH_SOCK_FD, &rfds);
 		if (maxfd < (int)ch->CH_SOCK_FD)
@@ -891,6 +961,9 @@ socketserver_wait(channel_T *channel, int timeout)
 
 	    FOR_ALL_CLIENTS(ch)
 		if (ch->CH_SOCK_FD != INVALID_FD
+#  ifdef FD_SETSIZE
+			&& (int)ch->CH_SOCK_FD < FD_SETSIZE
+#  endif
 			&& FD_ISSET(ch->CH_SOCK_FD, &rfds))
 		    channel_check(ch, PART_SOCK);
 
@@ -908,7 +981,7 @@ socketserver_wait(channel_T *channel, int timeout)
 	    continue;
 	}
 # else
-	struct pollfd   fds[MAX_OPEN_CHANNELS + 1];
+	struct pollfd   fds[MAX_OPEN_CHANNELS + 1 + MAX_CLIENT_CHANNELS];
 	int		nfd = 0;
 	int		channel_idx = -1;
 	int		server_idx = -1;

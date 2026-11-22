@@ -1270,32 +1270,35 @@ gui_mch_browse(int saving,
 
 	gfilter = gtk_file_filter_new();
 	patt = alloc(STRLEN(filter));
-	while (p != NULL && *p != NUL)
+	if (patt != NULL)
 	{
-	    if (*p == '\n' || *p == ';' || *p == '\t')
+	    while (p != NULL && *p != NUL)
 	    {
-		STRNCPY(patt, filter, i);
-		patt[i] = '\0';
-		if (*p == '\t')
-		    gtk_file_filter_set_name(gfilter, (gchar *)patt);
+		if (*p == '\n' || *p == ';' || *p == '\t')
+		{
+		    STRNCPY(patt, filter, i);
+		    patt[i] = '\0';
+		    if (*p == '\t')
+			gtk_file_filter_set_name(gfilter, (gchar *)patt);
+		    else
+		    {
+			gtk_file_filter_add_pattern(gfilter, (gchar *)patt);
+			if (*p == '\n')
+			{
+			    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(fc),
+				    gfilter);
+			    if (*(p + 1) != NUL)
+				gfilter = gtk_file_filter_new();
+			}
+		    }
+		    filter = ++p;
+		    i = 0;
+		}
 		else
 		{
-		    gtk_file_filter_add_pattern(gfilter, (gchar *)patt);
-		    if (*p == '\n')
-		    {
-			gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(fc),
-								     gfilter);
-			if (*(p + 1) != NUL)
-			    gfilter = gtk_file_filter_new();
-		    }
+		    p++;
+		    i++;
 		}
-		filter = ++p;
-		i = 0;
-	    }
-	    else
-	    {
-		p++;
-		i++;
 	    }
 	}
 	vim_free(patt);
@@ -1484,6 +1487,7 @@ split_button_string(char_u *button_string, int *n_buttons)
     return array;
 }
 
+# if !GTK_CHECK_VERSION(3,10,0)
     static char **
 split_button_translation(const char *message)
 {
@@ -1548,12 +1552,15 @@ button_equal(const char *a, const char *b)
 
     return (*a == '\0' && *b == '\0');
 }
+# endif
 
     static void
 dialog_add_buttons(GtkDialog *dialog, char_u *button_string)
 {
+# if !GTK_CHECK_VERSION(3,10,0)
     char    **ok;
     char    **ync;  // "yes no cancel"
+# endif
     char    **buttons;
     int	    n_buttons = 0;
     int	    idx;
@@ -1565,11 +1572,7 @@ dialog_add_buttons(GtkDialog *dialog, char_u *button_string)
     // Check 'v' flag in 'guioptions': vertical button placement.
     if (vim_strchr(p_go, GO_VERTICAL) != NULL)
     {
-# if GTK_CHECK_VERSION(3,0,0)
-	// Add GTK+ 3 code if necessary.
-	// N.B. GTK+ 3 doesn't allow you to access vbox and action_area via
-	// the C API.
-# else
+# if !GTK_CHECK_VERSION(3,0,0)
 	GtkWidget	*vbutton_box;
 
 	vbutton_box = gtk_vbutton_box_new();
@@ -1586,8 +1589,10 @@ dialog_add_buttons(GtkDialog *dialog, char_u *button_string)
      * this way has the compelling advantage that translations need not to
      * be touched at all.  See below what 'ok' and 'ync' are used for.
      */
+# if !GTK_CHECK_VERSION(3,10,0)
     ok	    = split_button_translation(N_("&Ok"));
     ync     = split_button_translation(N_("&Yes\n&No\n&Cancel"));
+# endif
     buttons = split_button_string(button_string, &n_buttons);
 
     /*
@@ -1611,18 +1616,9 @@ dialog_add_buttons(GtkDialog *dialog, char_u *button_string)
 	 * since anyone can create their own dialogs using Vim functions.
 	 * Thus we have to check for those too.
 	 */
+# if !GTK_CHECK_VERSION(3,10,0)
 	if (ok != NULL && ync != NULL) // almost impossible to fail
 	{
-# if GTK_CHECK_VERSION(3,10,0)
-	    if	    (button_equal(label, ok[0]))    label = _("OK");
-	    else if (button_equal(label, ync[0]))   label = _("Yes");
-	    else if (button_equal(label, ync[1]))   label = _("No");
-	    else if (button_equal(label, ync[2]))   label = _("Cancel");
-	    else if (button_equal(label, "Ok"))     label = _("OK");
-	    else if (button_equal(label, "Yes"))    label = _("Yes");
-	    else if (button_equal(label, "No"))     label = _("No");
-	    else if (button_equal(label, "Cancel")) label = _("Cancel");
-# else
 	    if	    (button_equal(label, ok[0]))    label = GTK_STOCK_OK;
 	    else if (button_equal(label, ync[0]))   label = GTK_STOCK_YES;
 	    else if (button_equal(label, ync[1]))   label = GTK_STOCK_NO;
@@ -1631,19 +1627,21 @@ dialog_add_buttons(GtkDialog *dialog, char_u *button_string)
 	    else if (button_equal(label, "Yes"))    label = GTK_STOCK_YES;
 	    else if (button_equal(label, "No"))     label = GTK_STOCK_NO;
 	    else if (button_equal(label, "Cancel")) label = GTK_STOCK_CANCEL;
-# endif
 	}
+# endif
 	label8 = CONVERT_TO_UTF8((char_u *)label);
 	gtk_dialog_add_button(dialog, (const gchar *)label8, idx);
 	CONVERT_TO_UTF8_FREE(label8);
     }
 
+# if !GTK_CHECK_VERSION(3,10,0)
     if (ok != NULL)
 	vim_free(*ok);
     if (ync != NULL)
 	vim_free(*ync);
     vim_free(ok);
     vim_free(ync);
+# endif
     vim_free(buttons);
     vim_free(button_string);
 }
@@ -1706,11 +1704,11 @@ gui_mch_dialog(int	type,	    // type of dialog
     int		response;
     DialogInfo  dialoginfo;
 
+    ++gui.dialogs_active;
+
     dialog = create_message_dialog(type, title, message);
     dialoginfo.dialog = GTK_DIALOG(dialog);
     dialog_add_buttons(GTK_DIALOG(dialog), buttons);
-    gtk_window_set_type_hint(GTK_WINDOW(dialog),
-			     GDK_WINDOW_TYPE_HINT_POPUP_MENU);
 
     if (textfield != NULL)
     {
@@ -1793,6 +1791,8 @@ gui_mch_dialog(int	type,	    // type of dialog
 	gtk_widget_destroy(dialog);
     }
 
+    if (gui.dialogs_active > 0)
+	--gui.dialogs_active;
     return response > 0 ? response : 0;
 }
 

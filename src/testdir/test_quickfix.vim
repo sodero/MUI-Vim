@@ -3184,6 +3184,24 @@ func Test_cwindow_jump()
   set efm&vim
 endfunc
 
+" ":silent make" leaves the screen as it was: the shell is run without the
+" hit-enter prompt, and the window is drawn again without waiting for CTRL-L.
+func Test_silent_make_redraw()
+  CheckScreendump
+  CheckUnix
+
+  let lines =<< trim END
+    call setline(1, ['one', 'two'])
+    set makeprg=echo\ hello
+  END
+  call writefile(lines, 'XtestSilentMake', 'D')
+  let buf = RunVimInTerminal('-S XtestSilentMake', #{rows: 8})
+  call term_sendkeys(buf, ":silent make\<CR>")
+  call VerifyScreenDump(buf, 'Test_quickfix_silent_make_1', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_cwindow_highlight()
   CheckScreendump
 
@@ -5981,6 +5999,46 @@ func Test_qftextfunc_other_loclist()
   %bw!
 endfunc
 
+func Test_qftextfunc_result_refcount()
+  let save_qftf = &quickfixtextfunc
+  new
+  try
+    for cchar in ['c', 'l']
+      call s:setup_commands(cchar)
+      let result = ['custom text']
+      let &quickfixtextfunc = {info -> result}
+      let refcount = test_refcount(result)
+      call g:Xsetlist([{'text': 'entry', 'lnum': 1}], 'r')
+      Xopen
+      call assert_equal(['custom text'], getline(1, '$'))
+      call assert_equal(refcount, test_refcount(result))
+
+      " Replacing and appending entries must release the callback result.
+      call g:Xsetlist([{'text': 'replacement', 'lnum': 2}], 'r')
+      call assert_equal(['custom text'], getline(1, '$'))
+      call assert_equal(refcount, test_refcount(result))
+      call g:Xsetlist([{'text': 'appended', 'lnum': 3}], 'a')
+      call assert_equal(['custom text', 'custom text'], getline(1, '$'))
+      call assert_equal(refcount, test_refcount(result))
+
+      " Empty and invalid custom entries still own a list reference.
+      let result[0] = ''
+      call g:Xsetlist([{'text': 'default text'}], 'r')
+      call assert_equal(['|| default text'], getline(1, '$'))
+      call assert_equal(refcount, test_refcount(result))
+      let result[0] = []
+      call assert_fails("call g:Xsetlist([{'text': 'default text'}], 'r')",
+            \ 'E730:')
+      call assert_equal(refcount, test_refcount(result))
+      Xclose
+      call g:Xsetlist([], 'f')
+    endfor
+  finally
+    let &quickfixtextfunc = save_qftf
+    bwipe!
+  endtry
+endfunc
+
 " Running :lhelpgrep command more than once in a help window, doesn't jump to
 " the help topic
 func Test_lhelpgrep_from_help_window()
@@ -5996,6 +6054,39 @@ func Test_lhelpgrep_from_help_window()
   call assert_equal('a.txt', fnamemodify(@%, ":p:t"))
   let &rtp = save_rtp
   new | only!
+endfunc
+
+" Jumping to an entry in another help file should add an entry to the
+" jumplist
+func Xhelp_jumplist_tests(cchar)
+  call s:setup_commands(a:cchar)
+  call mkdir('Xjumpdir/doc', 'pR')
+  call writefile(['*Xjumpa.txt*', 'one', 'jumpword', 'three', 'four', 'five'],
+        \ 'Xjumpdir/doc/Xjumpa.txt')
+  call writefile(['*Xjumpb.txt*', 'one', 'two', 'three', 'four', 'five'],
+        \ 'Xjumpdir/doc/Xjumpb.txt')
+  helptags Xjumpdir/doc
+  let save_rtp = &rtp
+  let &rtp = 'Xjumpdir,' .. &rtp
+
+  Xhelpgrep jumpword
+  help Xjumpb.txt
+  5
+  Xfirst
+  call assert_equal(['Xjumpa.txt', 3], [expand('%:t'), line('.')])
+  exe "normal! \<C-O>"
+  call assert_equal(['Xjumpb.txt', 5], [expand('%:t'), line('.')])
+  exe "normal! 1\<C-I>"
+  call assert_equal(['Xjumpa.txt', 3], [expand('%:t'), line('.')])
+
+  let &rtp = save_rtp
+  helpclose
+  new | only!
+endfunc
+
+func Test_help_jumplist()
+  call Xhelp_jumplist_tests('c')
+  call Xhelp_jumplist_tests('l')
 endfunc
 
 " Test for the crash fixed by 7.3.715

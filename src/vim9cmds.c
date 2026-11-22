@@ -1153,7 +1153,7 @@ compile_for(char_u *arg_start, cctx_T *cctx)
 		    goto failed;
 	    }
 
-	    if (get_var_dest(name, &dest, CMD_for, &opt_flags,
+	    if (get_var_dest(name, &dest, CMD_for, FALSE, &opt_flags,
 					      &vimvaridx, &type, cctx) == FAIL)
 		goto failed;
 	    if (dest != dest_local)
@@ -1728,7 +1728,7 @@ compile_catch(char_u *arg, cctx_T *cctx)
 	emsg(_(e_catch_unreachable_after_catch_all));
 	return NULL;
     }
-    if (!cctx->ctx_had_return)
+    if (!cctx->ctx_had_return && !cctx->ctx_had_throw)
 	scope->se_u.se_try.ts_no_return = TRUE;
 
     if (cctx->ctx_skip != SKIP_YES)
@@ -1844,6 +1844,12 @@ compile_finally(char_u *arg, cctx_T *cctx)
 	return NULL;
     }
 
+    // If the preceding "try" or "catch" block didn't end in a "return" or a
+    // "throw" statement, a pending return/throw from before "finally" cannot
+    // be relied on to terminate the try statement.
+    if (!cctx->ctx_had_return && !cctx->ctx_had_throw)
+	scope->se_u.se_try.ts_no_return = TRUE;
+
     if (cctx->ctx_skip != SKIP_YES)
     {
 	// End :catch or :finally scope: set value in ISN_TRY instruction
@@ -1955,13 +1961,20 @@ compile_endtry(char_u *arg, cctx_T *cctx)
 	}
     }
 
-    // If there is a finally clause that ends in return then we will return.
-    // If one of the blocks didn't end in "return" or we did not catch all
-    // exceptions reset the had_return flag.
-    if (!(scope->se_u.se_try.ts_has_finally && cctx->ctx_had_return)
-	    && (scope->se_u.se_try.ts_no_return
-		|| !scope->se_u.se_try.ts_caught_all))
-	cctx->ctx_had_return = FALSE;
+    // The try statement terminates (always returns or throws) if:
+    // - a "finally" clause always returns or throws, overriding everything
+    //   that came before it, or
+    // - every earlier block (the "try" body and each "catch") terminated
+    //   and, when there is no "finally" to override it, the last such block
+    //   also terminates.  A "catch" pattern not matching an exception still
+    //   terminates: the exception then simply propagates instead of falling
+    //   through to what follows "endtry".
+    cctx->ctx_had_return =
+	(scope->se_u.se_try.ts_has_finally
+			   && (cctx->ctx_had_return || cctx->ctx_had_throw))
+	|| (!scope->se_u.se_try.ts_no_return
+			   && (scope->se_u.se_try.ts_has_finally
+			       || cctx->ctx_had_return || cctx->ctx_had_throw));
 
     compile_endblock(cctx);
 
@@ -2067,7 +2080,7 @@ compile_defer(char_u *arg_start, cctx_T *cctx)
     if (*arg == '(')
     {
 	// a lambda function
-	if (compile_lambda(&arg, cctx) != OK)
+	if (compile_lambda(&arg, cctx, NULL) != OK)
 	    return NULL;
 	paren = vim_strchr(arg, '(');
 	if (paren == NULL)
@@ -2097,11 +2110,12 @@ compile_defer(char_u *arg_start, cctx_T *cctx)
 	*paren = '(';
     }
 
-    // check for function type
+    // check for function type, "any" (e.g. an imported function) is checked
+    // at runtime
     if (cctx->ctx_skip != SKIP_YES)
     {
 	type = get_type_on_stack(cctx, 0);
-	if (type->tt_type != VAR_FUNC)
+	if (type->tt_type != VAR_FUNC && type->tt_type != VAR_ANY)
 	{
 	    emsg(_(e_function_name_required));
 	    return NULL;
@@ -2124,8 +2138,9 @@ compile_defer(char_u *arg_start, cctx_T *cctx)
 			&argtypes, shuffled_argtypes) == FAIL)
 		return NULL;
 	}
-	else if (check_func_args_from_type(cctx, type, argcount, TRUE,
-		    arg_start) == FAIL)
+	else if (type->tt_type == VAR_FUNC
+		&& check_func_args_from_type(cctx, type, argcount, TRUE,
+							    arg_start) == FAIL)
 	    return NULL;
 
 	defer_var_idx = get_defer_var_idx(cctx);
@@ -2350,30 +2365,18 @@ compile_exec(char_u *line_arg, exarg_T *eap, cctx_T *cctx)
 	}
 	else if (eap->cmdidx == CMD_command || eap->cmdidx == CMD_autocmd)
 	{
-	    // If there is a trailing '{' read lines until the '}'
-	    p = eap->arg + STRLEN(eap->arg) - 1;
-	    while (p > eap->arg && VIM_ISWHITE(*p))
-		--p;
-	    if (*p == '{')
-	    {
-		exarg_T ea;
-		int	flags = 0;  // unused
-		int	start_lnum = SOURCING_LNUM;
+	    exarg_T ea;
+	    int	    flags = 0;  // unused
+	    int	    start_lnum = SOURCING_LNUM;
 
-		CLEAR_FIELD(ea);
-		ea.arg = eap->arg;
-		fill_exarg_from_cctx(&ea, cctx);
-		(void)may_get_cmd_block(&ea, p, &tofree, &flags);
-		if (tofree != NULL)
-		{
-		    *p = NUL;
-		    line = concat_str(line, tofree);
-		    if (line == NULL)
-			goto theend;
-		    vim_free(tofree);
-		    tofree = line;
-		    SOURCING_LNUM = start_lnum;
-		}
+	    CLEAR_FIELD(ea);
+	    ea.arg = eap->arg;
+	    fill_exarg_from_cctx(&ea, cctx);
+	    p = may_get_cmd_block(&ea, line, &tofree, &flags);
+	    if (tofree != NULL)
+	    {
+		line = p;
+		SOURCING_LNUM = start_lnum;
 	    }
 	}
     }

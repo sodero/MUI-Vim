@@ -44,6 +44,32 @@ Before submitting any patch, at minimum:
 2. Relevant tests pass.
 3. The code matches the style of the file being edited.
 
+### Memory checks (valgrind / ASan)
+
+Changes that allocate or free memory, change reference counting, or touch
+types, script reloading or error paths should be checked for memory errors
+*and* leaks.  The CI "Linux ASan" job runs LeakSanitizer and fails on leaks.
+
+- Build with `-DEXITFREE` (`LEAK_CFLAGS` in `src/Makefile`), otherwise memory
+  still in use at exit is reported as leaked.
+- valgrind: always enable the leak check, and check the log for "Invalid"
+  and "definitely lost" entries.  Without `--leak-check=full` (or with
+  `valgrind -q`), leaks are not reported in detail:
+
+      cd src/testdir
+      make test_name.res VALGRIND="valgrind --tool=memcheck \
+          --leak-check=full --errors-for-leak-kinds=definite \
+          --num-callers=45 --log-file=valgrind.test_name"
+
+- ASan: uncomment one of the `SANITIZER_CFLAGS` lines in `src/Makefile` and
+  rebuild, this matches what CI does.
+- In a build with X11 clipboard support, valgrind reports a leak from libXt
+  under `setup_term_clip()` for every run.  This is not a Vim leak; ignore
+  it or use a suppression file.
+- An error path is a common place for a leak: a test that expects an error
+  (`v9.CheckSourceFailure()`, `assert_fails()`) can pass while the failing
+  code leaks.  Run such tests under valgrind or ASan too.
+
 ## Layout
 
 - `src/` - the C source. Subsystem names are usually obvious from filenames
@@ -74,7 +100,7 @@ Before submitting any patch, at minimum:
 Vim uses a strict commit message format. The subject line is a
 one-sentence **problem statement**, not a description of the fix:
 
-    patch 9.2.NNNN: short description of the problem
+    short description of the problem
 
     Problem:  Restatement of the problem as a full sentence, possibly
               with a reporter attribution in parentheses.
@@ -88,6 +114,7 @@ one-sentence **problem statement**, not a description of the fix:
     related: #NNNN
     closes:  #NNNN
 
+    Assisted-by: <AI tool>
     Co-authored-by: Name
     Signed-off-by: Author Name <email>
 
@@ -105,10 +132,11 @@ Rules:
   **`related:` references related issues**, including issues that caused this
   one.
   All can appear. Colon, aligned, no trailing period.
-- **`Signed-off-by:` is required** — DCO.
-- **`Co-Authored-By:` is allowed** and is the accepted way to
-  acknowledge AI assistance transparently. Human
-  coauthors should usually also have their own Signed-off-by.
+- **`Signed-off-by:` is required** for the Developer Certificate of Origin (DCO).
+- **`Co-Authored-by:` is allowed** and is the accepted way to
+  acknowledge human assistance transparently. Human coauthors should usually
+  also have their own Signed-off-by.
+- **`Assisted-by:` is required** when AI was used.
 
 ## C code conventions
 
@@ -216,6 +244,17 @@ Further rules, not spelled out here, live in `runtime/doc/develop.txt`:
   `VerifyScreenDump`, and live dumps in `src/testdir/dumps/`.
 - `v9.CheckScriptSuccess(lines)` / `v9.CheckScriptFailure(lines, error, lnum)`
   are the standard way to test Vim9 script behavior at script-load time.
+- **Garbage Collection tests** Always write GC tests as a legacy func
+  Test_...(), using let lines =<< trim END and call
+  v9.CheckSourceSuccess(lines) with test_garbagecollect_now() invoked at script
+  level inside lines (see Test_enum_garbagecollect() in
+  src/testdir/test_vim9_enum.vim). Never call test_garbagecollect_now() while a
+  Vim9 :def function is on the call stack—including passing lines from a def
+  test—because :def stack values are not marked during GC, resulting in memory
+  errors or crashes.
+- A test for a memory error or leak usually passes in a normal build.  Say
+  in a comment that it is only detected with valgrind or ASan, and check
+  with valgrind that it reports the problem before the fix and not after.
 - When fixing a bug reported as an issue, include a test that
   reproduces the original report, not just a minimal synthetic case.
 - Tests for Syntax runtime are in `runtime/syntax/testdir`
@@ -307,6 +346,9 @@ the disclosure process described there.
 7. For multi-patch series: each commit compiles and passes its own
    tests. A known-broken intermediate state that a later patch fixes
    is not acceptable — squash instead.
+8. For changes touching memory management, the relevant tests were run
+   under valgrind with `--leak-check=full` (or an ASan build) without new
+   errors or leaks.
 
 ## When in doubt
 

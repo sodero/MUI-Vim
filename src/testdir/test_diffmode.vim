@@ -250,6 +250,24 @@ func Test_diffget_diffput()
   %bwipe!
 endfunc
 
+" Undo after getting lines into an empty buffer must leave it empty again
+func Test_diffget_undo_empty_buffer()
+  enew!
+  diffthis
+  new
+  call setline(1, ['1', '2'])
+  diffthis
+
+  wincmd p
+  normal do
+  call assert_equal(['1', '2'], getline(1, '$'))
+  undo
+  call assert_equal([''], getline(1, '$'))
+
+  windo diffoff
+  %bwipe!
+endfunc
+
 " Test putting two changes from one buffer to another
 func Test_diffput_two()
   new a
@@ -2662,6 +2680,29 @@ func Test_diff_inline_multibuffer_empty_block()
   call StopVimInTerminal(buf)
 endfunc
 
+" An inline:word diff block that starts with inserted words has df_count zero
+" for the first buffer, then the index of its last line is negative.  This
+" caused a heap-buffer underflow
+func Test_diff_inline_word_empty_block()
+  set diffopt=internal,filler,inline:word
+  enew!
+  call setline(1, ['b c', 'y z'])
+  diffthis
+  vnew
+  call setline(1, ['a b c d e', 'x y z w v'])
+  diffthis
+  redraw
+
+  " Part of the line is highlighted, not all of it.
+  let attrs = map(range(1, 9), 'screenattr(1, v:val)')
+  call assert_true(len(uniq(sort(attrs))) > 1)
+
+  diffoff!
+  set diffopt&
+  bwipe!
+  bwipe!
+endfunc
+
 func Test_diffget_diffput_linematch()
   CheckScreendump
   call delete('.Xdifile1.swp')
@@ -3626,6 +3667,173 @@ func Test_diffput_to_empty_buf()
   call VerifyScreenDump(buf, 'Test_diffput_to_empty_buf_03', {})
 
   call StopVimInTerminal(buf)
+endfunc
+
+" Undo can change which lines correspond in a diff. 'cursorbind' must update
+" the other window even when the cursor here did not move.
+func Test_diff_cursorbind_after_undo()
+  call setline(1, ['x', 'y', 'c', 'd'])
+  let w1 = win_getid()
+  new
+  call setline(1, ['p', 'q', 'c', 'd'])
+  let w2 = win_getid()
+  windo diffthis
+  call win_gotoid(w1)
+
+  normal! 2dd
+  call assert_equal(1, line('.', w1))
+  call assert_equal(1, line('.', w2))
+  normal! jk
+  call assert_equal(1, line('.', w1))
+  call assert_equal(3, line('.', w2))
+
+  normal! u
+  call assert_equal(1, line('.', w1))
+  call assert_equal(1, line('.', w2))
+
+  %bw!
+endfunc
+
+func Test_diffupdated_close_window_fails()
+  new
+  only
+  call setline(1, ['one', 'two', 'three'])
+  let w1 = win_getid()
+  vnew
+  call setline(1, ['one', 'Two', 'three'])
+  windo diffthis
+  call win_gotoid(w1)
+
+  augroup TestDiffUpdated
+    autocmd!
+    autocmd DiffUpdated * bw!
+  augroup END
+
+  try
+  diffupdate
+  catch
+  endtry
+
+  augroup TestDiffUpdated
+    autocmd!
+  augroup END
+  augroup! TestDiffUpdated
+
+  call assert_equal(2, winnr('$'))
+
+  diffoff!
+  %bw!
+endfunc
+
+" Redrawing folds scans the diff block list.  The scan is resumed from a
+" remembered position (the "finger") when the line number does not move
+" backwards, so make sure it yields exactly the same folds as a full scan
+" with many changes, when walking up and down, in both windows, and after an
+" edit invalidates the finger.
+func Test_diff_fold_scan_finger()
+  enew!
+  let lines = []
+  for i in range(1, 600)
+    call add(lines, string(i))
+  endfor
+  call setline(1, lines)
+  diffthis
+  let winone = win_getid()
+  new
+  let other = copy(lines)
+  " Change one line in every 30-line block, far enough apart to stay separate.
+  let changes = range(30, 570, 30)
+  for c in changes
+    let other[c - 1] = 'x' . other[c - 1]
+  endfor
+  call setline(1, other)
+  diffthis
+  let wintwo = win_getid()
+
+  set diffopt=internal,filler,context:4
+  diffupdate
+  " Park the cursor on a changed (never folded) line so the fold under the
+  " cursor is not opened, which would perturb the checks below.
+  call cursor(300, 1)
+  normal! zx
+
+  " Fold boundaries derived independently from the change positions: each
+  " change at line c keeps [c - 4, c + 4] visible, the gaps are closed folds.
+  let expected = []
+  let prev_end = 0
+  for c in changes
+    if c - 4 - 1 >= prev_end + 1
+      call add(expected, [prev_end + 1, c - 4 - 1])
+    endif
+    let prev_end = c + 4
+  endfor
+  if prev_end + 1 <= 600
+    call add(expected, [prev_end + 1, 600])
+  endif
+
+  " Walk the folds forward (lnum increasing: exercises the resume path).
+  for [s, e] in expected
+    call assert_equal(s, foldclosed(s), 'foldclosed at ' . s)
+    call assert_equal(e, foldclosedend(s), 'foldclosedend at ' . s)
+  endfor
+
+  " Walk the folds backward (lnum decreasing: forces the finger to restart).
+  for [s, e] in reverse(copy(expected))
+    call assert_equal(s, foldclosed(e), 'reverse foldclosed at ' . e)
+    call assert_equal(e, foldclosedend(e), 'reverse foldclosedend at ' . e)
+  endfor
+
+  " The context lines around every change must not be in a closed fold.
+  for c in changes
+    call assert_equal(-1, foldclosed(c), 'change line ' . c . ' visible')
+  endfor
+
+  " The other window (different buffer index) must produce the same folds.
+  call win_gotoid(winone)
+  call cursor(300, 1)
+  normal! zx
+  for [s, e] in expected
+    call assert_equal(s, foldclosed(s), 'winone foldclosed at ' . s)
+    call assert_equal(e, foldclosedend(s), 'winone foldclosedend at ' . s)
+  endfor
+
+  " Editing invalidates the finger; a new change deep inside a fold must split
+  " it and become visible.
+  call win_gotoid(wintwo)
+  call cursor(300, 1)
+  call setline(315, 'x' . getline(315))
+  diffupdate
+  normal! zx
+  call assert_equal(305, foldclosed(305))
+  call assert_equal(310, foldclosedend(305))
+  call assert_equal(-1, foldclosed(315))
+  call assert_equal(320, foldclosed(320))
+  call assert_equal(325, foldclosedend(320))
+
+  diffoff!
+  %bwipe!
+  set diffopt&
+endfunc
+
+func Test_diff_fold_in_other_tabpage()
+  call writefile(range(1, 100), 'Xdifffold1', 'D')
+  call writefile(range(1, 49) + ['changed'] + range(51, 100), 'Xdifffold2', 'D')
+  tabedit Xdifffold1
+  leftabove vertical diffsplit Xdifffold2
+  diffupdate
+  1tabnext
+  " Changing the buffer updates the folds of the diff window in another tab
+  call setbufline(bufnr('Xdifffold1'), 1, '1')
+  2tabnext
+  for nr in [1, 2]
+    exe nr .. 'wincmd w'
+    call assert_equal([1, 43], [foldclosed(1), foldclosedend(1)], 'window ' .. nr)
+    call assert_equal(-1, foldclosed(50), 'window ' .. nr)
+    call assert_equal([57, 100], [foldclosed(100), foldclosedend(100)], 'window ' .. nr)
+  endfor
+  diffoff!
+  tabclose!
+  %bwipe!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

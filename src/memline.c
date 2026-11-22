@@ -684,6 +684,13 @@ ml_setname(buf_T *buf)
 	if (*dirp == NUL)	    // tried all directories, fail
 	    break;
 	fname = findswapname(buf, &dirp, mfp->mf_fname);
+	// autocmd may have freed mfp if findswapname creates
+	// different swapfile name
+	if (buf->b_ml.ml_mfp != mfp)
+	{
+	    vim_free(fname);
+	    return;
+	}
 						    // alloc's fname
 	if (dirp == NULL)	    // out of memory
 	    break;
@@ -810,6 +817,12 @@ ml_open_file(buf_T *buf)
 	// and creating it, another Vim creates the file.  In that case the
 	// creation will fail and we will use another directory.
 	fname = findswapname(buf, &dirp, NULL); // allocates fname
+	// autocmd may have freed mfp, grr!
+	if (buf->b_ml.ml_mfp != mfp)
+	{
+	    vim_free(fname);
+	    return;
+	}
 	if (dirp == NULL)
 	    break;  // out of memory
 	if (fname == NULL)
@@ -1680,6 +1693,20 @@ ml_recover(int checkext)
 		     */
 		    has_error = FALSE;
 
+		    // Verify the cached block's actual size matches the
+		    // pointer entry's pe_page_count.  mf_get() cache hits
+		    // return the original block without resizing, so a
+		    // crafted swap file referencing the same block twice
+		    // with different pe_page_count values would cause an
+		    // OOB write below.
+		    if (hp->bh_page_count != page_count)
+		    {
+			++error;
+			ml_append(lnum++, (char_u *)_("??? BLOCK PAGE COUNT MISMATCH"),
+							    (colnr_T)0, TRUE);
+			page_count = hp->bh_page_count;
+		    }
+
 		    // Check the length of the block.
 		    // If wrong, use the length given in the pointer block.
 		    if (page_count * mfp->mf_page_size != dp->db_txt_end)
@@ -2404,7 +2431,7 @@ swapfile_unchanged(char_u *fname)
     }
 
     // the ID and magic number must be correct
-    if (ml_check_b0_id(&b0) == FAIL|| b0_magic_wrong(&b0))
+    if (ml_check_b0_id(&b0) == FAIL || b0_magic_wrong(&b0))
 	ret = FALSE;
 
     // must be unchanged
@@ -3808,6 +3835,11 @@ adjust_text_props_for_delete(
 		uint16_t pc;
 
 		mch_memmove(&pc, text + textlen, PROP_COUNT_SIZE);
+		if (!text_prop_count_valid(pc, (size_t)(line_size - (long)textlen)))
+		{
+		    internal_error("text property count too large");
+		    return;
+		}
 		this_props_len = pc * (int)sizeof(textprop_T);
 	    }
 
@@ -3894,7 +3926,7 @@ ml_delete_int(buf_T *buf, linenr_T lnum, int flags)
 	    set_keep_msg((char_u *)_(no_lines_msg), 0);
 
 	// FEAT_BYTEOFF already handled in there, don't worry 'bout it below
-	i = ml_replace((linenr_T)1, (char_u *)"", TRUE);
+	i = ml_replace_len((linenr_T)1, (char_u *)"", 1, TRUE, TRUE);
 	buf->b_ml.ml_flags |= ML_EMPTY;
 
 	return i;
@@ -4046,6 +4078,8 @@ theend:
 	mch_memmove(&pc, textprop_save, PROP_COUNT_SIZE);
 	props_data = textprop_save + PROP_COUNT_SIZE;
 	props_bytes = pc * (int)sizeof(textprop_T);
+	if (!text_prop_count_valid(pc, (size_t)textprop_len))
+	    props_bytes = 0;
 
 	// Adjust text properties in the line above and below.
 	if (lnum > 1)
@@ -5808,7 +5842,6 @@ ml_updatechunk(
     int		updtype)
 {
     static buf_T	*ml_upd_lastbuf = NULL;
-    static linenr_T	ml_upd_lastline;
     static linenr_T	ml_upd_lastcurline;
     static int		ml_upd_lastcurix;
 
@@ -5834,6 +5867,7 @@ ml_updatechunk(
 	buf->b_ml.ml_usedchunks = 1;
 	buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
 	buf->b_ml.ml_chunksize[0].mlcs_totalsize = 1;
+	ml_upd_lastbuf = NULL;		// invalidate resume cache
     }
 
     if (updtype == ML_CHNK_UPDLINE && buf->b_ml.ml_line_count == 1)
@@ -5844,29 +5878,25 @@ ml_updatechunk(
 	buf->b_ml.ml_usedchunks = 1;
 	buf->b_ml.ml_chunksize[0].mlcs_numlines = 1;
 	buf->b_ml.ml_chunksize[0].mlcs_totalsize = (long)buf->b_ml.ml_line_len;
+	ml_upd_lastbuf = NULL;		// invalidate resume cache
 	return;
     }
 
     /*
      * Find chunk that our line belongs to, curline will be at start of the
      * chunk.
+     * The scan resumes at the cached chunk while ml_upd_lastbuf is set: the
+     * chunks have not moved since the last call.
      */
-    if (buf != ml_upd_lastbuf || line != ml_upd_lastline + 1
-	    || updtype != ML_CHNK_ADDLINE)
+    if (buf != ml_upd_lastbuf || line < curline)
     {
-	for (curline = 1, curix = 0;
-	     curix < buf->b_ml.ml_usedchunks - 1
+	curline = 1;
+	curix = 0;
+    }
+    for (; curix < buf->b_ml.ml_usedchunks - 1
 	     && line >= curline + buf->b_ml.ml_chunksize[curix].mlcs_numlines;
 	     curix++)
-	    curline += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-    }
-    else if (curix < buf->b_ml.ml_usedchunks - 1
-	      && line >= curline + buf->b_ml.ml_chunksize[curix].mlcs_numlines)
-    {
-	// Adjust cached curix & curline
 	curline += buf->b_ml.ml_chunksize[curix].mlcs_numlines;
-	curix++;
-    }
     curchnk = buf->b_ml.ml_chunksize + curix;
 
     if (updtype == ML_CHNK_DELLINE)
@@ -6009,7 +6039,6 @@ ml_updatechunk(
     else if (updtype == ML_CHNK_DELLINE)
     {
 	curchnk->mlcs_numlines--;
-	ml_upd_lastbuf = NULL;   // Force recalc of curix & curline
 	if (curix < buf->b_ml.ml_usedchunks - 1
 		&& curchnk->mlcs_numlines + curchnk[1].mlcs_numlines
 								  <= MLCS_MINL)
@@ -6019,6 +6048,7 @@ ml_updatechunk(
 	}
 	else if (curix == 0 && curchnk->mlcs_numlines <= 0)
 	{
+	    ml_upd_lastbuf = NULL;   // Force recalc of curix & curline
 	    buf->b_ml.ml_usedchunks--;
 	    mch_memmove(buf->b_ml.ml_chunksize, buf->b_ml.ml_chunksize + 1,
 			buf->b_ml.ml_usedchunks * sizeof(chunksize_T));
@@ -6028,10 +6058,16 @@ ml_updatechunk(
 		    && curchnk->mlcs_numlines + curchnk[-1].mlcs_numlines
 								  > MLCS_MINL))
 	{
+	    // The chunks are left as they are, the cached position stays
+	    // valid.
+	    ml_upd_lastbuf = buf;
+	    ml_upd_lastcurline = curline;
+	    ml_upd_lastcurix = curix;
 	    return;
 	}
 
 	// Collapse chunks
+	ml_upd_lastbuf = NULL;   // Force recalc of curix & curline
 	curchnk[-1].mlcs_numlines += curchnk->mlcs_numlines;
 	curchnk[-1].mlcs_totalsize += curchnk->mlcs_totalsize;
 	buf->b_ml.ml_usedchunks--;
@@ -6043,7 +6079,6 @@ ml_updatechunk(
 	return;
     }
     ml_upd_lastbuf = buf;
-    ml_upd_lastline = line;
     ml_upd_lastcurline = curline;
     ml_upd_lastcurix = curix;
 }

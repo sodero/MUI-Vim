@@ -245,6 +245,7 @@ static int	num_complex_braces; // Complex \{...} count
 static char_u	*regcode;	// Code-emit pointer, or JUST_CALC_SIZE
 static long	regsize;	// Code size.
 static int	reg_toolong;	// TRUE when offset out of range
+static int	bt_reg_parse_depth;	// nesting depth in reg()
 static char_u	had_endbrace[NSUBEXP];	// flags, TRUE if end of () found
 static long	brace_min[10];	// Minimums for complex brace repeats
 static long	brace_max[10];	// Maximums for complex brace repeats
@@ -262,6 +263,53 @@ static const int classcodes[] = {
     ALPHA, NALPHA, LOWER, NLOWER,
     UPPER, NUPPER
 };
+
+/*
+ * Search between "start" (the first char of the range) and "end" (the closing
+ * "]") and try to recognize a character class in expanded form, for example
+ * [0-9].  On success, return the atom to be emitted, on failure 0.
+ */
+    static int
+bt_recognize_char_class(char_u *start, char_u *end)
+{
+    int		newl;
+    int		config = get_char_class_bits(start, end, &newl);
+
+    // A newline would need the ADD_NL variant, don't bother with it here.
+    if (config < 0 || newl)
+	return 0;
+
+	// The old engine has no case-insensitive class opcode, so [a-z] and [A-Z]
+	// are left as collections.  The classes below are case-independent.
+    switch (config)
+    {
+	case CLASS_o9:
+	    return DIGIT;
+	case CLASS_not | CLASS_o9:
+	    return NDIGIT;
+	case CLASS_af | CLASS_AF | CLASS_o9:
+	    return HEX;
+	case CLASS_not | CLASS_af | CLASS_AF | CLASS_o9:
+	    return NHEX;
+	case CLASS_o7:
+	    return OCTAL;
+	case CLASS_not | CLASS_o7:
+	    return NOCTAL;
+	case CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
+	    return WORD;
+	case CLASS_not | CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
+	    return NWORD;
+	case CLASS_az | CLASS_AZ | CLASS_underscore:
+	    return HEAD;
+	case CLASS_not | CLASS_az | CLASS_AZ | CLASS_underscore:
+	    return NHEAD;
+	case CLASS_az | CLASS_AZ:
+	    return ALPHA;
+	case CLASS_not | CLASS_az | CLASS_AZ:
+	    return NALPHA;
+    }
+    return 0;
+}
 
 /*
  * When regcode is set to this value, code is not emitted and size is computed
@@ -477,6 +525,7 @@ regcomp_start(
 #endif
     regsize = 0L;
     reg_toolong = FALSE;
+    bt_reg_parse_depth = 0;
     regflags = 0;
 #if defined(FEAT_SYN_HL)
     had_eol = FALSE;
@@ -1727,6 +1776,20 @@ collection:
 		int	startc = -1;	// > 0 when next '-' is a range
 		int	endc;
 
+		if (extra == 0)
+		{
+		    int	cl = bt_recognize_char_class(regparse, lp);
+
+		    if (cl != 0)
+		    {
+			ret = regnode(cl);
+			regparse = lp;
+			skipchr();
+			*flagp |= HASWIDTH | SIMPLE;
+			break;
+		    }
+		}
+
 		// In a character class, different parsing rules apply.
 		// Not even \ is special anymore, nothing is.
 		if (*regparse == '^')	    // Complement of range.
@@ -2135,7 +2198,7 @@ regpiece(int *flagp)
 		int	lop = END;
 		long	nr;
 
-		nr = (long)getdecchrs();
+		nr = get_at_limit();
 		switch (no_Magic(getchr()))
 		{
 		    case '=': lop = MATCH; break;		  // \@=
@@ -2383,10 +2446,17 @@ reg(
     else
 	ret = NULL;
 
+    if (bt_reg_parse_depth >= REG_MAX_PAREN_DEPTH)
+	EMSG_RET_NULL(_(e_command_too_complex));
+    ++bt_reg_parse_depth;
+
     // Pick up the branches, linking them together.
     br = regbranch(&flags);
     if (br == NULL)
-	return NULL;
+    {
+	ret = NULL;
+	goto theend;
+    }
     if (ret != NULL)
 	regtail(ret, br);	// [MZ]OPEN -> first.
     else
@@ -2402,7 +2472,10 @@ reg(
 	skipchr();
 	br = regbranch(&flags);
 	if (br == NULL || reg_toolong)
-	    return NULL;
+	{
+	    ret = NULL;
+	    goto theend;
+	}
 	regtail(ret, br);	// BRANCH -> BRANCH.
 	if (!(flags & HASWIDTH))
 	    *flagp &= ~HASWIDTH;
@@ -2427,26 +2500,56 @@ reg(
     {
 #ifdef FEAT_SYN_HL
 	if (paren == REG_ZPAREN)
-	    EMSG_RET_NULL(_(e_unmatched_z));
+	{
+	    emsg(_(e_unmatched_z));
+	    rc_did_emsg = TRUE;
+	    ret = NULL;
+	    goto theend;
+	}
 	else
 #endif
-	    if (paren == REG_NPAREN)
-	    EMSG2_RET_NULL(_(e_unmatched_str_percent_open), reg_magic == MAGIC_ALL);
+	if (paren == REG_NPAREN)
+	{
+	    semsg(_(e_unmatched_str_percent_open),
+				       reg_magic == MAGIC_ALL ? "" : "\\");
+	    rc_did_emsg = TRUE;
+	    ret = NULL;
+	    goto theend;
+	}
 	else
-	    EMSG2_RET_NULL(_(e_unmatched_str_open), reg_magic == MAGIC_ALL);
+	{
+	    semsg(_(e_unmatched_str_open),
+				       reg_magic == MAGIC_ALL ? "" : "\\");
+	    rc_did_emsg = TRUE;
+	    ret = NULL;
+	    goto theend;
+	}
     }
     else if (paren == REG_NOPAREN && peekchr() != NUL)
     {
 	if (curchr == Magic(')'))
-	    EMSG2_RET_NULL(_(e_unmatched_str_close), reg_magic == MAGIC_ALL);
+	{
+	    semsg(_(e_unmatched_str_close),
+				       reg_magic == MAGIC_ALL ? "" : "\\");
+	    rc_did_emsg = TRUE;
+	    ret = NULL;
+	    goto theend;
+	}
 	else
-	    EMSG_RET_NULL(_(e_trailing_characters));	// "Can't happen".
-	// NOTREACHED
+	{
+	    emsg(_(e_trailing_characters));	// "Can't happen".
+	    rc_did_emsg = TRUE;
+	    ret = NULL;
+	    goto theend;
+	}
     }
     // Here we set the flag allowing back references to this set of
     // parentheses.
     if (paren == REG_PAREN)
 	had_endbrace[parno] = TRUE;	// have seen the close paren
+
+theend:
+    --bt_reg_parse_depth;
     return ret;
 }
 
@@ -3146,7 +3249,7 @@ regstack_push(regstate_T state, char_u *scan)
 	emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
 	return NULL;
     }
-    if (ga_grow(&regstack, sizeof(regitem_T)) == FAIL)
+    if (GA_GROW_FAILS(&regstack, (int)sizeof(regitem_T)))
 	return NULL;
 
     rp = (regitem_T *)((char *)regstack.ga_data + regstack.ga_len);
@@ -3882,7 +3985,7 @@ regmatch(
 		if (i == backpos.ga_len)
 		{
 		    // First time at this BACK, make room to store the pos.
-		    if (ga_grow(&backpos, 1) == FAIL)
+		    if (GA_GROW_FAILS(&backpos, 1))
 			status = RA_FAIL;
 		    else
 		    {
@@ -4282,7 +4385,7 @@ regmatch(
 			emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
 			status = RA_FAIL;
 		    }
-		    else if (ga_grow(&regstack, sizeof(regstar_T)) == FAIL)
+		    else if (GA_GROW_FAILS(&regstack, (int)sizeof(regstar_T)))
 			status = RA_FAIL;
 		    else
 		    {
@@ -4327,7 +4430,7 @@ regmatch(
 		emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
 		status = RA_FAIL;
 	    }
-	    else if (ga_grow(&regstack, sizeof(regbehind_T)) == FAIL)
+	    else if (GA_GROW_FAILS(&regstack, (int)sizeof(regbehind_T)))
 		status = RA_FAIL;
 	    else
 	    {
@@ -4591,7 +4694,7 @@ regmatch(
 		    if (limit > 0
 			    && ((rp->rs_un.regsave.rs_u.pos.lnum
 						    < behind_pos.rs_u.pos.lnum
-				    ? (colnr_T)STRLEN(rex.line)
+				    ? reg_getline_len(rex.lnum)
 				    : behind_pos.rs_u.pos.col)
 				- rp->rs_un.regsave.rs_u.pos.col >= limit))
 			no = FAIL;
@@ -4607,7 +4710,7 @@ regmatch(
 			{
 			    reg_restore(&rp->rs_un.regsave, &backpos);
 			    rp->rs_un.regsave.rs_u.pos.col =
-						 (colnr_T)STRLEN(rex.line);
+						      reg_getline_len(rex.lnum);
 			}
 		    }
 		    else
@@ -4976,21 +5079,24 @@ bt_regexec_both(
 	if (!rex.reg_ic && !has_mbyte)
 	    while ((s = vim_strbyte(s, c)) != NULL)
 	    {
-		if (cstrncmp(s, prog->regmust, &prog->regmlen) == 0)
+		int len = prog->regmlen;
+		if (cstrncmp(s, prog->regmust, &len) == 0)
 		    break;		// Found it.
 		++s;
 	    }
 	else if (!rex.reg_ic || (!enc_utf8 && mb_char2len(c) > 1))
 	    while ((s = vim_strchr(s, c)) != NULL)
 	    {
-		if (cstrncmp(s, prog->regmust, &prog->regmlen) == 0)
+		int len = prog->regmlen;
+		if (cstrncmp(s, prog->regmust, &len) == 0)
 		    break;		// Found it.
 		MB_PTR_ADV(s);
 	    }
 	else
 	    while ((s = cstrchr(s, c)) != NULL)
 	    {
-		if (cstrncmp(s, prog->regmust, &prog->regmlen) == 0)
+		int len = prog->regmlen;
+		if (cstrncmp(s, prog->regmust, &len) == 0)
 		    break;		// Found it.
 		MB_PTR_ADV(s);
 	    }

@@ -1554,7 +1554,7 @@ ExpandMappings(
 
 	while (ptr2 < ptr3)
 	{
-	    if (STRCMP(*ptr1, *ptr2))
+	    if (STRCMP(*ptr1, *ptr2) != 0)
 		*++ptr1 = *ptr2++;
 	    else
 	    {
@@ -1694,7 +1694,7 @@ check_abbr(
 	    // find entries with right mode and keys
 	    match =    (mp->m_mode & State)
 		    && qlen == len
-		    && !STRNCMP(q, ptr, (size_t)len);
+		    && STRNCMP(q, ptr, (size_t)len) == 0;
 	    if (q != mp->m_keys)
 		vim_free(q);
 	    if (match)
@@ -1978,6 +1978,10 @@ makemap(
 
 	    for ( ; mp; mp = mp->m_next)
 	    {
+		// simplified map blocks are not created explicitly
+		if (mp->m_simplified)
+		    continue;
+
 		// skip script-local mappings
 		if (mp->m_noremap == REMAP_SCRIPT)
 		    continue;

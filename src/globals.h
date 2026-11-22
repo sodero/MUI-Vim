@@ -1198,6 +1198,11 @@ EXTERN int	sandbox INIT(= 0);
 EXTERN int	silent_mode INIT(= FALSE);
 				// set to TRUE when "-s" commandline argument
 				// used for ex
+#ifdef FEAT_JOB_CHANNEL
+EXTERN int	use_stdio_channel INIT(= FALSE);
+				// set to TRUE for the "--stdio-channel"
+				// commandline argument
+#endif
 
 EXTERN pos_T	VIsual;		// start position of active Visual selection
 EXTERN int	VIsual_active INIT(= FALSE);
@@ -1499,6 +1504,8 @@ EXTERN int allow_keys INIT(= FALSE);	// allow key codes when no_mapping
 					// is set
 EXTERN int no_reduce_keys INIT(= FALSE);  // do not apply Ctrl, Shift and Alt
 					  // to the key
+EXTERN int no_simplify_keys INIT(= 0);	// do not merge Ctrl and Alt into the
+					// key, but do apply Shift
 EXTERN int no_u_sync INIT(= 0);		// Don't call u_sync()
 #ifdef FEAT_EVAL
 EXTERN int u_sync_once INIT(= 0);	// Call u_sync() once when evaluating
@@ -1832,8 +1839,9 @@ extern cursorentry_T shape_table[SHAPE_IDX_COUNT];
 # define OPT_PRINT_COLLATE	11
 # define OPT_PRINT_JOBSPLIT	12
 # define OPT_PRINT_FORMFEED	13
+# define OPT_PRINT_FORMAT	14
 
-# define OPT_PRINT_NUM_OPTIONS	14
+# define OPT_PRINT_NUM_OPTIONS	15
 
 EXTERN option_table_T printer_opts[OPT_PRINT_NUM_OPTIONS]
 # ifdef DO_INIT
@@ -1852,6 +1860,7 @@ EXTERN option_table_T printer_opts[OPT_PRINT_NUM_OPTIONS]
 	{"collate",	FALSE, 0, NULL, 0, FALSE},
 	{"jobsplit", FALSE, 0, NULL, 0, FALSE},
 	{"formfeed", FALSE, 0, NULL, 0, FALSE},
+	{"format", FALSE, 0, NULL, 0, FALSE},
     }
 # endif
     ;
@@ -1885,7 +1894,7 @@ EXTERN Display	*xterm_dpy INIT(= NULL);
 EXTERN XtAppContext app_context INIT(= (XtAppContext)NULL);
 #endif
 
-#ifdef FEAT_GUI_GTK
+#if defined(FEAT_GUI_GTK) && !defined(USE_GTK4)
 EXTERN guint32	gtk_socket_id INIT(= 0);
 EXTERN int	echo_wid_arg INIT(= FALSE);	// --echo-wid argument
 #endif
@@ -2178,4 +2187,11 @@ EXTERN int silence_w23_w24_msg INIT( = 0);
 // text to "last_insert_ga".
 EXTERN garray_T last_insert_ga INIT5(0, 0, 1, 64, NULL);
 EXTERN int	add_last_insert INIT(= 0);
+#endif
+
+#if defined(FEAT_IMAGE) || defined(FEAT_EVAL)
+// Cached value, re calculated when window size changes. Defaults to 8x16
+// pixels. Note that these are in logical pixels (when using GUI).
+EXTERN int cell_width INIT(= 8);
+EXTERN int cell_height INIT(= 16);
 #endif

@@ -955,6 +955,56 @@ find_end_event(
 }
 
 /*
+ * Find the command of an ":autocmd" with argument "arg", the part after the
+ * events, the pattern and any "++once"/"++nested".  Returns NULL when there is
+ * no command.  Does not modify "arg" and gives no error messages.
+ */
+    char_u *
+au_find_cmd_arg(char_u *arg)
+{
+    char_u	*pat;
+    char_u	*cmd;
+    int		group;
+
+    if (*arg == '|')
+	return NULL;
+
+    // Errors are reported when the autocommand is actually defined.
+    ++emsg_off;
+    group = au_get_grouparg(&arg);
+    pat = group == AUGROUP_ERROR
+			  ? NULL : find_end_event(arg, group != AUGROUP_ALL);
+    --emsg_off;
+    if (pat == NULL)
+	return NULL;
+
+    pat = skipwhite(pat);
+    if (*pat == NUL || *pat == '|')
+	return NULL;
+
+    // White space in the pattern can be escaped with a backslash.
+    cmd = pat;
+    while (*cmd != NUL
+	    && (!VIM_ISWHITE(*cmd) || (cmd > pat && *(cmd - 1) == '\\')))
+	++cmd;
+    cmd = skipwhite(cmd);
+
+    // "++once" and "++nested" can come in any order.
+    for (int i = 0; i < 2; ++i)
+    {
+	if (STRNCMP(cmd, "++once", 6) == 0 && VIM_ISWHITE(cmd[6]))
+	    cmd = skipwhite(cmd + 6);
+	if (STRNCMP(cmd, "++nested", 8) == 0 && VIM_ISWHITE(cmd[8]))
+	    cmd = skipwhite(cmd + 8);
+	if (!in_vim9script() && STRNCMP(cmd, "nested", 6) == 0
+						       && VIM_ISWHITE(cmd[6]))
+	    cmd = skipwhite(cmd + 6);
+    }
+
+    return *cmd == NUL ? NULL : cmd;
+}
+
+/*
  * Return TRUE if "event" is included in 'eventignore(win)'.
  */
     int
@@ -1173,7 +1223,10 @@ do_autocmd(exarg_T *eap, char_u *arg_in, int forceit)
 	    if (STRNCMP(cmd, "++once", 6) == 0 && VIM_ISWHITE(cmd[6]))
 	    {
 		if (once)
+		{
 		    semsg(_(e_duplicate_argument_str), "++once");
+		    goto err_exit;
+		}
 		once = TRUE;
 		cmd = skipwhite(cmd + 6);
 	    }
@@ -1184,7 +1237,7 @@ do_autocmd(exarg_T *eap, char_u *arg_in, int forceit)
 		if (nested)
 		{
 		    semsg(_(e_duplicate_argument_str), "++nested");
-		    return;
+		    goto err_exit;
 		}
 		nested = TRUE;
 		cmd = skipwhite(cmd + 8);
@@ -1199,12 +1252,12 @@ do_autocmd(exarg_T *eap, char_u *arg_in, int forceit)
 		    // be removed and "nested" accepted as the start of the
 		    // command.
 		    emsg(_(e_invalid_command_nested_did_you_mean_plusplus_nested));
-		    return;
+		    goto err_exit;
 		}
 		if (nested)
 		{
 		    semsg(_(e_duplicate_argument_str), "nested");
-		    return;
+		    goto err_exit;
 		}
 		nested = TRUE;
 		cmd = skipwhite(cmd + 6);
@@ -1223,7 +1276,7 @@ do_autocmd(exarg_T *eap, char_u *arg_in, int forceit)
 
 	    cmd = expand_sfile(cmd);
 	    if (cmd == NULL)	    // some error
-		return;
+		goto err_exit;
 	    cmd_need_free = TRUE;
 	}
     }
@@ -1259,6 +1312,7 @@ do_autocmd(exarg_T *eap, char_u *arg_in, int forceit)
 		break;
     }
 
+err_exit:
     if (cmd_need_free)
 	vim_free(cmd);
     vim_free(tofree);
@@ -2947,6 +3001,64 @@ getnextac(
 }
 
 /*
+ * Implementation of has_autocmd() and has_autocmd_fullname().
+ * When "is_full" is TRUE "sfname" is already a full path name.
+ */
+    static int
+has_autocmd_ext(event_T event, char_u *sfname, buf_T *buf, bool is_full)
+{
+    AutoPat	*ap;
+    char_u	*fname = NULL;
+    char_u	*tail = gettail(sfname);
+#ifdef BACKSLASH_IN_FILENAME
+    char_u	*sfname_copy = NULL;
+#endif
+    int		retval = FALSE;
+
+    if (first_autopat[(int)event] == NULL)
+	return FALSE;
+
+    FOR_ALL_AUTOCMD_PATTERNS(event, ap)
+    {
+	if (ap->pat == NULL || ap->cmds == NULL)
+	    continue;
+
+	// Only patterns containing a directory need the full file name.
+	if (ap->buflocal_nr == 0 && ap->allow_dirs && fname == NULL)
+	{
+	    fname = is_full ? vim_strsave(sfname)
+					: FullName_save(sfname, FALSE);
+	    if (fname == NULL)
+		break;
+#ifdef BACKSLASH_IN_FILENAME
+	    // Use forward slashes to make autocommand patterns portable.
+	    sfname_copy = vim_strsave(sfname);
+	    sfname = sfname_copy;
+	    if (sfname != NULL)
+		forward_slash(sfname);
+	    forward_slash(fname);
+#endif
+	}
+	if (ap->buflocal_nr == 0
+		? match_file_pat(NULL, &ap->reg_prog,
+					  fname, sfname, tail, ap->allow_dirs)
+		: buf != NULL && ap->buflocal_nr == buf->b_fnum
+	   )
+	{
+	    retval = TRUE;
+	    break;
+	}
+    }
+
+    vim_free(fname);
+#ifdef BACKSLASH_IN_FILENAME
+    vim_free(sfname_copy);
+#endif
+
+    return retval;
+}
+
+/*
  * Return TRUE if there is a matching autocommand for "fname".
  * To account for buffer-local autocommands, function needs to know
  * in which buffer the file will be opened.
@@ -2954,43 +3066,18 @@ getnextac(
     int
 has_autocmd(event_T event, char_u *sfname, buf_T *buf)
 {
-    AutoPat	*ap;
-    char_u	*fname;
-    char_u	*tail = gettail(sfname);
-    int		retval = FALSE;
+    return has_autocmd_ext(event, sfname, buf, false);
+}
 
-    fname = FullName_save(sfname, FALSE);
-    if (fname == NULL)
-	return FALSE;
-
-#ifdef BACKSLASH_IN_FILENAME
-    /*
-     * Replace all backslashes with forward slashes.  This makes the
-     * autocommand patterns portable between Unix and MS-DOS.
-     */
-    sfname = vim_strsave(sfname);
-    if (sfname != NULL)
-	forward_slash(sfname);
-    forward_slash(fname);
-#endif
-
-    FOR_ALL_AUTOCMD_PATTERNS(event, ap)
-	if (ap->pat != NULL && ap->cmds != NULL
-	      && (ap->buflocal_nr == 0
-		? au_match_pat(ap, fname, sfname, tail)
-		: buf != NULL && ap->buflocal_nr == buf->b_fnum
-	   ))
-	{
-	    retval = TRUE;
-	    break;
-	}
-
-    vim_free(fname);
-#ifdef BACKSLASH_IN_FILENAME
-    vim_free(sfname);
-#endif
-
-    return retval;
+/*
+ * Like has_autocmd(), but "fname" is already a full path name, e.g. as
+ * returned by fix_fname().  Avoids expanding it again, which is slow on
+ * MS-Windows.
+ */
+    int
+has_autocmd_fullname(event_T event, char_u *fname, buf_T *buf)
+{
+    return has_autocmd_ext(event, fname, buf, true);
 }
 
 /*
@@ -3052,7 +3139,21 @@ set_context_in_autocmd(
     while (*arg && (!VIM_ISWHITE(*arg) || arg[-1] == '\\'))
 	arg++;
     if (*arg)
+    {
+	// skip over "++once", "++nested" and "nested"
+	arg = skipwhite(arg);
+	for (int i = 0; i < 2; i++)
+	{
+	    if (STRNCMP(arg, "++once", 6) == 0 && VIM_ISWHITE(arg[6]))
+		arg = skipwhite(arg + 6);
+	    if (STRNCMP(arg, "++nested", 8) == 0 && VIM_ISWHITE(arg[8]))
+		arg = skipwhite(arg + 8);
+	    if (!in_vim9script() && STRNCMP(arg, "nested", 6) == 0
+						       && VIM_ISWHITE(arg[6]))
+		arg = skipwhite(arg + 6);
+	}
 	return arg;			    // expand (next) command
+    }
 
     if (doautocmd)
 	xp->xp_context = EXPAND_FILES;	    // expand file names

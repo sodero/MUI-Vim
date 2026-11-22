@@ -182,6 +182,7 @@ SRC += \
 	gc.c \
 	gui_xim.c \
 	hardcopy.c \
+	hardcopy_postscript.c \
 	hashtab.c \
 	help.c \
 	highlight.c \
@@ -223,9 +224,6 @@ SRC += \
 	session.c \
 	sha256.c \
 	sign.c \
-	sixel.c \
-	kitty.c \
-	cairo.c \
 	spell.c \
 	spellfile.c \
 	spellsuggest.c \

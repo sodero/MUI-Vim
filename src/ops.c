@@ -2078,6 +2078,8 @@ adjust_cursor_eol(void)
  * process - if FALSE, will only check whether the line ends with an unclosed
  *	     comment,
  * include_space - whether to also skip space following the comment leader,
+ * skip_first - whether to ignore a leader with the 'f' flag when checking
+ *		for an unclosed comment,
  * is_comment - will indicate whether the current line ends with an unclosed
  *		comment.
  */
@@ -2086,11 +2088,15 @@ skip_comment(
     char_u   *line,
     int      process,
     int	     include_space,
+    bool     skip_first,
     int      *is_comment)
 {
     char_u *comment_flags = NULL;
     int    lead_len;
-    int    leader_offset = get_last_leader_offset(line, &comment_flags);
+    int    leader_offset = get_last_leader_offset(line, &comment_flags,
+								  skip_first);
+    bool   first = false;
+    bool   three_piece = false;
 
     *is_comment = FALSE;
     if (leader_offset != -1)
@@ -2125,13 +2131,20 @@ skip_comment(
 	if (*comment_flags == COM_END
 		|| *comment_flags == ':')
 	    break;
+	if (*comment_flags == COM_FIRST)
+	    first = true;
+	else if (*comment_flags == COM_START || *comment_flags == COM_MIDDLE)
+	    three_piece = true;
 	++comment_flags;
     }
 
     // If we found a colon, it means that we are not processing a line
     // starting with a closing part of a three-part comment. That's good,
     // because we don't want to remove those as this would be annoying.
-    if (*comment_flags == ':' || *comment_flags == NUL)
+    // A leader with the 'f' flag starts a new item, don't remove it either,
+    // unless it is part of a three-piece comment.
+    if ((*comment_flags == ':' || *comment_flags == NUL)
+						 && (!first || three_piece))
 	line += lead_len;
 
     return line;
@@ -2215,13 +2228,13 @@ do_join(
 	    {
 
 		char_u *new_curr = skip_comment(curr, TRUE, insert_space,
-							   &prev_was_comment);
+						     true, &prev_was_comment);
 		comments[t] = (int)(new_curr - curr);
 		curr = new_curr;
 	    }
 	    else
 		curr = skip_comment(curr, FALSE, insert_space,
-							   &prev_was_comment);
+						     true, &prev_was_comment);
 	}
 
 	if (insert_space && t > 0)
@@ -3747,8 +3760,9 @@ op_function(oparg_T *oap UNUSED)
 	// Set '[ and '] marks to text to be operated on.
 	curbuf->b_op_start = oap->start;
 	curbuf->b_op_end = oap->end;
-	if (oap->motion_type != MLINE && !oap->inclusive)
-	    // Exclude the end position.
+	// Exclude the end position.  For a block "oap->end" is already the
+	// last column.
+	if (oap->motion_type != MLINE && !oap->block_mode && !oap->inclusive)
 	    decl(&curbuf->b_op_end);
 
 	argv[0].v_type = VAR_STRING;
@@ -4273,9 +4287,10 @@ do_pending_operator(cmdarg_T *cap, int old_col, int gui_yank)
 	curwin->w_set_curswant = true;
 
 	// oap->empty is set when start and end are the same.  The inclusive
-	// flag affects this too, unless yanking and the end is on a NUL.
+	// flag affects this too, unless yanking and the end is on a NUL.  For
+	// a block "oap->end" is already the last column.
 	oap->empty = (oap->motion_type == MCHAR
-		    && (!oap->inclusive
+		    && ((!oap->inclusive && !oap->block_mode)
 			|| (oap->op_type == OP_YANK
 			    && gchar_pos(&oap->end) == NUL))
 		    && EQUAL_POS(oap->start, oap->end)

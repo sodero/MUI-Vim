@@ -484,6 +484,9 @@ spell_suggest(int count)
 	parse_spelllang(curwin);
 	curwin->w_p_spell = TRUE;
     }
+    // Autocommands may have changed the buffer and made the cursor invalid
+    check_cursor();
+    prev_cursor = curwin->w_cursor;
 
     if (*curwin->w_s->b_p_spl == NUL)
     {
@@ -3241,7 +3244,12 @@ add_sound_suggest(
 	{
 	    sft->sft_score = score;
 	    STRCPY(sft->sft_word, goodword);
-	    hash_add_item(&slang->sl_sounddone, hi, sft->sft_word, hash);
+	    if (hash_add_item(&slang->sl_sounddone, hi,
+			sft->sft_word, hash) == FAIL)
+	    {
+		vim_free(sft);
+		return;
+	    }
 	}
     }
     else
@@ -3703,8 +3711,8 @@ add_banned(
     if (!HASHITEM_EMPTY(hi))		// already present
 	return;
     s = vim_strsave(word);
-    if (s != NULL)
-	hash_add_item(&su->su_banned, hi, s, hash);
+    if (s != NULL && hash_add_item(&su->su_banned, hi, s, hash) == FAIL)
+	vim_free(s);
 }
 
 /*

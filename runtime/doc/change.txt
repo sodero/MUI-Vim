@@ -1,4 +1,4 @@
-*change.txt*	For Vim version 9.2.  Last change: 2026 May 31
+*change.txt*	For Vim version 9.2.  Last change: 2026 Nov 21
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -73,32 +73,27 @@ For inserting text see |insert.txt|.
 			the end of the line.
 
 					*:d* *:de* *:del* *:delete* *:dl* *:dp*
-:[range]d[elete] [x]	Delete [range] lines (default: current line) [into
+:[range]d[elete] [x] [flags]
+			Delete [range] lines (default: current line) [into
 			register x].
-			Note these weird abbreviations applicable only to
-			legacy Vim script:
-			  :dl		delete and list
-			  :dell		idem
-			  :delel	idem
-			  :deletl	idem
-			  :deletel	idem
-			  :dp		delete and print
-			  :dep		idem
-			  :delp		idem
-			  :delep	idem
-			  :deletp	idem
-			  :deletep	idem
-			Warning: These give |E492| in |Vim9| script and `:dl`
-			executes as `:dlist`.
+			See |ex-flags| for [flags].
 
-:[range]d[elete] [x] {count}
+:[range]d[elete] [x] {count} [flags]
 			Delete {count} lines, starting with [range]
 			(default: current line |cmdline-ranges|) [into
 			register x].
+			See |ex-flags| for [flags].
+
+Note: [flags] may also appear immediately after the command name without
+intervening white space.  E.g., `:dp`, `:d#` or `:dl#` (this is Vi
+compatible).  The combined command name and flag may not form an abbreviation
+of the command name itself.  E.g., `:del` is `:delete`, not `:de` with the "l"
+flag.  In |Vim9| script these combinations are not available (see |E492|) and
+`:dl` executes as `:dlist`.
 
 These commands delete text.  You can repeat them with the `.` command
-(except `:d`) and undo them.  Use Visual mode to delete blocks of text.  See
-|registers| for an explanation of registers.
+(except `:delete`) and undo them.  Use Visual mode to delete blocks of text.
+See |registers| for an explanation of registers.
 							*d-special*
 An exception for the d{motion} command: If the motion is not linewise, the
 start and end of the motion are not in the same line, and there are only
@@ -800,6 +795,9 @@ matched pattern is deleted.  The separator after {pattern} can also be left
 out then.  Example: >
 	:%s/TESTING
 This deletes "TESTING" from all lines, but only one per line.
+
+If [flags] are omitted the separator after {string} may also be left out.
+
 								*E1270*
 For compatibility with Vi these two exceptions are allowed in legacy Vim
 script:
@@ -814,6 +812,9 @@ use another single-byte character.  This is useful if you want to include a
 You can use most characters, but not an alphanumeric character, '\', '"' or
 '|'.  In Vim9 script you should not use '#' because it may be recognized as
 the start of a comment.
+
+The closing delimiter is optional for both the pattern and the replacement
+string, if nothing follows.  These then terminate at <EOL>.
 
 For the definition of a pattern, see |pattern|.  In Visual block mode, use
 |/\%V| in the pattern to have the substitute work in the block only.
@@ -915,7 +916,7 @@ either the first or second pattern in parentheses did not match, so either
 
 These commands repeat the previous `:substitute` command with the given flags.
 The first letter is always "s", followed by one or two of the possible flag
-characters.  For example `:sce` works like `:s///ce`.  The table lists the
+characters.  For example ":sce" works like ":s ce".  The table lists the
 possible combinations, not all flags are possible, because the command is
 short for another command.
 
@@ -1091,9 +1092,9 @@ inside of strings can change!  Also see 'softtabstop' option. >
 
 							*v_zy*
 {Visual}["x]zy		Yank the highlighted text [into register x].  Trailing
-			whitespace at the end of each line of a selected block
-			won't be yanked.  Especially useful in combination
-			with `zp`.  (for {Visual} see |Visual-mode|)
+			white space at the end of each line of a selected
+			block won't be yanked.  Especially useful in
+			combination with `zp` (for {Visual} see |Visual-mode|).
 
 							*:y* *:yank* *E850*
 :[range]y[ank] [x]	Yank [range] lines [into register x].  Yanking to the
@@ -1332,21 +1333,22 @@ and ":put" commands and with CTRL-R.
 		the command was executed completely from a mapping.
 		{not available when compiled without the |+cmdline_hist|
 		feature}
-							*quote_#* *quote#*
-6. Alternate file register "#
-Contains the name of the alternate file for the current window.  It will
-change how the |CTRL-^| command works.
-This register is writable, mainly to allow for restoring it after a plugin has
-changed it.  It accepts buffer number: >
-    let altbuf = bufnr(@#)
-    ...
-    let @# = altbuf
-It will give error |E86| if you pass buffer number and this buffer does not
-exist.
-It can also accept a match with an existing buffer name: >
+
+6. Alternate file register "#			*quote_#* *quote#* *@#*
+Contains the |alternate-file| name for current window.
+This register is writable with `:let` and |setreg()|.  This changes which
+buffer CTRL-^ enters.  You can't yank or delete into this register.
+A String is matched against existing buffer names, like |:buffer|: >
     let @# = 'buffer_name'
-Error |E93| if there is more than one buffer matching the given name or |E94|
-if none of buffers matches the given name.
+Also supports using buffer number and |file-pattern|.
+
+Throws
+  |E86| when the buffer number does not exist
+  |E93| when more than one buffer matches
+  |E94| when none match
+
+Clear the register with empty String: >
+    let @# = ''
 
 7. Expression register "=			*quote_=* *quote=* *@=*
 This is not really a register that stores text, but is a way to use an
@@ -1398,11 +1400,12 @@ When writing to this register, nothing happens.  This can be used to delete
 text without affecting the normal registers.  When reading from this register,
 nothing is returned.
 
-10. Last search pattern register	"/		*quote_/* *quote/*
+10. Last search pattern register "/			*quote_/* *quote/*
 Contains the most recent search-pattern.  This is used for "n" and 'hlsearch'.
-It is writable with `:let`, you can change it to have 'hlsearch' highlight
-other matches without actually searching.  You can't yank or delete into this
-register.  The search direction is available in |v:searchforward|.
+This register is writable with `:let` and |setreg()|.  You can change it to have
+'hlsearch' highlight other matches without actually searching.  You can't yank
+or delete into this register.  The search direction is available in
+|v:searchforward|.
 Note that the value is restored when returning from a function
 |function-search-undo|.
 
@@ -1536,7 +1539,7 @@ $VIMRUNTIME/ftplugin directory, sets the 'formatexpr' option to: >
 That means, you will find the corresponding script, defining the
 xmlformat#Format() function, in the file `$VIMRUNTIME/autoload/xmlformat.vim`
 
-Here is an example script that removes trailing whitespace from the selected
+Here is an example script that removes trailing white space from the selected
 text.  Put it in your autoload directory, e.g. ~/.vim/autoload/format.vim:
 >vim
   func! format#Format()
@@ -1561,9 +1564,9 @@ Note: this function explicitly returns non-zero when called from insert mode
 causes Vim to fall back to reformat the text by using the internal formatter.
 
 However, if the |gq| command is used to reformat the text, the function
-will receive the selected lines, trim trailing whitespace from those lines and
-put them back in place.  If you are going to split single lines into multiple
-lines, be careful not to overwrite anything.
+will receive the selected lines, trim trailing white space from those lines
+and put them back in place.  If you are going to split single lines into
+multiple lines, be careful not to overwrite anything.
 
 If you want to allow reformatting of text from insert or replace mode, one has
 to be very careful, because the function might be called recursively.  For
@@ -1606,6 +1609,7 @@ type of comment string.  A part consists of:
 
   f	Only the first line has the comment string.  Do not repeat comment on
 	the next line, but preserve indentation (e.g., a bullet-list).
+	When joining lines with |fo-j| the comment string is not removed.
 
   s	Start of three-piece comment
 

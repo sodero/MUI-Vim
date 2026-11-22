@@ -99,7 +99,7 @@ um_goto_line(unpacked_memline_T *um, linenr_T lnum, int extra_props)
     // New format: [prop_count (uint16)][textprop_T...][vtext...]
     if (propdata_len < PROP_COUNT_SIZE + sizeof(textprop_T))
     {
-	iemsg(e_text_property_info_corrupted);
+	emsg(e_text_property_info_corrupted);
 	um->buf = NULL;
 	return false;
     }
@@ -109,8 +109,21 @@ um_goto_line(unpacked_memline_T *um, linenr_T lnum, int extra_props)
     char_u	    *props_start;
 
     mch_memmove(&prop_count, count_ptr, PROP_COUNT_SIZE);
+    if (!text_prop_count_valid(prop_count, propdata_len))
+    {
+	emsg(e_text_property_info_corrupted);
+	um->buf = NULL;
+	return false;
+    }
     proplen = (int)prop_count;
     props_start = count_ptr + PROP_COUNT_SIZE;
+
+    if (!text_prop_vtext_valid(props_start, proplen, propdata_len))
+    {
+	emsg(e_text_property_info_corrupted);
+	um->buf = NULL;
+	return false;
+    }
 
     um->props = ALLOC_MULT(textprop_T, proplen + extra_props);
     if (um->props == NULL)
@@ -244,8 +257,8 @@ um_add_prop(unpacked_memline_T *um, textprop_T *prop)
 {
     if (um->buf == NULL)
 	return;
-    if (!um->detached)
-	um_detach(um);
+    if (!um->detached && !um_detach(um))
+	return;
     if (!um_grow_props(um, 1))
     {
 	um->buf = NULL;
@@ -505,6 +518,7 @@ um_store_changes(unpacked_memline_T *um)
     um->detached = false;
     um->text = packed;
     um->text_size = (colnr_T)STRLEN(packed) + 1;
+    um->buf->b_ml.ml_line_textlen = um->text_size;
 }
 
 /*
@@ -745,6 +759,13 @@ prop_add_one(
 	proplen = get_text_props(buf, lnum, &props, TRUE);
 	textlen = ml_get_buf_len(buf, lnum) + 1;
 
+	// prop_count is a uint16_t; stop before proplen + 1 wraps to zero.
+	if (proplen >= 0xffff)
+	{
+	    emsg(_(e_too_many_text_properties_on_a_single_line));
+	    goto theend;
+	}
+
 	if (lnum == start_lnum)
 	    col = start_col;
 	else
@@ -901,7 +922,14 @@ prop_add_one(
     }
 
     changed_line_display_buf(buf);
-    changed_lines_buf(buf, start_lnum, end_lnum + 1, 0);
+    if (text_arg != NULL)
+	// Virtual text may change the height of the lines.
+	changed_lines_buf(buf, start_lnum, end_lnum + 1, 0);
+    else
+	// Only the highlighting changes, keep the syntax state of the lines,
+	// recomputing it can be slow when the lines are far apart.  The callers
+	// use redraw_buf_later() for popup windows.
+	redraw_buf_range_later(buf, start_lnum, end_lnum);
     res = OK;
 
 theend:
@@ -1231,10 +1259,21 @@ get_text_props(buf_T *buf, linenr_T lnum, char_u **props, int will_change)
     // prop_count is never zero.
     if (propdata_len < PROP_COUNT_SIZE + sizeof(textprop_T))
     {
-	iemsg(e_text_property_info_corrupted);
+	emsg(e_text_property_info_corrupted);
 	return 0;
     }
     mch_memmove(&prop_count, text + textlen, PROP_COUNT_SIZE);
+    if (!text_prop_count_valid(prop_count, propdata_len))
+    {
+	emsg(e_text_property_info_corrupted);
+	return 0;
+    }
+    if (!text_prop_vtext_valid(text + textlen + PROP_COUNT_SIZE,
+					   (int)prop_count, propdata_len))
+    {
+	emsg(e_text_property_info_corrupted);
+	return 0;
+    }
     *props = text + textlen + PROP_COUNT_SIZE;
     return (int)prop_count;
 }
@@ -1807,8 +1846,10 @@ f_prop_clear(typval_T *argvars, typval_T *rettv UNUSED)
     linenr_T start;
     linenr_T end;
     linenr_T lnum;
+    linenr_T first_changed = 0;
+    linenr_T last_changed = 0;
+    bool     removed_text = false;
     buf_T    *buf = curbuf;
-    int	    did_clear = FALSE;
 
     if (in_vim9script()
 	    && (check_for_number_arg(argvars, 0) == FAIL
@@ -1847,15 +1888,32 @@ f_prop_clear(typval_T *argvars, typval_T *rettv UNUSED)
 		break;
 	    if (um.prop_count > 0)
 	    {
-		did_clear = TRUE;
 		for (idx = um.prop_count - 1; idx >= 0; --idx)
+		{
+		    if (um.props[idx].tp_id < 0)
+			removed_text = true;
 		    um_delete_prop(&um, idx);
+		}
+		if (first_changed == 0)
+		    first_changed = lnum;
+		last_changed = lnum;
 	    }
 	}
 	um_close(&um);
     }
-    if (did_clear)
-	redraw_buf_later(buf, UPD_NOT_VALID);
+    if (first_changed > 0)
+    {
+	// Like prop_remove(): the cursor position may change.
+	changed_line_display_buf(buf);
+	if (removed_text)
+	    // Virtual text may change the height of the lines.
+	    changed_lines_buf(buf, first_changed, last_changed + 1, 0);
+	else
+	    // Only the highlighting changes, keep the syntax state.
+	    redraw_buf_range_later(buf, first_changed, last_changed);
+	redraw_buf_later(buf, UPD_VALID);
+	popup_textprop_removed(buf);
+    }
 }
 
 /*
@@ -2129,7 +2187,8 @@ get_props_in_line(
 	    prop_fill_dict(d, &prop, buf);
 	    if (add_lnum)
 		dict_add_number(d, "lnum", lnum);
-	    list_append_dict(retlist, d);
+	    if (list_append_dict(retlist, d) == FAIL)
+		dict_unref(d);
 	}
     }
 }
@@ -2333,7 +2392,9 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
     linenr_T	lnum;
     linenr_T	first_changed = 0;
     linenr_T	last_changed = 0;
+    bool	removed_text = false;
     dict_T	*dict;
+    dictitem_T	*di;
     buf_T	*buf = curbuf;
     int		do_all;
     int		id = -MAXCOL;
@@ -2389,17 +2450,19 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
 	    return;
 	type_id = type->pt_id;
     }
-    if (dict_has_key(dict, "types"))
+    di = dict_find(dict, (char_u *)"types", -1);
+    if (di != NULL && di->di_tv.v_type == VAR_LIST)
     {
-	typval_T types;
-	listitem_T *li = NULL;
+	list_T	    *types = di->di_tv.vval.v_list;
+	listitem_T  *li = NULL;
 
-	dict_get_tv(dict, "types", &types);
-	if (types.v_type == VAR_LIST && types.vval.v_list->lv_len > 0)
+	if (types != NULL && types->lv_len > 0)
 	{
-	    type_ids = alloc( sizeof(int) * types.vval.v_list->lv_len );
+	    type_ids = ALLOC_MULT(int, types->lv_len);
+	    if (type_ids == NULL)
+		return;
 
-	    FOR_ALL_LIST_ITEMS(types.vval.v_list, li)
+	    FOR_ALL_LIST_ITEMS(types, li)
 	    {
 		proptype_T *prop_type;
 
@@ -2472,6 +2535,8 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
 		if (both ? matches_id && matches_type
 			 : matches_id || matches_type)
 		{
+		    if (prop->tp_id < 0)
+			removed_text = true;
 		    um_delete_prop(&um, idx);
 
 		    if (first_changed == 0)
@@ -2489,8 +2554,14 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
     if (first_changed > 0)
     {
 	changed_line_display_buf(buf);
-	changed_lines_buf(buf, first_changed, last_changed + 1, 0);
+	if (removed_text)
+	    // Virtual text may change the height of the lines.
+	    changed_lines_buf(buf, first_changed, last_changed + 1, 0);
+	else
+	    // Only the highlighting changes, keep the syntax state.
+	    redraw_buf_range_later(buf, first_changed, last_changed);
 	redraw_buf_later(buf, UPD_VALID);
+	popup_textprop_removed(buf);
     }
 
 cleanup_prop_remove:
@@ -2748,6 +2819,8 @@ f_prop_type_get(typval_T *argvars, typval_T *rettv)
     dict_add_number(d, "priority", prop->pt_priority);
     dict_add_number(d, "combine",
 	    (prop->pt_flags & PT_FLAG_COMBINE) ? 1 : 0);
+    dict_add_number(d, "override",
+	    (prop->pt_flags & PT_FLAG_OVERRIDE) ? 1 : 0);
     dict_add_number(d, "start_incl",
 	    (prop->pt_flags & PT_FLAG_INS_START_INCL) ? 1 : 0);
     dict_add_number(d, "end_incl",
@@ -3246,6 +3319,213 @@ prepend_joined_props(
 	}
     }
     um_abort(&r_um);
+}
+
+/*
+ * Remember in "gap" that "flag" was cleared on "prop", on the line "which".
+ */
+    static void
+remember_cleared_prop(garray_T *gap, int which, textprop_T *prop, int flag)
+{
+    undoprop_T	*up;
+
+    if (which == UNDOPROP_NONE)
+	return;
+    if (gap->ga_itemsize == 0)
+	ga_init2(gap, sizeof(undoprop_T), 4);
+    if (ga_grow(gap, 1) == FAIL)
+	return;
+    up = (undoprop_T *)gap->ga_data + gap->ga_len++;
+    up->up_which = which;
+    up->up_type = prop->tp_type;
+    up->up_id = prop->tp_id;
+    up->up_col = prop->tp_col;
+    up->up_flag = flag;
+}
+
+/*
+ * Clear the continuation flags between line "lnum" and the line below it that
+ * have no partner in the other line.  A property is split there then.  What
+ * is cleared on the line above is remembered in "gap" as "above_which", on
+ * the line below as "below_which".
+ */
+    void
+adjust_props_for_undo(
+	buf_T	    *buf,
+	linenr_T    lnum,
+	garray_T    *gap,
+	int	    above_which,
+	int	    below_which)
+{
+    unpacked_memline_T	above;
+    unpacked_memline_T	below;
+    bool		*paired = NULL;
+    bool		above_changed = false;
+    bool		below_changed = false;
+    bool		cont_next = false;
+
+    if (!buf->b_has_textprop || lnum < 1 || lnum >= buf->b_ml.ml_line_count)
+	return;
+
+    above = um_open_at(buf, lnum, 0);
+    if (above.buf == NULL)
+	return;
+    for (int i = 0; i < above.prop_count; ++i)
+	if (above.props[i].tp_flags & TP_FLAG_CONT_NEXT)
+	    cont_next = true;
+    // Loading the line below may invalidate the text of "above", copy it when
+    // it may have to be stored.
+    if (cont_next && !um_detach(&above))
+    {
+	um_abort(&above);
+	return;
+    }
+
+    below = um_open_at(buf, lnum + 1, 0);
+    if (below.buf == NULL)
+    {
+	um_abort(&above);
+	return;
+    }
+    if (below.prop_count > 0)
+    {
+	paired = ALLOC_CLEAR_MULT(bool, below.prop_count);
+	if (paired == NULL)
+	    goto theend;
+    }
+
+    for (int i = 0; i < above.prop_count; ++i)
+    {
+	textprop_T  *prop = &above.props[i];
+	bool	    found = false;
+
+	if (!(prop->tp_flags & TP_FLAG_CONT_NEXT))
+	    continue;
+	for (int j = 0; j < below.prop_count; ++j)
+	{
+	    textprop_T *next = &below.props[j];
+
+	    if (!paired[j] && (next->tp_flags & TP_FLAG_CONT_PREV)
+		    && next->tp_id == prop->tp_id
+		    && next->tp_type == prop->tp_type)
+	    {
+		paired[j] = true;
+		found = true;
+		break;
+	    }
+	}
+	if (!found)
+	{
+	    prop->tp_flags &= ~TP_FLAG_CONT_NEXT;
+	    above_changed = true;
+	    remember_cleared_prop(gap, above_which, prop, TP_FLAG_CONT_NEXT);
+	}
+    }
+
+    for (int j = 0; j < below.prop_count; ++j)
+    {
+	if (!(below.props[j].tp_flags & TP_FLAG_CONT_PREV) || paired[j])
+	    continue;
+	if (!below.detached && !um_detach(&below))
+	    break;
+	below.props[j].tp_flags &= ~TP_FLAG_CONT_PREV;
+	below_changed = true;
+	remember_cleared_prop(gap, below_which, &below.props[j],
+							   TP_FLAG_CONT_PREV);
+    }
+
+theend:
+    if (below_changed)
+	um_close(&below);
+    else
+	um_abort(&below);
+    if (above_changed)
+	um_close(&above);
+    else
+	um_abort(&above);
+    vim_free(paired);
+}
+
+/*
+ * Give back to line "lnum" the continuation flags "gap" has for "which",
+ * those cleared when the undo block was applied the other way.  A property
+ * that is no longer there is skipped.
+ */
+    void
+restore_props_for_undo(
+	buf_T	    *buf,
+	linenr_T    lnum,
+	garray_T    *gap,
+	int	    which)
+{
+    unpacked_memline_T	um;
+    bool		changed = false;
+
+    if (!buf->b_has_textprop || gap->ga_len == 0 || lnum < 1
+					  || lnum > buf->b_ml.ml_line_count)
+	return;
+    um = um_open_at(buf, lnum, 0);
+    if (um.buf == NULL)
+	return;
+    for (int r = 0; r < gap->ga_len; ++r)
+    {
+	undoprop_T  *up = (undoprop_T *)gap->ga_data + r;
+
+	if (up->up_which != which)
+	    continue;
+	for (int i = 0; i < um.prop_count; ++i)
+	{
+	    textprop_T *prop = &um.props[i];
+
+	    if (prop->tp_type != up->up_type || prop->tp_id != up->up_id
+		    || prop->tp_col != up->up_col
+		    || (prop->tp_flags & up->up_flag))
+		continue;
+	    if (!um.detached && !um_detach(&um))
+		goto theend;
+	    um.props[i].tp_flags |= up->up_flag;
+	    changed = true;
+	    break;
+	}
+    }
+
+theend:
+    if (changed)
+	um_close(&um);
+    else
+	um_abort(&um);
+}
+
+    bool
+text_prop_count_valid(int prop_count, size_t propdata_len)
+{
+    if (propdata_len < PROP_COUNT_SIZE)
+	return false;
+    return (size_t)prop_count * sizeof(textprop_T)
+		    <= propdata_len - PROP_COUNT_SIZE;
+}
+
+/*
+ * Return true when every virtual text property's offset and length stay within
+ * "propdata_len", so tp_text_offset can be safely turned into a pointer.
+ * "props" may be unaligned.
+ */
+    bool
+text_prop_vtext_valid(char_u *props, int prop_count, size_t propdata_len)
+{
+    for (int i = 0; i < prop_count; ++i)
+    {
+	textprop_T  prop;
+
+	mch_memmove(&prop, props + (size_t)i * sizeof(textprop_T),
+							  sizeof(textprop_T));
+	if (prop.tp_id >= 0 || prop.u.tp_text_offset <= 0)
+	    continue;
+	if (prop.tp_len < 0 || (size_t)prop.u.tp_text_offset
+				+ (size_t)prop.tp_len + 1 > propdata_len)
+	    return false;
+    }
+    return true;
 }
 
 #endif // FEAT_PROP_POPUP

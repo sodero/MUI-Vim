@@ -1,4 +1,4 @@
-/* popupwin.c */
+// popupwin.c
 int popup_on_border(win_T *wp, int row, int col);
 int popup_close_if_on_X(win_T *wp, int row, int col);
 void popup_start_drag(win_T *wp, int row, int col);
@@ -52,6 +52,7 @@ win_T *find_next_popup(int lowest, int handled_flag);
 int popup_do_filter(int c);
 int popup_no_mapping(void);
 void popup_check_cursor_pos(void);
+void popup_textprop_removed(buf_T *buf);
 int popup_is_under_opacity(int row, int col);
 int popup_is_over_opacity(int row, int col);
 int popup_is_under_opacity_range(int row, int start_col, int end_col);
@@ -59,9 +60,6 @@ void may_update_popup_mask(int type);
 void may_update_popup_position(void);
 int popup_get_base_screen_cell(int row, int col, schar_T *linep, int *attrp, u8char_T *ucp);
 void popup_set_base_screen_cell(int row, int col, schar_T line, int attr, u8char_T uc);
-void popup_images_invalidate(void);
-void update_popup_images(void);
-void update_popup_images_rect(int left, int top, int right, int bottom);
 void update_popups(void (*win_update)(win_T *wp));
 int set_ref_in_popups(int copyID);
 int popup_is_popup(win_T *wp);
@@ -85,4 +83,4 @@ void end_echowindow(void);
 int popup_win_closed(win_T *win);
 void popup_set_title(win_T *wp);
 void popup_update_preview_title(void);
-/* vim: set ft=c : */
+// vim: ft=c

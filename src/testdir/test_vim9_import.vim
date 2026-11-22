@@ -2843,6 +2843,94 @@ def Test_import_autoload_postponed()
   &rtp = save_rtp
 enddef
 
+def Test_import_autoload_func_as_value()
+  var lines =<< trim END
+      vim9script
+      export def Exported(): string
+        return 'exported'
+      enddef
+  END
+  writefile(lines, 'XimportRelFunc.vim', 'D')
+  writefile(lines, 'XimportRelFunc2.vim', 'D')
+
+  # Using the exported function as a value, not calling it.
+  lines =<< trim END
+      vim9script
+      import autoload './XimportRelFunc.vim'
+      def Func()
+        var Fn: func = XimportRelFunc.Exported
+        assert_equal('exported', Fn())
+      enddef
+      Func()
+  END
+  v9.CheckScriptSuccess(lines)
+
+  # The script is not loaded yet when compiling, thus the name is only
+  # checked when the function runs.
+  lines =<< trim END
+      vim9script
+      import autoload './XimportRelFunc2.vim'
+      def Func()
+        var Fn: func = XimportRelFunc2.NoSuchFunc
+      enddef
+      Func()
+  END
+  v9.CheckScriptFailure(lines, 'E121: Undefined variable: NoSuchFunc', 1)
+enddef
+
+" Test for using :defer with an imported function
+def Test_defer_imported_func()
+  mkdir('Xdeferdir/import/probe', 'pR')
+  mkdir('Xdeferdir/autoload/probe', 'p')
+  var lines =<< trim END
+      vim9script
+      export def Clean(s: string = 'x')
+        g:defer_result ..= s
+      enddef
+  END
+  writefile(lines, 'Xdeferdir/import/probe/lib.vim')
+  writefile(lines, 'Xdeferdir/autoload/probe/alib.vim')
+  writefile(lines, 'XdeferRel.vim', 'D')
+  writefile(lines, 'XdeferRelAuto.vim', 'D')
+  var save_rtp = &rtp
+  exe 'set rtp^=' .. getcwd() .. '/Xdeferdir'
+
+  lines =<< trim END
+      vim9script
+      import 'probe/lib.vim' as L
+      import autoload 'probe/alib.vim' as A
+      import './XdeferRel.vim' as R
+      import autoload './XdeferRelAuto.vim' as RA
+
+      def Imported()
+        defer L.Clean('1')
+        defer A.Clean('2')
+        defer R.Clean('3')
+        defer RA.Clean('4')
+        var F = L.Clean
+        defer F()
+        g:defer_result = 'start-'
+      enddef
+      Imported()
+      assert_equal('start-x4321', g:defer_result)
+  END
+  v9.CheckScriptSuccess(lines)
+
+  # A value of type "any" that is not a function fails at runtime
+  lines =<< trim END
+      vim9script
+      def NotAFunc()
+        var x: any = 10
+        defer x()
+      enddef
+      NotAFunc()
+  END
+  v9.CheckScriptFailure(lines, 'E1029: Expected function or partial but got number', 2)
+
+  &rtp = save_rtp
+  unlet g:defer_result
+enddef
+
 def Test_import_autoload_override()
   mkdir('Xoverdir/autoload', 'pR')
   var save_rtp = &rtp
@@ -3419,6 +3507,34 @@ def Test_imported_class_as_def_func_rettype()
   v9.CheckScriptSuccess(lines)
 enddef
 
+" Test for an autoload script sourced for the value of an exported variable
+def Test_export_value_sources_autoload_script()
+  for kind in ['var', 'const', 'final']
+    var lines =<< trim END
+      vim9script
+      export const VALUE = 42
+      export def Get(): number
+        return 7
+      enddef
+    END
+    writefile(lines, $'Xexportvalue_{kind}1.vim', 'D')
+
+    lines =<< eval trim END
+      vim9script
+      import autoload './Xexportvalue_{kind}1.vim' as A
+      export {kind} x = A.VALUE + A.Get()
+    END
+    writefile(lines, $'Xexportvalue_{kind}2.vim', 'D')
+
+    lines =<< eval trim END
+      vim9script
+      import './Xexportvalue_{kind}2.vim' as B
+      assert_equal(49, B.x)
+    END
+    v9.CheckScriptSuccess(lines)
+  endfor
+enddef
+
 " Test for don't crash when using a combination of import and class extends
 def Test_vim9_import_and_class_extends()
   var lines =<< trim END
@@ -3622,6 +3738,14 @@ def Test_enum_from_auloaded_script()
       assert_equal('Green', c.name)
     enddef
     CheckColor()
+
+    # the autoloaded enum can be used as an argument type
+    def Paint(c: color.Color): string
+      return c.name .. c.ordinal
+    enddef
+    assert_equal('Blue2', Paint(color.Color.Blue))
+    assert_equal(['Red', 'Green', 'Blue'],
+                 color.Color.values->mapnew((_, v) => v.name))
   END
   v9.CheckScriptSuccess(lines)
 
@@ -3717,6 +3841,85 @@ def Test_import_name_conflict_with_local_variable()
     call s:Main()
   END
   v9.CheckScriptSuccess(lines)
+enddef
+
+" Directly sourcing an autoload script more than once must not fail on its
+" exported variables: like functions, they get a clean slate on reload.
+def Test_autoload_reload_export_var()
+  mkdir('Xreloaddir/autoload', 'pR')
+  var save_rtp = &rtp
+  exe 'set rtp^=' .. getcwd() .. '/Xreloaddir'
+
+  var lines =<< trim END
+      vim9script
+      export var nr = 1
+      export const cnr = 2
+      export def GetNr(): number
+        return 3
+      enddef
+  END
+  writefile(lines, 'Xreloaddir/autoload/Xreload.vim')
+  source Xreloaddir/autoload/Xreload.vim
+  assert_equal(1, g:Xreload#nr)
+  assert_equal(2, g:Xreload#cnr)
+  assert_equal(3, g:Xreload#GetNr())
+
+  # Sourcing again with changed values updates them, no E1041.
+  lines =<< trim END
+      vim9script
+      export var nr = 11
+      export const cnr = 22
+      export def GetNr(): number
+        return 33
+      enddef
+  END
+  writefile(lines, 'Xreloaddir/autoload/Xreload.vim')
+  source Xreloaddir/autoload/Xreload.vim
+  assert_equal(11, g:Xreload#nr)
+  assert_equal(22, g:Xreload#cnr)
+  assert_equal(33, g:Xreload#GetNr())
+
+  # The type may also change on reload.
+  lines =<< trim END
+      vim9script
+      export var nr = 'text'
+  END
+  writefile(lines, 'Xreloaddir/autoload/Xreload.vim')
+  source Xreloaddir/autoload/Xreload.vim
+  assert_equal('text', g:Xreload#nr)
+
+  &rtp = save_rtp
+enddef
+
+" A class or enum cannot be redefined by sourcing the script again: existing
+" instances would keep the old definition, so E1041 is given instead.
+def Test_autoload_reload_export_class()
+  mkdir('Xreloadcldir/autoload', 'pR')
+  var save_rtp = &rtp
+  exe 'set rtp^=' .. getcwd() .. '/Xreloadcldir'
+
+  var lines =<< trim END
+      vim9script
+      export class Cls
+        var v = 1
+      endclass
+  END
+  writefile(lines, 'Xreloadcldir/autoload/Xcls.vim')
+  source Xreloadcldir/autoload/Xcls.vim
+  assert_fails('source Xreloadcldir/autoload/Xcls.vim', 'E1041:')
+
+  lines =<< trim END
+      vim9script
+      export enum Color
+        Red,
+        Blue
+      endenum
+  END
+  writefile(lines, 'Xreloadcldir/autoload/Xenum.vim')
+  source Xreloadcldir/autoload/Xenum.vim
+  assert_fails('source Xreloadcldir/autoload/Xenum.vim', 'E1041:')
+
+  &rtp = save_rtp
 enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

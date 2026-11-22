@@ -292,17 +292,13 @@
 	&& !defined(AMIGA)
 # define FEAT_PRINTER
 #endif
-#if defined(FEAT_PRINTER) && ((defined(MSWIN) && defined(MSWINPS)) \
-	|| (!defined(MSWIN) && defined(FEAT_EVAL)))
+#if defined(FEAT_PRINTER) && !defined(FEAT_PRINT_PANGO) \
+    && ((defined(MSWIN) && defined(MSWINPS)) \
+	    || (!defined(MSWIN) && defined(FEAT_EVAL)))
 # define FEAT_POSTSCRIPT
 #endif
-
-/*
- * +gtk_print		Native GTK print dialog for :hardcopy (GTK4).
- *			Uses GtkPrintOperation + Pango/Cairo instead of PostScript.
- */
-#if defined(FEAT_PRINTER) && defined(FEAT_GUI_GTK) && defined(USE_GTK4)
-# define FEAT_GUI_GTK_PRINT
+#if !defined(FEAT_PRINTER) && defined(FEAT_PRINT_PANGO)
+# undef FEAT_PRINT_PANGO
 #endif
 
 /*
@@ -1095,43 +1091,35 @@
 # define FEAT_PROP_POPUP
 #endif
 
+
 /*
- * +image		RGB image rendering inside popup windows.
- * +image_sixel		terminal backend: emit DEC sixel DCS sequences.
- * +image_kitty		terminal backend: emit kitty graphics protocol APC
- *			sequences.  Selected at runtime when the host
- *			terminal advertises kitty graphics support and
- *			falls back to sixel otherwise.
- * +image_gdi		Windows GUI backend: BitBlt a cached DIB section onto
- *			the GUI canvas.
- * +image_cairo		Cairo GUI backend: composite a cairo_image_surface_t
- *			onto gui.surface; covers GTK2/3/4 today.
- *
- * The parent FEAT_IMAGE flag enables the popup "image" attribute and the
- * shared RGB plumbing; at least one backend has to be enabled to actually
- * paint anything.
+ * +image	    Render images in the terminal and GUI
+ * +image_popup	    Render images in popup windows
  */
-#if defined(FEAT_HUGE) && defined(FEAT_PROP_POPUP)
-# define FEAT_IMAGE
+#if defined(FEAT_HUGE) && defined(FEAT_PROP_POPUP) && defined(HAVE_PIXMAN)
+# define ALLOW_IMAGE
 #endif
 
-#if defined(FEAT_IMAGE) && !defined(ALWAYS_USE_GUI)
+#if defined(ALLOW_IMAGE) && !defined(ALWAYS_USE_GUI)
 # define FEAT_IMAGE_SIXEL
 # ifdef USE_INPUT_BUF
 #  define FEAT_IMAGE_KITTY
 # endif
 #endif
 
-#if defined(FEAT_IMAGE) && defined(FEAT_GUI_MSWIN)
-# define FEAT_IMAGE_GDI
+#if defined(ALLOW_IMAGE) && ((defined(FEAT_GUI_GTK) \
+	    && (defined(USE_GTK4) || defined(USE_GTK3))) || defined(FEAT_GUI_MSWIN))
+# define FEAT_IMAGE_GUI
 #endif
 
-#if defined(FEAT_IMAGE) && defined(FEAT_GUI_GTK)
-# ifdef USE_GTK4_SNAPSHOT
-#  define FEAT_IMAGE_GDK
-# else
-#  define FEAT_IMAGE_CAIRO
-# endif
+#if defined(FEAT_IMAGE_SIXEL) || defined(FEAT_IMAGE_KITTY) \
+    || defined(FEAT_IMAGE_GUI)
+# define FEAT_IMAGE_POPUP
+# define FEAT_IMAGE
+#endif
+
+#ifdef ALLOW_IMAGE
+# undef ALLOW_IMAGE
 #endif
 
 /*

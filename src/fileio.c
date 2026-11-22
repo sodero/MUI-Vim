@@ -4724,6 +4724,7 @@ buf_reload(buf_T *buf, int orig_mode, int reload_options)
 	curwin->w_cursor = old_cursor;
 	check_cursor();
 	update_topline();
+	check_lnums(FALSE);
 	curbuf->b_keep_filetype = false;
 #ifdef FEAT_FOLDING
 	{
@@ -5371,6 +5372,19 @@ vim_closetempdir(void)
     closedir(vim_tempdir_dp);
     vim_tempdir_dp = NULL;
 }
+
+/*
+ * Return true if the temp directory we created is gone.
+ */
+    static bool
+vim_tempdir_gone(void)
+{
+    stat_T	st;
+
+    if (vim_tempdir_dp == NULL)
+	return false;
+    return fstat(dirfd(vim_tempdir_dp), &st) < 0 || st.st_nlink == 0;
+}
 # endif
 
 /*
@@ -5412,7 +5426,7 @@ vim_settempdir(char_u *tempdir)
     if (!after_pathsep(buf, buf + buflen))
     {
 	STRCPY(buf + buflen, PATHSEPSTR);
-	buflen += STRLEN_LITERAL(PATHSEPSTR);
+	buflen += sizeof(PATHSEP);
     }
     vim_tempdir = vim_strnsave(buf, buflen);
 # if defined(UNIX) && defined(HAVE_FLOCK) && defined(HAVE_DIRFD)
@@ -5451,6 +5465,15 @@ vim_tempname(
     stat_T	st;
 # endif
 
+# if defined(UNIX) && defined(HAVE_FLOCK) && defined(HAVE_DIRFD)
+    // if the temp directory is gone, force re-creation of it
+    if (vim_tempdir != NULL && vim_tempdir_gone())
+    {
+	vim_closetempdir();
+	VIM_CLEAR(vim_tempdir);
+    }
+# endif
+
     /*
      * This will create a directory for private use by this instance of Vim.
      * This is done once, and the same directory is used for all temp files.
@@ -5480,7 +5503,7 @@ vim_tempname(
 		if (!after_pathsep(itmp, itmp + itmplen))
 		{
 		    STRCPY(itmp + itmplen, PATHSEPSTR);
-		    itmplen += STRLEN_LITERAL(PATHSEPSTR);
+		    itmplen += sizeof(PATHSEP);
 		}
 
 # ifdef HAVE_MKDTEMP
@@ -5585,7 +5608,7 @@ vim_tempname(
     // randomize the name to avoid collisions
     i = mch_get_pid() + extra_char;
     buf4[1] = chartab[i % 36];
-    buf4[2] = chartab[101 * i % 36];
+    buf4[2] = chartab[(i / 36) % 36];
     if (GetTempFileNameW(wszTempFile, buf4, 0, itmp) == 0)
 	return NULL;
     if (!keep)

@@ -1,4 +1,4 @@
-/* os_amiga.c */
+// os_amiga.c
 void win_resize_on(void);
 void win_resize_off(void);
 void mch_write(char_u *p, int len);
@@ -49,4 +49,4 @@ int mch_is_console(char_u *name);
 int mch_get_random(char_u *buf, int len);
 const void *mch_disable_volume_requester(void);
 void mch_enable_volume_requester(const void *req_handle);
-/* vim: set ft=c : */
+// vim: ft=c

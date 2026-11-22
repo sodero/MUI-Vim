@@ -291,7 +291,7 @@ tuple_find(tuple_T *tuple, long n)
     int
 tuple_append_tv(tuple_T *tuple, typval_T *tv)
 {
-    if (ga_grow(&tuple->tv_items, 1) == FAIL)
+    if (ga_grow_id(&tuple->tv_items, 1, aid_tuple_append) == FAIL)
 	return FAIL;
 
     tuple_set_item(tuple, TUPLE_LEN(tuple), tv);
@@ -331,6 +331,7 @@ tuple_concat(tuple_T *t1, tuple_T *t2, typval_T *tv)
 
 	if (tuple_append_tv(tuple, &new_tv) == FAIL)
 	{
+	    clear_tv(&new_tv);
 	    tuple_free(tuple);
 	    return FAIL;
 	}
@@ -360,6 +361,7 @@ tuple_slice(tuple_T *tuple, long n1, long n2)
 
 	if (tuple_append_tv(new_tuple, &new_tv) == FAIL)
 	{
+	    clear_tv(&new_tv);
 	    tuple_free(new_tuple);
 	    return NULL;
 	}
@@ -511,13 +513,19 @@ eval_tuple(char_u **arg, typval_T *rettv, evalarg_T *evalarg, int do_error)
     {
 	tuple = tuple_alloc();
 	if (tuple == NULL)
+	{
+	    clear_tv(rettv);
 	    return FAIL;
+	}
 
 	if (rettv->v_type != VAR_UNKNOWN)
 	{
 	    // Add the first item to the tuple from "rettv"
 	    if (tuple_append_tv(tuple, rettv) == FAIL)
+	    {
+		clear_tv(rettv);
 		goto failret;
+	    }
 	    // The first item in "rettv" is added to the tuple.  Set the rettv
 	    // type to unknown, so that the caller doesn't free it.
 	    rettv->v_type = VAR_UNKNOWN;
@@ -669,7 +677,11 @@ tuple_join_inner(
 	s.length = STRLEN(s.string);
 	sumlen += (int)s.length;
 
-	(void)ga_grow(join_gap, 1);
+	if (ga_grow(join_gap, 1) == FAIL)
+	{
+	    vim_free(tofree);
+	    return FAIL;
+	}
 	p = ((join_T *)join_gap->ga_data) + (join_gap->ga_len++);
 	if (tofree != NULL || s.string != numbuf)
 	{
@@ -874,7 +886,7 @@ tuple2items(typval_T *argvars, typval_T *rettv)
 
 	if (list_append_list(rettv->vval.v_list, l) == FAIL)
 	{
-	    vim_free(l);
+	    list_free(l);
 	    break;
 	}
 	if (list_append_number(l, idx) == FAIL
@@ -989,7 +1001,7 @@ tuple_max_min(tuple_T *tuple, int domax)
  * Repeat the tuple "tuple" "n" times and set "rettv" to the new tuple.
  */
     void
-tuple_repeat(tuple_T *tuple, int n, typval_T *rettv)
+tuple_repeat(tuple_T *tuple, varnumber_T n, typval_T *rettv)
 {
     rettv->v_type = VAR_TUPLE;
     rettv->vval.v_tuple = NULL;
@@ -997,11 +1009,14 @@ tuple_repeat(tuple_T *tuple, int n, typval_T *rettv)
     if (tuple == NULL || TUPLE_LEN(tuple) == 0 || n <= 0)
 	return;
 
-    if (rettv_tuple_set_with_items(rettv, TUPLE_LEN(tuple) * n) == FAIL)
+    if (check_repeat_count(TUPLE_LEN(tuple), n) == FAIL)
+	return;
+
+    if (rettv_tuple_set_with_items(rettv, TUPLE_LEN(tuple) * (int)n) == FAIL)
 	return;
 
     tuple_T	*new_tuple = rettv->vval.v_tuple;
-    for (int count = 0; count < n; count++)
+    for (int count = 0; count < (int)n; count++)
     {
 	for (int idx = 0; idx < TUPLE_LEN(tuple); idx++)
 	{

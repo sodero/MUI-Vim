@@ -1,4 +1,4 @@
-/* dict.c */
+// dict.c
 dict_T *dict_alloc(void);
 dict_T *dict_alloc_id(alloc_id_T id);
 dict_T *dict_alloc_lock(int lock);
@@ -10,7 +10,7 @@ void dict_unref(dict_T *d);
 int dict_free_nonref(int copyID);
 void dict_free_items(int copyID);
 dictitem_T *dictitem_alloc(char_u *key);
-void dictitem_remove(dict_T *dict, dictitem_T *item, char *command);
+int dictitem_remove(dict_T *dict, dictitem_T *item, char *command);
 void dictitem_free(dictitem_T *item);
 dict_T *dict_copy(dict_T *orig, int deep, int top, int copyID);
 int dict_wrong_func_name(dict_T *d, typval_T *tv, char_u *name);
@@ -51,4 +51,4 @@ void f_keys(typval_T *argvars, typval_T *rettv);
 void f_values(typval_T *argvars, typval_T *rettv);
 void dict_set_items_ro(dict_T *di);
 void f_has_key(typval_T *argvars, typval_T *rettv);
-/* vim: set ft=c : */
+// vim: ft=c

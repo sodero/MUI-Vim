@@ -733,12 +733,25 @@ validate_interface_variables(
 }
 
 /*
- * Returns TRUE if the method signature of "if_method" and "cl_method" matches.
+ * Returns TRUE if the method signature of "if_method" of interface
+ * "intf_name" and "cl_method" matches.
  */
     static int
-intf_method_type_matches(ufunc_T *if_method, ufunc_T *cl_method)
+intf_method_type_matches(
+    ufunc_T	*if_method,
+    ufunc_T	*cl_method,
+    char_u	*intf_name)
 {
     where_T where = WHERE_INIT;
+
+    // A generic method must have the same number of type variables, like
+    // when overriding a method, see validate_extends_generic_method().
+    if (cl_method->uf_generic_argcount != if_method->uf_generic_argcount)
+    {
+	semsg(_(e_type_var_count_of_method_str_differs_from_interface_str),
+						cl_method->uf_name, intf_name);
+	return FALSE;
+    }
 
     // Ensure the type is matching.
     where.wt_func_name = (char *)if_method->uf_name;
@@ -751,16 +764,17 @@ intf_method_type_matches(ufunc_T *if_method, ufunc_T *cl_method)
 }
 
 /*
- * Returns TRUE if the interface method "if_ufunc" is present in the list of
- * methods in "cl_fp" or in the parent lineage of one of the extended classes
- * in "extends_cl".  For a class method, 'is_class_method' is TRUE.
+ * Returns TRUE if the method "if_ufunc" of interface "intf_name" is present in
+ * the list of methods in "cl_fp" or in the parent lineage of one of the
+ * extended classes in "extends_cl".
  */
     static int
 intf_method_present(
     ufunc_T *if_ufunc,
     ufunc_T **cl_fp,
     int	    cl_count,
-    class_T *extends_cl)
+    class_T *extends_cl,
+    char_u  *intf_name)
 {
     int		method_present  = FALSE;
 
@@ -769,7 +783,7 @@ intf_method_present(
 	if (STRCMP(if_ufunc->uf_name, cl_fp[cl_i]->uf_name) == 0)
 	{
 	    // Ensure the type is matching.
-	    if (!intf_method_type_matches(if_ufunc, cl_fp[cl_i]))
+	    if (!intf_method_type_matches(if_ufunc, cl_fp[cl_i], intf_name))
 		return FALSE;
 	    method_present = TRUE;
 	    break;
@@ -781,7 +795,7 @@ intf_method_present(
 	ufunc_T **ext_cl_fp = (ufunc_T **)(extends_cl->class_obj_methods);
 	int	ext_cl_count = extends_cl->class_obj_method_count;
 	return intf_method_present(if_ufunc, ext_cl_fp, ext_cl_count,
-						extends_cl->class_extends);
+					extends_cl->class_extends, intf_name);
     }
 
     return method_present;
@@ -813,7 +827,8 @@ validate_interface_methods(
     {
 	char_u	*if_name = if_fp[if_i]->uf_name;
 
-	if (!intf_method_present(if_fp[if_i], cl_fp, cl_count, extends_cl))
+	if (!intf_method_present(if_fp[if_i], cl_fp, cl_count, extends_cl,
+							    intf_class_name))
 	{
 	    semsg(_(e_method_str_of_interface_str_not_implemented),
 		    if_name, intf_class_name);
@@ -825,14 +840,15 @@ validate_interface_methods(
 }
 
 /*
- * Validate all the "implements" classes when creating a new class.  The
- * classes are returned in "intf_classes".  The class functions, class members,
- * object methods and object members in the new class are in
+ * Validate all the "implements" classes when creating the new class "cl".
+ * The classes are returned in "intf_classes".  The class functions, class
+ * members, object methods and object members in the new class are in
  * "classfunctions_gap", "classmembers_gap", "objmethods_gap", and
  * "objmembers_gap" respectively.
  */
     static int
 validate_implements_classes(
+    class_T	*cl,
     garray_T	*impl_gap,
     garray_T	*intf_classes_gap,
     garray_T	*objmethods_gap,
@@ -878,14 +894,27 @@ validate_implements_classes(
 	// check the variables of the interface match the members of the class
 	success = validate_interface_variables(impl, ifcl, objmembers_gap,
 								extends_cl);
-
-	// check the functions/methods of the interface match the
-	// functions/methods of the class
-	if (success)
-	    success = validate_interface_methods(impl, ifcl, objmethods_gap,
-								extends_cl);
 	clear_tv(&tv);
     }
+
+    if (!success)
+	return FALSE;
+
+    // check if the functions/methods of the interface match the
+    // functions/methods of the class.  A method may return the new class
+    // where an interface or the parent class is expected, temporarily set
+    // them in "cl" to make the type check work.
+    cl->class_interfaces_cl = (class_T **)intf_classes_gap->ga_data;
+    cl->class_interface_count = intf_classes_gap->ga_len;
+    cl->class_extends = extends_cl;
+    for (int i = 0; i < impl_gap->ga_len && success; ++i)
+	success = validate_interface_methods(
+		((char_u **)impl_gap->ga_data)[i],
+		((class_T **)intf_classes_gap->ga_data)[i], objmethods_gap,
+		extends_cl);
+    cl->class_interfaces_cl = NULL;
+    cl->class_interface_count = 0;
+    cl->class_extends = NULL;
 
     return success;
 }
@@ -899,7 +928,7 @@ is_interface_class_present(garray_T *intf_classes_gap, class_T *ifcl)
 {
     for (int j = 0; j < intf_classes_gap->ga_len; j++)
     {
-	if (((class_T **)intf_classes_gap)[j] == ifcl)
+	if (((class_T **)intf_classes_gap->ga_data)[j] == ifcl)
 	    return TRUE;
     }
 
@@ -1589,7 +1618,14 @@ add_classfuncs_objmethods(
 		// methods may be overruled, then "super.Method()" is used to
 		// find a method from the parent.
 		ufunc_T *pf = (extends_cl->class_obj_methods)[i];
-		(*fup)[gap->ga_len + i] = copy_function(pf, 0);
+		ufunc_T *nf = copy_function(pf, 0);
+		(*fup)[gap->ga_len + i] = nf;
+
+		// The types of a generic method use the type variables of the
+		// parent method, make them use the type variables of the copy.
+		if (nf != NULL && IS_GENERIC_FUNC(nf)
+					      && nf->uf_generic_args != NULL)
+		    generic_func_copy_types(pf, nf);
 
 		// If the child class overrides a function from the parent
 		// the signature must be equal.
@@ -1788,8 +1824,10 @@ enum_parse_values(
 
 	++*num_enum_values;
 
-	if (*p != '#')
-	    last_char = *p;
+	// Remember the character after the enum value.  When it is a comment
+	// the enum value list ends here, even when an earlier enum value in
+	// the same line was followed by a comma.
+	last_char = *p;
 
 	if (*p != NUL && *p != ',')
 	    break;
@@ -1934,6 +1972,35 @@ enum_set_internal_obj_vars(class_T *en, object_T *enval)
 }
 
 /*
+ * Read the body up to ":endclass", ":endenum" or ":endinterface" and throw it
+ * away.  Used while skipping.
+ */
+    static void
+skip_class_body(exarg_T *eap)
+{
+    for (;;)
+    {
+	char_u	*theline = eap->ea_getline(':', eap->cookie, 0,
+							  GETLINE_CONCAT_ALL);
+	if (theline == NULL)
+	    break;
+
+	char_u	*p = theline;
+	int	found;
+
+	// skip ':' and blanks
+	for (; VIM_ISWHITE(*p) || *p == ':'; ++p)
+	    ;
+	found = checkforcmd(&p, "endclass", 4)
+			|| checkforcmd(&p, "endenum", 4)
+			|| checkforcmd(&p, "endinterface", 5);
+	vim_free(theline);
+	if (found)
+	    break;
+    }
+}
+
+/*
  * Handle ":class" and ":abstract class" up to ":endclass".
  * Handle ":enum" up to ":endenum".
  * Handle ":interface" up to ":endinterface".
@@ -1948,6 +2015,12 @@ ex_class(exarg_T *eap)
     int		is_interface;
     long	start_lnum = SOURCING_LNUM;
     char_u	*arg = eap->arg;
+
+    if (eap->skip)
+    {
+	skip_class_body(eap);
+	return;
+    }
 
     if (is_abstract)
     {
@@ -2033,7 +2106,7 @@ ex_class(exarg_T *eap)
 	    if (extends == NULL)
 		goto early_ret;
 
-	    arg = skipwhite(end + 1);
+	    arg = skipwhite(end);
 	}
 	else if (STRNCMP(arg, "implements", 10) == 0
 						   && IS_WHITE_OR_NUL(arg[10]))
@@ -2123,6 +2196,7 @@ early_ret:
     class_T *cl = NULL;
     class_T *extends_cl = NULL;  // class from "extends" argument
     class_T **intf_classes = NULL;
+    int	    intf_count = 0;	// number of items in "intf_classes"
     int	    num_enum_values = 0;
 
     cl = ALLOC_CLEAR_ONE(class_T);
@@ -2294,7 +2368,6 @@ early_ret:
 		break;
 	    }
 	    has_public = TRUE;
-	    p = skipwhite(line + 6);
 
 	    if (STRNCMP(p, "def", 3) == 0)
 	    {
@@ -2340,7 +2413,6 @@ early_ret:
 		break;
 	    }
 
-	    p = skipwhite(pa + 8);
 	    if (STRNCMP(p, "def", 3) != 0)
 	    {
 		emsg(_(e_abstract_must_be_followed_by_def));
@@ -2366,7 +2438,6 @@ early_ret:
 		break;
 	    }
 	    has_static = TRUE;
-	    p = skipwhite(ps + 6);
 
 	    if (STRNCMP(p, "var", 3) != 0 && STRNCMP(p, "def", 3) != 0
 		&& STRNCMP(p, "final", 5) != 0 && STRNCMP(p, "const", 5) != 0)
@@ -2399,7 +2470,6 @@ early_ret:
 	    }
 	    has_const = TRUE;
 	}
-	p = skipwhite(p);
 
 	// object members (public, read access, private):
 	//	"var _varname"
@@ -2639,7 +2709,7 @@ early_ret:
     ga_init2(&intf_classes_ga, sizeof(class_T *), 5);
 
     if (success && ga_impl.ga_len > 0)
-	success = validate_implements_classes(&ga_impl, &intf_classes_ga,
+	success = validate_implements_classes(cl, &ga_impl, &intf_classes_ga,
 					&objmethods, &objmembers, extends_cl);
 
     // inherit the super class interfaces
@@ -2647,7 +2717,10 @@ early_ret:
 	success = add_super_class_interfaces(extends_cl, &ga_impl,
 							&intf_classes_ga);
 
+    // When validating failed "intf_classes" may have fewer items than
+    // "ga_impl".
     intf_classes = intf_classes_ga.ga_data;
+    intf_count = intf_classes_ga.ga_len;
     intf_classes_ga.ga_len = 0;
 
     // Check no function argument name is used as a class member.
@@ -2763,7 +2836,7 @@ cleanup:
 
     if (intf_classes != NULL)
     {
-	for (int i = 0; i < ga_impl.ga_len; ++i)
+	for (int i = 0; i < intf_count; ++i)
 	    class_unref(intf_classes[i]);
 	vim_free(intf_classes);
     }
@@ -2957,23 +3030,40 @@ ex_type(exarg_T *eap)
     tv.v_type = VAR_UNKNOWN;
     if (eval_variable_import(name_start, &tv) == OK)
     {
-	if (tv.v_type == VAR_TYPEALIAS)
-	    semsg(_(e_typealias_already_exists_for_str), name_start);
-	else
-	    semsg(_(e_redefining_script_item_str), name_start);
+	dictitem_T  *di = find_var(name_start, NULL, TRUE);
+	int	    is_typealias = tv.v_type == VAR_TYPEALIAS;
+
 	clear_tv(&tv);
-	goto done;
+	// When sourcing a "noclear" script again the item can be redefined,
+	// set_var_const() takes care of that.
+	if (di == NULL || (di->di_flags & DI_FLAGS_RELOAD) == 0)
+	{
+	    if (is_typealias)
+		semsg(_(e_typealias_already_exists_for_str), name_start);
+	    else
+		semsg(_(e_redefining_script_item_str), name_start);
+	    goto done;
+	}
     }
 
-    // Create a script-local variable for the type alias.
-    if (type->tt_type != VAR_OBJECT)
+    // Create a script-local variable for the type alias.  "object<any>" has
+    // no class, it is handled like other types.
+    if (type->tt_type != VAR_OBJECT || type->tt_class == NULL)
     {
 	tv.v_type = VAR_TYPEALIAS;
 	tv.v_lock = 0;
 	tv.vval.v_typealias = ALLOC_CLEAR_ONE(typealias_T);
+	if (tv.vval.v_typealias == NULL)
+	    goto done;
 	++tv.vval.v_typealias->ta_refcount;
 	tv.vval.v_typealias->ta_name = vim_strsave(name_start);
+	if (tv.vval.v_typealias->ta_name == NULL)
+	{
+	    vim_free(tv.vval.v_typealias);
+	    goto done;
+	}
 	tv.vval.v_typealias->ta_type = type;
+	tv.vval.v_typealias->ta_depth = parse_type_depth();
     }
     else
     {

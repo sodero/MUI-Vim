@@ -1,4 +1,4 @@
-/* os_mswin.c */
+// os_mswin.c
 void SaveInst(HINSTANCE hInst);
 void mch_exit_g(int r);
 void mch_early_init(void);
@@ -48,7 +48,7 @@ char_u *mch_resolve_path(char_u *fname, int reparse_point);
 void win32_set_foreground(void);
 void serverInitMessaging(void);
 void serverSetName(char_u *name);
-char_u *serverGetVimNames(void);
+list_T *serverGetVimNames(void);
 int serverSendReply(char_u *name, char_u *reply);
 int serverSendToVim(char_u *name, char_u *cmd, char_u **result, void *ptarget, int asExpr, int timeout, int silent);
 void serverForeground(char_u *name);
@@ -60,4 +60,4 @@ void gui_mch_expand_font(optexpand_T *args, void *param, int (*add_match)(char_u
 UINT WINAPI vimGetDpiForSystem(void);
 int get_logfont(LOGFONTW *lf, char_u *name, HDC printer_dc, int verbose);
 void channel_init_winsock(void);
-/* vim: set ft=c : */
+// vim: ft=c

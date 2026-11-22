@@ -51,7 +51,7 @@ func Test_display_registers()
     " these commands work in the sandbox
     let a = execute('sandbox display')
     " When X11 connection is not available, there is a warning W23
-    " filter this out (we could also run the :display comamand twice)
+    " filter this out (we could also run the :display command twice)
     let a = substitute(a, 'W23.*0\n', '', '')
     let b = execute('sandbox registers')
 
@@ -76,6 +76,14 @@ func Test_display_registers()
     let a = execute('registers :')
     call assert_match('^\nType Name Content\n'
           \ .         '  c  ":   ls', a)
+
+    let a = execute('registers %')
+    call assert_match('^\nType Name Content\n'
+          \ .         '  c  "%   file2', a)
+
+    let a = execute('registers #')
+    call assert_match('^\nType Name Content\n'
+          \ .         '  c  "#   file1', a)
 
     bwipe!
 endfunc
@@ -396,6 +404,11 @@ func Test_set_register()
   call assert_equal('Xfile_alt_1', getreg('#'))
   call setreg('#', b2)
   call assert_equal('Xfile_alt_2', getreg('#'))
+  call setreg('#', '')
+  call assert_equal('', getreg('#'))
+  call setreg('#', 'alt_1')
+  let @# = ''
+  call assert_equal('', getreg('#'))
 
   let ab = 'regwrite'
   call setreg('=', '')
@@ -410,6 +423,7 @@ func Test_set_register()
   call assert_equal('', @=)
   call assert_fails("call setreg('/', ['a', 'b'])", 'E883:')
   call assert_fails("call setreg('=', ['a', 'b'])", 'E883:')
+  call assert_fails("call setreg('#', ['a', 'b'])", 'E883:')
   call assert_equal(0, setreg('_', ['a', 'b']))
 
   " Test for recording to a invalid register
@@ -468,6 +482,31 @@ func Test_set_register_blockwise_width()
   call setreg('a', "z😅😅z\n12345", 'b')
   call assert_equal("\<c-v>6", getreginfo('a').regtype)
   call setreg('a', ["z😅😅z", "12345"], 'b')
+  call assert_equal("\<c-v>6", getreginfo('a').regtype)
+endfunc
+
+" Test for blockwise register width with unprintable chars
+func Test_set_register_blockwise_width_unprintable()
+  " unprintable ASCII control char, displayed as ^G
+  call setreg('a', "a\x07y", 'b')
+  call assert_equal("\<c-v>4", getreginfo('a').regtype)
+  call setreg('a', ["a\x07y", "123"], 'b')
+  call assert_equal("\<c-v>4", getreginfo('a').regtype)
+
+  " truncated UTF-8 (displayed as <c4> )
+  call setreg('a', "qq\xc4", 'b')
+  call assert_equal("\<c-v>6", getreginfo('a').regtype)
+  call setreg('a', ["qq\xc4", "123"], 'b')
+  call assert_equal("\<c-v>6", getreginfo('a').regtype)
+
+  " invalid UTF-8 start byte (displayed as <82> )
+  call setreg('a', "qqq\x82", 'b')
+  call assert_equal("\<c-v>7", getreginfo('a').regtype)
+  call setreg('a', ["qqq\x82", "123"], 'b')
+  call assert_equal("\<c-v>7", getreginfo('a').regtype)
+
+  " embedded NUL (as NL in list), displayed as ^@
+  call setreg('a', ["q\n434", "12345"], 'b')
   call assert_equal("\<c-v>6", getreginfo('a').regtype)
 endfunc
 
@@ -1317,6 +1356,38 @@ func Test_writing_readonly_regs()
   call assert_fails('let @% = "foo"', 'E354:')
   call assert_fails('let @: = "foo"', 'E354:')
   call assert_fails('let @~ = "foo"', 'E354:')
+endfunc
+
+func s:ProviderPaste(reg)
+  return g:provider_paste_ret
+endfunc
+
+" A clipboard provider "paste" callback returning a null tuple or a null list
+" used to cause a crash.  The register should not change.
+func Test_clipboard_provider_paste_null_value()
+  CheckFeature clipboard_provider
+
+  let v:clipproviders['Xnull'] = {
+        \ 'paste': {'+': function('s:ProviderPaste'),
+        \           '*': function('s:ProviderPaste')}}
+  set clipmethod=Xnull
+
+  try
+    let g:provider_paste_ret = ('', ['one', 'two'])
+    call assert_equal(['one', 'two'], getreg('+', 1, 1))
+    let g:provider_paste_ret = test_null_tuple()
+    call assert_equal(['one', 'two'], getreg('+', 1, 1))
+    let g:provider_paste_ret = test_null_list()
+    call assert_equal(['one', 'two'], getreg('+', 1, 1))
+
+  finally
+    call remove(v:clipproviders, 'Xnull')
+    unlet g:provider_paste_ret
+    call setreg('"', [])
+    call setreg('+', [])
+    call setreg('*', [])
+    set clipmethod&
+  endtry
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

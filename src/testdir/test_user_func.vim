@@ -1087,4 +1087,54 @@ func Test_func_return_in_try_verbose()
   delfunc TryReturnOverlongString
 endfunc
 
+" Memory allocation failure when registering a deferred function: the ga_grow()
+" in add_defer() fails, so the deferred function must not be registered and
+" "saved_name" must not leak
+func Test_defer_alloc_fail()
+  let g:defer_log = []
+  func DeferLogTarget()
+    call add(g:defer_log, 'ran')
+  endfunc
+  func CallWithDefer()
+    defer DeferLogTarget()
+  endfunc
+
+  call test_alloc_fail(GetAllocId('defer'), 0, 0)
+  call assert_fails('call CallWithDefer()', 'E342:')
+  call assert_equal([], g:defer_log)
+
+  " Without the injected failure it registers and runs at function exit.
+  call CallWithDefer()
+  call assert_equal(['ran'], g:defer_log)
+
+  delfunc DeferLogTarget
+  delfunc CallWithDefer
+  unlet g:defer_log
+endfunc
+
+" Test for garbage collection while the arguments of a deferred function are
+" only referenced by the deferred call.  They must not be freed.
+func Test_defer_garbagecollect()
+  let lines =<< trim END
+    let s:res = []
+    let s:res2 = []
+    func s:Add(...)
+      call add(s:res, a:000)
+    endfunc
+    func s:Fn()
+      defer s:Add([1, [2]], {'a': [3]}, (4, [5]))
+      let F = function('s:Add', [[6]])
+      defer F({'b': [7]})
+      unlet F
+      defer add(s:res2, [8])
+      call test_garbagecollect_now()
+    endfunc
+    call s:Fn()
+    call assert_equal([[[6], {'b': [7]}], [[1, [2]], {'a': [3]}, (4, [5])]],
+          \ s:res)
+    call assert_equal([[8]], s:res2)
+  END
+  call v9.CheckSourceSuccess(lines)
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

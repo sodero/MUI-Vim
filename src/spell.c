@@ -1752,6 +1752,30 @@ slang_free(slang_T *lp)
     vim_free(lp);
 }
 
+
+/*
+ * Free the salitem_T entries in a "sl_sal" garray (the SN_SAL form) and
+ * clear the garray.  Used by slang_clear() and when set_sofo() reuses
+ * sl_sal for the SN_SOFO form.
+ */
+    void
+free_sal_items(garray_T *gap)
+{
+    salitem_T	*smp;
+
+    while (gap->ga_len > 0)
+    {
+	smp = &((salitem_T *)gap->ga_data)[--gap->ga_len];
+	vim_free(smp->sm_lead);
+	// Don't free sm_oneof and sm_rules, they point into sm_lead.
+	vim_free(smp->sm_to);
+	vim_free(smp->sm_lead_w);
+	vim_free(smp->sm_oneof_w);
+	vim_free(smp->sm_to_w);
+    }
+    ga_clear(gap);
+}
+
 /*
  * Clear an slang_T so that the file can be reloaded.
  */
@@ -1760,7 +1784,6 @@ slang_clear(slang_T *lp)
 {
     garray_T	*gap;
     fromto_T	*ftp;
-    salitem_T	*smp;
     int		i;
     int		round;
 
@@ -1792,20 +1815,10 @@ slang_clear(slang_T *lp)
 	    // SOFOFROM and SOFOTO items: free lists of wide characters.
 	    for (i = 0; i < gap->ga_len; ++i)
 		vim_free(((int **)gap->ga_data)[i]);
+	ga_clear(gap);
     }
     else
-	// SAL items: free salitem_T items
-	while (gap->ga_len > 0)
-	{
-	    smp = &((salitem_T *)gap->ga_data)[--gap->ga_len];
-	    vim_free(smp->sm_lead);
-	    // Don't free sm_oneof and sm_rules, they point into sm_lead.
-	    vim_free(smp->sm_to);
-	    vim_free(smp->sm_lead_w);
-	    vim_free(smp->sm_oneof_w);
-	    vim_free(smp->sm_to_w);
-	}
-    ga_clear(gap);
+	free_sal_items(gap);
 
     for (i = 0; i < lp->sl_prefixcnt; ++i)
 	vim_regfree(lp->sl_prefprog[i]);
@@ -2903,18 +2916,22 @@ check_need_cap(win_T *wp, linenr_T lnum, colnr_T col)
 		need_cap = TRUE;
 	    else
 	    {
+		colnr_T len = ml_get_buf_len(wp->w_buffer, lnum - 1);
 		// Append a space in place of the line break.
 		line_copy = concat_str(line, (char_u *)" ");
 		if (line_copy == NULL)
 		    return FALSE;
 
 		line = line_copy;
-		endcol = (colnr_T)STRLEN(line);
+		endcol = len + 1;
 	    }
 	}
     }
     else
-	endcol = col;
+    {
+	colnr_T len = ml_get_buf_len(wp->w_buffer, lnum);
+	endcol = col > len ? len : col;
+    }
 
     if (endcol > 0)
     {
@@ -3270,7 +3287,7 @@ spell_soundfold_sofo(slang_T *slang, char_u *inword, char_u *res)
     else
     {
 	// The sl_sal_first[] table contains the translation.
-	for (s = inword; (c = *s) != NUL; ++s)
+	for (s = inword; (c = *s) != NUL && ri < MAXWLEN - 1; ++s)
 	{
 	    if (VIM_ISWHITE(c))
 		c = ' ';
@@ -3343,7 +3360,7 @@ spell_soundfold_sal(slang_T *slang, char_u *inword, char_u *res)
 	if (n >= 0)
 	{
 	    // check all rules for the same letter
-	    for (; (s = smp[n].sm_lead)[0] == c; ++n)
+	    for (; n < slang->sl_sal.ga_len && (s = smp[n].sm_lead)[0] == c; ++n)
 	    {
 		// Quickly skip entries that don't match the word.  Most
 		// entries are less than three chars, optimize for that.
@@ -3513,7 +3530,7 @@ spell_soundfold_sal(slang_T *slang, char_u *inword, char_u *res)
 			// no '<' rule used
 			i += k - 1;
 			z = 0;
-			while (*s != NUL && s[1] != NUL && reslen < MAXWLEN)
+			while (*s != NUL && s[1] != NUL && reslen < MAXWLEN - 1)
 			{
 			    if (reslen == 0 || res[reslen - 1] != *s)
 				res[reslen++] = *s;
@@ -3523,7 +3540,7 @@ spell_soundfold_sal(slang_T *slang, char_u *inword, char_u *res)
 			c = *s;
 			if (strstr((char *)pf, "^^") != NULL)
 			{
-			    if (c != NUL)
+			    if (c != NUL && reslen < MAXWLEN - 1)
 				res[reslen++] = c;
 			    STRMOVE(word, word + i + 1);
 			    i = 0;
@@ -3542,7 +3559,7 @@ spell_soundfold_sal(slang_T *slang, char_u *inword, char_u *res)
 
 	if (z0 == 0)
 	{
-	    if (k && !p0 && reslen < MAXWLEN && c != NUL
+	    if (k && !p0 && reslen < MAXWLEN - 1 && c != NUL
 		    && (!slang->sl_collapse || reslen == 0
 						     || res[reslen - 1] != c))
 		// condense only double letters
@@ -3633,7 +3650,8 @@ spell_soundfold_wsal(slang_T *slang, char_u *inword, char_u *res)
 	    // Check all rules for the same index byte.
 	    // If c is 0x300 need extra check for the end of the array, as
 	    // (c & 0xff) is NUL.
-	    for (; ((ws = smp[n].sm_lead_w)[0] & 0xff) == (c & 0xff)
+	    for (; n < slang->sl_sal.ga_len
+			&& ((ws = smp[n].sm_lead_w)[0] & 0xff) == (c & 0xff)
 							 && ws[0] != NUL; ++n)
 	    {
 		// Quickly skip entries that don't match the word.  Most
@@ -4325,7 +4343,7 @@ dump_prefixes(
 			}
 		    }
 		}
-		else
+		else if (depth < MAXWLEN - 1)
 		{
 		    // Normal char, go one level deeper.
 		    prefix[depth++] = c;

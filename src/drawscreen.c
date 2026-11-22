@@ -458,12 +458,9 @@ update_screen(int type_arg)
     }
 #endif
 
-#if defined(FEAT_IMAGE_GDI) || defined(FEAT_IMAGE_CAIRO) \
-    || defined(FEAT_IMAGE_GDK)
-    // GUI only: the cursor redraw and other late blits paint directly onto
-    // the canvas and may damage the popup images blitted by update_popups();
-    // restore the image layer.  No-op in terminal mode.
-    update_popup_images();
+#ifdef FEAT_IMAGE
+    // Make sure to do this last!
+    draw_image_placements();
 #endif
 
 #ifdef FEAT_EVAL
@@ -629,6 +626,7 @@ win_redr_status(win_T *wp, int ignore_pum UNUSED)
 	    if (width > 0)
 		screen_puts_len(showcmd_buf, width, row,
 				wp->w_wincol + this_ru_col - width - 1, attr);
+	    showcmd_update_clear_state();
 	}
     }
 
@@ -659,6 +657,8 @@ win_redr_status(win_T *wp, int ignore_pum UNUSED)
  *    over the join without changing visible characters.
  *  - Cells where the vsep char is drawn (stl_connected == FALSE) are left
  *    untouched so the VertSplit highlight is preserved.
+ * Called for every cursor movement, thus only cells whose attribute changed
+ * are written to the screen.
  */
     static void
 borrow_stl_vsep_hl(void)
@@ -666,12 +666,17 @@ borrow_stl_vsep_hl(void)
     win_T   *left = NULL;
     win_T   *right = NULL;
 
-    if (!redrawing())
+    // In silent Ex mode the screen is not allocated, so LineOffset and
+    // ScreenAttrs are NULL; there is nothing to borrow.
+    if (!redrawing() || ScreenLines == NULL)
 	return;
 
     FOR_ALL_WINDOWS(left)
     {
 	if (left->w_status_height == 0 || left->w_vsep_width == 0)
+	    continue;
+	// A window of zero width has no status line cell to borrow from.
+	if (left->w_width == 0)
 	    continue;
 	if (!stl_connected(left))
 	    continue;
@@ -717,12 +722,22 @@ borrow_stl_vsep_hl(void)
 	int src_col = (neighbour == curwin)
 				? neighbour->w_wincol : W_ENDCOL(left) - 1;
 
+	// The windows may be laid out for a size the screen does not have yet.
+	if (dst_col >= screen_Columns || src_col >= screen_Columns)
+	    continue;
+	if (end > screen_Rows)
+	    end = screen_Rows;
+
 	for (int r = start; r < end; r++)
 	{
-	    unsigned dst_off = LineOffset[r] + dst_col;
+	    unsigned	dst_off = LineOffset[r] + dst_col;
+	    sattr_T	attr = ScreenAttrs[LineOffset[r] + src_col];
 
-	    ScreenAttrs[dst_off] = ScreenAttrs[LineOffset[r] + src_col];
-	    screen_char(dst_off, r, dst_col);
+	    if (ScreenAttrs[dst_off] != attr)
+	    {
+		ScreenAttrs[dst_off] = attr;
+		screen_char(dst_off, r, dst_col);
+	    }
 	}
     }
 }
@@ -765,7 +780,10 @@ showruler(int always)
     }
 #if defined(FEAT_STL_OPT)
     if ((*p_stl != NUL || *curwin->w_p_stl != NUL) && curwin->w_status_height)
+    {
 	redraw_custom_statusline(curwin);
+	borrow_stl_vsep_hl();
+    }
     else
 #endif
 	win_redr_ruler(curwin, always, FALSE);
@@ -1666,6 +1684,13 @@ win_update(win_T *wp)
     }
 #endif
 
+#ifdef FEAT_SYN_HL
+    // 'cursorcolumn' is drawn with w_virtcol, make sure it is up to date.
+    // This may set w_redr_type, thus do it before using it below.
+    if (wp->w_p_cuc)
+	validate_virtcol_win(wp);
+#endif
+
     type = wp->w_redr_type;
 
     if (type == UPD_NOT_VALID)
@@ -2263,12 +2288,11 @@ win_update(win_T *wp)
 
 	// If we know the value of w_botline, use it to restrict the update to
 	// the lines that are visible in the window.
+	// Note: w_botline may be partially visible or completely invisible.
 	if (wp->w_valid & VALID_BOTLINE)
 	{
-	    if (from >= wp->w_botline)
-		from = wp->w_botline - 1;
-	    if (to >= wp->w_botline)
-		to = wp->w_botline - 1;
+	    from = MIN(from, wp->w_botline);
+	    to = MIN(to, wp->w_botline);
 	}
 
 	// Find the minimal part to be updated.
@@ -2769,10 +2793,10 @@ win_update(win_T *wp)
 		if ((*mb_off2cells)(LineOffset[k] + topframe->fr_width - 2,
 					   LineOffset[k] + screen_Columns) > 1)
 		    screen_draw_rectangle(k, topframe->fr_width - 2, 1, 2,
-			    FALSE);
+			    FALSE, FALSE);
 		else
 		    screen_draw_rectangle(k, topframe->fr_width - 1, 1, 1,
-			    FALSE);
+			    FALSE, FALSE);
 	    else
 		screen_char(LineOffset[k] + topframe->fr_width - 1, k,
 			cmdline_width - 1);
@@ -3045,7 +3069,7 @@ update_debug_sign(buf_T *buf, linenr_T lnum)
 # endif
 
     // update/delete a specific sign
-    redraw_buf_line_later(buf, lnum);
+    redraw_buf_range_later(buf, lnum, lnum);
 
     // check if it resulted in the need to redraw a window
     FOR_ALL_WINDOWS(wp)
@@ -3442,6 +3466,15 @@ redraw_buf_later(buf_T *buf, int type)
 	if (wp->w_buffer == buf)
 	    redraw_win_later(wp, type);
     }
+#ifdef FEAT_PROP_POPUP
+    // popup windows are not in the list of windows
+    FOR_ALL_POPUPWINS(wp)
+	if (wp->w_buffer == buf)
+	    redraw_win_later(wp, type);
+    FOR_ALL_POPUPWINS_IN_TAB(curtab, wp)
+	if (wp->w_buffer == buf)
+	    redraw_win_later(wp, type);
+#endif
 #if defined(FEAT_TERMINAL) && defined(FEAT_PROP_POPUP)
     // terminal in popup window is not in list of windows
     if (curwin->w_buffer == buf)
@@ -3449,16 +3482,20 @@ redraw_buf_later(buf_T *buf, int type)
 #endif
 }
 
-#if defined(FEAT_SIGNS)
+#if defined(FEAT_PROP_POPUP) || defined(FEAT_SIGNS)
+/*
+ * Redraw lines "first" to "last" of buffer "buf" in the windows that show it,
+ * without marking the text as changed: the text, syntax state and line
+ * heights remain valid. Popup windows are not handled here.
+ */
     void
-redraw_buf_line_later(buf_T *buf, linenr_T lnum)
+redraw_buf_range_later(buf_T *buf, linenr_T first, linenr_T last)
 {
     win_T	*wp;
 
     FOR_ALL_WINDOWS(wp)
-	if (wp->w_buffer == buf && lnum >= wp->w_topline
-						  && lnum < wp->w_botline)
-	    redrawWinline(wp, lnum);
+	if (wp->w_buffer == buf)
+	    redraw_win_range_later(wp, first, last);
 }
 #endif
 
@@ -3484,6 +3521,17 @@ redraw_buf_and_status_later(buf_T *buf, int type)
 #endif
 
 /*
+ * mark the ruler for redraw when the last window has no status line and the
+ * ruler takes its place in the last screen line; showmode() draws it
+ */
+    static void
+ruler_redraw_lastwin(void)
+{
+    if (p_ru && lastwin->w_status_height == 0)
+	redraw_cmdline = TRUE;
+}
+
+/*
  * mark all status lines for redraw; used after first :cd
  */
     void
@@ -3497,6 +3545,7 @@ status_redraw_all(void)
 	    wp->w_redr_status = true;
 	    redraw_later(UPD_VALID);
 	}
+    ruler_redraw_lastwin();
 }
 
 /*
@@ -3513,6 +3562,8 @@ status_redraw_curbuf(void)
 	    wp->w_redr_status = true;
 	    redraw_later(UPD_VALID);
 	}
+    if (lastwin->w_buffer == curbuf)
+	ruler_redraw_lastwin();
 }
 
 /*

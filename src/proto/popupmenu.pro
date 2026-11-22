@@ -1,8 +1,8 @@
-/* popupmenu.c */
+// popupmenu.c
 void pum_set_border(int enable);
 void pum_set_shadow(int enable);
 void pum_set_margin(int enable);
-void pum_display(pumitem_T *array, int size, int selected);
+void pum_display(pumitem_T *array, int size, int selected, int pum_wcol);
 void pum_call_update_screen(void);
 int pum_under_menu(int row, int col, int only_redrawing);
 void pum_opacity_changed(void);
@@ -23,4 +23,4 @@ void pum_show_popupmenu(vimmenu_T *menu);
 void pum_make_popup(char_u *path_name, int use_mouse_pos);
 void pum_set_border_chars(int top, int right, int bottom, int left, int top_left, int top_right, int bottom_right, int bottom_left);
 void put_shadow_char(int row, int col);
-/* vim: set ft=c : */
+// vim: ft=c

@@ -2148,10 +2148,6 @@ if test "$enable_rubyinterp" = "yes" -o "$enable_rubyinterp" = "dynamic"; then
 	  RUBY_LIBS="$RUBY_LIBS -L$rubylibdir"
 	fi
 
-	if test "X$librubyarg" != "X"; then
-	  RUBY_LIBS="$librubyarg $RUBY_LIBS"
-	fi
-
 	dnl Here the Ruby LDFLAGS used to be added to LDFLAGS, but that turns
 	dnl out to cause trouble and was removed.
 
@@ -2166,6 +2162,19 @@ if test "$enable_rubyinterp" = "yes" -o "$enable_rubyinterp" = "dynamic"; then
 	  AC_DEFINE(DYNAMIC_RUBY)
 	  RUBY_CFLAGS="-DDYNAMIC_RUBY_DLL=\\\"$libruby_soname\\\" $RUBY_CFLAGS"
 	  RUBY_LIBS=
+	  dnl For dynamic Ruby keep only the library search path / runpath from
+	  dnl librubyarg so the dlopen()ed library can be found at runtime,
+	  dnl without adding -lruby and thus a hard dependency on the Ruby
+	  dnl library, which would defeat dynamic loading.
+	  for arg in $librubyarg; do
+	    case "$arg" in
+	      -L*|-R*|-Wl,-R*|-Wl,-rpath*) RUBY_LIBS="$RUBY_LIBS $arg" ;;
+	    esac
+	  done
+	  librubyarg=
+	fi
+	if test "X$librubyarg" != "X"; then
+	  RUBY_LIBS="$librubyarg $RUBY_LIBS"
 	fi
 	if test "X$CLANG_VERSION" != "X" -a "$rubyversion" -ge 30; then
 	  RUBY_CFLAGS="$RUBY_CFLAGS -fdeclspec"
@@ -2416,17 +2425,6 @@ AC_ARG_ENABLE(fontset,
 AC_MSG_RESULT($enable_fontset)
 dnl defining FEAT_XFONTSET is delayed, so that it can be disabled for no GUI
 
-AC_MSG_CHECKING(if shm_open is available)
-cppflags_save=$CPPFLAGS
-CPPFLAGS="$CPPFLAGS $X_CFLAGS"
-AC_LINK_IFELSE([AC_LANG_PROGRAM(
-		   [#include <sys/mman.h>
-		    #include <sys/stat.h>
-		    #include <fcntl.h>], [shm_open("/test", O_CREAT, 0600);])],
-		   AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SHM_OPEN),
-		   AC_MSG_RESULT(no))
-CPPFLAGS=$cppflags_save
-
 AC_MSG_CHECKING(--with-wayland argument)
 AC_ARG_WITH(wayland,
 	[  --with-wayland	  Include support for the Wayland protocol.],
@@ -2471,6 +2469,69 @@ if test "$with_wayland" = yes; then
   fi
 CPPFLAGS=$cppflags_save
 CFLAGS=$cflags_save
+else
+  AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for cairo)
+have_cairo="no"
+if "$PKG_CONFIG" --exists 'cairo-ps'; then
+  if "$PKG_CONFIG" --exists 'cairo-pdf'; then
+    have_cairo="yes"
+    AC_MSG_RESULT([yes])
+
+    CAIRO_CFLAGS=`$PKG_CONFIG --cflags-only-other cairo-ps cairo-pdf`
+    CAIRO_CPPFLAGS=`$PKG_CONFIG --cflags-only-I cairo-ps cairo-pdf`
+    CAIRO_LIBS=`$PKG_CONFIG --libs cairo-ps cairo-pdf`
+  else
+    AC_MSG_RESULT(no, pdf backend not enabled)
+  fi
+else
+  AC_MSG_RESULT(no, postscript backend not enabled)
+fi
+
+AC_MSG_CHECKING(for pango)
+have_pango="no"
+if "$PKG_CONFIG" --exists 'pango' && "$PKG_CONFIG" --exists 'pangocairo'; then
+dnl pango_font_metrics_get_height() requires Pango 1.44.
+  if "$PKG_CONFIG" --exists 'pango >= 1.44'; then
+    have_pango="yes"
+    AC_MSG_RESULT([yes])
+
+    PANGO_CFLAGS=`$PKG_CONFIG --cflags-only-other pango pangocairo`
+    PANGO_CPPFLAGS=`$PKG_CONFIG --cflags-only-I pango pangocairo`
+    PANGO_LIBS=`$PKG_CONFIG --libs pango pangocairo`
+  else
+    have_pango="old"
+    AC_MSG_RESULT([no, version 1.44 or later is required])
+  fi
+else
+  AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(--enable-pixman argument)
+AC_ARG_ENABLE(pixman,
+	[  --enable-pixman         Use the pixman library (default: auto).], ,
+	[enable_pixman="auto"])
+AC_MSG_RESULT($enable_pixman)
+
+if test "$enable_pixman" != "no"; then
+  AC_MSG_CHECKING(for pixman)
+  if test -n "$PKG_CONFIG" && "$PKG_CONFIG" --exists 'pixman-1'; then
+    AC_MSG_RESULT(yes)
+    PIXMAN_LIBS=`$PKG_CONFIG --libs pixman-1`
+    PIXMAN_CFLAGS=`$PKG_CONFIG --cflags-only-other pixman-1`
+    PIXMAN_CPPFLAGS=`$PKG_CONFIG --cflags-only-I pixman-1`
+    AC_DEFINE(HAVE_PIXMAN)
+    AC_SUBST(PIXMAN_LIBS)
+    AC_SUBST(PIXMAN_CFLAGS)
+    AC_SUBST(PIXMAN_CPPFLAGS)
+  else
+    AC_MSG_RESULT(no)
+    if test "$fail_if_missing" = "yes" -a "$enable_pixman" = "yes"; then
+      AC_MSG_ERROR([could not configure pixman])
+    fi
+  fi
 fi
 
 dnl GTK4 does not use X11 APIs directly, so skip X11 detection entirely.
@@ -2714,19 +2775,6 @@ if test "x$SKIP_GTK4" != "xYES" -a "$enable_gui_canon" != "gtk4"; then
     SKIP_GTK4=YES
   fi
 fi
-
-if test "x$SKIP_GTK4" != "xYES" -a "$enable_gui_canon" = "gtk4"; then
-  AC_MSG_CHECKING(--enable-gtk4-hwaccel argument)
-  AC_ARG_ENABLE(gtk4-hwaccel,
-	[  --enable-gtk4-hwaccel  Use hardware accelerated rendering backend for GTK4 [default=no]],
-	, enable_gtk4_hwaccel="no")
-  AC_MSG_RESULT($enable_gtk4_hwaccel)
-
-  if test "x$enable_gtk4_hwaccel" = "xyes"; then
-    AC_DEFINE(USE_GTK4_SNAPSHOT)
-  fi
-fi
-
 
 if test "x$SKIP_GTK3" != "xYES" -a "$enable_gui_canon" != "gtk3"; then
   AC_MSG_CHECKING(whether or not to look for GTK+ 3)
@@ -3089,6 +3137,7 @@ if test "x$GUITYPE" = "xGTK"; then
 	AC_MSG_RESULT([usable.])
 	AC_DEFINE(USE_GRESOURCE)
 	GRESOURCE_SRC="auto/gui_gtk_gresources.c"
+    GRESOURCE_PRO="proto/gui_gtk_gresources.pro"
 	GRESOURCE_OBJ="objects/gui_gtk_gresources.o"
       fi
     else
@@ -3130,9 +3179,65 @@ if test "x$GUITYPE" = "xGTK"; then
 fi
 AC_SUBST(GLIB_COMPILE_RESOURCES)
 AC_SUBST(GRESOURCE_SRC)
+AC_SUBST(GRESOURCE_PRO)
 AC_SUBST(GRESOURCE_OBJ)
 AC_SUBST(GTK_UPDATE_ICON_CACHE)
 AC_SUBST(UPDATE_DESKTOP_DATABASE)
+
+AC_MSG_CHECKING(--enable-hardcopy-pango argument)
+AC_ARG_ENABLE(hardcopy-pango,
+	[  --enable-hardcopy-pango     Use Pango 1.44 or later and Cairo for improved hardcopy printing. [default=yes when GTK GUI enabled]],
+	[],
+	[enable_hardcopy_pango="auto"])
+
+if test "x$have_pango" != "xyes" || test "x$have_cairo" = "xno"; then
+  if test "$fail_if_missing" = "yes" -a "$enable_hardcopy_pango" = "yes"; then
+    AC_MSG_ERROR([could not configure hardcopy-pango])
+  fi
+  enable_hardcopy_pango="no"
+  if test "x$have_pango" = "xold"; then
+    AC_MSG_RESULT([no, Pango is older than 1.44])
+  else
+    AC_MSG_RESULT([no, Pango or Cairo not found])
+  fi
+else
+  if test "x$enable_hardcopy_pango" = "xauto"; then
+    if test "x$GUITYPE" = "xGTK" || test "x$GUITYPE" = "xGTK4"; then
+      enable_hardcopy_pango="yes"
+      AC_MSG_RESULT([yes, GTK GUI enabled])
+    else
+      enable_hardcopy_pango="no"
+      AC_MSG_RESULT([no])
+    fi
+  elif test "$enable_hardcopy_pango" = "yes"; then
+    AC_MSG_RESULT([yes])
+  else
+    AC_MSG_RESULT([no])
+  fi
+fi
+
+if test "$enable_hardcopy_pango" = "yes"; then
+  cppflags_save=$CPPFLAGS
+  cflags_save=$CFLAGS
+
+  AC_DEFINE(FEAT_PRINT_PANGO)
+
+  CPPFLAGS="$CPPFLAGS $PANGO_CPPFLAGS"
+  CFLAGS="$CFLAGS $PANGO_CFLAGS"
+  AC_SUBST(PANGO_LIBS)
+  AC_SUBST(PANGO_CFLAGS)
+  AC_SUBST(PANGO_CPPFLAGS)
+
+  CPPFLAGS="$CPPFLAGS $CAIRO_CPPFLAGS"
+  CFLAGS="$CFLAGS $CAIRO_CFLAGS"
+  AC_SUBST(CAIRO_LIBS)
+  AC_SUBST(CAIRO_CFLAGS)
+  AC_SUBST(CAIRO_CPPFLAGS)
+
+  CPPFLAGS=$cppflags_save
+  CFLAGS=$cflags_save
+fi
+
 
 dnl Check for Motif include files location.
 dnl The LAST one found is used, this makes the highest version to be used,
@@ -4028,7 +4133,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
 
 dnl Check for timer_create. It probably requires the 'rt' library.
 AC_CACHE_CHECK([for timer_create without -lrt], [vim_cv_timer_create], [
-  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([
   #include <time.h>
   ], [
     timer_create(CLOCK_MONOTONIC, NULL, NULL);
@@ -4042,7 +4147,7 @@ if test "x$vim_cv_timer_create" = "xno" ; then
   save_LIBS="$LIBS"
   LIBS="$LIBS -lrt"
   AC_CACHE_CHECK([for timer_create with -lrt], [vim_cv_timer_create_with_lrt], [
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([
     #include <time.h>
     ], [
       timer_create(CLOCK_MONOTONIC, NULL, NULL);

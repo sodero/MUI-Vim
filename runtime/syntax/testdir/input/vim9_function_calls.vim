@@ -136,7 +136,7 @@ var substitute = substitute(42)
 call substitute(42)
 # function
 substitute(42)
-# command
+# command - /42)/
 substitute (42)
 
 var swapname = swapname(42)
@@ -298,6 +298,58 @@ g:substitute#substitute()
 
 module.foo().bar()
 module.foo().substitute()
+
+
+# Method-call statements
+
+null->type()
+
+true->type()
+
+42->type()
+# :42- :> with invalid trailing type(), not a number arg
+:42->type()
+42.42->type()
+42.0e1->type()
+0x2A->type()
+0o52->type()
+0b101010->type()
+
+0zFF00.ED01.5DAF->type()
+
+"foo"->type()
+'foo'->type()
+$"foo"->type()
+$'foo'->type()
+
+[]->type()
+()->type()
+{}->type()
+
+foo->type()
+foo[42]->type()
+g:foo->type()
+g:foo[42]->type()
+v:argv->type()
+&sw->type()
+&l:sw->type()
+&g:sw->type()
+$FOO->type()
+@a->type()
+
+Foo->type()
+foo.bar->type()
+foo#bar->type()
+Foo<number>->type()
+foo.bar<number>->type()
+foo#bar<number>->type()
+
+Foo()->type()
+foo.bar()->type()
+foo#bar()->type()
+Foo<number>()->type()
+foo.bar<number>()->type()
+foo#bar<number>()->type()
 
 
 # Issue 16721 (Vim script highlight of builtin function after |)

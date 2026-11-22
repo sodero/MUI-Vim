@@ -1628,6 +1628,22 @@ func Test_large_hex_chars3()
   endtry
 endfunc
 
+func Test_large_dec_chars()
+  " A large decimal number used to wrap around: 2^64 + 97 becomes 'a'
+  for re in [1, 2]
+    let &re = re
+    call assert_fails("call match('xab', '\\%d18446744073709551713')", 'E678:')
+    call assert_fails("call match('xab', '[\\d18446744073709551713]')", 'E1541:')
+    " With a 32-bit long_u, 2^32 + 97 used to become 'a'
+    call assert_fails("call match('xab', '\\%d4294967393')", 'E678:')
+    call assert_fails("call match('xab', '[\\d4294967393]')", 'E1541:')
+    " INT_MAX is the largest accepted value
+    call assert_equal(-1, match('xab', '\%d2147483647'))
+    call assert_fails("call match('xab', '\\%d2147483648')", 'E678:')
+  endfor
+  set re&
+endfunc
+
 func Test_one_error_msg()
   " This was also giving an internal error
   call assert_fails('call search(" \\((\\v[[=P=]]){185}+             ")', 'E871:')
@@ -1827,10 +1843,22 @@ endfunc
 func Test_search_with_last_substitute_pat()
   let lines =<< trim [SCRIPT]
     new
-    set shortmess+=S
+    set shortmess+=Ss
     call setline(1, repeat(['foofoo'], 3))
     %s/foo/bar/
     call assert_equal(repeat(['barfoo'], 3), getline(1, '$'))
+
+    " this was crashing
+    call cursor(1, 1)
+    call assert_equal("/foo/e", execute('call feedkeys("//e\r", "tx")', '')->trim())
+    call assert_equal([0, 1, 6, 0], getpos('.'))
+    call assert_equal("?foo?e", execute('call feedkeys("??e\r", "tx")', '')->trim())
+    call assert_equal([0, 3, 6, 0], getpos('.'))
+    call cursor(1, 1)
+    call assert_equal("/foo", execute('call feedkeys("//\r", "tx")', '')->trim())
+    call assert_equal([0, 1, 4, 0], getpos('.'))
+    call assert_equal("?foo", execute('call feedkeys("??\r", "tx")', '')->trim())
+    call assert_equal([0, 3, 4, 0], getpos('.'))
 
     call cursor(1, 1)
     call assert_equal("/foo", execute('call feedkeys("/\r", "tx")', '')->trim())
@@ -2166,6 +2194,19 @@ func Test_search_match_paren()
   normal [(
   call assert_equal([1, 4], [line('.'), col('.')])
 
+  call setline(1, ['x" (a "b" )\', '")'])
+  call cursor(1, 4)
+  normal %
+  call assert_equal([1, 11], [line('.'), col('.')])
+  normal %
+  call assert_equal([1, 4], [line('.'), col('.')])
+  call cursor(1, 10)
+  normal [(
+  call assert_equal([1, 4], [line('.'), col('.')])
+  call cursor(1, 4)
+  normal ])
+  call assert_equal([1, 11], [line('.'), col('.')])
+
   " matching parenthesis in 'virtualedit' mode with cursor after the eol
   call setline(1, 'abc(defgh)')
   set virtualedit=all
@@ -2442,6 +2483,19 @@ func Test_incsearch_delimiter_ctrlg()
   call term_sendkeys(buf, "\<Esc>")
 
   call StopVimInTerminal(buf)
+endfunc
+
+func Test_searchcount_maxcount_cached()
+  new
+  call setline(1, repeat(['foo'], 5))
+  set maxsearchcount=99
+  let @/ = 'foo'
+  call cursor(1, 1)
+  call searchcount(#{recompute: v:true,  maxcount: 3})
+  let r = searchcount(#{recompute: v:false, maxcount: 3})
+  call assert_equal(3, r.maxcount)
+  set maxsearchcount&
+  bwipe!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

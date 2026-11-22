@@ -1,10 +1,11 @@
-/* autocmd.c */
+// autocmd.c
 void aubuflocal_remove(buf_T *buf);
 int au_has_group(char_u *name);
 void do_augroup(char_u *arg, int del_group);
 void autocmd_init(void);
 void free_all_autocmds(void);
 int is_aucmd_win(win_T *win);
+char_u *au_find_cmd_arg(char_u *arg);
 int event_ignored(event_T event, char_u *ei);
 int check_ei(char_u *ei);
 char_u *au_event_disable(char *what);
@@ -40,6 +41,7 @@ int is_autocmd_blocked(void);
 sctx_T *acp_script_ctx(AutoPatCmd_T *acp);
 char_u *getnextac(int c, void *cookie, int indent, getline_opt_T options);
 int has_autocmd(event_T event, char_u *sfname, buf_T *buf);
+int has_autocmd_fullname(event_T event, char_u *fname, buf_T *buf);
 char_u *get_augroup_name(expand_T *xp, int idx);
 char_u *set_context_in_autocmd(expand_T *xp, char_u *arg, int doautocmd);
 char_u *get_event_name(expand_T *xp, int idx);
@@ -50,4 +52,4 @@ int au_exists(char_u *arg);
 void f_autocmd_add(typval_T *argvars, typval_T *rettv);
 void f_autocmd_delete(typval_T *argvars, typval_T *rettv);
 void f_autocmd_get(typval_T *argvars, typval_T *rettv);
-/* vim: set ft=c : */
+// vim: ft=c

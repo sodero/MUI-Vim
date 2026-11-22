@@ -269,6 +269,8 @@ EXTERN char e_missing_colon_after_questionmark[]
 	INIT(= N_("E109: Missing ':' after '?'"));
 EXTERN char e_missing_closing_paren[]
 	INIT(= N_("E110: Missing ')'"));
+EXTERN char e_missing_closing_paren_str[]
+	INIT(= N_("E110: Missing ')': %s"));
 EXTERN char e_missing_closing_square_brace[]
 	INIT(= N_("E111: Missing ']'"));
 EXTERN char e_option_name_missing_str[]
@@ -569,7 +571,7 @@ EXTERN char e_font_str_is_not_fixed_width[]
 	INIT(= N_("E236: Font \"%s\" is not fixed-width"));
 # endif
 #endif
-#ifdef MSWIN
+#if defined(MSWIN) || defined(FEAT_PRINT_PANGO)
 EXTERN char e_printer_selection_failed[]
 	INIT(= N_("E237: Printer selection failed"));
 EXTERN char e_print_error_str[]
@@ -815,7 +817,7 @@ EXTERN char e_line_number_out_of_range_nr_past_the_end[]
 	INIT(= "E322: Line number out of range: %ld past the end");
 EXTERN char e_line_count_wrong_in_block_nr[]
 	INIT(= "E323: Line count wrong in block %ld");
-#ifdef FEAT_POSTSCRIPT
+#if defined(FEAT_POSTSCRIPT) || defined(FEAT_PRINT_PANGO)
 EXTERN char e_cant_open_postscript_output_file[]
 	INIT(= N_("E324: Can't open PostScript output file"));
 #endif
@@ -912,7 +914,7 @@ EXTERN char e_pattern_uses_more_memory_than_maxmempattern[]
 EXTERN char e_library_call_failed_for_str[]
 	INIT(= N_("E364: Library call failed for \"%s()\""));
 #endif
-#ifdef FEAT_POSTSCRIPT
+#if defined(FEAT_POSTSCRIPT) || defined(FEAT_PRINT_PANGO)
 EXTERN char e_failed_to_print_postscript_file[]
 	INIT(= N_("E365: Failed to print PostScript file"));
 #endif
@@ -1186,7 +1188,8 @@ EXTERN char e_invalid_argument_str[]
 	INIT(= N_("E475: Invalid argument: %s"));
 EXTERN char e_invalid_value_for_argument_str[]
 	INIT(= N_("E475: Invalid value for argument %s"));
-#if defined(FEAT_JOB_CHANNEL) || defined(FEAT_PROP_POPUP) || defined(FEAT_EVAL)
+#if defined(FEAT_JOB_CHANNEL) || defined(FEAT_PROP_POPUP) \
+	|| defined(FEAT_EVAL) || defined(FEAT_IMAGE)
 EXTERN char e_invalid_value_for_argument_str_str[]
 	INIT(= N_("E475: Invalid value for argument %s: %s"));
 #endif
@@ -1565,7 +1568,7 @@ EXTERN char e_using_special_as_number[]
 EXTERN char e_too_many_signs_defined[]
 	INIT(= N_("E612: Too many signs defined"));
 #endif
-#if defined(MSWIN) && defined(FEAT_PRINTER)
+#if defined(FEAT_PRINTER) && (defined(MSWIN) || defined(FEAT_PRINT_PANGO))
 EXTERN char e_unknown_printer_font_str[]
 	INIT(= N_("E613: Unknown printer font: %s"));
 #endif
@@ -2284,8 +2287,8 @@ EXTERN char e_line_count_changed_unexpectedly[]
 #ifdef FEAT_EVAL
 EXTERN char e_uniq_compare_function_failed[]
 	INIT(= N_("E882: Uniq compare function failed"));
-EXTERN char e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines[]
-	INIT(= N_("E883: Search pattern and expression register may not contain two or more lines"));
+EXTERN char e_register_char_cannot_contain_multiple_lines[]
+	INIT(= N_("E883: Register '%c' cannot contain multiple lines"));
 EXTERN char e_function_name_cannot_contain_colon_str[]
 	INIT(= N_("E884: Function name cannot contain a colon: %s"));
 #endif
@@ -2632,8 +2635,9 @@ EXTERN char e_reduce_of_an_empty_str_with_no_initial_value[]
 #endif
 EXTERN char e_scriptversion_not_supported_nr[]
 	INIT(= N_("E999: scriptversion not supported: %d"));
-// E1000 unused
 #ifdef FEAT_EVAL
+EXTERN char e_cannot_declare_an_environment_variable_str[]
+	INIT(= N_("E1000: Cannot declare an environment variable: %s"));
 EXTERN char e_variable_not_found_str[]
 	INIT(= N_("E1001: Variable not found: %s"));
 EXTERN char e_syntax_error_at_str[]
@@ -2670,8 +2674,6 @@ EXTERN char e_name_expected_str[]
 	INIT(= N_("E1015: Name expected: %s"));
 EXTERN char e_cannot_declare_a_scope_variable_str[]
 	INIT(= N_("E1016: Cannot declare a %s variable: %s"));
-EXTERN char e_cannot_declare_an_environment_variable_str[]
-	INIT(= N_("E1016: Cannot declare an environment variable: %s"));
 EXTERN char e_variable_already_declared_str[]
 	INIT(= N_("E1017: Variable already declared: %s"));
 EXTERN char e_cannot_assign_to_constant_str[]
@@ -3625,8 +3627,12 @@ EXTERN char e_interface_can_only_be_used_in_script[]
 	INIT(= N_("E1436: Interface can only be used in a script"));
 EXTERN char e_can_only_compare_object_with_object[]
 	INIT(= N_("E1437: Can only compare Object with Object"));
+EXTERN char e_type_var_count_of_method_str_differs_from_interface_str[]
+	INIT(= N_("E1438: Number of type variables of method \"%s\" differs from interface \"%s\""));
+EXTERN char e_type_nested_too_deep[]
+	INIT(= N_("E1439: Type nested too deep"));
 #endif
-// E1438 - E1499 unused (reserved for Vim9 class support)
+// E1440 - E1499 unused (reserved for Vim9 class support)
 EXTERN char e_cannot_mix_positional_and_non_positional_str[]
 	INIT(= N_("E1500: Cannot mix positional and non-positional arguments: %s"));
 EXTERN char e_fmt_arg_nr_unused_str[]
@@ -3815,3 +3821,35 @@ EXTERN char e_too_many_postponed_prefixes_spell[]
 #endif
 EXTERN char e_completeopt_escape_cannot_be_used_with_nargs_underscore[]
 	INIT(= N_("E1579: -completeopt=escape cannot be used with -nargs=_"));
+#ifdef FEAT_PROP_POPUP
+EXTERN char e_too_many_text_properties_on_a_single_line[]
+	INIT(= N_("E1580: Too many text properties on a single line"));
+#endif
+#ifdef FEAT_EVAL
+EXTERN char e_cannot_extend_null_blob[]
+	INIT(= N_("E1581: Cannot extend a null blob"));
+#endif
+#ifdef FEAT_JOB_CHANNEL
+EXTERN char e_not_started_with_stdio_channel[]
+	INIT(= N_("E1582: Not started with --stdio-channel"));
+EXTERN char e_cannot_open_stdio_channel[]
+	INIT(= N_("E1583: Cannot open stdio channel"));
+#endif
+#ifdef FEAT_IMAGE
+EXTERN char e_invalid_image_dimensions[]
+	INIT(= N_("E1584: Image dimensions are invalid"));
+EXTERN char e_no_image_backend_available[]
+	INIT(= N_("E1585: No image backend available"));
+EXTERN char e_changing_image_backend_failed[]
+	INIT(= N_("E1586: Failed changing image backends"));
+EXTERN char e_image_id_nr_does_not_exist[]
+	INIT(= N_("E1587: Image ID %d does not exist"));
+#endif
+#ifdef FEAT_EVAL
+EXTERN char e_comparison_operators_cannot_be_chained_str[]
+	INIT(= N_("E1588: Comparison operators cannot be chained, use parentheses: %s"));
+#endif
+#if defined(FEAT_SOCKETSERVER) && !defined(MSWIN)
+EXTERN char e_unsafe_socket_directory_str[]
+	INIT(= N_("E1589: Socket directory is not safe to use: %s"));
+#endif

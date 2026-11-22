@@ -1386,6 +1386,7 @@ macOS:				| fully supported up until v10.6 (?)
 MS-Windows 7, 8, 10, 11:	| fully supported
 OpenVMS:			| supported
 QNX:				| still supported (?)
+Solaris:			| supported (on maintained versions)
 UNIX:				| supported (on maintained versions)
 zOS/OS390:			| still supported (?)
 

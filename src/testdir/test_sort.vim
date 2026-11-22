@@ -53,6 +53,9 @@ func Test_sort_numeric()
   call assert_equal([3, 13, 28], sort([13, 28, 3], 'n'))
   " strings are not sorted
   call assert_equal(['13', '28', '3'], sort(['13', '28', '3'], 'n'))
+  " a string sorts as 0 in "n" mode, even a numeric-looking one
+  call assert_equal(['a', 0, 1], sort([1, 'a', 0], 'n'))
+  call assert_equal(['10', 2], sort([2, '10'], 'n'))
 endfunc
 
 func Test_sort_numbers()
@@ -64,6 +67,34 @@ endfunc
 
 func Test_sort_float()
   call assert_equal([0.28, 3, 13.5], sort([13.5, 0.28, 3], 'f'))
+endfunc
+
+" The numeric compare modes precompute a sort key per item; exercise that on
+" larger lists (many comparisons), with mixed int/float, negatives, and
+" int64 values that do not fit in a double for 'N'.
+func Test_sort_numeric_precomputed()
+  " 'n' on a large shuffled list, compared against the known order.
+  let expected = range(500)
+  let shuffled = copy(expected)
+  " deterministic shuffle
+  let s = 7
+  for i in range(len(shuffled) - 1, 1, -1)
+    let s = (s * 1103515245 + 12345) % 2147483648
+    let j = s % (i + 1)
+    let [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  endfor
+  call assert_equal(expected, sort(shuffled, 'n'))
+
+  " 'n' with mixed integers and floats and negatives.
+  call assert_equal([-3, -1.5, 0, 0.5, 2, 7.25], sort([7.25, -1.5, 2, 0, -3, 0.5], 'n'))
+
+  " 'N' with int64 values beyond the exact range of a double: keys must not
+  " be rounded through a double.
+  call assert_equal([9007199254740992, 9007199254740993, 9007199254740994],
+        \ sort([9007199254740994, 9007199254740992, 9007199254740993], 'N'))
+
+  " uniq() uses the non-precomputed path; it must still work.
+  call assert_equal([1, 2, 3], uniq(sort([3, 1, 2, 2, 3, 1], 'n')))
 endfunc
 
 func Test_sort_nested()
@@ -1583,6 +1614,33 @@ func Test_sort_funcref_with_large_number()
         \ ]->sort(LSTART a, b LMIDDLE a[0] - b[0] LEND))
   END
   call v9.CheckSourceLegacyAndVim9Success(lines)
+endfunc
+
+" A compare function used by sort()/uniq() must not be able to change the
+" list that is being processed: sort() and uniq() keep pointers into the
+" list while the compare function runs.
+func RemoveWhileSorting(a, b)
+  call assert_fails('call remove(g:sortlist, 0)', 'E742:')
+  return a:a - a:b
+endfunc
+
+func Test_sort_disallow_mutate_during_compare()
+  let g:sortlist = [3, 2, 1]
+  call sort(g:sortlist, 'RemoveWhileSorting')
+  call assert_equal([1, 2, 3], g:sortlist)
+  unlet g:sortlist
+endfunc
+
+func RemoveWhileUniq(a, b)
+  call assert_fails('call remove(g:uniqlist, 0)', 'E742:')
+  return a:a - a:b
+endfunc
+
+func Test_uniq_disallow_mutate_during_compare()
+  let g:uniqlist = [1, 1, 2, 2, 3]
+  call uniq(g:uniqlist, 'RemoveWhileUniq')
+  call assert_equal([1, 2, 3], g:uniqlist)
+  unlet g:uniqlist
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

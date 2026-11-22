@@ -1,4 +1,4 @@
-/* terminal.c */
+// terminal.c
 void init_job_options(jobopt_T *opt);
 buf_T *term_start(typval_T *argvar, char **argv, jobopt_T *opt, int flags);
 void ex_terminal(exarg_T *eap);
@@ -17,7 +17,7 @@ void may_move_terminal_to_buffer(term_T *term, int redraw);
 int term_check_timers(int next_due_arg, proftime_T *now);
 int term_in_normal_mode(buf_T *buf);
 void term_enter_job_mode(void);
-void check_no_reduce_keys(void);
+void check_no_simplify_keys(void);
 int send_keys_to_term(term_T *term, int c, int modmask, int typed);
 int terminal_is_active(void);
 cursorentry_T *term_get_cursor_shape(guicolor_T *fg, guicolor_T *bg);
@@ -42,6 +42,7 @@ void term_update_hlfwin_all(void);
 void term_init_default_colors(term_T *term);
 void term_update_palette_all(void);
 void term_update_colors_all(void);
+void term_update_cell_size(void);
 char_u *term_get_status_text(term_T *term);
 void term_clear_status_text(term_T *term);
 int set_ref_in_term(int copyID);
@@ -74,4 +75,4 @@ void term_send_eof(channel_T *ch);
 job_T *term_getjob(term_T *term);
 int use_conpty(void);
 int terminal_enabled(void);
-/* vim: set ft=c : */
+// vim: ft=c

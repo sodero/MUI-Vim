@@ -124,6 +124,32 @@ if has('timers')
     set updatetime&
   endfunc
 
+  func Test_cursorhold_normal_ctrl_w()
+    au CursorHold * :
+    set updatetime=20
+    new
+    let bnr = bufnr()
+    call timer_start(100, { -> feedkeys("w", 't') })
+    call feedkeys("\<C-w>", 'tx!')
+    sleep 200m
+    call assert_equal(2, winnr())
+
+    " <C-w> with count
+    new
+    let bnr2 = bufnr()
+    call timer_start(100, { -> feedkeys("w", 't') })
+    call feedkeys("\<C-w>3", 'tx!')
+    sleep 200m
+    call assert_equal(3, winnr())
+    call feedkeys(":\<C-B>\"\<CR>", 'xt')
+    call assert_equal('"', @:)
+
+    exe 'bwipe!' bnr2
+    exe 'bwipe!' bnr
+    au! CursorHold
+    set updatetime&
+  endfunc
+
   func Test_OptionSet_modeline()
     call test_override('starting', 1)
     au! OptionSet
@@ -384,6 +410,37 @@ func Test_WinNewPre()
   endtry
   call assert_equal(4, g:caught)
   unlet g:caught
+endfunc
+
+" After an interrupt() from a timer callback in a "WinNew" autocommand,
+" typing on the command line must be visible. #10631
+func Test_interrupt_after_WinNew()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    vim9script
+    def Interrupt()
+      writefile(['fired'], 'Xinterrupt_fired')
+      silent interrupt()
+    enddef
+    autocmd WinNew * timer_start(0, (_) => Interrupt())
+  END
+  call writefile(lines, 'Xtest_interrupt_winnew', 'D')
+  call delete('Xinterrupt_fired')
+  let buf = RunVimInTerminal('-S Xtest_interrupt_winnew', {'rows': 8})
+
+  call term_sendkeys(buf, "\<C-W>s")
+  call WaitFor({-> filereadable('Xinterrupt_fired')})
+  call TermWait(buf, 200)
+  call term_sendkeys(buf, ':echo')
+  call WaitForAssert({-> assert_match(':echo', join(map(range(1, 8),
+        \ {_, n -> term_getline(buf, n)}), "\n"))})
+  call term_sendkeys(buf, " 'typed'\<CR>")
+  call WaitForAssert({-> assert_match('typed', join(map(range(1, 8),
+        \ {_, n -> term_getline(buf, n)}), "\n"))})
+
+  call StopVimInTerminal(buf)
+  call delete('Xinterrupt_fired')
 endfunc
 
 func Test_WinResized()
@@ -3208,7 +3265,40 @@ func Test_autocmd_once()
   close
 
   call assert_fails('au WinNew * ++once ++once echo bad', 'E983:')
+  call assert_false(exists('#WinNew'))
 endfunc
+
+func Test_autocmd_dup_arg()
+  " Duplicate ++once / ++nested, or the legacy "nested" used twice, must
+  " error out *and* not create the autocommand.  Using an environment
+  " variable in the pattern also exercises the error-exit path that frees
+  " the expanded pattern (checked by the address/leak sanitizers).
+  augroup XdupTest
+    au!
+  augroup END
+  let $XAUTODIR = 'Xfoo'
+
+  " New behavior: duplicate ++once now aborts, the autocmd is not added
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* ++once ++once echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* ++nested ++nested echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* nested nested echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  " "nested" without "++" is rejected in Vim9 script (also frees the pattern)
+  call assert_fails('vim9cmd au XdupTest WinNew $XAUTODIR/* nested echo bad', 'E1078:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  augroup XdupTest
+    au!
+  augroup END
+  augroup! XdupTest
+  let $XAUTODIR = ''
+endfunc
+
 
 func Test_autocmd_bufreadpre()
   new
@@ -4037,6 +4127,193 @@ func Test_autocmd_with_block()
   augroup END
 endfunc
 
+" Test for a lambda in an :autocmd block with the expression split over lines
+func Test_autocmd_block_multiline_lambda()
+  let lines =<< trim END
+      vim9script
+      autocmd CmdlineEnter * {
+          g:Lambda = () => true ?
+              'yes' :
+              'no' | g:after = 'done'
+        }
+      doautocmd CmdlineEnter
+      assert_equal('yes', g:Lambda())
+      assert_equal('done', g:after)
+
+      au! CmdlineEnter
+      autocmd CmdlineEnter * {
+          g:Lambda = () => false ?
+              'yes' :
+              'no'
+        }
+      doautocmd CmdlineEnter
+      assert_equal('no', g:Lambda())
+  END
+  call v9.CheckScriptSuccess(lines)
+
+  unlet g:Lambda g:after
+  au! CmdlineEnter
+endfunc
+
+" Test for a backslash line continuation in an :autocmd command
+func Test_autocmd_line_continuation()
+  let lines =<< trim END
+      vim9script
+      def Bar(label: string, value: any): void
+        g:result = [label, value]
+      enddef
+      autocmd BufWritePre * call Bar('x', {
+            \ 'key': 'value',
+            \ })
+      doautocmd BufWritePre
+      assert_equal(['x', {'key': 'value'}], g:result)
+  END
+  call v9.CheckScriptSuccess(lines)
+  unlet g:result
+  au! BufWritePre
+endfunc
+
+" Test for a {} block at script level in an :autocmd nested in another one
+func Test_autocmd_nested_block()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * autocmd BufReadPre * ++once {
+            g:nested_block = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedBlock', 'D')
+  source XautoNestedBlock
+
+  doautocmd CursorHold
+  doautocmd BufReadPre
+  call assert_equal('yes', g:nested_block)
+
+  unlet g:nested_block
+  au! CursorHold
+  au! BufReadPre
+endfunc
+
+" Test for a {} block in an :autocmd nested two levels deep
+func Test_autocmd_nested_block_twice()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * autocmd CursorHoldI * autocmd BufReadPre * ++once {
+            g:nested_twice = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedTwice', 'D')
+  source XautoNestedTwice
+
+  doautocmd CursorHold
+  doautocmd CursorHoldI
+  doautocmd BufReadPre
+  call assert_equal('yes', g:nested_twice)
+
+  unlet g:nested_twice
+  au! CursorHold
+  au! CursorHoldI
+  au! BufReadPre
+endfunc
+
+" Only the :autocmd owning the block uses Vim9 syntax, the one it is nested in
+" keeps the syntax of the script.  The old "nested" is valid in legacy script
+" but an error in Vim9 script, so it tells the two apart.
+func Test_autocmd_nested_block_legacy_script()
+  let lines =<< trim END
+      autocmd CursorHold * autocmd BufReadPre * nested {
+            g:legacy_block = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedLegacy', 'D')
+  source XautoNestedLegacy
+
+  doautocmd CursorHold
+  doautocmd BufReadPre
+  call assert_equal('yes', g:legacy_block)
+
+  unlet g:legacy_block
+  au! CursorHold
+  au! BufReadPre
+endfunc
+
+" A trailing "{" that is an argument of the command does not start a block,
+" the lines after it are not swallowed
+func Test_autocmd_trailing_curly_no_block()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * normal! {
+      g:after_autocmd = 'reached'
+  END
+  call writefile(lines, 'XautoTrailingCurly', 'D')
+  source XautoTrailingCurly
+  call assert_equal('reached', g:after_autocmd)
+
+  new
+  call setline(1, ['one', '', 'two'])
+  call cursor(3, 1)
+  doautocmd CursorHold
+  call assert_equal(2, line('.'))
+
+  bwipe!
+  unlet g:after_autocmd
+  au! CursorHold
+endfunc
+
+" Lines after ":au! grp | cmd" in a {} block are executed
+func Test_autocmd_block_bar_after_autocmd()
+  augroup XautoBarOther
+  augroup END
+  augroup XautoBar
+    autocmd CursorHold * {
+          au! XautoBarOther | g:bar_first = 'yes'
+          g:bar_second = 'yes'
+        }
+  augroup END
+  doautocmd CursorHold
+  call assert_equal('yes', g:bar_first)
+  call assert_equal('yes', g:bar_second)
+  unlet g:bar_first g:bar_second
+  au! XautoBar
+  augroup! XautoBar
+  augroup! XautoBarOther
+
+  " When the block removes its own group, a Vim9 script with an
+  " autocommand for the same event keeps its variables.
+  augroup XautoBarSelf
+    autocmd CursorHold * {
+          au! XautoBarSelf | aug! XautoBarSelf
+        }
+  augroup END
+  let lines =<< trim END
+      vim9script
+      var count = 0
+      def g:AutoBarCount(): number
+        count += 1
+        return count
+      enddef
+      autocmd CursorHold * g:AutoBarCount()
+  END
+  call writefile(lines, 'XautoBarScript', 'D')
+  source XautoBarScript
+  doautocmd CursorHold
+  call assert_equal(2, g:AutoBarCount())
+  au! CursorHold
+  delfunc g:AutoBarCount
+
+  " Expanding "%" and "#" reallocates the command line, the line after the
+  " newline must still be executed.
+  new Xbar
+  new Xfoo
+  exe "silent !echo %\nlet g:bar_after = 'yes'"
+  call assert_equal('yes', g:bar_after)
+  unlet g:bar_after
+  exe "silent !echo % #\nlet g:bar_after = 'yes'"
+  call assert_equal('yes', g:bar_after)
+  unlet g:bar_after
+  bwipe!
+  bwipe!
+endfunc
+
 func Test_closing_autocmd_window()
   let lines =<< trim END
       edit Xa.txt
@@ -4160,6 +4437,64 @@ func Test_v_event_readonly()
   autocmd TextYankPost * let v:event.operator = ''
   call assert_fails('normal! yy', 'E46:')
   au! TextYankPost
+endfunc
+
+func s:YankWithNestedEvent()
+  let before = deepcopy(v:event)
+  cd Xveventdir
+  cd -
+  call add(g:Xouter, [before, deepcopy(v:event)])
+endfunc
+
+" v:event of an autocommand is restored after a nested autocommand that
+" also uses v:event
+func Test_v_event_nested()
+  call mkdir('Xveventdir', 'R')
+  let g:Xouter = []
+  let g:Xinner = []
+  autocmd TextYankPost * ++nested call s:YankWithNestedEvent()
+  autocmd DirChangedPre * call add(g:Xinner, deepcopy(v:event))
+  new
+  call setline(1, 'text')
+  normal! yy
+  au! TextYankPost
+  au! DirChangedPre
+  bwipe!
+
+  call assert_equal(1, len(g:Xouter))
+  call assert_equal(g:Xouter[0][0], g:Xouter[0][1])
+  call assert_equal('y', g:Xouter[0][1].operator)
+  call assert_equal(['text'], g:Xouter[0][1].regcontents)
+  call assert_equal(2, len(g:Xinner))
+  call assert_match('Xveventdir$', g:Xinner[0].directory)
+  unlet g:Xouter g:Xinner
+endfunc
+
+" Garbage collection in a nested autocommand that uses v:event must not free
+" the values of v:event of the outer autocommand.  This used freed memory,
+" which is only reliably detected with valgrind or ASan.
+func s:YankThenChangeDir()
+  call add(g:Xregs, copy(v:event.regcontents))
+  let olddir = getcwd()
+  cd Xveventgcdir
+  exe 'cd ' .. fnameescape(olddir)
+  call add(g:Xregs, copy(v:event.regcontents))
+  call add(g:Xregs, v:event.operator)
+endfunc
+
+func Test_v_event_nested_garbagecollect()
+  call mkdir('Xveventgcdir', 'R')
+  let g:Xregs = []
+  autocmd TextYankPost * ++nested call s:YankThenChangeDir()
+  autocmd DirChangedPre * call test_garbagecollect_now()
+  new
+  call setline(1, 'line one')
+  normal! yy
+  au! TextYankPost
+  au! DirChangedPre
+  bwipe!
+  call assert_equal([['line one'], ['line one'], 'y'], g:Xregs)
+  unlet g:Xregs
 endfunc
 
 " Test for ModeChanged pattern
@@ -4903,6 +5238,8 @@ func Test_Changed_ChangedI()
   call writefile(['one', 'two', 'three'], 'XTextChangedI2', 'D')
   let before =<< trim END
       set ttimeout ttimeoutlen=10
+      " SafeState must also work when only the background color was queried.
+      set t_RF=
       let [g:autocmd_n, g:autocmd_i] = ['','']
 
       func TextChangedAutocmd(char)
@@ -5814,6 +6151,224 @@ func Test_eventignore_subtract()
   %bw!
 endfunc
 
+" A cursor move made while CursorMoved is ignored is not reported once the
+" event is not ignored anymore.
+func Test_eventignore_cursormoved()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, range(1, 300))
+    let g:moved = 0
+    autocmd CursorMoved * let g:moved += 1
+
+    func MoveWhileIgnored()
+      set eventignore=all
+      call cursor(100, 1)
+      call cursor(200, 1)
+      set eventignore=
+    endfunc
+
+    func MoveThenIgnore()
+      call cursor(50, 1)
+      set eventignore=all
+      set eventignore=
+    endfunc
+
+    func MoveExWhileIgnored()
+      set eventignore=all
+      100
+      200
+      set eventignore=
+    endfunc
+
+    " The move under "all" is not reported, the one under "WinEnter" is.
+    func MoveWithTwoStages()
+      set eventignore=all
+      call cursor(100, 1)
+      set eventignore=WinEnter
+      call cursor(200, 1)
+      set eventignore=
+    endfunc
+  END
+  call writefile(lines, 'XTest_eventignore_cm', 'D')
+  let buf = RunVimInTerminal('-S XTest_eventignore_cm', {'rows': 10})
+
+  " Reset the counter in the same command line as the move, so that the main
+  " loop only runs once the move has been made.
+  call term_sendkeys(buf, ":let g:moved = 0 | call MoveWhileIgnored()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'moved:' g:moved\<CR>")
+  call WaitForAssert({-> assert_match('^moved: 0\>', term_getline(buf, 10))}, 1000)
+
+  " A move made before the event was ignored is still reported.
+  call term_sendkeys(buf, ":let g:moved = 0 | call MoveThenIgnore()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'moved:' g:moved\<CR>")
+  call WaitForAssert({-> assert_match('^moved: 1\>', term_getline(buf, 10))}, 1000)
+
+  " Same as the first check, but moving with an Ex line address.
+  call term_sendkeys(buf, ":let g:moved = 0 | call MoveExWhileIgnored()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'moved:' g:moved\<CR>")
+  call WaitForAssert({-> assert_match('^moved: 0\>', term_getline(buf, 10))}, 1000)
+
+  " Only the move made while CursorMoved was not ignored is reported.
+  call term_sendkeys(buf, ":let g:moved = 0 | call MoveWithTwoStages()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'moved:' g:moved\<CR>")
+  call WaitForAssert({-> assert_match('^moved: 1\>', term_getline(buf, 10))}, 1000)
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" Same as Test_eventignore_cursormoved(), but driven from Python, which
+" updates the screen after every command.
+func Test_eventignore_cursormoved_python()
+  CheckFeature python3
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, range(1, 300))
+    let g:moved = 0
+    autocmd CursorMoved * let g:moved += 1
+    py3 << PYEOF
+    import vim
+    def Fun():
+        vim.command('set ei=all')
+        vim.command('100')
+        vim.command('200')
+        vim.command('echom "set ei: line = " .. line(".")')
+        vim.command('set ei=')
+    PYEOF
+  END
+  call writefile(lines, 'XTest_eventignore_cm_py', 'D')
+  let buf = RunVimInTerminal('-S XTest_eventignore_cm_py', {'rows': 10})
+
+  call term_sendkeys(buf, ":let g:moved = 0 | py3 Fun()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'moved:' g:moved\<CR>")
+  call WaitForAssert({-> assert_match('^moved: 0\>', term_getline(buf, 10))}, 1000)
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" The other events that are triggered by comparing against a stored value.
+func Test_eventignore_deferred_events()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, range(1, 300))
+    let g:textchanged = 0
+    let g:winscrolled = 0
+    autocmd TextChanged * let g:textchanged += 1
+    autocmd WinScrolled * let g:winscrolled += 1
+
+    func ChangeWhileIgnored()
+      set eventignore=all
+      call setline(1, 'changed')
+      set eventignore=
+    endfunc
+
+    func ScrollWhileIgnored()
+      set eventignore=all
+      call winrestview({'topline': 100, 'lnum': 100})
+      set eventignore=
+    endfunc
+
+    func ChangeThenIgnore()
+      call setline(2, 'changed too')
+      set eventignore=all
+      set eventignore=
+    endfunc
+
+    func ScrollThenIgnore()
+      call winrestview({'topline': 150, 'lnum': 150})
+      set eventignore=all
+      set eventignore=
+    endfunc
+  END
+  call writefile(lines, 'XTest_eventignore_deferred', 'D')
+  let buf = RunVimInTerminal('-S XTest_eventignore_deferred', {'rows': 10})
+
+  call term_sendkeys(buf, ":let g:textchanged = 0 | call ChangeWhileIgnored()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'textchanged:' g:textchanged\<CR>")
+  call WaitForAssert({-> assert_match('^textchanged: 0\>', term_getline(buf, 10))}, 1000)
+
+  call term_sendkeys(buf, ":let g:winscrolled = 0 | call ScrollWhileIgnored()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'winscrolled:' g:winscrolled\<CR>")
+  call WaitForAssert({-> assert_match('^winscrolled: 0\>', term_getline(buf, 10))}, 1000)
+
+  " What happened before the events were ignored is still reported.
+  call term_sendkeys(buf, ":let g:textchanged = 0 | call ChangeThenIgnore()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'textchanged:' g:textchanged\<CR>")
+  call WaitForAssert({-> assert_match('^textchanged: 1\>', term_getline(buf, 10))}, 1000)
+
+  call term_sendkeys(buf, ":let g:winscrolled = 0 | call ScrollThenIgnore()\<CR>")
+  call TermWait(buf)
+  call term_sendkeys(buf, ":echo 'winscrolled:' g:winscrolled\<CR>")
+  call WaitForAssert({-> assert_match('^winscrolled: 1\>', term_getline(buf, 10))}, 1000)
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" Changing 'eventignore' from an autocommand that is triggered by setting
+" 'eventignore' must not crash.
+func Test_eventignore_changed_while_triggering()
+  new
+  call setline(1, range(1, 10))
+  augroup testing
+    autocmd!
+    autocmd CursorMoved * set eventignore=WinLeave
+  augroup END
+
+  " The pending cursor move is reported when the option changes.
+  set eventignore=WinNew
+  normal! j
+  set eventignore=all
+  call assert_equal('all', &eventignore)
+
+  augroup testing
+    autocmd!
+    autocmd CursorMoved * noautocmd echo ''
+  augroup END
+  set eventignore=WinNew
+  normal! j
+  set eventignore=all
+  call assert_equal('all', &eventignore)
+
+  set eventignore=
+  call CleanUpTestAuGroup()
+  %bw!
+endfunc
+
+" An autocommand that is triggered by setting 'eventignorewin' cannot close
+" the window that holds the option.
+func Test_eventignorewin_window_not_closed_while_triggering()
+  new
+  call setline(1, range(1, 10))
+  split
+  let nwin = winnr('$')
+  let s:tried = 0
+  augroup testing
+    autocmd!
+    autocmd CursorMoved * if !s:tried | let s:tried = 1 | close | endif
+  augroup END
+
+  normal! j
+  set eventignorewin=WinLeave
+  call assert_equal(1, s:tried)
+  call assert_equal(nwin, winnr('$'))
+  call assert_equal('WinLeave', &eventignorewin)
+
+  set eventignorewin=
+  unlet s:tried
+  call CleanUpTestAuGroup()
+  %bw!
+endfunc
+
 func Test_VimResized_and_window_width_not_equalized()
   CheckRunVimInTerminal
 
@@ -5837,6 +6392,27 @@ func Test_VimResized_and_window_width_not_equalized()
   call WaitForAssert({-> assert_match('^window_width: 10$', term_getline(buf, 10))}, 1000)
 
   call StopVimInTerminal(buf)
+endfunc
+
+func Test_WinResized_on_shell_resize()
+  CheckRunVimInTerminal
+
+  " A shell (terminal/GUI) resize changes window sizes, so WinResized must
+  " trigger from the resize alone, not only on the next typed command.
+  let lines =<< trim END
+    autocmd WinResized * call writefile(['x'], 'XwinResized', 'a')
+  END
+  call writefile(lines, 'XTest_WinResized_shell', 'D')
+  let buf = RunVimInTerminal('-S XTest_WinResized_shell', {'rows': 10, 'cols': 30})
+  call TermWait(buf)
+  call delete('XwinResized')
+
+  " Resize the terminal (SIGWINCH); do not send any key to the inner Vim.
+  call term_setsize(buf, 15, 40)
+  call WaitForAssert({-> assert_true(filereadable('XwinResized'))})
+
+  call StopVimInTerminal(buf)
+  call delete('XwinResized')
 endfunc
 
 func Test_win_tabclose_autocmd()
@@ -6125,46 +6701,18 @@ func Test_TextPutPost_term_norm()
   bwipe!
 endfunc
 
-" Simple file patterns like "*.c" are matched with a string compare.  Check
-" that this gives the same result as the regexp used for patterns with "[]".
-func Test_autocmd_simple_patterns()
-  let pairs = [['*.mk', '*.m[k]'], ['Xmake*', 'Xmak[e]*'], ['Xmk', 'X[m]k'],
-        \ ['*/Xd/Xf', '*/Xd/X[f]']]
-  augroup testsimplepat
-    au!
-    for i in range(len(pairs))
-      exe printf('au BufRead %s call add(g:fast, %d)', pairs[i][0], i)
-      exe printf('au BufRead %s call add(g:slow, %d)', pairs[i][1], i)
-    endfor
-    au BufRead * call add(g:any, 1)
+func Test_setfname_wipe_in_autocmd()
+  edit Xsetfname_a
+  let bnr = bufnr()
+  badd Xsetfname_other
+  badd Xsetfname_b
+  augroup Xtest
+    exe 'au BufWipeout Xsetfname_b ++once bwipe! ' .. bnr
   augroup END
-
-  let save_fic = &fileignorecase
-  set nofileignorecase
-  let g:fast = []
-  let g:slow = []
-  let g:any = []
-  doautocmd BufRead x.mk
-  call assert_equal([0], g:fast)
-  call assert_equal([1], g:any)
-
-  let names = ['x.mk', 'x.MK', 'x.mkk', '.mk', 'mk', 'Xmake', 'Xmakefile',
-        \ 'xmakefile', 'Xmak', 'Xmk', 'xMK', 'dir/Xmk', 'Xd/Xf', 'Xd/XF',
-        \ 'Xdd/Xf', "x.m\u212a", "x\u00e9.mk", "X\u00e9.MK"]
-  for fic in [0, 1]
-    let &fileignorecase = fic
-    for name in names
-      let g:fast = []
-      let g:slow = []
-      exe 'doautocmd BufRead ' .. fnameescape(name)
-      call assert_equal(g:slow, g:fast, name .. ' fic=' .. fic)
-    endfor
-  endfor
-
-  let &fileignorecase = save_fic
-  au! testsimplepat
-  augroup! testsimplepat
-  unlet g:fast g:slow g:any
+  call assert_fails('file Xsetfname_b', 'E937:')
+  au! Xtest
+  augroup! Xtest
+  %bwipe!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

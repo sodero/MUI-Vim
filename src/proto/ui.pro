@@ -1,4 +1,4 @@
-/* ui.c */
+// ui.c
 void ui_write(char_u *s, int len, int console);
 void ui_inchar_undo(char_u *s, int len);
 int ui_inchar(char_u *buf, int maxlen, long wtime, int tb_change_cnt);
@@ -13,6 +13,7 @@ void ui_set_shellsize(int mustset);
 void ui_new_shellsize(void);
 int ui_get_winpos(int *x, int *y, varnumber_T timeout);
 void ui_breakcheck(void);
+void ui_breakcheck_reset(void);
 void ui_breakcheck_force(int force);
 int vim_is_input_buf_full(void);
 int vim_is_input_buf_empty(void);
@@ -34,4 +35,4 @@ long scroll_line_len(linenr_T lnum);
 linenr_T ui_find_longest_lnum(void);
 void ui_focus_change(int in_focus);
 void im_save_status(long *psave);
-/* vim: set ft=c : */
+// vim: ft=c

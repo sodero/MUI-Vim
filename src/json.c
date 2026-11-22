@@ -204,11 +204,12 @@ write_string(garray_T *gap, char_u *str)
 		    GA_CONCAT_LITERAL(gap, "\\\\"); break;
 		default:
 		{
-		    size_t  numbuflen;
+		    char_u escaped[] = "\\u0000";
 
-		    numbuflen = vim_snprintf_safelen((char *)numbuf,
-			sizeof(numbuf), "\\u%04lx", (long)c);
-		    ga_concat_len(gap, numbuf, numbuflen);
+		    // Only control characters below 0x20 reach this case.
+		    escaped[4] = '0' + (c >> 4);
+		    escaped[5] = "0123456789abcdef"[c & 0xf];
+		    ga_concat_len(gap, escaped, STRLEN_LITERAL("\\u0000"));
 		}
 	    }
 
@@ -1431,7 +1432,9 @@ item_end:
 	res->v_type = VAR_SPECIAL;
 	res->vval.v_number = VVAL_NONE;
     }
-    semsg(_(e_json_decode_error_at_str), p);
+    // "p" may dangle into a buffer freed by a js_fill() refill in
+    // json_decode_string(); report the position from the current reader.
+    semsg(_(e_json_decode_error_at_str), reader->js_buf + reader->js_used);
 
 theend:
     for (i = 0; i < stack.ga_len; i++)

@@ -279,6 +279,7 @@ getcount:
 	    *ctrl_w = TRUE;
 	    cap->opcount = cap->count0;	// remember first count
 	    cap->count0 = 0;
+	    did_cursorhold = TRUE;
 	    ++no_mapping;
 	    ++allow_keys;		// no mapping for nchar, but keys
 	    c = plain_vgetc();		// get next character
@@ -1739,7 +1740,7 @@ add_to_showcmd(int c)
 	K_RIGHTMOUSE, K_RIGHTDRAG, K_RIGHTRELEASE,
 	K_MOUSEDOWN, K_MOUSEUP, K_MOUSELEFT, K_MOUSERIGHT,
 	K_X1MOUSE, K_X1DRAG, K_X1RELEASE, K_X2MOUSE, K_X2DRAG, K_X2RELEASE,
-	K_CURSORHOLD,
+	K_CURSORHOLD, K_COMMAND, K_SCRIPT_COMMAND,
 	0
     };
 
@@ -1834,24 +1835,30 @@ pop_showcmd(void)
     display_showcmd();
 }
 
+    void
+showcmd_update_clear_state(void)
+{
+    showcmd_is_clear = (showcmd_buf[0] == NUL);
+}
+
     static void
 display_showcmd(void)
 {
     int	    len = vim_strsize(showcmd_buf);
 
-    showcmd_is_clear = (len == 0);
+    showcmd_update_clear_state();
     cursor_off();
 
     if (*p_sloc == 's')
     {
-	if (showcmd_is_clear)
+	if (showcmd_is_clear && !vgetc_busy)
 	    curwin->w_redr_status = true;
 	else
 	    win_redr_status(curwin, FALSE);
     }
     else if (*p_sloc == 't')
     {
-	if (showcmd_is_clear)
+	if (showcmd_is_clear && !vgetc_busy)
 	    redraw_tabline = TRUE;
 	else
 	    draw_tabline();
@@ -2369,9 +2376,15 @@ nv_screengo(oparg_T *oap, int dir, long dist)
 	    curwin->w_curswant = 0;
 	else
 	{
+	    colnr_T virtcol = curwin->w_virtcol
+#ifdef FEAT_PROP_POPUP
+		- curwin->w_virtcol_first_char
+#endif
+		;
+
 	    curwin->w_curswant = width1 - 1;
-	    if (curwin->w_virtcol > curwin->w_curswant)
-		curwin->w_curswant += ((curwin->w_virtcol
+	    if (virtcol > curwin->w_curswant)
+		curwin->w_curswant += ((virtcol
 			     - curwin->w_curswant - 1) / width2 + 1) * width2;
 	}
       }
@@ -2465,7 +2478,11 @@ nv_screengo(oparg_T *oap, int dir, long dist)
 	// last line.  We want to advance a screenline, not end up in the same
 	// screenline or move two screenlines.
 	validate_virtcol();
-	virtcol = curwin->w_virtcol;
+	virtcol = curwin->w_virtcol
+#ifdef FEAT_PROP_POPUP
+	    - curwin->w_virtcol_first_char
+#endif
+	    ;
 #if defined(FEAT_LINEBREAK)
 	if (virtcol > (colnr_T)width1 && *get_showbreak_value(curwin) != NUL)
 	    virtcol -= vim_strsize(get_showbreak_value(curwin));
@@ -5579,13 +5596,12 @@ nv_visual(cmdarg_T *cap)
 	    }
 	    else if (VIsual_mode == Ctrl_V)
 	    {
-		// Update curswant on the original line, that is where "col" is
-		// valid.
-		linenr_T lnum = curwin->w_cursor.lnum;
-		curwin->w_cursor.lnum = VIsual.lnum;
+		// Update curswant at the original cursor position.
+		pos_T tmp_cursor = curwin->w_cursor;
+		curwin->w_cursor = VIsual;
 		update_curswant_force();
 		curwin->w_curswant += resel_VIsual_vcol * cap->count0 - 1;
-		curwin->w_cursor.lnum = lnum;
+		curwin->w_cursor = tmp_cursor;
 		if (*p_sel == 'e')
 		    ++curwin->w_curswant;
 		coladvance(curwin->w_curswant);
@@ -6599,7 +6615,10 @@ nv_pipe(cmdarg_T *cap)
 {
     cap->oap->motion_type = MCHAR;
     cap->oap->inclusive = FALSE;
-    beginline(0);
+    // Not using beginline(), the columns to skip for 'smoothscroll' must be
+    // adjusted for the column we end up in, not for column zero.
+    curwin->w_cursor.col = 0;
+    curwin->w_cursor.coladd = 0;
     if (cap->count0 > 0)
     {
 	coladvance((colnr_T)(cap->count0 - 1));
@@ -6610,6 +6629,7 @@ nv_pipe(cmdarg_T *cap)
     // keep curswant at the column where we wanted to go, not where
     // we ended; differs if line is too short
     curwin->w_set_curswant = false;
+    adjust_skipcol();
 }
 
 /*

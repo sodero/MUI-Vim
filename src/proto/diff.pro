@@ -1,4 +1,4 @@
-/* diff.c */
+// diff.c
 void diff_buf_delete(buf_T *buf);
 void diff_buf_adjust(win_T *win);
 void diff_buf_add(buf_T *buf);
@@ -24,7 +24,7 @@ int diffopt_closeoff(void);
 void diff_update_line(linenr_T lnum);
 int diff_change_parse(diffline_T *diffline, diffline_change_T *change, int *change_start, int *change_end);
 int diff_find_change(win_T *wp, linenr_T lnum, diffline_T *diffline);
-int diff_infold(win_T *wp, linenr_T lnum);
+int diff_infold(win_T *wp, tabpage_T *tp, linenr_T lnum);
 void nv_diffgetput(int put, long count);
 void ex_diffgetput(exarg_T *eap);
 int diff_mode_buf(buf_T *buf);
@@ -34,4 +34,4 @@ linenr_T diff_lnum_win(linenr_T lnum, win_T *wp);
 void f_diff_filler(typval_T *argvars, typval_T *rettv);
 void f_diff_hlID(typval_T *argvars, typval_T *rettv);
 void f_diff(typval_T *argvars, typval_T *rettv);
-/* vim: set ft=c : */
+// vim: ft=c

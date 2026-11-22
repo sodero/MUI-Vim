@@ -1270,7 +1270,7 @@ add_llist_tags(
 	    continue;
 	if (list_append_dict(list, dict) == FAIL)
 	{
-	    vim_free(dict);
+	    dict_unref(dict);
 	    continue;
 	}
 
@@ -1425,6 +1425,38 @@ prepare_pats(pat_T *pats, int has_re)
 }
 
 #ifdef FEAT_EVAL
+// Classification of a "cmd" value returned by a tagfunc.
+typedef enum {
+    TAGCMD_INVALID,	// cannot be stored in a tag line
+    TAGCMD_ADDRESS,	// line number or /pat/ or ?pat? (no "|" needed)
+    TAGCMD_GENERIC	// any other Ex command: needs a "|" terminator
+} tagcmd_T;
+
+/*
+ * Classify "cmd" from a tagfunc result (see tagcmd_T), like a tags file
+ * address, to decide whether a "|" terminator must be appended before storing
+ * it in a tag line.
+ */
+    static tagcmd_T
+tagfunc_cmd_kind(char_u *cmd)
+{
+    if (VIM_ISDIGIT(*cmd))
+	return *skipdigits(cmd) == NUL ? TAGCMD_ADDRESS : TAGCMD_INVALID;
+    if (*cmd == '/' || *cmd == '?')
+    {
+	// A Tab inside the pattern is fine (Universal Ctags emits one for a
+	// tab-indented line); only trailing content after the closing
+	// delimiter, which would break the tag line fields, is rejected.
+	char_u	*end = skip_regexp(cmd + 1, *cmd, FALSE);
+
+	return (*end == *cmd && end[1] == NUL)
+					? TAGCMD_ADDRESS : TAGCMD_INVALID;
+    }
+    if (vim_strpbrk(cmd, (char_u *)"\t\r\n") != NULL)
+	return TAGCMD_INVALID;
+    return TAGCMD_GENERIC;
+}
+
 /*
  * Call the user-defined function to generate a list of tags used by
  * find_tags().
@@ -1535,23 +1567,23 @@ find_tagfunc_tags(
 		continue;
 
 	    len += (int)STRLEN(tv->vval.v_string) + 1;   // Space for "\tVALUE"
-	    if (!STRCMP(dict_key, "name"))
+	    if (STRCMP(dict_key, "name") == 0)
 	    {
 		res_name = tv->vval.v_string;
 		continue;
 	    }
-	    if (!STRCMP(dict_key, "filename"))
+	    if (STRCMP(dict_key, "filename") == 0)
 	    {
 		res_fname = tv->vval.v_string;
 		continue;
 	    }
-	    if (!STRCMP(dict_key, "cmd"))
+	    if (STRCMP(dict_key, "cmd") == 0)
 	    {
 		res_cmd = tv->vval.v_string;
 		continue;
 	    }
 	    has_extra = 1;
-	    if (!STRCMP(dict_key, "kind"))
+	    if (STRCMP(dict_key, "kind") == 0)
 	    {
 		res_kind = tv->vval.v_string;
 		continue;
@@ -1569,6 +1601,15 @@ find_tagfunc_tags(
 	    emsg(_(e_invalid_return_value_from_tagfunc));
 	    break;
 	}
+
+	tagcmd_T cmdkind = tagfunc_cmd_kind(res_cmd);
+	if (cmdkind == TAGCMD_INVALID)
+	{
+	    emsg(_(e_invalid_return_value_from_tagfunc));
+	    break;
+	}
+	if (cmdkind == TAGCMD_GENERIC)
+	    len += 3;	// need space for "|;\""
 
 	if (name_only)
 	    mfp = vim_strsave(res_name);
@@ -1599,7 +1640,10 @@ find_tagfunc_tags(
 	    STRCPY(p, res_cmd);
 	    p += STRLEN(p);
 
-	    if (has_extra)
+	    if (cmdkind == TAGCMD_GENERIC)
+		*p++ = '|';	// terminate the command
+
+	    if (cmdkind == TAGCMD_GENERIC || has_extra)
 	    {
 		STRCPY(p, ";\"");
 		p += STRLEN(p);
@@ -1617,13 +1661,13 @@ find_tagfunc_tags(
 		    if (tv->v_type != VAR_STRING || tv->vval.v_string == NULL)
 			continue;
 
-		    if (!STRCMP(dict_key, "name"))
+		    if (STRCMP(dict_key, "name") == 0)
 			continue;
-		    if (!STRCMP(dict_key, "filename"))
+		    if (STRCMP(dict_key, "filename") == 0)
 			continue;
-		    if (!STRCMP(dict_key, "cmd"))
+		    if (STRCMP(dict_key, "cmd") == 0)
 			continue;
-		    if (!STRCMP(dict_key, "kind"))
+		    if (STRCMP(dict_key, "kind") == 0)
 			continue;
 
 		    *p++ = TAB;
@@ -3781,7 +3825,12 @@ jumpto_tag(
 	    str++;
 	if (find_extra(&str) == OK)
 	{
-	    pbuf_end = str;
+	    // Drop a trailing "|" that terminates a generic Ex command, so it
+	    // is not executed as an empty command separator.
+	    if (str > pbuf && str[-1] == '|')
+		pbuf_end = str - 1;
+	    else
+		pbuf_end = str;
 	    *pbuf_end = NUL;
 	}
     }
@@ -4140,8 +4189,8 @@ expand_tag_fname(char_u *fname, char_u *tag_fname, int expand)
     // otherwise be passed to netrw and trigger a network request.
     if (p_tagsecure && path_with_url(fname))
     {
-       emsg(_(e_tag_file_entry_must_not_be_url));
-       return NULL;
+	emsg(_(e_tag_file_entry_must_not_be_url));
+	return NULL;
     }
 
     /*
@@ -4157,6 +4206,14 @@ expand_tag_fname(char_u *fname, char_u *tag_fname, int expand)
 			    WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE);
 	if (expanded_fname != NULL)
 	    fname = expanded_fname;
+    }
+
+    // need to check again, ExpandOne() may have expanded http:\/\/
+    if (p_tagsecure && path_with_url(fname))
+    {
+	vim_free(expanded_fname);
+	emsg(_(e_tag_file_entry_must_not_be_url));
+	return NULL;
     }
 
     if ((p_tr || curbuf->b_help)
@@ -4312,11 +4369,11 @@ expand_tags(
 	extra_flag = 0;
     if (pat[0] == '/')
 	ret = find_tags(pat + 1, num_file, file,
-		TAG_REGEXP | extra_flag | TAG_VERBOSE | TAG_NO_TAGFUNC,
+		TAG_REGEXP | extra_flag | TAG_VERBOSE,
 		TAG_MANY, curbuf->b_ffname);
     else
 	ret = find_tags(pat, num_file, file,
-	      TAG_REGEXP | extra_flag | TAG_VERBOSE | TAG_NO_TAGFUNC | TAG_NOIC,
+	      TAG_REGEXP | extra_flag | TAG_VERBOSE | TAG_NOIC,
 		TAG_MANY, curbuf->b_ffname);
     if (ret == OK && !tagnames)
     {
@@ -4450,7 +4507,12 @@ get_tags(list_T *list, char_u *pat, char_u *buf_fname)
 	    break;
 	}
 	if (list_append_dict(list, dict) == FAIL)
+	{
 	    ret = FAIL;
+	    dict_unref(dict);
+	    vim_free(matches[i]);
+	    continue;
+	}
 
 	full_fname = tag_full_fname(&tp);
 	if (add_tag_field(dict, "name", tp.tagname, tp.tagname_end) == FAIL
@@ -4564,7 +4626,11 @@ get_tagstack(win_T *wp, dict_T *retdict)
     {
 	if ((d = dict_alloc_id(aid_tagstack_details)) == NULL)
 	    return;
-	list_append_dict(l, d);
+	if (list_append_dict(l, d) == FAIL)
+	{
+	    dict_unref(d);
+	    return;
+	}
 
 	get_tag_details(&wp->w_tagstack[i], d);
     }

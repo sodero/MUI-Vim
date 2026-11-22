@@ -319,6 +319,21 @@ func Test_spellfile_format_error()
   " SN_SOFO: multi-byte characters in sofofrom and sofoto
   call Spellfile_Test(0z0600000000080002CF810002CF82FF000000000000000000000000, '')
 
+  " SN_SAL (empty) followed by SN_SOFO with two multi-byte 'from' characters
+  " sharing the same low byte.  A preceding SN_SAL poisons sl_sal_first[], so
+  " without a reset set_sofo() under-counts and writes out of bounds.  Both
+  " sections are not allowed.
+  call Spellfile_Test(0z05000000000300000006000000000A0004CAABCEAB00024142FF000000000000000000000000, 'E759:')
+
+  " SN_SOFO twice: the second one freed the first as SN_SAL items.
+  call Spellfile_Test(0z060000000006000161000162060000000006000161000162FF000000000000000000000000, 'E759:')
+
+  " SN_SOFO followed by SN_SAL
+  call Spellfile_Test(0z06000000000600016100016205000000000700000101610162FF000000000000000000000000, 'E759:')
+
+  " SN_SAL twice
+  call Spellfile_Test(0z0500000000070000010161016205000000000700000101610162FF000000000000000000000000, 'E759:')
+
   " SN_COMPOUND: compmax is less than 2
   call Spellfile_Test(0z08000000000101, 'E759:')
 
@@ -403,6 +418,30 @@ func Test_spellfile_format_error()
   call Spellfile_Test(0zFF00000000000000000000000201010000, 'E759:')
 
   let &rtp = save_rtp
+endfunc
+
+" An over-length soundfold() argument must not overflow the MAXWLEN result
+" buffer in the single-byte branch of spell_soundfold_sal().
+func Test_spellfile_soundfold_sal_overflow()
+  let save_enc = &encoding
+  set encoding=latin1
+  " A SAL map that appends without collapsing, so the result is not shorter
+  " than the input.
+  call writefile(['SET ISO8859-1', 'SAL collapse_result false',
+	\ 'SAL a aaaa', 'SAL b bbbb'], 'Xsal.aff')
+  call writefile(['2', 'hello', 'world'], 'Xsal.dic')
+  mkspell! Xsal Xsal
+  set spl=Xsal.latin1.spl spell
+
+  " 253 input characters hit the buffer boundary; the result must not exceed
+  " MAXWLEN - 1.
+  call assert_true(strlen(soundfold(repeat('a', 253))) <= 253)
+
+  set nospell spl& spelllang&
+  call delete('Xsal.aff')
+  call delete('Xsal.dic')
+  call delete('Xsal.latin1.spl')
+  let &encoding = save_enc
 endfunc
 
 " Test for format errors in suggest file
@@ -1272,6 +1311,95 @@ func Test_spell_sug_tree_count_words_overflow()
 
   set spell& spelllang& runtimepath&
   bwipe!
+endfunc
+
+" A word longer than MAXWLEN must not overflow the soundfold result buffer in
+" the single-byte SOFO branch of spell_soundfold_sofo().
+func Test_soundfold_overflow()
+  let _enc=&enc
+  set enc=latin1
+  call writefile(['SOFOFROM ab', 'SOFOTO xy'], 'Xtest.aff', 'D')
+  call writefile(['1', 'foo'], 'Xtest.dic', 'D')
+  mkspell! Xtest Xtest
+  defer delete('Xtest.latin1.spl')
+  defer delete('Xtest.latin1.sug')
+  setl spelllang=Xtest.latin1.spl spell
+
+  " Before the fix the copy loop wrote one byte per input byte into a
+  " MAXWLEN (254) stack buffer with no upper bound, smashing the stack.
+  let sound = soundfold(repeat('ab', 300))
+  call assert_true(strlen(sound) < 254, 'soundfold result exceeds MAXWLEN')
+
+  set spell& spelllang&
+  let &enc = _enc
+endfunc
+
+func Test_spell_sal_sofo_truncated()
+  call mkdir('Xspelldir/spell', 'pR')
+
+  " "VIMspell" <ver=0x32>
+  "   SN_SAL(5)  flags=0 len=7   : <salflags=0><salcount=0,1><a><0><1>a<1>a
+  "   SN_SOFO(6) flags=0 len=0   : truncated, no body -> EOF in reader
+  " (28 bytes total)
+  let bytes = 0z56494d7370656c6c.3205000000000700.000101610161060000.000000
+  call writefile(bytes, 'Xspelldir/spell/Xx.utf-8.spl', 'b')
+
+  let save_rtp = &rtp
+  set rtp=./Xspelldir
+  try
+    set spelllang=Xx
+    silent! set spell
+  catch
+    " an error message is fine; a crash is not
+  endtry
+
+  " Reaching this point means Vim did not crash on the crafted file.
+  call assert_true(v:true)
+
+  set nospell
+  set spelllang&
+  let &rtp = save_rtp
+endfunc
+
+" A <prefcondnr> in the prefix tree that is truncated reads as -1, which used to
+" be stored as the condition index and then used to index sl_prefprog[].
+func Test_spellfile_truncated_prefcondnr()
+  " PFXPOSTPONE puts the prefixes in the prefix tree, the conditions are what
+  " make a <prefcondnr> be written for each of them.
+  call writefile(['SET UTF-8', 'PFXPOSTPONE',
+	\ 'PFX A Y 1', 'PFX A 0 un [a-z]',
+	\ 'PFX B Y 1', 'PFX B 0 re [b-d]',
+	\ 'PFX C Y 1', 'PFX C 0 de [c-f]'], 'Xpfx.aff', 'D')
+  call writefile(['3', 'apple/A', 'bread/B', 'cat/C'], 'Xpfx.dic', 'D')
+  mkspell! Xpfx.spl Xpfx
+  defer delete('Xpfx.spl')
+
+  let bytes = readfile('Xpfx.spl', 'B')
+
+  " Truncating anywhere in the prefix tree must give an error, not store a
+  " negative condition index.  Every truncation needs its own file name, a
+  " spell file that has been read once is cached by its name.
+  for n in range(len(bytes) - 40, len(bytes) - 1)
+    let fname = 'Xtrunc' .. n .. '.spl'
+    call writefile(bytes[0 : n - 1], fname)
+    try
+      execute 'set spl=' .. fname
+      set spell
+    catch /E75[789]:/
+    endtry
+    " Use the prefix tree, in case a bad index was stored.
+    call spellbadword('unapple')
+    call spellbadword('rebread')
+    set nospell spl&
+    call delete(fname)
+  endfor
+
+  " The valid file still works, prefixed words are recognized.
+  set spl=Xpfx.spl spell
+  call assert_equal(['', ''], spellbadword('unapple'))
+  call assert_equal(['', ''], spellbadword('rebread'))
+
+  set nospell spl& spelllang&
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

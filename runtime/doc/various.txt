@@ -28,6 +28,9 @@ CTRL-L			Clear and redraw the screen.  The redraw may happen
 			Useful to update the status line(s) when 'statusline'
 			includes an item that doesn't cause automatic
 			updating.
+			When the last window has no status line the ruler is
+			redrawn instead, this is useful when 'rulerformat'
+			includes such an item.
 			If the command line is being edited the redraw is
 			postponed until later.
 
@@ -422,12 +425,8 @@ N  *+gettext*		message translations |multi-lang|
 m  *+hangul_input*	Hangul input support |hangul|
    *+iconv*		Compiled with the |iconv()| function
    *+iconv/dyn*		Likewise |iconv-dynamic| |/dyn|
-H  *+image*		popup window image attribute, see |popup-image|
-H  *+image_cairo*	|+image| Cairo backend (GTK2 and GTK3 GUI)
-H  *+image_gdi*		|+image| GDI backend (Windows GUI)
-H  *+image_gdk*		|+image| GDK backend (GTK4 GUI)
-H  *+image_kitty*	|+image| kitty graphics protocol backend (terminal)
-H  *+image_sixel*	|+image| DEC sixel backend (terminal)
+H  *+image*		image rendering, |image|
+H  *+image_popup*	popup window image rendering, |popup-image|
 T  *+insert_expand*	|insert_expand| Insert mode completion
 m  *+ipv6*		Support for IPv6 networking |channel|
 m  *+job*		starting and stopping jobs |job|
@@ -478,6 +477,7 @@ m  *+perl/dyn*		Perl interface |perl-dynamic| |/dyn|
 N  *+persistent_undo*	Persistent undo |undo-persistence|
 N  *+popupwin*		Popup windows |popup-window|
    *+postscript*	|:hardcopy| writes a PostScript file
+   *+pango*		|:hardcopy| uses Pango and Cairo to render pages
 N  *+printer*		|:hardcopy| command
 H  *+profile*		|:profile| command
 m  *+python*		Python 2 interface |python|

@@ -493,7 +493,7 @@ endfunc
 
 func Test_highlight_eol_on_diff()
   call setline(1, ['abcd', ''])
-  call matchadd('Search', '\n')
+  call matchadd('ErrorMsg', '\n')
   let attrs0 = ScreenAttrs(1, 10)[0]
 
   diffthis
@@ -504,7 +504,7 @@ func Test_highlight_eol_on_diff()
   " '  abcd    '
   "  ^^           sign
   "    ^^^^ ^^^   'DiffAdd' highlight
-  "        ^      'Search' highlight
+  "        ^      'ErrorMsg' highlight
   let attrs = ScreenAttrs(1, 10)[0]
   call assert_equal(repeat([attrs[0]], 2), attrs[0:1])
   call assert_equal(repeat([attrs[2]], 4), attrs[2:5])
@@ -618,6 +618,30 @@ func Test_cursorcolumn_insert_on_tab()
   call term_sendkeys(buf, 'i')
   call TermWait(buf)
   call VerifyScreenDump(buf, 'Test_cursorcolumn_insert_on_tab_2', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
+" The column highlighted with 'cursorcolumn' must be the column of the cursor,
+" also after a command that moved the cursor into virtual space and back.
+func Test_cursorcolumn_virtualedit()
+  CheckScreendump
+
+  let lines =<< trim END
+    set virtualedit=all
+    set cursorcolumn
+    call setline(1, ['', '', ''])
+    call cursor(3, 1)
+  END
+  call writefile(lines, 'Xcuc_virtualedit', 'D')
+
+  let buf = RunVimInTerminal('-S Xcuc_virtualedit', #{rows: 8})
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_cursorcolumn_virtualedit_1', {})
+
+  call term_sendkeys(buf, "\<Del>")
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_cursorcolumn_virtualedit_1', {})
 
   call StopVimInTerminal(buf)
 endfunc
@@ -897,6 +921,25 @@ func Test_highlight_ctermul()
   call assert_match('ctermul=3', HighlightArgs('Normal'))
   call assert_equal('3', synIDattr(synIDtrans(hlID('Normal')), 'ul'))
   highlight Normal ctermul=NONE
+endfunc
+
+" The underline color from 'ctermul' adds no other attribute in a terminal
+" that does not take it, such as the Vim terminal.
+func Test_highlight_ctermul_other_attributes()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, 'text')
+    highlight Underlined cterm=underline ctermul=9
+    call matchadd('Underlined', 'text')
+  END
+  call writefile(lines, 'Xtest_ctermul', 'D')
+  let buf = RunVimInTerminal('-S Xtest_ctermul', {'rows': 5})
+  call WaitForAssert({-> assert_equal(1,
+        \ term_getattr(term_scrape(buf, 1)[0].attr, 'underline'))})
+  call assert_equal(0, term_getattr(term_scrape(buf, 1)[0].attr, 'strike'))
+
+  call StopVimInTerminal(buf)
 endfunc
 
 " Test for 'ctermfont' in a highlight group

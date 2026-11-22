@@ -1504,8 +1504,10 @@ cs_insert_filelist(
 	    csinfo = vim_realloc(csinfo, sizeof(csinfo_T)*csinfo_size);
 	    if (csinfo == NULL)
 	    {
-		vim_free(t_csinfo);
-		csinfo_size = 0;
+		// allocation failure, so keep the old infos
+		csinfo = t_csinfo;
+		csinfo_size = i;
+		return -1;
 	    }
 	}
 	if (csinfo == NULL)
@@ -2093,7 +2095,10 @@ cs_print_tags_priv(char **matches, char **cntxts, int num_matches)
 	    vim_free(tbuf);
 	    continue;
 	}
-	extra = strtok(NULL, (const char *)"\t");
+	extra = strtok(NULL, "");
+	// Skip leading Tabs, but keep a Tab inside the line.
+	while (extra != NULL && *extra == TAB)
+	    ++extra;
 
 	lno[strlen(lno)-2] = '\0';  // ignore ;" at the end
 

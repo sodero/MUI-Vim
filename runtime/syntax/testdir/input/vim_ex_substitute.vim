@@ -1,11 +1,23 @@
 " Vim :substitute command
 
 
+substitute/foo
+substitute/foo/bar
+substitute/foo/bar/
+
 substitute/foo/bar/&
 substitute/foo/bar/cegiInp#lr
 
+snomagic/foo
+snomagic/foo/bar
+snomagic/foo/bar/
+
 snomagic/foo/bar/&
 snomagic/foo/bar/cegiInp#lr
+
+smagic/foo
+smagic/foo/bar
+smagic/foo/bar/
 
 smagic/foo/bar/&
 smagic/foo/bar/cegiInp#lr
@@ -31,11 +43,15 @@ call Foo() | smagic/foo/bar/cegiInp#lr
 let foo = str->substitute(str, pat, sub, flags)
 
 function Foo()
+  substitute/foo
+  substitute/foo/bar
   substitute/foo/bar/
   let bar = str->substitute(str, pat, sub, flags)
 endfunction
 
 def Foo()
+  substitute/foo
+  substitute/foo/bar
   substitute/foo/bar/
   let bar = str->substitute(str, pat, sub, flags)
 enddef
@@ -50,8 +66,7 @@ s$/$//$ " comment
 s%/%//% " comment
 s&/&//& " comment
 s'/'//' " comment
-" FIXME - matches vimUserFunc
-" s(/(//( " comment
+s(/(//( " comment
 s)/)//) " comment
 s*/*//* " comment
 s+/+//+ " comment
@@ -84,8 +99,7 @@ s $/$//$ " comment
 s %/%//% " comment
 s &/&//& " comment
 s '/'//' " comment
-" FIXME - matches vimUserFunc
-" s (/(//( " comment
+s (/(//( " comment
 s )/)//) " comment
 s */*//* " comment
 s +/+//+ " comment
@@ -144,17 +158,29 @@ sg42
 sgi42
 :sgi42
 
-" FIXME
+
+" :& and :~
+
 &
 &&
 ~
 ~&
 
-" FIXME
+&  42
+&& 42
+~  42
+~& 42
+
 &cegiInp#lr
 &&cegiInp#lr
 ~cegiInp#lr
 ~&cegiInp#lr
+
+&cegiInp#lr  42
+&&cegiInp#lr 42
+~cegiInp#lr  42
+~&cegiInp#lr 42
+
 
 " 2 and 3 letter repeat-previous variants
 
@@ -197,9 +223,6 @@ s | echo "Foo"
 
 
 " Issue #13883
-
-str[s]
-str(s)
 
 def Test()
   str[s]

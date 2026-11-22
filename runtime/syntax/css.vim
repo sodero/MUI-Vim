@@ -11,6 +11,8 @@
 " Changelog:
 " 2025 Nov 11: improve support for cssBoxProperties #18717
 " 2026 Feb 13: add missing numeric units (baseline 2015, 2020, 2022, 2023, 2026) #19325
+" 2026 Jun 28: add scrollbar-gutter properties
+" 2026 Sep 30: add :host, :host-context(), slotted(), and state() #21404
 
 " quit when a syntax file was already loaded
 if !exists("main_syntax")
@@ -203,10 +205,27 @@ syn keyword cssBorderAttr contained clone slice
 syn match cssBoxProp contained "\<padding\%(-\%(top\|right\|bottom\|left\)\)\=\>"
 syn match cssBoxProp contained "\<margin\%(-\%(top\|right\|bottom\|left\)\)\=\>"
 syn match cssBoxProp contained "\<\%(margin\|padding\)\%(-\%(inline\|block\)\%(-\%(start\|end\)\)\=\)\=\>"
-syn match cssBoxProp contained "\<overflow\%(-\%(x\|y\|style\)\)\=\>"
 syn match cssBoxProp contained "\<rotation\%(-point\)\=\>"
 syn keyword cssBoxAttr contained visible hidden scroll auto
 syn match cssBoxAttr contained "\<no-\%(display\|content\)\>"
+
+"------------------------------------------------
+" CSS Overflow Module Level 3
+" https://www.w3.org/TR/css-overflow-3/
+syn match cssOverflowProp contained "\<overflow-clip-margin\>"
+
+syn match cssOverflowProp contained "\<text-overflow\>"
+syn keyword cssOverflowAttr contained clip ellipsis
+
+syn match cssOverflowProp contained "\<overflow\%(-\%(x\|y\|inline\|block\)\)\=\>"
+syn keyword cssOverflowAttr contained visible hidden clip scroll auto
+
+syn match cssOverflowProp contained "\<scrollbar-gutter\>"
+syn keyword cssOverflowAttr contained auto stable both-edges
+
+syn match cssOverflowProp contained "\<scroll-behavior\>"
+syn keyword cssOverflowAttr contained auto smooth
+"------------------------------------------------
 
 syn keyword cssCascadeProp contained all
 syn keyword cssCascadeAttr contained initial unset revert
@@ -392,7 +411,6 @@ syn keyword cssUIAttr contained invert
 syn keyword cssUIProp contained icon resize
 syn keyword cssUIAttr contained both horizontal vertical
 
-syn match cssUIProp contained "\<text-overflow\>"
 syn keyword cssUIAttr contained clip ellipsis
 
 syn match cssUIProp contained "\<image-rendering\>"
@@ -435,7 +453,7 @@ syn match cssMobileTextProp contained "\<text-size-adjust\>"
 
 syn keyword cssMediaProp contained width height orientation scan
 syn keyword cssMediaProp contained any-hover any-pointer color-gamut grid hover
-syn keyword cssMediaProp contained overflow-block overflow-inline pointer update
+syn keyword cssMediaProp contained pointer update
 syn match cssMediaProp contained /\<\%(\%(max\|min\)-\)\=\%(\%(device\)-\)\=aspect-ratio\>/
 syn match cssMediaProp contained /\<\%(\%(max\|min\)-\)\=device-pixel-ratio\>/
 syn match cssMediaProp contained /\<\%(\%(max\|min\)-\)\=device-\%(height\|width\)\>/
@@ -462,12 +480,12 @@ syn match cssAttrComma ","
 " Pseudo class
 " https://www.w3.org/TR/selectors-4/
 syn match cssPseudoClass ":[A-Za-z0-9_-]*" contains=cssNoise,cssPseudoClassId,cssUnicodeEscape,cssVendor,cssPseudoClassFn
-syn keyword cssPseudoClassId contained link visited active hover before after left right
-syn keyword cssPseudoClassId contained root empty target enabled disabled checked invalid
+syn keyword cssPseudoClassId contained link visited active hover before after left right slotted
+syn keyword cssPseudoClassId contained root host empty target enabled disabled checked invalid
 syn match cssPseudoClassId contained "\<first-\%(line\|letter\)\>"
 syn match cssPseudoClassId contained "\<\%(first\|last\|only\)-\%(of-type\|child\)\>"
 syn match cssPseudoClassId contained  "\<focus\%(-within\|-visible\)\=\>"
-syn region cssPseudoClassFn contained matchgroup=cssFunctionName start="\<\%(not\|is\|lang\|\%(nth\|nth-last\)-\%(of-type\|child\)\)(" end=")" contains=cssStringQ,cssStringQQ,cssTagName,cssAttributeSelector,cssClassName,cssIdentifier
+syn region cssPseudoClassFn contained matchgroup=cssFunctionName start="\<\%(not\|is\|lang\|host\|host-context\|state\|\%(nth\|nth-last\)-\%(of-type\|child\)\)(" end=")" contains=cssStringQ,cssStringQQ,cssTagName,cssAttributeSelector,cssClassName,cssIdentifier
 " ------------------------------------
 " Vendor specific properties
 syn match cssPseudoClassId contained  "\<selection\>"
@@ -569,6 +587,7 @@ hi def link cssMultiColumnProp cssProp
 hi def link cssPagedMediaProp cssProp
 hi def link cssPositioningProp cssProp
 hi def link cssObjectProp cssProp
+hi def link cssOverflowProp cssProp
 hi def link cssPrintProp cssProp
 hi def link cssRubyProp cssProp
 hi def link cssSpeechProp cssProp

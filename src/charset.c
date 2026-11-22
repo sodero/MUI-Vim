@@ -383,7 +383,8 @@ transstr(char_u *s)
     if (res == NULL)
 	return NULL;
 
-    *res = NUL;
+    char_u *d = res;
+
     p = s;
     while (*p != NUL)
     {
@@ -391,14 +392,27 @@ transstr(char_u *s)
 	{
 	    c = (*mb_ptr2char)(p);
 	    if (vim_isprintc(c))
-		STRNCAT(res, p, l);	// append printable multi-byte char
+	    {
+		mch_memmove(d, p, (size_t)l);
+		d += l;
+	    }
 	    else
-		transchar_hex(res + STRLEN(res), c);
+	    {
+		transchar_hex(d, c);
+		d += STRLEN(d);
+	    }
 	    p += l;
 	}
 	else
-	    STRCAT(res, transchar_byte(*p++));
+	{
+	    char_u	*trs = transchar_byte(*p++);
+	    size_t	trs_len = STRLEN(trs);
+
+	    mch_memmove(d, trs, trs_len);
+	    d += trs_len;
+	}
     }
+    *d = NUL;
     return res;
 }
 
@@ -895,17 +909,66 @@ linetabsize_no_outer(win_T *wp, linenr_T lnum)
 #endif
 }
 
+/*
+ * Like linetabsize_no_outer(), but counts the size of 'listchars' "eol".
+ */
+    int
+linetabsize_no_outer_eol(win_T *wp, linenr_T lnum)
+{
+    return linetabsize_no_outer(wp, lnum)
+	+ ((wp->w_p_list && wp->w_lcs_chars.eol != NUL) ? 1 : 0);
+}
+
+/*
+ * Return TRUE when win_lbr_chartabsize() does nothing more than
+ * win_nolbr_chartabsize(): no 'linebreak', 'breakindent', 'showbreak' and no
+ * text properties that insert text.
+ */
+#if defined(FEAT_LINEBREAK) || defined(FEAT_PROP_POPUP)
+    static int
+win_lbr_is_simple_width(chartabsize_T *cts)
+{
+    return TRUE
+# ifdef FEAT_LINEBREAK
+	&& !cts->cts_win->w_p_lbr && !cts->cts_win->w_p_bri
+	&& *get_showbreak_value(cts->cts_win) == NUL
+# endif
+# ifdef FEAT_PROP_POPUP
+	&& !cts->cts_has_prop_with_text
+# endif
+	;
+}
+#endif
+
     void
 win_linetabsize_cts(chartabsize_T *cts, colnr_T len)
 {
     vimlong_T vcol = cts->cts_vcol;
+#if defined(FEAT_LINEBREAK) || defined(FEAT_PROP_POPUP)
+    // Fast path: when win_lbr_chartabsize() would just return
+    // win_nolbr_chartabsize() (wrap on; no 'linebreak'/'breakindent'/
+    // 'showbreak'/inserted text properties), call it directly.
+    int simple_width = cts->cts_win->w_p_wrap && win_lbr_is_simple_width(cts);
+#endif
 #ifdef FEAT_PROP_POPUP
     cts->cts_with_trailing = len == MAXCOL;
 #endif
     for ( ; *cts->cts_ptr != NUL && (len == MAXCOL || cts->cts_ptr < cts->cts_line + len);
 						      MB_PTR_ADV(cts->cts_ptr))
     {
-	vcol += win_lbr_chartabsize(cts, NULL, NULL);
+#if defined(FEAT_LINEBREAK) || defined(FEAT_PROP_POPUP)
+	if (simple_width)
+	{
+	    int	c = *cts->cts_ptr;
+
+	    if (c < 0x80 && c != TAB)
+		vcol += g_chartab[c] & CT_CELL_MASK;
+	    else
+		vcol += win_nolbr_chartabsize(cts, NULL);
+	}
+	else
+#endif
+	    vcol += win_lbr_chartabsize(cts, NULL, NULL);
 	if (vcol > MAXCOL)
 	{
 	    cts->cts_vcol = MAXCOL;
@@ -921,9 +984,10 @@ win_linetabsize_cts(chartabsize_T *cts, colnr_T len)
 	int head = 0;
 	(void)win_lbr_chartabsize(cts, &head, NULL);
 	vcol += cts->cts_cur_text_width + head;
-	// when properties are above or below the empty line must also be
-	// counted
-	if (cts->cts_ptr == cts->cts_line && cts->cts_prop_lines > 0)
+	// When properties are above the empty line must also be counted.  For
+	// a property below the width already includes filling up the line.
+	if (cts->cts_ptr == cts->cts_line && cts->cts_prop_lines > 0
+							 && !cts->cts_has_below)
 	    ++vcol;
 	cts->cts_vcol = vcol > MAXCOL ? MAXCOL : (int)vcol;
     }
@@ -1260,6 +1324,7 @@ win_lbr_chartabsize(
 
 #if defined(FEAT_PROP_POPUP)
     cts->cts_cur_text_width = 0;
+    cts->cts_has_below = false;
     cts->cts_first_char = 0;
 #endif
 
@@ -1268,14 +1333,7 @@ win_lbr_chartabsize(
      * No 'linebreak', 'showbreak', 'breakindent' and text properties that
      * insert text: return quickly.
      */
-    if (1
-# ifdef FEAT_LINEBREAK
-	    && !wp->w_p_lbr && !wp->w_p_bri && *get_showbreak_value(wp) == NUL
-# endif
-# ifdef FEAT_PROP_POPUP
-	    && !cts->cts_has_prop_with_text
-# endif
-	    )
+    if (win_lbr_is_simple_width(cts))
 #endif
     {
 	if (wp->w_p_wrap)
@@ -1285,11 +1343,18 @@ win_lbr_chartabsize(
 
 #if defined(FEAT_LINEBREAK) || defined(FEAT_PROP_POPUP)
     int has_lcs_eol = wp->w_p_list && wp->w_lcs_chars.eol != NUL;
+    // Virtual text above the line is on its own screen line, it does not count
+    // for the size of a Tab.
+    colnr_T tab_vcol = vcol;
+
+# ifdef FEAT_PROP_POPUP
+    tab_vcol -= cts->cts_above_width;
+# endif
 
     /*
      * First get the normal size, without 'linebreak' or text properties
      */
-    size = win_chartabsize(wp, s, vcol);
+    size = win_chartabsize(wp, s, tab_vcol);
 # ifdef FEAT_LINEBREAK
     if (*s == NUL)
     {
@@ -1356,25 +1421,36 @@ win_lbr_chartabsize(
 		    }
 		    else
 			cells = vim_strsize(p);
-		    cts->cts_cur_text_width += cells;
 		    if (tp->tp_flags & TP_FLAG_ALIGN_ABOVE)
+		    {
 			cts->cts_first_char += cells;
+			if (!cts->cts_no_above)
+			    cts->cts_cur_text_width += cells;
+		    }
 		    else
+		    {
+			cts->cts_cur_text_width += cells;
 			size += cells;
+		    }
 		    cts->cts_start_incl = tp->tp_flags & TP_FLAG_START_INCL;
 #  ifdef FEAT_LINEBREAK
 		    if (*s == TAB)
 		    {
 			// tab size changes because of the inserted text
 			size -= tab_size;
-			tab_size = win_chartabsize(wp, s, vcol + size);
+			tab_size = win_chartabsize(wp, s,
+					vcol + size - cts->cts_above_width);
 			size += tab_size;
 		    }
 #  endif
 		    if (tp->tp_col == MAXCOL && (tp->tp_flags
 				& (TP_FLAG_ALIGN_ABOVE | TP_FLAG_ALIGN_BELOW)))
+		    {
 			// count extra line for property above/below
 			++cts->cts_prop_lines;
+			if (tp->tp_flags & TP_FLAG_ALIGN_BELOW)
+			    cts->cts_has_below = true;
+		    }
 		}
 	    }
 	    if (tp->tp_col != MAXCOL && tp->tp_col - 1 > col)
@@ -1521,7 +1597,7 @@ win_lbr_chartabsize(
 	    colmax += col_adj;
 	    n = colmax +  win_col_off2(wp);
 	    if (n > 0)
-		colmax += (((vcol - colmax) / n) + 1) * n - col_adj;
+		colmax += (((vcol + col_adj - colmax) / n) + 1) * n - col_adj;
 	}
 
 	colnr_T vcol2 = vcol;
@@ -1549,7 +1625,13 @@ win_lbr_chartabsize(
 	*tailp = size - size_before_lbr;
 
 #  ifdef FEAT_PROP_POPUP
-    size += cts->cts_first_char;
+    if (cts->cts_first_char > 0 && !cts->cts_no_above)
+    {
+	// Remember the width for the size of a Tab later in the line.  Use
+	// assignment, this may be called more than once for a character.
+	cts->cts_above_width = cts->cts_first_char;
+	size += cts->cts_first_char;
+    }
 #  endif
 # endif
     return size;
@@ -1660,6 +1742,9 @@ getvcol(
 
     init_chartabsize_arg(&cts, wp, pos->lnum, 0, line, line);
     cts.cts_max_head_vcol = -1;
+#ifdef FEAT_PROP_POPUP
+    cts.cts_no_above = true;
+#endif
 
     /*
      * This function is used very often, do some speed optimizations.
@@ -1737,6 +1822,19 @@ getvcol(
 	    head = 0;
 	    tail = 0;
 	    incr = win_lbr_chartabsize(&cts, &head, &tail);
+#ifdef FEAT_PROP_POPUP
+	    if (cts.cts_ptr == cts.cts_line)
+	    {
+		if (flags & GETVCOL_FOR_VIRTCOL)
+		    // do not count the virtual text above for w_curswant
+		    wp->w_virtcol_first_char = cts.cts_first_char;
+		if ((flags & GETVCOL_NO_ABOVE) == 0)
+		{
+		    cts.cts_vcol += cts.cts_first_char;
+		    cts.cts_above_width = cts.cts_first_char;
+		}
+	    }
+#endif
 	    // make sure we don't go past the end of the line
 	    if (*cts.cts_ptr == NUL)
 	    {
@@ -1747,11 +1845,6 @@ getvcol(
 #endif
 		break;
 	    }
-#ifdef FEAT_PROP_POPUP
-	    if (cursor == &wp->w_virtcol && cts.cts_ptr == cts.cts_line)
-		// do not count the virtual text above for w_curswant
-		wp->w_virtcol_first_char = cts.cts_first_char;
-#endif
 
 	    char_u *next_ptr = cts.cts_ptr + (*mb_ptr2len)(cts.cts_ptr);
 	    if (next_ptr - line > pos->col) // character at pos->col
@@ -1791,9 +1884,6 @@ getvcol(
 	    if (((State & MODE_INSERT) == 0 || cts.cts_start_incl) && !on_NUL)
 		// cursor is after inserted text, unless on the NUL
 		vcol += cts.cts_cur_text_width;
-	    else
-		// insertion also happens after the "above" virtual text
-		vcol += cts.cts_first_char;
 #endif
 	    *cursor = vcol + head;	    // cursor at start
 	}
@@ -2230,7 +2320,7 @@ getdigits(char_u **pp)
     long	retval;
 
     p = *pp;
-    retval = atol((char *)p);
+    retval = strtol((char *)p, NULL, 10);
     if (*p == '-')		// skip negative sign
 	++p;
     p = skipdigits(p);		// skip to next non-digit

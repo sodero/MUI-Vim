@@ -188,6 +188,12 @@ def Test_assignment()
   v9.CheckDefFailure(['&notex += 3'], 'E113:')
   v9.CheckDefFailure(['&ts ..= "xxx"'], 'E1019:')
   v9.CheckDefFailure(['var d = {k: [0]}', 'd.k ..= "x"'], 'E1012: Type mismatch; expected list<number> but got string')
+  # the result of ..= is a string, a number item cannot hold it
+  v9.CheckDefAndScriptFailure(['var d: dict<number> = {a: 1}', 'd.a ..= 5'], 'E1019:', 2)
+  v9.CheckDefAndScriptFailure(['var d: dict<number> = {a: 1}', "d['a'] ..= 5"], 'E1019:', 2)
+  v9.CheckDefAndScriptFailure(['var l: list<number> = [1]', 'l[0] ..= 5'], 'E1019:', 2)
+  v9.CheckDefAndScriptSuccess(['var d: dict<string> = {a: "x"}', 'd.a ..= "y"', 'assert_equal("xy", d.a)'])
+  v9.CheckDefAndScriptSuccess(['var d: dict<any> = {a: 1}', 'd.a ..= 5', 'assert_equal("15", d.a)'])
   v9.CheckDefFailure(['&ts = [7]'], 'E1012:')
   v9.CheckDefExecFailure(['&ts = g:alist'], 'E1012: Type mismatch; expected number but got list<number>')
   v9.CheckDefFailure(['&ts = "xx"'], 'E1012:')
@@ -214,7 +220,7 @@ def Test_assignment()
   v9.CheckDefFailure(['var s:var = 123'], 'E1101:')
   v9.CheckDefFailure(['var s:var: number'], 'E1101:')
 
-  v9.CheckDefAndScriptFailure(['var $VAR: number'], ['E1016:', 'E475:'])
+  v9.CheckDefAndScriptFailure(['var $VAR: number'], ['E1000:', 'E475:'])
 
   lines =<< trim END
     vim9script
@@ -246,6 +252,28 @@ def Test_assignment()
   var text =<< trim END
     some text
   END
+enddef
+
+" An item of a read-only v: variable can be changed in a :def function, as
+" at the script level, the variable itself cannot.
+def Test_assign_item_of_readonly_vim_var()
+  assert_equal(v:t_dict, type(v:clipproviders))
+  var lines =<< trim END
+    vim9script
+    def Define()
+      v:clipproviders['vim9_one'] = {}
+      v:clipproviders.vim9_two = {}
+    enddef
+    Define()
+    assert_equal({}, v:clipproviders.vim9_one)
+    assert_equal({}, v:clipproviders.vim9_two)
+    remove(v:clipproviders, 'vim9_one')
+    remove(v:clipproviders, 'vim9_two')
+  END
+  v9.CheckScriptSuccess(lines)
+
+  v9.CheckDefFailure(['v:clipproviders = {}'], 'E46:')
+  v9.CheckDefFailure(['v:version[0] = 1'], 'E1141:')
 enddef
 
 def Test_float_and_number()
@@ -291,6 +319,23 @@ def Test_assign_concat()
       ls[-1] ..= 'foo'
   END
   v9.CheckDefExecAndScriptFailure(lines, 'E684: List index out of range: -1', 2)
+
+  # a target of type any that holds a number is converted too
+  lines =<< trim END
+      var d: dict<any> = {a: 1}
+      d.a ..= 'z'
+      assert_equal({a: '1z'}, d)
+      var n: any = 0
+      n ..= 'zero'
+      assert_equal('0zero', n)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+
+  lines =<< trim END
+      var l: any = [1]
+      l ..= 'x'
+  END
+  v9.CheckDefExecAndScriptFailure(lines, ['E1105:', 'E734:'], 2)
 enddef
 
 def Test_assign_register()
@@ -306,6 +351,33 @@ def Test_assign_register()
 
   v9.CheckDefFailure(['@a += "more"'], 'E1051:')
   v9.CheckDefFailure(['@a += 123'], 'E1012:')
+enddef
+
+" An environment variable, a register and a String v: variable only take a
+" String.
+def Test_assign_string_only()
+  for target in ['$XSTRING_ONLY', '@a', 'v:errmsg']
+    v9.CheckDefAndScriptFailure([target .. ' = 123'],
+      'E1012: Type mismatch; expected string but got number', 1)
+    v9.CheckDefAndScriptFailure([target .. ' ..= 123'],
+      'E1012: Type mismatch; expected string but got number', 1)
+    v9.CheckDefAndScriptFailure([target .. ' = true'],
+      'E1012: Type mismatch; expected string but got bool', 1)
+  endfor
+  v9.CheckDefAndScriptFailure(['[$XSTRING_ONLY, @a] = [1, 2]'],
+    'E1012: Type mismatch; expected string but got number', 1)
+  v9.CheckDefAndScriptFailure(['@# ..= 1'],
+    'E1012: Type mismatch; expected string but got number', 1)
+  v9.CheckDefAndScriptSuccess(['@# = bufnr()'])
+
+  # Legacy script converts the value.
+  legacy let $XSTRING_ONLY = 123
+  legacy let @a = 456
+  legacy let v:errmsg = 789
+  assert_equal('123', $XSTRING_ONLY)
+  assert_equal('456', @a)
+  assert_equal('789', v:errmsg)
+  unlet $XSTRING_ONLY
 enddef
 
 def Test_reserved_name()
@@ -378,11 +450,91 @@ def Test_null_values()
   v9.CheckDefAndScriptSuccess(lines)
 enddef
 
+" Indexing a declared but not yet initialized script-level list allocates
+" an empty list for it; that list must get the declared member type, the
+" same as when the list is given an initial value.
+def Test_assign_index_sets_type_of_empty_list()
+  var lines =<< trim END
+    vim9script
+    var a: list<string>
+    a[0] = 'x'
+    assert_equal('list<string>', typename(a))
+    assert_fails('a->add(123)', 'E1012: Type mismatch; expected string but got number')
+    assert_equal(['x'], a)
+  END
+  v9.CheckScriptSuccess(lines)
+enddef
+
 def Test_type_with_extra_white()
   var lines =<< trim END
       const x : number = 3
   END
   v9.CheckDefExecAndScriptFailure(lines, 'E1059:')
+enddef
+
+" A very deeply nested type gives an error instead of running out of stack
+def Test_type_nested_too_deep()
+  var lines = ['vim9script',
+        'var x: ' .. repeat('list<', 1001) .. 'number' .. repeat('>', 1001)]
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 2)
+
+  lines[1] = 'var x: ' .. repeat('list<', 100000) .. 'number'
+        .. repeat('>', 100000)
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 2)
+
+  lines = ['vim9script',
+        'def Fn()',
+        '  var x: ' .. repeat('list<', 100000) .. 'number'
+        .. repeat('>', 100000),
+        'enddef',
+        'defcompile Fn']
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 1)
+
+  lines = ['vim9script',
+        'var x: ' .. repeat('list<', 1000) .. 'number' .. repeat('>', 1000)]
+  v9.CheckSourceSuccess(lines)
+
+  # Nesting type aliases cannot be used to circumvent the depth limit
+  lines =<< trim END
+    vim9script
+    type T0 = number
+    execute range(1, 100000)
+          ->mapnew((_, i) => $'type T{i} = list<T{i - 1}>')
+          ->join("\n")
+    var x: T100000 = []
+    echo typename(x)
+  END
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 3)
+
+  lines =<< trim END
+    vim9script
+    type T0 = number
+    execute range(1, 1000)
+          ->mapnew((_, i) => $'type T{i} = list<T{i - 1}>')
+          ->join("\n")
+    var x: T1000 = []
+    assert_equal(repeat('list<', 1000) .. 'number' .. repeat('>', 1000),
+          typename(x))
+  END
+  v9.CheckSourceSuccess(lines)
+  lines[2] = "execute range(1, 1001)"
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 3)
+
+  # A type alias used inside another type
+  lines =<< trim END
+    vim9script
+    type T0 = number
+    execute range(1, 900)
+          ->mapnew((_, i) => $'type T{i} = list<T{i - 1}>')
+          ->join("\n")
+    var x: dict<T900>
+    var y: tuple<number, T900>
+    var F: func(T900): T900
+    execute $"var w: list<{repeat('list<', 99)}T900{repeat('>', 99)}>"
+  END
+  v9.CheckSourceSuccess(lines)
+  lines[-1] = 'execute $"var w: list<{repeat(''list<'', 100)}T900{repeat(''>'', 100)}>"'
+  v9.CheckSourceFailure(lines, 'E1439: Type nested too deep', 9)
 enddef
 
 def Test_keep_type_after_assigning_null()
@@ -506,6 +658,19 @@ def Test_assign_unpack()
       [v1, v2; _] = [1]
   END
   v9.CheckDefFailure(lines, 'E1093: Expected 2 items but got 1', 3)
+
+  # null_list and null_tuple have no items
+  for null_value in ['null_list', 'null_tuple']
+    lines =<< trim eval END
+        var [v1, v2] = {null_value}
+    END
+    v9.CheckDefFailure(lines, 'E1093: Expected 2 items but got 0', 1)
+
+    lines =<< trim eval END
+        var [v1; v2] = {null_value}
+    END
+    v9.CheckDefFailure(lines, 'E1093: Expected 1 items but got 0', 1)
+  endfor
 
   lines =<< trim END
       var v1: number
@@ -974,9 +1139,9 @@ def Test_assignment_list()
   assert_equal(['sdf', 'asdf', 'end'], list3)
 
   v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'll[-4] = 6'], 'E684:')
-  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[8 : 9]'], 'E684:')
-  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[1 : -9]'], 'E684:')
-  v9.CheckDefExecFailure(['var ll = [1, 2, 3]', 'unlet ll[2 : 1]'], 'E684:')
+  v9.CheckDefExecAndScriptFailure(['var ll = [1, 2, 3]', 'unlet ll[8 : 9]'], 'E684:')
+  v9.CheckDefExecAndScriptFailure(['var ll = [1, 2, 3]', 'unlet ll[1 : -9]'], 'E684:')
+  v9.CheckDefExecAndScriptFailure(['var ll = [1, 2, 3]', 'unlet ll[2 : 1]'], 'E684:')
 
   # type becomes list<any>
   var somelist = rand() > 0 ? [1, 2, 3] : ['a', 'b', 'c']
@@ -1589,8 +1754,8 @@ def Test_assignment_failure()
   v9.CheckDefFailure(['&g:option = 5'], 'E113:')
   v9.CheckScriptFailure(['vim9script', 'var &tabstop = 4'], 'E1052:')
 
-  v9.CheckDefFailure(['var $VAR = 5'], 'E1016: Cannot declare an environment variable:')
-  v9.CheckScriptFailure(['vim9script', 'var $ENV = "xxx"'], 'E1016:')
+  v9.CheckDefFailure(['var $VAR = 5'], 'E1000: Cannot declare an environment variable:')
+  v9.CheckScriptFailure(['vim9script', 'var $ENV = "xxx"'], 'E1000:')
 
   # read-only registers
   v9.CheckDefAndScriptFailure(['var @. = 5'], ['E354:', 'E1066:'], 1)
@@ -1688,6 +1853,23 @@ def Test_assign_list()
       assert_equal([1, 2, 3], ul)
   END
   v9.CheckDefAndScriptSuccess(lines)
+
+  # A slice of a list or blob that is an item or member of another value
+  lines =<< trim END
+      var ll = [[1, 2]]
+      ll[0][0 : 0] = [9]
+      assert_equal([[9, 2]], ll)
+
+      var d = {a: [1, 2]}
+      d.a[1 : 1] = [8]
+      assert_equal({a: [1, 8]}, d)
+
+      var lb = [0z0000]
+      lb[0][1 : 1] = 0z01
+      assert_equal([0z0001], lb)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+  v9.CheckDefFailure(['var ll = [[1, 2]]', 'll[0][0 : 0] = 7'], 'E1012: Type mismatch; expected list<number> but got number', 2)
 
   lines =<< trim END
       var l = [1, 2]
@@ -1817,6 +1999,36 @@ def Test_assign_dict_with_op()
   v9.CheckDefAndScriptSuccess(lines)
 enddef
 
+" A type error in a slice assignment leaves the list unchanged
+def Test_assign_list_slice_type_error()
+  var lines =<< trim END
+    var l: list<number> = [1, 2, 3]
+    var bad: list<any> = [7, 'x']
+    try
+      l[0 : 1] = bad
+    catch /E1012:/
+    endtry
+    assert_equal([1, 2, 3], l)
+    try
+      l[1 :] = bad
+    catch /E1012:/
+    endtry
+    assert_equal([1, 2, 3], l)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+" A null List in a slice assignment in a compiled function gives an error.
+" This used to crash.
+def Test_assign_list_slice_null()
+  v9.CheckDefExecFailure(['var l: list<number> = [1, 2]',
+                          'l[0 : 1] = null_list'], 'E709:', 2)
+  v9.CheckDefExecFailure(['var l: list<number> = null_list',
+                          'l[0 : 0] = [1]'], 'E1147:', 2)
+  v9.CheckDefExecFailure(['var l: list<number> = null_list',
+                          'l[0 :] = null_list'], 'E1147:', 2)
+enddef
+
 def Test_assign_list_with_op()
   var lines =<< trim END
     var ls: list<string> = ['x']
@@ -1840,6 +2052,51 @@ def Test_assign_list_with_op()
     assert_equal(2, ln[0])
   END
   v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+" When "+=" fails because of an item type the List is not changed.
+def Test_assign_list_add_wrong_item_type()
+  var lines =<< trim END
+    var l: list<number> = [1]
+    var good: list<any> = [2, 3]
+    l += good
+    assert_equal([1, 2, 3], l)
+
+    var bad: list<any> = [4, 'x']
+    try
+      l += bad
+      assert_report('expected an error')
+    catch /E1012:/
+    endtry
+    assert_equal([1, 2, 3], l)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+" "+=" changes a list in place, it must not change a locked or const list.
+def Test_assign_list_add_to_locked_list()
+  var lines =<< trim END
+    vim9script
+    def AddTo(l: list<number>)
+      var x = l
+      x += [2]
+    enddef
+
+    const c = [1]
+    assert_fails('AddTo(c)', 'E741:')
+    assert_equal([1], c)
+
+    var s = [1]
+    lockvar 1 s
+    assert_fails('AddTo(s)', 'E741:')
+    assert_equal([1], s)
+
+    # same at script level
+    var a = s
+    assert_fails('a += [2]', 'E741:')
+    assert_equal([1], s)
+  END
+  v9.CheckScriptSuccess(lines)
 enddef
 
 def Test_assign_with_op_fails()
@@ -3363,6 +3620,25 @@ def Test_dict_item_assign()
   v9.CheckSourceSuccess(lines)
 enddef
 
+" In a :def function the index is evaluated before the Dict item is used,
+" removing the item in the index expression gives an error.
+def Test_dict_item_assign_index_removes_item()
+  var lines =<< trim END
+    vim9script
+    var d = {a: {b: 1}}
+    def RemoveA(): string
+      remove(d, 'a')
+      return 'b'
+    enddef
+    def Assign()
+      d.a[RemoveA()] = 2
+    enddef
+    assert_fails('Assign()', 'E716: Key not present in Dictionary: "a"')
+    assert_equal({}, d)
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
 def Test_class_assign()
   var lines =<< trim END
     vim9script
@@ -3952,6 +4228,126 @@ def Test_nested_type_check()
     l[0][1][0] = [{x: 20}]
   END
   v9.CheckScriptFailure(lines, 'E1012: Type mismatch; expected list<number> but got list<dict<number>>', 6)
+enddef
+
+" A store into an inner typed Dict is checked at run time, also when the
+" compiled store is not typed (the nested form compiles to STOREINDEX any)
+def Test_dict_nested_typed_store_check()
+  var lines =<< trim END
+    var d: dict<dict<number>> = {a: {b: 1}}
+    var s: any = 'str'
+    d.a.b = s
+  END
+  v9.CheckDefExecAndScriptFailure(lines, 'E1012:', 3)
+
+  lines =<< trim END
+    var d: dict<dict<number>> = {a: {b: 1}}
+    var s: any = 'str'
+    d['a']['b'] = s
+  END
+  v9.CheckDefExecAndScriptFailure(lines, 'E1012:', 3)
+
+  lines =<< trim END
+    var d: dict<dict<number>> = {a: {b: 1}}
+    var f: any = 1.5
+    d.a.b += f
+  END
+  v9.CheckDefExecAndScriptFailure(lines, 'E1012:', 3)
+
+  lines =<< trim END
+    var l: list<dict<number>> = [{b: 1}]
+    var s: any = 'str'
+    l[0].b = s
+  END
+  v9.CheckDefExecAndScriptFailure(lines, 'E1012:', 3)
+
+  # the value is unchanged after the error
+  lines =<< trim END
+    var d: dict<dict<number>> = {a: {b: 1}}
+    var s: any = 'str'
+    try
+      d.a.b = s
+    catch /E1012:/
+    endtry
+    assert_equal({a: {b: 1}}, d)
+  END
+  v9.CheckDefAndScriptSuccess(lines)
+enddef
+
+" Compound assignment on an item of a Dict in a List and of a nested Dict
+" gives the same result as the long form, in all three modes
+def Test_dict_compound_assign_nested_forms()
+  var lines =<< trim END
+    VAR d = {'k': 7, 'a': {'b': 7}}
+    VAR l = [{'k': 7}]
+    LET d.a.b += 3
+    LET l[0].k -= 3
+    LET d['a']['b'] *= 2
+    call assert_equal({'k': 7, 'a': {'b': 20}}, d)
+    call assert_equal([{'k': 4}], l)
+    LET l[0].k = l[0].k * 5
+    LET d.a.b = d.a.b % 7
+    call assert_equal([{'k': 20}], l)
+    call assert_equal({'b': 6}, d.a)
+  END
+  v9.CheckLegacyAndVim9Success(lines)
+enddef
+
+" Test for doing a type check at runtime for a dict member type
+def Test_nested_dict_type_check()
+  var lines =<< trim END
+    var d: dict<number> = {a: 1}
+    var x: any = d
+    x['b'] = 'str'
+  END
+  v9.CheckSourceDefExecAndScriptFailure(lines, 'E1012: Type mismatch; expected number but got string', 3)
+
+  # replacing an existing item
+  lines =<< trim END
+    var d: dict<string> = {a: 'x'}
+    var x: any = d
+    x['a'] = 42
+  END
+  v9.CheckSourceDefExecAndScriptFailure(lines, 'E1012: Type mismatch; expected string but got number', 3)
+
+  # a nested dict
+  lines =<< trim END
+    var d: dict<dict<number>> = {a: {b: 1}}
+    var x: any = d
+    x['a']['c'] = 'str'
+  END
+  v9.CheckSourceDefExecAndScriptFailure(lines, 'E1012: Type mismatch; expected number but got string', 3)
+
+  # the dict is not changed and a value of the right type can be stored
+  lines =<< trim END
+    vim9script
+    def Foo()
+      var d: dict<number> = {a: 1}
+      var x: any = d
+      try
+        x['b'] = 'str'
+      catch /E1012:/
+      endtry
+      x['c'] = 3
+      assert_equal({a: 1, c: 3}, d)
+    enddef
+    Foo()
+
+    var sd: dict<number> = {a: 1}
+    var sx: any = sd
+    try
+      sx['b'] = 'str'
+    catch /E1012:/
+    endtry
+    sx['c'] = 3
+    assert_equal({a: 1, c: 3}, sd)
+
+    # a dict without a type accepts any value
+    var ud: any = {a: 1}
+    ud['b'] = 'str'
+    assert_equal({a: 1, b: 'str'}, ud)
+  END
+  v9.CheckSourceSuccess(lines)
 enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker

@@ -353,6 +353,7 @@ spell_load_file(
     int		c = 0;
     int		res;
     int		did_estack_push = FALSE;
+    bool	had_soundfold = false;
     ESTACK_CHECK_DECLARATION;
 
     fd = mch_fopen((char *)fname, "r");
@@ -470,11 +471,15 @@ spell_load_file(
 		break;
 
 	    case SN_SAL:
-		res = read_sal_section(fd, lp);
-		break;
-
 	    case SN_SOFO:
-		res = read_sofo_section(fd, lp);
+		// there should either be a SN_SAL or SN_SOFO section
+		if (had_soundfold)
+		    res = SP_FORMERROR;
+		else if (n == SN_SAL)
+		    res = read_sal_section(fd, lp);
+		else
+		    res = read_sofo_section(fd, lp);
+		had_soundfold = true;
 		break;
 
 	    case SN_MAP:
@@ -1178,8 +1183,6 @@ read_sofo_section(FILE *fd, slang_T *slang)
     char_u	*from, *to;
     int		res;
 
-    slang->sl_sofo = TRUE;
-
     // <sofofromlen> <sofofrom>
     from = read_cnt_string(fd, 2, &cnt);
     if (cnt < 0)
@@ -1423,6 +1426,8 @@ set_sofo(slang_T *lp, char_u *from, char_u *to)
 
     if (has_mbyte)
     {
+	free_sal_items(&lp->sl_sal);
+
 	// Use "sl_sal" as an array with 256 pointers to a list of wide
 	// characters.  The index is the low byte of the character.
 	// The list contains from-to pairs with a terminating NUL.
@@ -1433,9 +1438,12 @@ set_sofo(slang_T *lp, char_u *from, char_u *to)
 	    return SP_OTHERERROR;
 	vim_memset(gap->ga_data, 0, sizeof(int *) * 256);
 	gap->ga_len = 256;
+	lp->sl_sofo = TRUE;
 
 	// First count the number of items for each list.  Temporarily use
-	// sl_sal_first[] for this.
+	// sl_sal_first[] for this.  Reset it first: a preceding SN_SAL section
+	// may have set the entries to -1 via set_sal_first().
+	vim_memset(lp->sl_sal_first, 0, sizeof(salfirst_T) * 256);
 	for (p = from, s = to; *p != NUL && *s != NUL; )
 	{
 	    c = mb_cptr2char_adv(&p);
@@ -1489,6 +1497,7 @@ set_sofo(slang_T *lp, char_u *from, char_u *to)
 	for (i = 0; to[i] != NUL; ++i)
 	    lp->sl_sal_first[from[i]] = to[i];
 	lp->sl_sal.ga_len = 1;		// indicates we have soundfolding
+	lp->sl_sofo = TRUE;
     }
 
     return 0;
@@ -1697,14 +1706,22 @@ read_tree_node(
 		    // byte, the condition index shifted up 8 bits, the flags
 		    // shifted up 24 bits.
 		    if (c == BY_FLAGS)
-			c = getc(fd) << 24;		// <pflags>
+		    {
+			n = getc(fd);			// <pflags>
+			if (n < 0)
+			    return SP_TRUNCERROR;
+			c = n << 24;
+		    }
 		    else
 			c = 0;
 
-		    c |= getc(fd);			// <affixID>
+		    n = getc(fd);			// <affixID>
+		    if (n < 0)
+			return SP_TRUNCERROR;
+		    c |= n;
 
 		    n = get2c(fd);			// <prefcondnr>
-		    if (n >= maxprefcondnr)
+		    if (n < 0 || n >= maxprefcondnr)
 			return SP_FORMERROR;
 		    c |= (n << 8);
 		}
@@ -1715,12 +1732,29 @@ read_tree_node(
 		    // that and prefix ID above the region.
 		    c2 = c;
 		    c = getc(fd);			// <flags>
+		    if (c < 0)
+			return SP_TRUNCERROR;
 		    if (c2 == BY_FLAGS2)
-			c = (getc(fd) << 8) + c;	// <flags2>
+		    {
+			n = getc(fd);			// <flags2>
+			if (n < 0)
+			    return SP_TRUNCERROR;
+			c = (n << 8) + c;
+		    }
 		    if (c & WF_REGION)
-			c = (getc(fd) << 16) + c;	// <region>
+		    {
+			n = getc(fd);			// <region>
+			if (n < 0)
+			    return SP_TRUNCERROR;
+			c = (n << 16) + c;
+		    }
 		    if (c & WF_AFX)
-			c = (getc(fd) << 24) + c;	// <affixID>
+		    {
+			n = getc(fd);			// <affixID>
+			if (n < 0)
+			    return SP_TRUNCERROR;
+			c = (n << 24) + c;
+		    }
 		}
 
 		idxs[idx] = c;

@@ -2,15 +2,6 @@
 
 source util/screendump.vim
 
-func Test_ex_delete()
-  new
-  call setline(1, ['a', 'b', 'c'])
-  2
-  " :dl is :delete with the "l" flag, not :dlist
-  .dl
-  call assert_equal(['a', 'c'], getline(1, 2))
-endfunc
-
 func Test_range_error()
   call assert_fails(':.echo 1', 'E481:')
   call assert_fails(':$echo 1', 'E481:')
@@ -154,6 +145,75 @@ func Test_append_cmd_empty_buf()
 
   " clean up
   call StopVimInTerminal(buf)
+endfunc
+
+" Test for :append, :insert and :change in a block that is not executed: the
+" lines up to the "." are skipped, not executed as commands.
+func Test_append_cmd_skipped()
+  let lines =<< trim END
+    if 0
+      append
+    endif
+    .
+    endif
+    let g:skipped = 'append'
+    if 0
+      insert
+    else
+    .
+    endif
+    let g:skipped ..= ' insert'
+    if 0
+      1change
+    endif
+    .
+    endif
+    let g:skipped ..= ' change'
+    while 0
+      append
+    endwhile
+    .
+    endwhile
+    let g:skipped ..= ' while'
+  END
+  call writefile(lines, 'Xappend_skipped', 'D')
+  new
+  call setline(1, 'text')
+  source Xappend_skipped
+  call assert_equal('append insert change while', g:skipped)
+  call assert_equal(['text'], getline(1, '$'))
+
+  " In Vim9 script :append isn't allowed and doesn't consume following lines.
+  let lines =<< trim END
+    vim9script
+    if false
+      append
+    endif
+    g:skipped = 'vim9'
+  END
+  call writefile(lines, 'Xappend_skipped_vim9', 'D')
+  source Xappend_skipped_vim9
+  call assert_equal('vim9', g:skipped)
+  call assert_equal(['text'], getline(1, '$'))
+
+  " Compiling a :def function with a skipped :append should still give E1100.
+  let lines =<< trim END
+    vim9script
+    def Foo()
+      if false
+        append
+      endif
+    enddef
+    g:skipped = ''
+    defcompile
+    g:skipped = 'defcompile' # not reached
+  END
+  call writefile(lines, 'Xappend_skipped_def', 'D')
+  call assert_fails('source Xappend_skipped_def', 'E1100:')
+  call assert_equal('', g:skipped)
+
+  unlet g:skipped
+  bwipe!
 endfunc
 
 " Test for the :insert command
@@ -584,34 +644,6 @@ func Test_verbose_cmd()
   set verbose=0
   call assert_match('  verbose=4\n\s*Last set from .*\n  verbose=0',
         \ execute("4verbose set verbose | set verbose"))
-endfunc
-
-" Test for the :delete command and the related abbreviated commands
-func Test_excmd_delete()
-  new
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['^Ibar$'], split(execute('dl'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['^Ibar$'], split(execute('dell'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['^Ibar$'], split(execute('delel'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['^Ibar$'], split(execute('deletl'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['^Ibar$'], split(execute('deletel'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('dp'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('dep'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('delp'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('delep'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('deletp'), "\n"))
-  call setline(1, ['foo', "\tbar"])
-  call assert_equal(['        bar'], split(execute('deletep'), "\n"))
-  bw!
 endfunc
 
 " Test for commands that are blocked in a sandbox

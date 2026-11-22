@@ -126,11 +126,52 @@ static int parse_diffanchors(int check_only, buf_T *buf, linenr_T *anchors, int 
 # define FOR_ALL_DIFFBLOCKS_IN_TAB(tp, dp) \
     for ((dp) = (tp)->tp_first_diff; (dp) != NULL; (dp) = (dp)->df_next)
 
+// Cursor into the diff block list for diff_infold() and
+// diff_check_with_linestatus(): both scan blocks in ascending df_lnum order,
+// usually with an increasing "lnum" during redraw.  Remembering the last block
+// at or before "lnum" lets the next call resume there instead of from the head.
+// Cleared when a block is freed, allocated or line-shifted (see below).
+static diff_T	    *diff_finger_dp = NULL;
+static tabpage_T    *diff_finger_tp = NULL;
+static int	    diff_finger_idx = -1;
+static linenr_T	    diff_finger_lnum = 0;
+
     static void
 clear_diffblock(diff_T *dp)
 {
+    if (dp == diff_finger_dp)
+	diff_finger_dp = NULL;		// don't leave a dangling finger
     ga_clear(&dp->df_changes);
     vim_free(dp);
+}
+
+/*
+ * Return the diff block to start a forward scan for line "lnum" in tab "tp",
+ * buffer index "idx".  Resumes from the finger when it is still valid and
+ * "lnum" did not move backwards, else starts at the first block.
+ */
+    static diff_T *
+diff_scan_start(tabpage_T *tp, int idx, linenr_T lnum)
+{
+    if (diff_finger_dp != NULL
+	    && diff_finger_tp == tp
+	    && diff_finger_idx == idx
+	    && lnum >= diff_finger_lnum)
+	return diff_finger_dp;
+    return tp->tp_first_diff;
+}
+
+/*
+ * Remember "dp" as the finger for the next scan: the last block with
+ * df_lnum[idx] <= "lnum" seen by the scan, or NULL when there is none.
+ */
+    static void
+diff_scan_remember(tabpage_T *tp, int idx, linenr_T lnum, diff_T *dp)
+{
+    diff_finger_tp = tp;
+    diff_finger_idx = idx;
+    diff_finger_lnum = lnum;
+    diff_finger_dp = dp != NULL ? dp : tp->tp_first_diff;
 }
 
 /*
@@ -336,6 +377,8 @@ diff_mark_adjust_tp(
     linenr_T	last;
     linenr_T	lnum_deleted = line1;	// lnum of remaining deletion
     int		check_unchanged;
+
+    diff_finger_dp = NULL;		// may shift df_lnum, invalidate the finger
 
     if (diff_internal())
     {
@@ -606,6 +649,7 @@ diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp)
     dnew = ALLOC_CLEAR_ONE(diff_T);
     if (dnew == NULL)
 	return NULL;
+    diff_finger_dp = NULL;		// list changed, invalidate the finger
 
     dnew->is_linematched = FALSE;
     dnew->df_next = dp;
@@ -1075,6 +1119,8 @@ diff_try_update(
 
 	if (anchor_i != 0)
 	{
+	    diff_finger_dp = NULL;	// df_lnum shifted, invalidate the finger
+
 	    // Combine the new diff blocks with the existing ones
 	    for (diff_T *dp = curtab->tp_first_diff; dp != NULL; dp = dp->df_next)
 	    {
@@ -1191,7 +1237,9 @@ theend:
     if (had_diffs || curtab->tp_first_diff != NULL)
     {
 	diff_redraw(TRUE);
+	window_layout_lock();
 	apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, FALSE, curbuf);
+	window_layout_unlock();
     }
 }
 
@@ -2473,10 +2521,17 @@ diff_check_with_linestatus(win_T *wp, linenr_T lnum, int *linestatus)
 	return 0;
 # endif
 
-    // search for a change that includes "lnum" in the list of diffblocks.
-    FOR_ALL_DIFFBLOCKS_IN_TAB(curtab, dp)
+    // Search for a change that includes "lnum" in the list of diffblocks.
+    // Resume from the scan finger to avoid restarting at the first block.
+    diff_T	*le = NULL;		// last block with df_lnum[idx] <= lnum
+    for (dp = diff_scan_start(curtab, idx, lnum); dp != NULL; dp = dp->df_next)
+    {
+	if (dp->df_lnum[idx] <= lnum)
+	    le = dp;
 	if (lnum <= dp->df_lnum[idx] + dp->df_count[idx])
 	    break;
+    }
+    diff_scan_remember(curtab, idx, lnum, le);
     if (dp == NULL || lnum < dp->df_lnum[idx])
 	return 0;
 
@@ -3410,18 +3465,24 @@ diff_refine_inline_word_highlight(diff_T *dp_orig, garray_T *linemap, int idx1,
 
 	while (dp != NULL && dp->df_next != NULL)
 	{
+	    // Index of the last line of this block and of the first line of the
+	    // next one.  When this block is empty, which happens for inserted
+	    // lines, it has no last line and "idx_entry1" is negative.
+	    linenr_T	idx_entry1 = dp->df_lnum[idx1] + dp->df_count[idx1] - 2;
+	    linenr_T	idx_entry2 = dp->df_next->df_lnum[idx1] - 1;
+
 	    // Only merge blocks on the same line
-	    if (dp->df_lnum[idx1] + dp->df_count[idx1] - 1 >= linemap[idx1]. ga_len
-		    || dp->df_next->df_lnum[idx1] - 1 >= linemap[idx1]. ga_len)
+	    if (idx_entry1 < 0 || idx_entry1 >= linemap[idx1].ga_len
+		    || idx_entry2 < 0 || idx_entry2 >= linemap[idx1].ga_len)
 	    {
 		dp = dp->df_next;
 		continue;
 	    }
 
 	    linemap_entry_T *entry1 =
-		&((linemap_entry_T *)linemap[idx1].ga_data)[dp->df_lnum[idx1] + dp->df_count[idx1] - 2];
+		&((linemap_entry_T *)linemap[idx1].ga_data)[idx_entry1];
 	    linemap_entry_T *entry2 =
-		&((linemap_entry_T *)linemap[idx1].ga_data)[dp->df_next->df_lnum[idx1] - 1];
+		&((linemap_entry_T *)linemap[idx1].ga_data)[idx_entry2];
 
 	    // Skip if blocks are on different lines
 	    if (entry1->lineoff != entry2->lineoff)
@@ -3977,7 +4038,7 @@ diff_find_change(
  * Return FALSE if there are no diff blocks at all in this window.
  */
     int
-diff_infold(win_T *wp, linenr_T lnum)
+diff_infold(win_T *wp, tabpage_T *tp, linenr_T lnum)
 {
     int		i;
     int		idx = -1;
@@ -3988,11 +4049,14 @@ diff_infold(win_T *wp, linenr_T lnum)
     if (!wp->w_p_diff)
 	return FALSE;
 
+    if (tp == NULL)
+	tp = curtab;
+
     for (i = 0; i < DB_COUNT; ++i)
     {
-	if (curtab->tp_diffbuf[i] == wp->w_buffer)
+	if (tp->tp_diffbuf[i] == wp->w_buffer)
 	    idx = i;
-	else if (curtab->tp_diffbuf[i] != NULL)
+	else if (tp->tp_diffbuf[i] != NULL)
 	    other = TRUE;
     }
 
@@ -4000,23 +4064,32 @@ diff_infold(win_T *wp, linenr_T lnum)
     if (idx == -1 || !other)
 	return FALSE;
 
-    if (curtab->tp_diff_invalid)
+    if (tp == curtab && tp->tp_diff_invalid)
 	ex_diffupdate(NULL);		// update after a big change
 
     // Return if there are no diff blocks.  All lines will be folded.
-    if (curtab->tp_first_diff == NULL)
+    if (tp->tp_first_diff == NULL)
 	return TRUE;
 
-    FOR_ALL_DIFFBLOCKS_IN_TAB(curtab, dp)
+    // Resume from the scan finger to avoid restarting at the first block.
+    diff_T	*le = NULL;		// last block with df_lnum[idx] <= lnum
+    int		result = TRUE;
+    for (dp = diff_scan_start(tp, idx, lnum); dp != NULL; dp = dp->df_next)
     {
+	if (dp->df_lnum[idx] <= lnum)
+	    le = dp;
 	// If this change is below the line there can't be any further match.
 	if (dp->df_lnum[idx] - diff_context > lnum)
 	    break;
 	// If this change ends before the line we have a match.
 	if (dp->df_lnum[idx] + dp->df_count[idx] + diff_context > lnum)
-	    return FALSE;
+	{
+	    result = FALSE;
+	    break;
+	}
     }
-    return TRUE;
+    diff_scan_remember(tp, idx, lnum, le);
+    return result;
 }
 # endif
 
@@ -4240,8 +4313,12 @@ ex_diffgetput(exarg_T *eap)
 	dfree = NULL;
 	lnum = dp->df_lnum[idx_to];
 	count = dp->df_count[idx_to];
+	// The empty line of an empty buffer is deleted below, include it in
+	// the undo information, otherwise undo leaves a line behind.
+	linenr_T undo_bot = lnum + count + (count == 0 && BUFEMPTY() ? 1 : 0);
+
 	if (dp->df_lnum[idx_cur] + dp->df_count[idx_cur] > eap->line1 + off
-		&& u_save(lnum - 1, lnum + count) != FAIL)
+		&& u_save(lnum - 1, undo_bot) != FAIL)
 	{
 	    // Inside the specified range and saving for undo worked.
 	    start_skip = 0;
@@ -4440,7 +4517,9 @@ theend:
     {
 	// Also need to redraw the other buffers.
 	diff_redraw(FALSE);
+	window_layout_lock();
 	apply_autocmds(EVENT_DIFFUPDATED, NULL, NULL, FALSE, curbuf);
+	window_layout_unlock();
     }
 }
 
@@ -5140,7 +5219,8 @@ f_diff(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 	    if (hunk_dict == NULL)
 		goto done;
 
-	    list_append_dict(l, hunk_dict);
+	    if (list_append_dict(l, hunk_dict) == FAIL)
+		dict_unref(hunk_dict);
 	}
     }
     else

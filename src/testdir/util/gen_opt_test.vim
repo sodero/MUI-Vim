@@ -100,6 +100,7 @@ let test_values = {
       \ 'sidescroll': [[0, 1, 8, 999], [-1]],
       \ 'sidescrolloff': [[0, 1, 8, 999], [-1]],
       \ 'tabstop': [[1, 4, 8, 12, 9999], [-1, 0, 10000]],
+      \ 'termbackgroundwait': [[0, 1, 25, 100, 9999], [-1]],
       \ 'termwinscroll': [[1, 100, 99999], [-1, 0]],
       \ 'textwidth': [[0, 1, 8, 99], [-1]],
       \ 'timeoutlen': [[0, 8, 99999], [-1]],
@@ -237,7 +238,10 @@ let test_values = {
       \		['xxx', 'a,b']],
       \ 'helplang': [['', 'de', 'de,it'], ['xxx']],
       \ 'highlight': [['', 'e:Error'], ['xxx']],
-      \ 'imactivatekey': [['', 'S-space'], ['xxx']],
+      \ 'imactivatekey': [[''], ['xxx']],
+      \ 'imageprotocol': [
+      \ ['kitty:kitty', 'xterm:sixel,kitty:sixel'],
+      \ ['kitty:', 'xterm:unknown', 'xterm:sixel,wwww']],
       \ 'isfname': [['', '@', '@,48-52'], ['xxx', '@48']],
       \ 'isident': [['', '@', '@,48-52'], ['xxx', '@48']],
       \ 'iskeyword': [['', '@', '@,48-52'], ['xxx', '@48']],
@@ -394,6 +398,10 @@ let test_values = {
       \ 'othernum': [[-1, 0, 100], ['']],
       \ 'otherstring': [['', 'xxx'], []],
       \}
+
+if !has('gui_gtk4')
+    let test_values['imactivatekey'] = [['', 'S-space'], ['xxx']]
+endif
 
 if !has('clipboard')
   " If +clipboard isn't enabled but +clipboard_provider is, then 'clipboard' is

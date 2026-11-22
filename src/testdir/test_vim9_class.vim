@@ -2483,6 +2483,16 @@ def Test_class_extends()
     endclass
   END
   v9.CheckSourceFailure(lines, 'E1315: White space required after name: A"', 4)
+
+  # this was reading past end of the string
+  lines =<< trim END
+    vim9script
+    class A
+    endclass
+    execute "class B extends A"
+    endclass
+  END
+  v9.CheckSourceSuccess(lines)
 enddef
 
 def Test_using_base_class()
@@ -7386,6 +7396,39 @@ def Test_object_funcref()
   v9.CheckSourceSuccess(lines)
 enddef
 
+" Calling an object method funcref directly, (a.M)(), must pass the object
+def Test_object_funcref_call_directly()
+  # Without the object the nested this.K() call crashed Vim
+  var lines =<< trim END
+    vim9script
+    class A
+      def K(): number
+        return 1
+      enddef
+      def M(): number
+        return this.K() + 10
+      enddef
+    endclass
+    var a = A.new()
+    assert_equal(11, (a.M)())
+  END
+  v9.CheckSourceSuccess(lines)
+
+  # "this" must be the object, not a number
+  lines =<< trim END
+    vim9script
+    class A
+      var val: number
+      def M(): string
+        return typename(this) .. this.val
+      enddef
+    endclass
+    var a = A.new(5)
+    assert_equal('object<A>5', (a.M)())
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
 " Test for using a class method as a funcref
 def Test_class_funcref()
   # Using class method funcref in a def function
@@ -8418,6 +8461,47 @@ def Test_compile_many_def_functions_in_funcref_instr()
   writefile(lines, 'Xscript', 'D')
   g:RunVim([], [], '-u NONE -S Xscript -c qa')
   assert_equal(0, v:shell_error)
+enddef
+
+" Test that freeing a class does not remove a global function with the same
+" name as a method
+def Test_class_free_keeps_global_func()
+  var lines =<< trim END
+    vim9script
+    var cls =<< trim CLS
+      vim9script
+      class A
+        def Get(): number
+          return 1
+        enddef
+        static def Make(): number
+          return 2
+        enddef
+      endclass
+      class B extends A
+      endclass
+      g:o = B.new()
+    CLS
+    writefile(cls, 'XclassFreeFunc.vim')
+    def g:Get(): string
+      return 'global Get'
+    enddef
+    def g:Make(): string
+      return 'global Make'
+    enddef
+    source XclassFreeFunc.vim
+    assert_equal(1, g:o.Get())
+    unlet g:o
+    # Sourcing the script again frees the classes and their methods.
+    writefile(['vim9script'], 'XclassFreeFunc.vim')
+    source XclassFreeFunc.vim
+    assert_equal('global Get', g:Get())
+    assert_equal('global Make', g:Make())
+    delete('XclassFreeFunc.vim')
+    delfunc g:Get
+    delfunc g:Make
+  END
+  v9.CheckSourceSuccess(lines)
 enddef
 
 " Test for 'final' class and object variables
@@ -10121,6 +10205,37 @@ def Test_class_object_index()
     a[10] = 1
   END
   v9.CheckScriptFailure(lines, 'E689: Index not allowed after a object: a[10] = 1', 5)
+enddef
+
+" Calling a method of a class variable in a skipped part of an expression in
+" a constructor
+def Test_method_call_in_skipped_expr()
+  var lines =<< trim END
+    vim9script
+
+    class A
+      def True(): bool
+        return true
+      enddef
+    endclass
+
+    class B
+      static var AO: A
+      static var result = ''
+
+      def new()
+        AO = A.new()
+
+        if has('eval') || AO.True()
+          result = 'works'
+        endif
+      enddef
+    endclass
+
+    var BO: B = B.new()
+    assert_equal('works', B.result)
+  END
+  v9.CheckSourceSuccess(lines)
 enddef
 
 def Test_class_member_init_typecheck()
@@ -11835,6 +11950,25 @@ func Test_class_selfref_gc()
   call v9.CheckSourceSuccess(lines)
 endfunc
 
+" Adding an object to a List using the List length as the index should not
+" leave an extra reference to the class.
+def Test_list_append_object_refcount()
+  var lines =<< trim END
+    vim9script
+    class A
+    endclass
+    assert_equal(1, test_refcount(A))
+    var l: list<A> = []
+    for i in range(3)
+      l[i] = A.new()
+    endfor
+    assert_equal(4, test_refcount(A))
+    l = []
+    assert_equal(1, test_refcount(A))
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
 " Test if class members can be accessed via a lambda inside a object/class
 " method.
 func Test_class_member_lambda()
@@ -11885,6 +12019,244 @@ def Test_colon_whitespace()
     :   endclass
   END
   v9.CheckSourceSuccess(lines)
+enddef
+
+" A closure in the initializer of an object variable, with the constructor
+" called without arguments.
+def Test_class_member_closure()
+  var lines =<< trim END
+    vim9script
+    class C
+      def F(): number
+        return 7
+      enddef
+      var A = () => this.F()
+    endclass
+    var c = C.new()
+    assert_equal(7, c.A())
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
+" Using a compound operator on an object variable of an object variable.
+def Test_nested_object_member_op_assign()
+  var lines =<< trim END
+    vim9script
+    class A
+      public var n = 1
+      public var s = 'x'
+    endclass
+    class B
+      var a: A = A.new()
+      def Add()
+        this.a.n += 2
+        this.a.s ..= 'y'
+      enddef
+    endclass
+    var b = B.new()
+    b.Add()
+    assert_equal(3, b.a.n)
+    assert_equal('xy', b.a.s)
+  END
+  v9.CheckSourceSuccess(lines)
+
+  # Also when the object is in a local variable.
+  lines =<< trim END
+    vim9script
+    class A
+      public var n = 1
+    endclass
+    class B
+      var a: A = A.new()
+    endclass
+    def F(): number
+      var b = B.new()
+      b.a.n += 2
+      return b.a.n
+    enddef
+    assert_equal(3, F())
+  END
+  v9.CheckSourceSuccess(lines)
+
+  # A plain assignment must use the last name, not the first one.
+  lines =<< trim END
+    vim9script
+    class A
+      public var n = 1
+      public var s = 'x'
+    endclass
+    class B
+      var a: A = A.new()
+      def Set()
+        this.a.s = 'y'
+      enddef
+    endclass
+    var b = B.new()
+    b.Set()
+    assert_equal(1, b.a.n)
+    assert_equal('y', b.a.s)
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
+" Test for a class, interface or enum in a block that is not executed: the
+" body is skipped, not read as commands.
+def Test_class_body_skipped()
+  var lines =<< trim END
+      vim9script
+      if 0
+        interface Bar
+          def M(): number
+        endinterface
+      endif
+      if 0
+        class Foo
+          var x: number = 1
+        endclass
+      endif
+      while 0
+        enum Baz
+          One,
+          Two
+        endenum
+      endwhile
+      g:skipped = 'all three'
+  END
+  g:skipped = ''
+  v9.CheckSourceSuccess(lines)
+  assert_equal('all three', g:skipped)
+  unlet g:skipped
+enddef
+
+def Test_index_object()
+  # Used to write past the end of the object member array.
+  var lines =<< trim END
+    vim9script
+    class C
+      var a: number = 1
+    endclass
+    def Fails()
+      var o: any = C.new()
+      o[100] = 999
+    enddef
+    Fails()
+  END
+  v9.CheckSourceFailure(lines, 'E928: String required')
+
+  # Used to write in front of the object member array.
+  lines =<< trim END
+    vim9script
+    class C
+      var a: number = 1
+    endclass
+    def Fails()
+      var o: any = C.new()
+      o[-4] = 999
+    enddef
+    Fails()
+  END
+  v9.CheckSourceFailure(lines, 'E928: String required')
+
+  # In range, but used to write a protected member.
+  lines =<< trim END
+    vim9script
+    class C
+      var _secret: number = 1
+    endclass
+    def Fails()
+      var o: any = C.new()
+      o[0] = 42
+    enddef
+    Fails()
+  END
+  v9.CheckSourceFailure(lines, 'E928: String required')
+
+  # In range, but used to store a number in a member declared as a string.
+  lines =<< trim END
+    vim9script
+    class C
+      public var name: string = 'hello'
+    endclass
+    def Fails()
+      var o: any = C.new()
+      o[0] = 999
+    enddef
+    Fails()
+  END
+  v9.CheckSourceFailure(lines, 'E928: String required')
+
+  # Using the member name instead of a number still works.
+  lines =<< trim END
+    vim9script
+    class C
+      public var a: number = 1
+    endclass
+    def Works()
+      var o = C.new()
+      var any_o: any = o
+      any_o['a'] = 7
+      assert_equal(7, o.a)
+    enddef
+    Works()
+  END
+  v9.CheckSourceSuccess(lines)
+
+  # An object reached through a member typed "any" still works.
+  lines =<< trim END
+    vim9script
+    class Inner
+      public var value: number = 0
+    endclass
+    class Outer
+      var inner: any
+    endclass
+    def Works(outer: Outer)
+      outer.inner.value = 1
+    enddef
+    var inner_obj = Inner.new(0)
+    Works(Outer.new(inner_obj))
+    assert_equal(1, inner_obj.value)
+  END
+  v9.CheckSourceSuccess(lines)
+enddef
+
+" Assigning to a slice of a List or Blob object variable
+def Test_object_variable_slice_assign()
+  var lines =<< trim END
+    vim9script
+    class C
+      public var b: blob = 0z000000
+      public var l: list<number> = [1, 2, 3]
+      def Set()
+        this.b[0 : 1] = 0z0102
+        this.l[1 : 2] = [8, 9]
+      enddef
+    endclass
+    def Works()
+      var o = C.new()
+      o.Set()
+      assert_equal(0z010200, o.b)
+      assert_equal([1, 8, 9], o.l)
+      o.b[2 : 2] = 0z03
+      o.l[0 : 0] = [7]
+      assert_equal(0z010203, o.b)
+      assert_equal([7, 8, 9], o.l)
+    enddef
+    Works()
+  END
+  v9.CheckSourceSuccess(lines)
+
+  lines =<< trim END
+    vim9script
+    class C
+      var l: list<number> = [1, 2, 3]
+      def Set()
+        this.l[0 : 0] = ['x']
+      enddef
+    endclass
+    C.new().Set()
+  END
+  v9.CheckSourceFailure(lines, 'E1012: Type mismatch; expected list<number> but got list<string>', 1)
 enddef
 
 " vim: ts=8 sw=2 sts=2 expandtab tw=80 fdm=marker
