@@ -3260,12 +3260,12 @@ int gui_mch_wait_for_chars(int wtime UNUSED)
     // Commit pending menu changes before handing control over to MUI.
     gui_mui_menu_change(FALSE);
 
-    // Wait until something happens.
-    for(; state == MUIV_VimCon_State_Idle ;
-        state = DoMethod(Con, M_ID(VimCon, GetState)))
-    {
-        IPTR sig;
+    // The signals received by Wait(), MUI needs them in the next NewInput.
+    IPTR sig = 0;
 
+    // Wait until something happens.
+    for(;;)
+    {
         // Pass control over to MUI.
         if(unlikely(DoMethod(_app(Con), MUIM_Application_NewInput, &sig) ==
             (IPTR) MUIV_Application_ReturnID_Quit))
@@ -3275,18 +3275,24 @@ int gui_mch_wait_for_chars(int wtime UNUSED)
             break;
         }
 
-        // For some reason MUI returns 0 when jumping to the same screen that
-        // we're currently on. If that happens, just pass control over to Vim.
-        if(unlikely(!sig))
+        // Stop when MUI gave Vim something to do, before waiting for more.
+        state = DoMethod(Con, M_ID(VimCon, GetState));
+
+        if(state != MUIV_VimCon_State_Idle)
         {
             break;
         }
 
-        sig = Wait(sig | SIGBREAKF_CTRL_C);
-
-        if(unlikely(sig & SIGBREAKF_CTRL_C))
+        // No signals means that MUI wants to be called again right away, only
+        // wait when MUI has nothing left to do.
+        if(likely(sig))
         {
-            getout_preserve_modified(0);
+            sig = Wait(sig | SIGBREAKF_CTRL_C);
+
+            if(unlikely(sig & SIGBREAKF_CTRL_C))
+            {
+                getout_preserve_modified(0);
+            }
         }
     }
 
