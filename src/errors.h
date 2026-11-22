@@ -900,6 +900,7 @@ EXTERN char e_langmap_extra_characters_after_semicolon_str[]
 EXTERN char e_screen_mode_setting_not_supported[]
 	INIT(= N_("E359: Screen mode setting not supported"));
 #endif
+// E360 unused
 // E361 unused
 #if defined(FEAT_EVAL)
 EXTERN char e_using_boolean_value_as_float[]
