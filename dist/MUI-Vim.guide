@@ -5,7 +5,6 @@
 @{" Introduction     " LINK "Introduction"} What's MUI-Vim?
 @{" Installation     " LINK "Installation"} Installing MUI-Vim
 @{" Compatibility    " LINK "Compatibility"} Plugin compatibility
-@{" Limitations      " LINK "Limitations"} Known limitations
 @{" Contributions    " LINK "Contributions"} List of contributors
 @{" Changelog        " LINK "Changelog"} The complete changelog
 @{" License          " LINK "License"} MUI-Vim software license
@@ -29,14 +28,6 @@ The recommended method of installation is using the included installer.
 @TOC "Main"
 MUI-Vim should work with plugins that use Vim script. There are exceptions to
 this, e.g NetRW which will crash badly occasionally.
-
-@ENDNODE
-
-@NODE "Limitations" "Known limitations"
-@TOC "Main"
-When running Vim in text mode on MorphOS and AROS, window resizing isn't
-detected by Vim. After a window resize, press Ctrl + L to resize and redraw
-the Vim console.
 
 @ENDNODE
 
@@ -67,7 +58,6 @@ Hollywood syntax highlighting.
 - GUI: Dead key fix (MUI)
 - CLI: Shell command support in foreground mode
 - CLI: AROS/MorphOS workaround for missing window size reports
-- ?
 
 @{B}2026-03-22@{UB}
 - Update to VIM 9.2.219
