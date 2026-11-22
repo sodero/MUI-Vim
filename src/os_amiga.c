@@ -458,21 +458,6 @@ write_pipe(struct Pipe *pipe, const void *buf, int len)
 }
 
 /*
- * Write a single byte "c" to "pipe".
- * Return "c" on success, -1 on error.
- */
-    static int
-putc_pipe(struct Pipe *pipe, int c)
-{
-    char byte = (char) c;
-
-    if (write_pipe(pipe, &byte, 1) != 1)
-	return -1;
-
-    return c;
-}
-
-/*
  * Write a formatted string to "pipe".
  * Return number of bytes written, -1 on error.
  */
