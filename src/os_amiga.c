@@ -1360,6 +1360,17 @@ mch_new_shellsize(void)
 }
 
 /*
+ * Get terminal cell size.
+ */
+    void
+mch_calc_cell_size(struct cellsize *cs_out)
+{
+    /* Not supported. */
+    cs_out->cs_xpixel = -1;
+    cs_out->cs_ypixel = -1;
+}
+
+/*
  * Start shell and get output from pipe.
  * Return error number for failure, 0 otherwise
  */

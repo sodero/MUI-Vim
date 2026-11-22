@@ -36,6 +36,7 @@ void mch_settmode(tmode_T tmode);
 int mch_get_shellsize(void);
 void mch_set_shellsize(void);
 void mch_new_shellsize(void);
+void mch_calc_cell_size(struct cellsize *cs_out);
 int mch_call_shell(char_u *cmd, int options);
 char_u *mch_get_cmd_output_direct(char **argv, char_u *infile, int flags, int *ret_len);
 void mch_breakcheck(int force);
