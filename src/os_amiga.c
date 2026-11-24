@@ -1157,10 +1157,10 @@ mch_settmode(tmode_T tmode)
  * Get console size on AROS and MorphOS.
  * Return FAIL for failure, OK otherwise
  */
-    static void
+    static int
 get_shellsize_fallback(void)
 {
-    term_console = FALSE;
+    int ret = FAIL;
 
     // Save current console mode.
     int old_tmode = cur_tmode;
@@ -1179,14 +1179,21 @@ get_shellsize_fallback(void)
 	// Read return sequence from input.
 	if (Read(raw_in, reply, sizeof(reply) - 1) > 0)
 	{
+	    int rows, cols;
+
 	    // Parse result and set Vim globals.
-	    if (sscanf(reply, format, &Rows, &Columns) == 2)
-		term_console = TRUE;
+	    if (sscanf(reply, format, &rows, &cols) == 2)
+	    {
+		Rows = rows;
+		Columns = cols;
+		ret = OK;
+	    }
 	}
     }
 
     // Restore console mode.
     mch_settmode(old_tmode);
+    return ret;
 }
 
     static struct InfoData *
@@ -1271,6 +1278,9 @@ get_console(struct InfoData *id)
     int
 mch_get_shellsize(void)
 {
+    static int have_size = FALSE;
+    int keep_size = FALSE;
+
 #ifdef FEAT_GUI
     if (gui.in_use || gui.starting)
     {
@@ -1303,11 +1313,19 @@ mch_get_shellsize(void)
 	    Columns = con->cu_XMax + 1;
 	    term_console = TRUE;
 	}
-	else
-	    get_shellsize_fallback();
+	else if (get_shellsize_fallback() == OK)
+	    term_console = TRUE;
+	else if (have_size)
+	{
+	    term_console = TRUE;
+	    keep_size = TRUE;
+	}
     }
 
     free_window_infodata(id);
+
+    if (keep_size)
+	return FAIL;
 
     if (!term_console)
     {
@@ -1317,6 +1335,7 @@ mch_get_shellsize(void)
 	return FAIL;
     }
 
+    have_size = TRUE;
     return OK;
 }
 
