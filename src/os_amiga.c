@@ -134,19 +134,14 @@ mch_inchar(
 		buf[2] = (int)KE_CURSORHOLD;
 		return 3;
 	    }
-
 	    before_blocking();
-
 #if defined(__AROS__) || defined(__MORPHOS__)
-	    int rows = Rows;
-	    int cols = Columns;
-
-	    mch_get_shellsize();
-
-	    if(rows != Rows || cols != Columns)
-		shell_resized();
-#endif /* __AROS__ || __MORPHOS__ */
-	    return 0;
+	    // No window size report on AROS and MorhpOS. Check size on timeout
+	    // as workaround.
+	    do
+		shell_resized_check();
+	    while (WaitForChar(raw_in, p_ut * 1000L) == 0);
+#endif
 	}
     }
 
