@@ -136,7 +136,7 @@ mch_inchar(
 	    }
 	    before_blocking();
 #if defined(__AROS__) || defined(__MORPHOS__)
-	    // No window size report on AROS and MorhpOS. Check size on timeout
+	    // No window size report on AROS and MorphOS. Check size on timeout
 	    // as workaround.
 	    do
 		shell_resized_check();
